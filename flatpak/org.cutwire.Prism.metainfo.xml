@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.cutwire.Prism</id>
+  <name>CutWire Prism</name>
+  <summary>Live media trigger and overlay tool</summary>
+  <description>
+    <p>
+      CutWire Prism is a beginner-friendly live media trigger and overlay tool built with Qt 6,
+      FFmpeg, and OpenGL. It is designed for school events, small concerts, and sports,
+      combining instant clip triggering with live visual control.
+    </p>
+    <p>Features include:</p>
+    <ul>
+      <li>Dynamic clip grid with instant playback</li>
+      <li>Video, image, slideshow, webcam, and screen capture sources</li>
+      <li>A/B deck mixing with crossfader</li>
+      <li>Per-clip trim, crop, and overlay editing</li>
+      <li>Fullscreen output for projection or streaming</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">org.cutwire.Prism.desktop</launchable>
+  <developer_name>CutWire Studios</developer_name>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <content_rating type="oars-1.1"/>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Video</category>
+  </categories>
+  <url type="homepage">https://github.com/CutWire-Studios/CutWire Prism</url>
+  <url type="bugtracker">https://github.com/CutWire-Studios/CutWire Prism/issues</url>
+  <url type="vcs-browser">https://github.com/CutWire-Studios/CutWire Prism</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>CutWire Prism live media control interface</caption>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="0.1.0" date="2025-06-17">
+      <description>
+        <p>Initial Flatpak release of CutWire Prism.</p>
+      </description>
+    </release>
+  </releases>
+</component>

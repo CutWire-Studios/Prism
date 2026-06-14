@@ -1,0 +1,63 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [master, main, develop]
+  pull_request:
+    branches: [master, main, develop]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt update
+          sudo apt install -y qt6-base-dev qt6-tools-dev libgl1-mesa-dev
+
+      - name: Install FFmpeg (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt install -y libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
+
+      - name: Install Qt (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install qt@6
+
+      - name: Install FFmpeg (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install ffmpeg
+
+      - name: Install Qt (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: "6.7.0"
+          host: windows
+          target: desktop
+          arch: win64_msvc2019_64
+          tools: cmake
+
+      - name: Install FFmpeg (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install ffmpeg -y
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure || true

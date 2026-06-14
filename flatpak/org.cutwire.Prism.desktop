@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=CutWire Prism
+GenericName=Live Media Control
+Comment=Live media trigger and overlay tool for events and performances
+Exec=Prism
+Icon=org.cutwire.Prism
+Terminal=false
+Categories=AudioVideo;Video;
+Keywords=vj;video;live;overlay;media;streaming;
+StartupWMClass=Prism

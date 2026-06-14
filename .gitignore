@@ -1,0 +1,54 @@
+# Build directories
+build/
+cmake-build-debug/
+cmake-build-release/
+out/
+
+# CMake
+CMakeUserPresets.json
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+
+# Qt
+*.pro.user
+*.pro.user.*
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+*.qm
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+.clang-format.bak
+
+# OS
+.DS_Store
+Thumbs.db
+*.exe
+*.app
+*.dll
+*.so
+*.dylib
+
+# Dependencies
+vcpkg_installed/
+external/
+
+# Temp files
+*.o
+*.a
+*.lib
+*.obj
+*.pdb
+*.ilk
+
+# Test results
+Testing/
+Test.log
