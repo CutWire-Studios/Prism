@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "../core/ThumbnailExtractor.h"
 #include <QApplication>
 #include <QWidget>
 #include <QVBoxLayout>
@@ -67,11 +68,12 @@ void MainWindow::createUI() {
     for (int i = 0; i < GRID_ROWS; ++i) {
         for (int j = 0; j < GRID_COLS; ++j) {
             int index = i * GRID_COLS + j;
-            clipButtons[index] = new QPushButton(this);
-            clipButtons[index]->setMinimumSize(76, 76);
-            clipButtons[index]->setMaximumSize(76, 76);
+            clipButtons[index] = new QToolButton(this);
+            clipButtons[index]->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+            clipButtons[index]->setIconSize(QSize(82, 54));
+            clipButtons[index]->setFixedSize(96, 90);
             clipButtons[index]->setProperty("gridIndex", index);
-            connect(clipButtons[index], &QPushButton::clicked, this, [this, index]() {
+            connect(clipButtons[index], &QToolButton::clicked, this, [this, index]() {
                 onClipGridClicked(index);
             });
             gridLayout->addWidget(clipButtons[index], i, j);
@@ -204,7 +206,7 @@ void MainWindow::setupConnections() {
 void MainWindow::onClipGridClicked(int index) {
     if (selectedClipIndex == index && outputWidget->isPlaying()) {
         outputWidget->pause();
-        clipButtons[index]->setText("");
+        clipButtons[index]->setStyleSheet("");
     } else {
         selectedClipIndex = index;
         for (int i = 0; i < GRID_COLS * GRID_ROWS; ++i) {
@@ -216,7 +218,8 @@ void MainWindow::onClipGridClicked(int index) {
             if (!clipPath.isEmpty()) {
                 outputWidget->loadVideo(clipPath);
                 outputWidget->play();
-                clipButtons[index]->setText("✓");
+                clipButtons[index]->setStyleSheet(
+                    "QToolButton { border: 2px solid #2a8fa0; background-color: #1a3d45; }");
             }
         }
     }
@@ -226,15 +229,27 @@ void MainWindow::onLoadFolderClicked() {
     QString folderPath = QFileDialog::getExistingDirectory(this, "Select Media Folder", "");
     if (!folderPath.isEmpty()) {
         clipManager.loadFolder(folderPath);
-        for (int i = 0; i < GRID_COLS * GRID_ROWS && i < clipManager.getClipCount(); ++i) {
-            QString clipPath = clipManager.getClipPath(i);
-            QFileInfo info(clipPath);
-            QString fileName = info.baseName();
-            if (fileName.length() > 8) {
-                fileName = fileName.left(8) + ".";
+        for (int i = 0; i < GRID_COLS * GRID_ROWS; ++i) {
+            if (i < clipManager.getClipCount()) {
+                QString clipPath = clipManager.getClipPath(i);
+                QFileInfo info(clipPath);
+                QString name = info.baseName();
+                if (name.length() > 10)
+                    name = name.left(10) + "…";
+
+                QPixmap thumb = ThumbnailExtractor::extract(clipPath, 82, 54);
+                if (!thumb.isNull())
+                    clipButtons[i]->setIcon(QIcon(thumb));
+                else
+                    clipButtons[i]->setIcon(QIcon());
+
+                clipButtons[i]->setText(name);
+                clipButtons[i]->setEnabled(true);
+            } else {
+                clipButtons[i]->setIcon(QIcon());
+                clipButtons[i]->setText("");
+                clipButtons[i]->setEnabled(false);
             }
-            clipButtons[i]->setText(fileName);
-            clipButtons[i]->setEnabled(true);
         }
         qDebug() << "Loaded folder with" << clipManager.getClipCount() << "clips";
     }
@@ -372,19 +387,28 @@ void MainWindow::applyTheme() {
         }
 
         /* Grid Clip Buttons */
-        QPushButton[objectName*="clipButton"] {
+        QToolButton {
             background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #2a2c30, stop:1 #1e1f22);
+            border-top: 1px solid #33363b;
+            border-left: 1px solid #33363b;
+            border-bottom: 1px solid #151618;
+            border-right: 1px solid #151618;
             border-radius: 6px;
-            padding: 4px;
-            font-size: 10px;
-            min-height: 76px;
-            min-width: 76px;
-            max-height: 76px;
-            max-width: 76px;
+            padding: 3px;
+            font-size: 9px;
+            color: #E0E0E0;
         }
 
-        QPushButton[objectName*="clipButton"]:hover {
+        QToolButton:hover {
             background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #3a5c6a, stop:1 #2a4a58);
+        }
+
+        QToolButton:pressed {
+            background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #191a1c, stop:1 #2b2d32);
+            border-top: 1px solid #121314;
+            border-left: 1px solid #121314;
+            border-bottom: 1px solid #3a3d43;
+            border-right: 1px solid #3a3d43;
         }
 
         /* ==========================================================================

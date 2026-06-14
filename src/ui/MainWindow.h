@@ -3,6 +3,7 @@
 #include <QMainWindow>
 #include <QSlider>
 #include <QPushButton>
+#include <QToolButton>
 #include <QGridLayout>
 #include <QLabel>
 #include <QSpinBox>
@@ -36,7 +37,7 @@ private:
     static const int GRID_ROWS = 4;
 
     VideoWidget *outputWidget = nullptr;
-    QPushButton *clipButtons[GRID_COLS * GRID_ROWS];
+    QToolButton *clipButtons[GRID_COLS * GRID_ROWS];
 
     QPushButton *aDeckPlayBtn = nullptr;
     QPushButton *bDeckPlayBtn = nullptr;

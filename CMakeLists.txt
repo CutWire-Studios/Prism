@@ -19,6 +19,7 @@ set(SOURCES
     src/main.cpp
     src/core/VideoPlayer.cpp
     src/core/ClipManager.cpp
+    src/core/ThumbnailExtractor.cpp
     src/ui/MainWindow.cpp
     src/ui/VideoWidget.cpp
 )
@@ -26,6 +27,7 @@ set(SOURCES
 set(HEADERS
     src/core/VideoPlayer.h
     src/core/ClipManager.h
+    src/core/ThumbnailExtractor.h
     src/ui/MainWindow.h
     src/ui/VideoWidget.h
 )
