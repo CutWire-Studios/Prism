@@ -13,6 +13,8 @@ public:
     void loadClip(const QString &path, const QPixmap &thumbnail);
     void clearClip();
     void setActive(bool active);
+    void setASelected(bool selected);
+    void setBSelected(bool selected);
 
     QString clipPath() const { return m_clipPath; }
     bool isMuted() const { return m_muted; }
@@ -23,11 +25,15 @@ public:
 
 signals:
     void triggered(int index);
+    void aButtonClicked(int index);
+    void bButtonClicked(int index);
 
 private slots:
     void onMuteClicked();
     void onRepeatClicked();
     void onEditClicked();
+    void onAButtonClicked();
+    void onBButtonClicked();
 
 private:
     int m_index;
@@ -43,4 +49,8 @@ private:
     QSlider *volumeSlider;
     QPushButton *repeatBtn;
     QPushButton *editBtn;
+    QPushButton *aBtn;
+    QPushButton *bBtn;
+    bool m_aSelected = false;
+    bool m_bSelected = false;
 };

@@ -65,6 +65,25 @@ ClipCard::ClipCard(int index, QWidget *parent)
     connect(editBtn, &QPushButton::clicked, this, &ClipCard::onEditClicked);
     layout->addWidget(editBtn);
 
+    QWidget *abRow = new QWidget(this);
+    QHBoxLayout *abLayout = new QHBoxLayout(abRow);
+    abLayout->setContentsMargins(0, 0, 0, 0);
+    abLayout->setSpacing(3);
+
+    aBtn = new QPushButton("A", this);
+    aBtn->setFixedHeight(20);
+    aBtn->setStyleSheet("font-size: 9px; min-height: 0; height: 20px;");
+    connect(aBtn, &QPushButton::clicked, this, &ClipCard::onAButtonClicked);
+
+    bBtn = new QPushButton("B", this);
+    bBtn->setFixedHeight(20);
+    bBtn->setStyleSheet("font-size: 9px; min-height: 0; height: 20px;");
+    connect(bBtn, &QPushButton::clicked, this, &ClipCard::onBButtonClicked);
+
+    abLayout->addWidget(aBtn, 1);
+    abLayout->addWidget(bBtn, 1);
+    layout->addWidget(abRow);
+
     clearClip();
 }
 
@@ -91,6 +110,8 @@ void ClipCard::loadClip(const QString &path, const QPixmap &thumbnail) {
     editBtn->setEnabled(true);
     muteBtn->setEnabled(true);
     volumeSlider->setEnabled(true);
+    aBtn->setEnabled(true);
+    bBtn->setEnabled(true);
     setActive(false);
 }
 
@@ -106,7 +127,11 @@ void ClipCard::clearClip() {
     editBtn->setEnabled(false);
     muteBtn->setEnabled(false);
     volumeSlider->setEnabled(false);
+    aBtn->setEnabled(false);
+    bBtn->setEnabled(false);
     setActive(false);
+    setASelected(false);
+    setBSelected(false);
 }
 
 void ClipCard::setActive(bool active) {
@@ -114,6 +139,24 @@ void ClipCard::setActive(bool active) {
         setStyleSheet("ClipCard { background-color: #1a3d45; border: 2px solid #2a8fa0; border-radius: 8px; }");
     } else {
         setStyleSheet("ClipCard { background-color: #242528; border: 1px solid #1c1d1f; border-radius: 8px; }");
+    }
+}
+
+void ClipCard::setASelected(bool selected) {
+    m_aSelected = selected;
+    if (selected) {
+        aBtn->setStyleSheet("QPushButton { background-color: #2a5c66; color: #FFFFFF; font-weight: bold; font-size: 9px; min-height: 0; height: 20px; border-radius: 4px; }");
+    } else {
+        aBtn->setStyleSheet("font-size: 9px; min-height: 0; height: 20px;");
+    }
+}
+
+void ClipCard::setBSelected(bool selected) {
+    m_bSelected = selected;
+    if (selected) {
+        bBtn->setStyleSheet("QPushButton { background-color: #2a5c66; color: #FFFFFF; font-weight: bold; font-size: 9px; min-height: 0; height: 20px; border-radius: 4px; }");
+    } else {
+        bBtn->setStyleSheet("font-size: 9px; min-height: 0; height: 20px;");
     }
 }
 
@@ -134,4 +177,14 @@ void ClipCard::onEditClicked() {
         m_startTime = dlg.startTime();
         m_endTime = dlg.endTime();
     }
+}
+
+void ClipCard::onAButtonClicked() {
+    if (m_clipPath.isEmpty()) return;
+    emit aButtonClicked(m_index);
+}
+
+void ClipCard::onBButtonClicked() {
+    if (m_clipPath.isEmpty()) return;
+    emit bButtonClicked(m_index);
 }

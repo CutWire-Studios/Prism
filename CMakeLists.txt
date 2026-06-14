@@ -24,6 +24,7 @@ set(SOURCES
     src/ui/VideoWidget.cpp
     src/ui/ClipCard.cpp
     src/ui/ClipEditDialog.cpp
+    src/ui/OutputWindow.cpp
 )
 
 set(HEADERS
@@ -34,6 +35,7 @@ set(HEADERS
     src/ui/VideoWidget.h
     src/ui/ClipCard.h
     src/ui/ClipEditDialog.h
+    src/ui/OutputWindow.h
 )
 
 # Create executable
