@@ -50,10 +50,6 @@ bool VideoPlayer::open(const QString &filePath) {
     codecContext = avcodec_alloc_context3(codec);
     avcodec_parameters_to_context(codecContext, videoStream->codecpar);
     codecContext->thread_count = 0; // auto-detect thread count
-    
-    // Ensure proper color range to avoid deprecation warnings from swscaler
-    if (codecContext->color_range == AVCOL_RANGE_UNSPECIFIED)
-       codecContext->color_range = AVCOL_RANGE_MPEG;
 
     if (avcodec_open2(codecContext, codec, nullptr) < 0) {
         qWarning() << "Could not open codec";
@@ -152,17 +148,13 @@ bool VideoPlayer::decodeFrame() {
 
             ret = avcodec_receive_frame(codecContext, frame);
             if (ret == 0) {
-               // Ensure proper color range to avoid deprecation warnings
-               if (frame->color_range == AVCOL_RANGE_UNSPECIFIED)
-                   frame->color_range = AVCOL_RANGE_MPEG;
-                
-               sws_scale(swsContext, frame->data, frame->linesize, 0, codecContext->height,
-                        frameRGB->data, frameRGB->linesize);
-               frameCount++;
-               frameDecoded = true;
-               av_packet_unref(&packet);
-               av_frame_free(&frame);
-               return true;
+                sws_scale(swsContext, frame->data, frame->linesize, 0, codecContext->height,
+                         frameRGB->data, frameRGB->linesize);
+                frameCount++;
+                frameDecoded = true;
+                av_packet_unref(&packet);
+                av_frame_free(&frame);
+                return true;
             }
         }
         av_packet_unref(&packet);

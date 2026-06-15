@@ -22,8 +22,6 @@ public:
     void setActive(bool active);
     void setASelected(bool selected);
     void setBSelected(bool selected);
-    bool isASelected() const { return m_aSelected; }
-    bool isBSelected() const { return m_bSelected; }
 
     // Update this card's grid index (called after rebuildGrid re-flows cards).
     void setIndex(int idx) { m_index = idx; }

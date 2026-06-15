@@ -6,7 +6,6 @@
 #include <QHash>
 #include <QPixmap>
 #include <memory>
-#include <vector>
 #include "core/MediaSource.h"
 #include "core/OverlayItem.h"
 
@@ -47,17 +46,6 @@ public:
     // Overlays drawn on top of the output
     void setOverlaysA(const QList<OverlayItem> &overlays);
     void setOverlaysB(const QList<OverlayItem> &overlays);
-
-    // ── Node chain compositing ────────────────────────────────────────────────
-    // Sources from upstream nodes are rendered on top of the base deck source,
-    // in order (index 0 = directly above base, last index = topmost).
-    struct NodeChainSource {
-        std::unique_ptr<MediaSource> source;
-        float cropX = 0.f, cropY = 0.f, cropW = 1.f, cropH = 1.f;
-        bool  playing = false;   // whether to call nextFrame() each tick
-    };
-    void setNodeChainA(std::vector<NodeChainSource> chain);
-    void setNodeChainB(std::vector<NodeChainSource> chain);
 
     bool   isPlayingA()      const { return m_playingA; }
     bool   isPlayingB()      const { return m_playingB; }
@@ -121,12 +109,6 @@ private:
     QList<OverlayItem>       m_overlaysB;
     QHash<QString, QPixmap>  m_overlayPixCache;
 
-    // Node chain sources (upstream overlays)
-    std::vector<NodeChainSource> m_chainA;
-    std::vector<NodeChainSource> m_chainB;
-    std::vector<GLuint>          m_chainTexA;
-    std::vector<GLuint>          m_chainTexB;
-
     QTimer *m_frameTimer = nullptr;
     QRectF  m_videoRectA;
     QRectF  m_videoRectB;
@@ -146,12 +128,4 @@ private:
     void   loadSourceInternal(const QString &filePath,
                               std::unique_ptr<MediaSource> &target,
                               GLuint &tex, bool &playing);
-
-    void clearChainTextures(std::vector<GLuint> &texList);
-    void primeChainSources(std::vector<NodeChainSource> &chain,
-                           std::vector<GLuint> &texList);
-    void drawChainSources(std::vector<NodeChainSource> &chain,
-                          std::vector<GLuint> &texList, float alpha);
-    void advanceChainSources(std::vector<NodeChainSource> &chain,
-                             std::vector<GLuint> &texList, bool &anyDecoded);
 };

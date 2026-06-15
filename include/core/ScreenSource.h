@@ -3,26 +3,24 @@
 #include "core/MediaSource.h"
 #include <QObject>
 #include <QImage>
-#include <QtCore/qglobal.h>
+#include <QString>
+#include <QVariantMap>
+#include <gst/gst.h>
+#include <gst/app/gstappsink.h>
 
 class QScreen;
-class QMediaCaptureSession;
-class QVideoSink;
-class QVideoFrame;
 
-#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
-class QScreenCapture;
-#endif
-
-// MediaSource that captures a display/screen via Qt Multimedia.
+// MediaSource that captures a display or window via the XDG Desktop Portal
+// ScreenCast D-Bus API (org.freedesktop.portal.ScreenCast), reading frames
+// through a PipeWire stream via GStreamer's pipewiresrc element.
 //
-// Requires Qt 6.5+ (QScreenCapture was introduced in 6.5).
-// On older Qt the source compiles cleanly but start() always returns false.
+// The portal shows its own picker UI — the user selects the capture source
+// interactively. Pass CaptureType to control which sources are offered.
 //
 // Usage:
 //   auto scr = std::make_unique<ScreenSource>();
-//   scr->start();                 // primary screen
-//   scr->start(someQScreen);      // specific screen
+//   scr->start(ScreenSource::CaptureType::Monitor);   // screen picker
+//   scr->start(ScreenSource::CaptureType::Window);    // window/tab picker
 //   videoWidget->setSourceB(std::move(scr));
 //   videoWidget->playB();
 
@@ -30,11 +28,16 @@ class ScreenSource : public QObject, public MediaSource {
     Q_OBJECT
 
 public:
+    enum class CaptureType {
+        Monitor = 1,  // physical displays only
+        Window  = 2,  // application windows / browser tabs
+        Any     = 3,  // let the user choose either
+    };
+
     ScreenSource();
     ~ScreenSource() override;
 
-    // Start capturing. Pass nullptr to use the primary screen.
-    bool start(QScreen *screen = nullptr);
+    bool start(CaptureType type = CaptureType::Monitor);
     void stop();
 
     bool isCapturing() const;
@@ -49,15 +52,24 @@ public:
     QString displayName() const override { return m_name; }
 
 private slots:
-    void onVideoFrameChanged(const QVideoFrame &frame);
+    void onCreateSessionResponse(uint response, QVariantMap results);
+    void onSelectSourcesResponse(uint response, QVariantMap results);
+    void onStartResponse(uint response, QVariantMap results);
 
 private:
-#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
-    QScreenCapture       *m_capture = nullptr;
-    QMediaCaptureSession *m_session = nullptr;
-    QVideoSink           *m_sink    = nullptr;
-#endif
-    QImage  m_frame;   // Format_RGB888, updated on main thread
-    bool    m_dirty  = false;
+    void buildGstPipeline(int fd, uint32_t nodeId);
+    static GstFlowReturn onNewSample(GstAppSink *sink, gpointer userData);
+
+    enum class State { Idle, CreatingSession, SelectingSources, Starting, Capturing };
+    State       m_state       = State::Idle;
+    CaptureType m_captureType = CaptureType::Monitor;
+
+    QString m_sessionHandle;
     QString m_name;
+
+    GstElement *m_pipeline = nullptr;
+    GstElement *m_appsink  = nullptr;
+
+    QImage  m_frame;
+    bool    m_dirty = false;
 };

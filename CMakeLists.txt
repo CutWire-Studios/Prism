@@ -8,13 +8,18 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Qt
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets Gui Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets Gui Multimedia DBus)
+
+# GStreamer (for ScreenSource PipeWire frame capture)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
+pkg_check_modules(GSTREAMER_APP REQUIRED gstreamer-app-1.0)
 
 # FFmpeg
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat avutil swscale)
 
-
+# Source files
 set(SOURCES
     src/main.cpp
     src/core/VideoPlayer.cpp
@@ -32,8 +37,6 @@ set(SOURCES
     src/ui/MainWindow.cpp
     src/ui/VideoWidget.cpp
     src/ui/ClipCard.cpp
-    src/ui/ClipNodeModel.cpp
-    src/ui/ClipNodeEditor.cpp
     src/ui/ClipEditDialog.cpp
     src/ui/CropSelectorWidget.cpp
     src/ui/OverlayCanvasWidget.cpp
@@ -59,8 +62,6 @@ set(HEADERS
     include/ui/MainWindow.h
     include/ui/VideoWidget.h
     include/ui/ClipCard.h
-    include/ui/ClipNodeModel.h
-    include/ui/ClipNodeEditor.h
     include/ui/ClipEditDialog.h
     include/ui/CropSelectorWidget.h
     include/ui/OverlayCanvasWidget.h
@@ -88,6 +89,8 @@ set_target_properties(Prism PROPERTIES
 target_include_directories(Prism PRIVATE
     include
     ${FFMPEG_INCLUDE_DIRS}
+    ${GSTREAMER_INCLUDE_DIRS}
+    ${GSTREAMER_APP_INCLUDE_DIRS}
 )
 
 # Link libraries
@@ -98,7 +101,10 @@ target_link_libraries(Prism PRIVATE
     Qt6::OpenGLWidgets
     Qt6::Gui
     Qt6::Multimedia
+    Qt6::DBus
     ${FFMPEG_LIBRARIES}
+    ${GSTREAMER_LIBRARIES}
+    ${GSTREAMER_APP_LIBRARIES}
 )
 
 # Enable testing
