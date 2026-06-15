@@ -34,6 +34,12 @@ public:
     // ── Get Ordered Clip Chain ──────────────────────────────────────────────
     QVector<ClipNodeModel *> getClipChain(NodeId fromClip) const;
 
+    // ── Transform queries ────────────────────────────────────────────────────
+    NodeId transformNodeForClip(NodeId clipId) const;
+    bool clipTransform(NodeId clipId, float &x, float &y, float &w, float &h) const;
+    void setClipTransform(NodeId clipId, float x, float y, float w, float h);
+    QVector<NodeId> clipsForContext(NodeId contextId) const;
+
 signals:
     void clipChainChanged();
     void deckAClipChanged(NodeId clipId);
@@ -45,6 +51,11 @@ private slots:
     void onNodeAButtonClicked(NodeId nodeId);
     void onNodeBButtonClicked(NodeId nodeId);
     void onNodeRemoveRequested(NodeId nodeId);
+    void onCanvasContextMenu();
+    void onAddTransformContext();
+    void onEditTransformNode(NodeId nodeId);
+    void onEditContextNode(NodeId nodeId);
+    void onOpenTransformEditor(NodeId contextId);
 
 private:
     ClipNodeModel *createAndAddNode(NodeId nodeId);
@@ -56,6 +67,8 @@ private:
     QGraphicsView *m_view   = nullptr;
 
     QMap<NodeId, ClipNodeModel *> m_nodeMap;
+    QMap<NodeId, void *> m_transformNodes;
+    QMap<NodeId, void *> m_contextNodes;
     NodeId m_activeClipA = 0;
     NodeId m_activeClipB = 0;
     NodeId m_nextId      = 1;

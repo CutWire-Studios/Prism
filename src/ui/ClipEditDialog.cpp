@@ -1,14 +1,8 @@
 #include "ui/ClipEditDialog.h"
 #include "ui_ClipEditDialog.h"
 #include "core/VideoPlayer.h"
-#include "ui/BasePlacementWidget.h"
-#include "ui/OverlayCanvasWidget.h"
 #include <QShowEvent>
-#include <QColorDialog>
-#include <QFileDialog>
 #include <cmath>
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 ClipEditDialog::ClipEditDialog(const QString &clipPath, const ClipSettings &settings,
                                QWidget *parent)
@@ -19,24 +13,17 @@ ClipEditDialog::ClipEditDialog(const QString &clipPath, const ClipSettings &sett
     , m_endTime(settings.endTime)
     , m_cropX(settings.cropX), m_cropY(settings.cropY)
     , m_cropW(settings.cropW), m_cropH(settings.cropH)
-    , m_baseX(settings.baseX), m_baseY(settings.baseY)
-    , m_baseW(settings.baseW), m_baseH(settings.baseH)
-    , m_overlays(settings.overlays)
 {
     ui->setupUi(this);
     setWindowTitle("Edit Clip — " + clipPath.section('/', -1));
 
-    // Probe duration cheaply
-    {
-        VideoPlayer tmp;
-        if (tmp.open(clipPath))
-            m_duration = tmp.getDuration();
-    }
+    VideoPlayer tmp;
+    if (tmp.open(clipPath))
+        m_duration = tmp.getDuration();
     if (m_duration <= 0.0) m_duration = 1.0;
     if (m_endTime < 0.0 || m_endTime > m_duration) m_endTime = m_duration;
     m_startTime = clampTime(m_startTime);
 
-    // ── Trim tab setup ────────────────────────────────────────────────────
     ui->progressSlider->setRange(0, toSliderVal(m_duration));
     ui->progressSlider->setValue(toSliderVal(m_startTime));
     ui->durationLabel->setText("/ " + formatTime(m_duration));
@@ -66,7 +53,6 @@ ClipEditDialog::ClipEditDialog(const QString &clipPath, const ClipSettings &sett
     connect(ui->progressSlider, &QSlider::sliderReleased, this, &ClipEditDialog::onProgressSliderReleased);
     connect(ui->timestampEdit,  &QLineEdit::editingFinished, this, &ClipEditDialog::onTimestampEditFinished);
 
-    // ── Crop tab setup ────────────────────────────────────────────────────
     syncCropSpinsFromValues();
 
     connect(ui->cropSelector, &CropSelectorWidget::cropChanged,
@@ -82,39 +68,6 @@ ClipEditDialog::ClipEditDialog(const QString &clipPath, const ClipSettings &sett
     connect(ui->resetCropBtn,    &QPushButton::clicked, this, &ClipEditDialog::onResetCrop);
     connect(ui->cropPreviewCheck,&QCheckBox::toggled,   this, &ClipEditDialog::onCropPreviewToggled);
     connect(ui->tabWidget, &QTabWidget::currentChanged, this, &ClipEditDialog::onTabChanged);
-
-    // ── Base placement tab setup ─────────────────────────────────────────
-    syncBasePlacementFromValues();
-    connect(ui->baseCanvas, &BasePlacementWidget::placementChanged,
-            this, &ClipEditDialog::onBasePlacementChanged);
-    connect(ui->resetBaseBtn, &QPushButton::clicked,
-            this, &ClipEditDialog::onResetBasePlacement);
-
-    // ── Overlays tab setup ────────────────────────────────────────────────
-    ui->overlayCanvas->setOverlays(m_overlays);
-    setPropsEnabled(false);
-
-    connect(ui->addTextBtn,    &QPushButton::clicked, this, &ClipEditDialog::onAddTextOverlay);
-    connect(ui->addImageBtn,   &QPushButton::clicked, this, &ClipEditDialog::onAddImageOverlay);
-    connect(ui->removeOverlayBtn, &QPushButton::clicked, this, &ClipEditDialog::onRemoveOverlay);
-
-    connect(ui->overlayCanvas, &OverlayCanvasWidget::overlaySelected,
-            this, &ClipEditDialog::onCanvasOverlaySelected);
-    connect(ui->overlayCanvas, &OverlayCanvasWidget::overlayChanged,
-            this, &ClipEditDialog::onCanvasOverlayChanged);
-
-    connect(ui->ovContentEdit, &QLineEdit::textChanged,
-            this, &ClipEditDialog::onOverlayContentChanged);
-    connect(ui->ovImageBtn,   &QPushButton::clicked,
-            this, &ClipEditDialog::onOverlayImageBrowse);
-    connect(ui->ovColorBtn,   &QPushButton::clicked,
-            this, &ClipEditDialog::onOverlayColorClicked);
-    connect(ui->ovOpacitySlider, &QSlider::valueChanged,
-            this, &ClipEditDialog::onOverlayOpacityChanged);
-    connect(ui->ovFontSizeSpin, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, &ClipEditDialog::onOverlayFontSizeChanged);
-    connect(ui->ovVisibleCheck, &QCheckBox::toggled,
-            this, &ClipEditDialog::onOverlayVisibilityChanged);
 }
 
 ClipEditDialog::~ClipEditDialog() {
@@ -122,7 +75,6 @@ ClipEditDialog::~ClipEditDialog() {
 }
 
 void ClipEditDialog::hideTrimTab() {
-    // Tab 0 is the Trim tab — remove it so only Crop and Overlays remain.
     ui->tabWidget->removeTab(0);
     setWindowTitle("Edit — " + m_clipPath.section('/', -1));
 }
@@ -133,15 +85,8 @@ ClipSettings ClipEditDialog::resultSettings() const {
     s.endTime   = m_endTime;
     s.cropX = m_cropX; s.cropY = m_cropY;
     s.cropW = m_cropW; s.cropH = m_cropH;
-    s.baseX = m_baseX; s.baseY = m_baseY;
-    s.baseW = m_baseW; s.baseH = m_baseH;
-    s.overlays = m_overlays;
     return s;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Show event — load video into preview
-// ─────────────────────────────────────────────────────────────────────────────
 
 void ClipEditDialog::showEvent(QShowEvent *event) {
     QDialog::showEvent(event);
@@ -149,17 +94,7 @@ void ClipEditDialog::showEvent(QShowEvent *event) {
         m_videoLoaded = true;
         QTimer::singleShot(60, this, [this]() {
             ui->preview->loadVideo(m_clipPath);
-            ui->preview->setOverlaysA(m_overlays);
-            ui->preview->setBaseA(m_baseX, m_baseY, m_baseW, m_baseH);
-            ui->overlayCanvas->setOverlays(m_overlays);
             applyCropToPreview();
-            applyBaseToPreview();
-            if (ui->tabWidget->currentWidget() == ui->baseTab) {
-                QImage frame = ui->preview->getFrameA();
-                if (!frame.isNull())
-                    ui->baseCanvas->setFrame(frame);
-                ui->baseCanvas->setPlacement(m_baseX, m_baseY, m_baseW, m_baseH);
-            }
 
             double d = ui->preview->getDuration();
             if (d > 0.0 && std::fabs(d - m_duration) > 0.5) {
@@ -169,17 +104,13 @@ void ClipEditDialog::showEvent(QShowEvent *event) {
                 ui->totalDurationLabel->setText("/ " + formatTime(m_duration));
                 if (m_endTime > m_duration) { m_endTime = m_duration; updateSelectionLabels(); }
             }
-        seekTo(m_startTime);
-        ui->preview->play();            // auto-play so crop/overlay tabs show live video
-        ui->playPauseBtn->setText("⏸");
-        pollTimer->start();
+            seekTo(m_startTime);
+            ui->preview->play();
+            ui->playPauseBtn->setText("⏸");
+            pollTimer->start();
         });
     }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Trim tab slots
-// ─────────────────────────────────────────────────────────────────────────────
 
 void ClipEditDialog::onPlayPauseClicked() {
     if (!m_videoLoaded) return;
@@ -253,55 +184,27 @@ void ClipEditDialog::onPollTimer() {
     if (!ui->timestampEdit->hasFocus())
         ui->timestampEdit->setText(formatTime(t));
 
-    // Always feed the latest frame into the crop selector so the user
-    // sees live video (or the current paused frame) while cropping/adding overlays.
-    QWidget *cur = ui->tabWidget->currentWidget();
-    if (cur == ui->cropTab || cur == ui->overlaysTab) {
+    if (ui->tabWidget->currentWidget() == ui->cropTab) {
         QImage frame = ui->preview->getFrameA();
-        if (!frame.isNull()) {
+        if (!frame.isNull())
             ui->cropSelector->setFrame(frame);
-            ui->overlayCanvas->setFrame(frame);
-        }
     }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Crop tab slots
-// ─────────────────────────────────────────────────────────────────────────────
 
 void ClipEditDialog::onTabChanged(int index) {
     QWidget *tab = ui->tabWidget->widget(index);
     if (!m_videoLoaded) return;
 
     if (tab == ui->cropTab) {
-        // Grab current frame for the crop selector
         QImage frame = ui->preview->getFrameA();
         if (!frame.isNull())
             ui->cropSelector->setFrame(frame);
-        // Sync selector to current crop values
         ui->cropSelector->blockSignals(true);
         ui->cropSelector->setCrop(m_cropX, m_cropY, m_cropW, m_cropH);
         ui->cropSelector->blockSignals(false);
-        // Apply crop to the preview VideoWidget above the tabs
         applyCropToPreview();
-        applyBaseToPreview();
-    } else if (tab == ui->baseTab) {
-        QImage frame = ui->preview->getFrameA();
-        if (!frame.isNull())
-            ui->baseCanvas->setFrame(frame);
-        ui->baseCanvas->blockSignals(true);
-        ui->baseCanvas->setPlacement(m_baseX, m_baseY, m_baseW, m_baseH);
-        ui->baseCanvas->blockSignals(false);
-        applyBaseToPreview();
     } else if (tab == ui->trimTab) {
-        // Remove crop from preview when back on Trim tab so scrubbing
-        // shows the full frame (makes trimming easier).
         ui->preview->setCropA(0.f, 0.f, 1.f, 1.f);
-        applyBaseToPreview();
-    } else if (tab == ui->overlaysTab) {
-        // Show crop on preview while editing overlays so the framing is correct.
-        applyCropToPreview();
-        applyBaseToPreview();
     }
 }
 
@@ -317,7 +220,6 @@ void ClipEditDialog::onCropSpinChanged() {
     m_cropY = static_cast<float>(ui->cropYSpin->value() / 100.0);
     m_cropW = static_cast<float>(ui->cropWSpin->value() / 100.0);
     m_cropH = static_cast<float>(ui->cropHSpin->value() / 100.0);
-    // Sync selector without triggering signals
     ui->cropSelector->blockSignals(true);
     ui->cropSelector->setCrop(m_cropX, m_cropY, m_cropW, m_cropH);
     ui->cropSelector->blockSignals(false);
@@ -340,20 +242,6 @@ void ClipEditDialog::onCropPreviewToggled(bool checked) {
         ui->preview->setCropA(0.f, 0.f, 1.f, 1.f);
 }
 
-void ClipEditDialog::onBasePlacementChanged(float x, float y, float w, float h) {
-    m_baseX = x; m_baseY = y; m_baseW = w; m_baseH = h;
-    applyBaseToPreview();
-}
-
-void ClipEditDialog::onResetBasePlacement() {
-    m_baseX = 0.f; m_baseY = 0.f; m_baseW = 1.f; m_baseH = 1.f;
-    syncBasePlacementFromValues();
-    ui->baseCanvas->blockSignals(true);
-    ui->baseCanvas->setPlacement(0.f, 0.f, 1.f, 1.f);
-    ui->baseCanvas->blockSignals(false);
-    applyBaseToPreview();
-}
-
 void ClipEditDialog::syncCropSpinsFromValues() {
     m_cropSpinChanging = true;
     ui->cropXSpin->setValue(m_cropX * 100.0);
@@ -366,191 +254,9 @@ void ClipEditDialog::syncCropSpinsFromValues() {
 void ClipEditDialog::applyCropToPreview() {
     if (ui->cropPreviewCheck->isChecked()) {
         ui->preview->setCropA(m_cropX, m_cropY, m_cropW, m_cropH);
-        ui->preview->update();   // force immediate repaint
+        ui->preview->update();
     }
 }
-
-void ClipEditDialog::syncBasePlacementFromValues() {
-    ui->baseCanvas->setPlacement(m_baseX, m_baseY, m_baseW, m_baseH);
-}
-
-void ClipEditDialog::applyBaseToPreview() {
-    ui->preview->setBaseA(m_baseX, m_baseY, m_baseW, m_baseH);
-    ui->preview->update();
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Overlays tab slots
-// ─────────────────────────────────────────────────────────────────────────────
-
-void ClipEditDialog::onAddTextOverlay() {
-    OverlayItem ov;
-    ov.type    = OverlayItem::Type::Text;
-    ov.content = "New Text";
-    ov.x = 0.25f; ov.y = 0.82f; ov.w = 0.5f; ov.h = 0.10f;
-    m_overlays.append(ov);
-    m_selectedOverlayIdx = m_overlays.size() - 1;
-    updateOverlayCanvas();
-    populatePropsFromOverlay(m_selectedOverlayIdx);
-    setPropsEnabled(true);
-    updateSelectedLabel();
-}
-
-void ClipEditDialog::onAddImageOverlay() {
-    QString path = QFileDialog::getOpenFileName(this, "Select Image",
-        m_clipPath.section('/', 0, -2),
-        "Images (*.png *.jpg *.jpeg *.bmp *.gif *.svg *.webp)");
-    if (path.isEmpty()) return;
-    OverlayItem ov;
-    ov.type    = OverlayItem::Type::Image;
-    ov.content = path;
-    ov.x = 0.75f; ov.y = 0.04f; ov.w = 0.20f; ov.h = 0.18f;
-    m_overlays.append(ov);
-    m_selectedOverlayIdx = m_overlays.size() - 1;
-    updateOverlayCanvas();
-    populatePropsFromOverlay(m_selectedOverlayIdx);
-    setPropsEnabled(true);
-    updateSelectedLabel();
-}
-
-void ClipEditDialog::onRemoveOverlay() {
-    if (m_selectedOverlayIdx < 0 || m_selectedOverlayIdx >= m_overlays.size()) return;
-    m_overlays.removeAt(m_selectedOverlayIdx);
-    m_selectedOverlayIdx = -1;
-    updateOverlayCanvas();
-    setPropsEnabled(false);
-    updateSelectedLabel();
-    if (m_videoLoaded) ui->preview->setOverlaysA(m_overlays);
-}
-
-void ClipEditDialog::onCanvasOverlaySelected(int index) {
-    m_selectedOverlayIdx = index;
-    if (index >= 0 && index < m_overlays.size()) {
-        populatePropsFromOverlay(index);
-        setPropsEnabled(true);
-    } else {
-        setPropsEnabled(false);
-    }
-    updateSelectedLabel();
-}
-
-void ClipEditDialog::onCanvasOverlayChanged(int index, const OverlayItem &item) {
-    if (index < 0 || index >= m_overlays.size()) return;
-    m_overlays[index] = item;
-    if (m_videoLoaded) ui->preview->setOverlaysA(m_overlays);
-}
-
-void ClipEditDialog::onOverlayContentChanged() {
-    if (m_overlayUpdating) return;
-    if (m_selectedOverlayIdx < 0 || m_selectedOverlayIdx >= m_overlays.size()) return;
-    m_overlays[m_selectedOverlayIdx].content = ui->ovContentEdit->text();
-    updateOverlayCanvas();
-    updateSelectedLabel();
-    if (m_videoLoaded) ui->preview->setOverlaysA(m_overlays);
-}
-
-void ClipEditDialog::onOverlayImageBrowse() {
-    QString path = QFileDialog::getOpenFileName(this, "Select Image",
-        m_clipPath.section('/', 0, -2),
-        "Images (*.png *.jpg *.jpeg *.bmp *.gif *.svg *.webp)");
-    if (path.isEmpty()) return;
-    if (m_selectedOverlayIdx < 0 || m_selectedOverlayIdx >= m_overlays.size()) return;
-    m_overlays[m_selectedOverlayIdx].content = path;
-    m_overlayUpdating = true;
-    ui->ovContentEdit->setText(path);
-    m_overlayUpdating = false;
-    updateOverlayCanvas();
-    updateSelectedLabel();
-    if (m_videoLoaded) ui->preview->setOverlaysA(m_overlays);
-}
-
-void ClipEditDialog::onOverlayOpacityChanged(int value) {
-    if (m_overlayUpdating) return;
-    if (m_selectedOverlayIdx < 0 || m_selectedOverlayIdx >= m_overlays.size()) return;
-    m_overlays[m_selectedOverlayIdx].opacity = value / 100.f;
-    ui->ovOpacityLabel->setText(QString::number(value) + "%");
-    updateOverlayCanvas();
-    if (m_videoLoaded) ui->preview->setOverlaysA(m_overlays);
-}
-
-void ClipEditDialog::onOverlayColorClicked() {
-    QColor c = QColorDialog::getColor(m_currentOverlayColor, this, "Pick Text Color",
-                                      QColorDialog::ShowAlphaChannel);
-    if (!c.isValid()) return;
-    m_currentOverlayColor = c;
-    updateColorButton(c);
-    if (m_selectedOverlayIdx < 0 || m_selectedOverlayIdx >= m_overlays.size()) return;
-    m_overlays[m_selectedOverlayIdx].color = c;
-    updateOverlayCanvas();
-    if (m_videoLoaded) ui->preview->setOverlaysA(m_overlays);
-}
-
-void ClipEditDialog::onOverlayFontSizeChanged(int value) {
-    if (m_overlayUpdating) return;
-    if (m_selectedOverlayIdx < 0 || m_selectedOverlayIdx >= m_overlays.size()) return;
-    m_overlays[m_selectedOverlayIdx].fontSize = value;
-    updateOverlayCanvas();
-    if (m_videoLoaded) ui->preview->setOverlaysA(m_overlays);
-}
-
-void ClipEditDialog::onOverlayVisibilityChanged(bool checked) {
-    if (m_overlayUpdating) return;
-    if (m_selectedOverlayIdx < 0 || m_selectedOverlayIdx >= m_overlays.size()) return;
-    m_overlays[m_selectedOverlayIdx].visible = checked;
-    updateOverlayCanvas();
-    if (m_videoLoaded) ui->preview->setOverlaysA(m_overlays);
-}
-
-// ── Overlay helpers ───────────────────────────────────────────────────────────
-
-void ClipEditDialog::populatePropsFromOverlay(int idx) {
-    if (idx < 0 || idx >= m_overlays.size()) return;
-    m_overlayUpdating = true;
-    const OverlayItem &ov = m_overlays[idx];
-    bool isText = (ov.type == OverlayItem::Type::Text);
-    ui->ovContentEdit->setText(ov.content);
-    ui->ovContentEdit->setPlaceholderText(isText ? "Type your text here…" : "Image file path…");
-    ui->ovImageBtn->setVisible(!isText);
-    ui->ovColorBtn->setVisible(isText);
-    ui->ovColorHeadLabel->setVisible(isText);
-    ui->ovFontSizeLabel->setVisible(isText);
-    ui->ovFontSizeSpin->setVisible(isText);
-    ui->ovOpacitySlider->setValue(static_cast<int>(ov.opacity * 100));
-    ui->ovOpacityLabel->setText(QString::number(static_cast<int>(ov.opacity * 100)) + "%");
-    ui->ovFontSizeSpin->setValue(ov.fontSize);
-    ui->ovVisibleCheck->setChecked(ov.visible);
-    m_currentOverlayColor = ov.color;
-    updateColorButton(ov.color);
-    m_overlayUpdating = false;
-}
-
-void ClipEditDialog::updateOverlayCanvas() {
-    ui->overlayCanvas->setOverlays(m_overlays);
-    ui->overlayCanvas->setSelectedIndex(m_selectedOverlayIdx);
-}
-
-void ClipEditDialog::setPropsEnabled(bool enabled) {
-    ui->overlayPropsGroup->setEnabled(enabled);
-    ui->removeOverlayBtn->setEnabled(enabled);
-}
-
-void ClipEditDialog::updateSelectedLabel() {
-    if (m_selectedOverlayIdx >= 0 && m_selectedOverlayIdx < m_overlays.size())
-        ui->selectedOverlayLabel->setText(m_overlays[m_selectedOverlayIdx].displayName());
-    else
-        ui->selectedOverlayLabel->setText("No overlay selected");
-}
-
-void ClipEditDialog::updateColorButton(const QColor &c) {
-    ui->ovColorBtn->setStyleSheet(
-        QString("background-color:%1;color:%2;border:1px solid #444;padding:2px 8px;")
-        .arg(c.name()).arg(c.lightness() > 128 ? "#000" : "#fff"));
-    ui->ovColorBtn->setText(c.name().toUpper());
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Trim private helpers (unchanged)
-// ─────────────────────────────────────────────────────────────────────────────
 
 void ClipEditDialog::seekRelative(double delta) {
     if (!m_videoLoaded) return;
@@ -617,5 +323,6 @@ double ClipEditDialog::parseTime(const QString &str, bool *ok) const {
 double ClipEditDialog::clampTime(double t) const {
     return t < 0.0 ? 0.0 : t > m_duration ? m_duration : t;
 }
+
 int    ClipEditDialog::toSliderVal(double secs) const { return static_cast<int>(secs * 100.0); }
 double ClipEditDialog::fromSliderVal(int val)   const { return val / 100.0; }

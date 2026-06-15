@@ -26,9 +26,16 @@ public:
     // Show / clear the hotkey badge on the embedded card.
     void setHotkeyLabel(const QString &key);
 
-    void loadClip(const QString &path, const QPixmap &thumbnail) { m_card->loadClip(path, thumbnail); }
-    void loadSource(const SourceDescriptor &desc, const QPixmap &thumbnail) { m_card->loadSource(desc, thumbnail); }
+    void loadClip(const QString &path, const QPixmap &thumbnail) {
+        m_thumbnail = thumbnail;
+        m_card->loadClip(path, thumbnail);
+    }
+    void loadSource(const SourceDescriptor &desc, const QPixmap &thumbnail) {
+        m_thumbnail = thumbnail;
+        m_card->loadSource(desc, thumbnail);
+    }
     void clearClip() { m_card->clearClip(); }
+    QPixmap thumbnail() const { return m_thumbnail; }
 
     // ── Clip properties (forwarded to the embedded ClipCard) ─────────────────
     QString clipPath() const { return m_card->clipPath(); }
@@ -65,4 +72,5 @@ signals:
 private:
     ClipCard *m_card   = nullptr;  // borrowed — owned by QGraphicsProxyWidget inside ClipNodeItem
     NodeId    m_nodeId = 0;
+    QPixmap   m_thumbnail;
 };

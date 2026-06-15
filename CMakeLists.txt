@@ -26,7 +26,7 @@ set(SOURCES
     src/core/VideoFileSource.cpp
     src/core/ImageSource.cpp
     src/core/SlideshowSource.cpp
-    src/core/ColorSource.cpp
+    src/core/CanvasSource.cpp
     src/core/CameraSource.cpp
     src/core/ScreenSource.cpp
     src/core/WindowCaptureSource.cpp
@@ -41,8 +41,8 @@ set(SOURCES
     src/ui/ClipNodeEditor.cpp
     src/ui/ClipEditDialog.cpp
     src/ui/CropSelectorWidget.cpp
-    src/ui/BasePlacementWidget.cpp
-    src/ui/OverlayCanvasWidget.cpp
+    src/ui/TransformCanvasWidget.cpp
+    src/ui/TransformEditorDialog.cpp
     src/ui/OutputWindow.cpp
     src/ui/ShaderEditDialog.cpp
 )
@@ -54,7 +54,7 @@ set(HEADERS
     include/core/VideoFileSource.h
     include/core/ImageSource.h
     include/core/SlideshowSource.h
-    include/core/ColorSource.h
+    include/core/CanvasSource.h
     include/core/CameraSource.h
     include/core/ScreenSource.h
     include/core/WindowCaptureSource.h
@@ -69,8 +69,8 @@ set(HEADERS
     include/ui/ClipNodeEditor.h
     include/ui/ClipEditDialog.h
     include/ui/CropSelectorWidget.h
-    include/ui/BasePlacementWidget.h
-    include/ui/OverlayCanvasWidget.h
+    include/ui/TransformCanvasWidget.h
+    include/ui/TransformEditorDialog.h
     include/ui/OutputWindow.h
     include/ui/ShaderEditDialog.h
 )

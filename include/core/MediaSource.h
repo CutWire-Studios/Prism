@@ -11,11 +11,11 @@
 //   SlideshowSource  — folder of images + timer  (Part 2)
 //   CameraSource     — webcam via Qt Multimedia   (Part 3)
 //   ScreenSource     — screen capture             (Part 3)
-//   ColorSource      — solid colour / test card   (Part 2)
+//   CanvasSource     — checkered/solid canvas      (Part 2)
 
 class MediaSource {
 public:
-    enum class Type { VideoFile, Image, Slideshow, Camera, Screen, Color, Window, Shader };
+    enum class Type { VideoFile, Image, Slideshow, Camera, Screen, Canvas, Window, Shader };
 
     virtual ~MediaSource() = default;
 

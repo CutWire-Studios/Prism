@@ -39,23 +39,6 @@ private slots:
     void onCropPreviewToggled(bool checked);
     void onTabChanged(int index);
 
-    // ── Base placement tab ────────────────────────────────────────────────
-    void onBasePlacementChanged(float x, float y, float w, float h);
-    void onResetBasePlacement();
-
-    // ── Overlays tab ──────────────────────────────────────────────────────
-    void onAddTextOverlay();
-    void onAddImageOverlay();
-    void onRemoveOverlay();
-    void onCanvasOverlaySelected(int index);
-    void onCanvasOverlayChanged(int index, const OverlayItem &item);
-    void onOverlayContentChanged();
-    void onOverlayImageBrowse();
-    void onOverlayOpacityChanged(int value);
-    void onOverlayColorClicked();
-    void onOverlayFontSizeChanged(int value);
-    void onOverlayVisibilityChanged(bool checked);
-
 private:
     Ui::ClipEditDialog *ui;
     QTimer *pollTimer;
@@ -69,13 +52,6 @@ private:
 
     float         m_cropX = 0.f, m_cropY = 0.f, m_cropW = 1.f, m_cropH = 1.f;
     bool          m_cropSpinChanging = false;
-
-    float         m_baseX = 0.f, m_baseY = 0.f, m_baseW = 1.f, m_baseH = 1.f;
-
-    QList<OverlayItem> m_overlays;
-    int                m_selectedOverlayIdx = -1;
-    QColor             m_currentOverlayColor = Qt::white;
-    bool               m_overlayUpdating = false;
 
     // ── Trim helpers ──────────────────────────────────────────────────────
     void seekRelative(double delta);
@@ -91,15 +67,4 @@ private:
     // ── Crop helpers ──────────────────────────────────────────────────────
     void syncCropSpinsFromValues();
     void applyCropToPreview();
-
-    // ── Base placement helpers ────────────────────────────────────────────
-    void syncBasePlacementFromValues();
-    void applyBaseToPreview();
-
-    // ── Overlay helpers ───────────────────────────────────────────────────
-    void populatePropsFromOverlay(int index);
-    void updateOverlayCanvas();
-    void setPropsEnabled(bool enabled);
-    void updateColorButton(const QColor &c);
-    void updateSelectedLabel();
 };

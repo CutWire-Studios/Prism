@@ -337,8 +337,7 @@ void VideoWidget::setSourceA(std::unique_ptr<MediaSource> source) {
     m_playingA = (t == MediaSource::Type::Camera   ||
                   t == MediaSource::Type::Screen    ||
                   t == MediaSource::Type::Window    ||
-                  t == MediaSource::Type::Slideshow ||
-                  t == MediaSource::Type::Color);
+                  t == MediaSource::Type::Slideshow);
     update();
 }
 
@@ -355,8 +354,7 @@ void VideoWidget::setSourceB(std::unique_ptr<MediaSource> source) {
     m_playingB = (t == MediaSource::Type::Camera   ||
                   t == MediaSource::Type::Screen    ||
                   t == MediaSource::Type::Window    ||
-                  t == MediaSource::Type::Slideshow ||
-                  t == MediaSource::Type::Color);
+                  t == MediaSource::Type::Slideshow);
     update();
 }
 

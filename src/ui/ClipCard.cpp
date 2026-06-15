@@ -22,9 +22,11 @@
 #include <QCameraDevice>
 #include <QGuiApplication>
 #include <QScreen>
+#include <QPainter>
 #include <QCapturableWindow>
 #include <QWindowCapture>
 #include <QApplication>
+#include <numeric>
 
 // When the card is embedded in a QGraphicsProxyWidget (node editor), parenting a
 // dialog to the card would embed the dialog inside the scene. In that case fall
@@ -380,17 +382,92 @@ void ClipCard::onEditClicked() {
         break;
     }
 
-    case Kind::Color: {
-        QColor chosen = QColorDialog::getColor(m_sourceDesc.color, parent, "Choose Color",
-                                               QColorDialog::ShowAlphaChannel);
-        if (chosen.isValid()) {
-            m_sourceDesc.color       = chosen;
-            m_sourceDesc.displayName = QString("Color %1").arg(chosen.name().toUpper());
+    case Kind::Canvas: {
+        QDialog dlg(parent);
+        dlg.setWindowTitle("Edit Canvas");
+        dlg.setMinimumWidth(360);
+
+        auto *widthSpin = new QSpinBox(&dlg);
+        widthSpin->setRange(16, 16384);
+        widthSpin->setValue(m_sourceDesc.canvasWidth);
+        auto *heightSpin = new QSpinBox(&dlg);
+        heightSpin->setRange(16, 16384);
+        heightSpin->setValue(m_sourceDesc.canvasHeight);
+        auto *fillCombo = new QComboBox(&dlg);
+        fillCombo->addItems({"Checkered", "Transparent", "Color"});
+        const int fillIndex = m_sourceDesc.canvasFill == SourceDescriptor::CanvasFill::Transparent ? 1
+                            : m_sourceDesc.canvasFill == SourceDescriptor::CanvasFill::Color ? 2 : 0;
+        fillCombo->setCurrentIndex(fillIndex);
+        auto *colorBtn = new QPushButton("Pick…", &dlg);
+        colorBtn->setEnabled(fillIndex == 2);
+        QColor chosenColor = m_sourceDesc.color;
+        connect(fillCombo, &QComboBox::currentIndexChanged, &dlg, [=](int idx) {
+            colorBtn->setEnabled(idx == 2);
+        });
+        connect(colorBtn, &QPushButton::clicked, &dlg, [&]() {
+            QColor c = QColorDialog::getColor(chosenColor, &dlg, "Canvas Color");
+            if (c.isValid()) chosenColor = c;
+        });
+
+        auto *form = new QFormLayout;
+        form->addRow("Width:", widthSpin);
+        form->addRow("Height:", heightSpin);
+        form->addRow("Fill:", fillCombo);
+        form->addRow("Color:", colorBtn);
+
+        auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+        connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+        auto *layout = new QVBoxLayout(&dlg);
+        layout->addLayout(form);
+        layout->addWidget(buttons);
+
+        if (dlg.exec() == QDialog::Accepted) {
+            m_sourceDesc.canvasWidth = widthSpin->value();
+            m_sourceDesc.canvasHeight = heightSpin->value();
+            m_sourceDesc.canvasFill = fillCombo->currentIndex() == 1 ? SourceDescriptor::CanvasFill::Transparent
+                                    : fillCombo->currentIndex() == 2 ? SourceDescriptor::CanvasFill::Color
+                                                                      : SourceDescriptor::CanvasFill::Checkered;
+            if (m_sourceDesc.canvasFill == SourceDescriptor::CanvasFill::Color)
+                m_sourceDesc.color = chosenColor;
+            const int g = std::gcd(m_sourceDesc.canvasWidth, m_sourceDesc.canvasHeight);
+            QString fillLabel = m_sourceDesc.canvasFill == SourceDescriptor::CanvasFill::Transparent
+                              ? "Transparent"
+                              : m_sourceDesc.canvasFill == SourceDescriptor::CanvasFill::Color
+                              ? m_sourceDesc.color.name().toUpper()
+                              : "Checkered";
+            m_sourceDesc.displayName = QString("Canvas %1:%2 (%3)")
+                                           .arg(m_sourceDesc.canvasWidth / g)
+                                           .arg(m_sourceDesc.canvasHeight / g)
+                                           .arg(fillLabel);
+
             QFontMetrics fm(ui->titleLabel->font());
             ui->titleLabel->setText(fm.elidedText(m_sourceDesc.displayName, Qt::ElideRight, 108));
             ui->titleLabel->setToolTip(m_sourceDesc.displayName);
+
             QPixmap px(110, 65);
-            px.fill(chosen);
+            if (m_sourceDesc.canvasFill == SourceDescriptor::CanvasFill::Color) {
+                px.fill(m_sourceDesc.color);
+            } else if (m_sourceDesc.canvasFill == SourceDescriptor::CanvasFill::Checkered) {
+                px.fill(QColor("#1c1d1f"));
+                QPainter p(&px);
+                p.setRenderHint(QPainter::Antialiasing);
+                p.setPen(QColor("#8b93a1"));
+                p.setBrush(Qt::NoBrush);
+                p.drawRect(8, 8, 94, 49);
+                p.setPen(QColor("#c8ccd4"));
+                p.drawText(px.rect(), Qt::AlignCenter, "CHK");
+            } else {
+                px.fill(QColor("#1c1d1f"));
+                QPainter p(&px);
+                p.setRenderHint(QPainter::Antialiasing);
+                p.setPen(QColor("#8b93a1"));
+                p.setBrush(Qt::NoBrush);
+                p.drawRect(8, 8, 94, 49);
+                p.setPen(QColor("#c8ccd4"));
+                p.drawText(px.rect(), Qt::AlignCenter, "TR");
+            }
             ui->thumbnailBtn->setIcon(QIcon(px));
             emit sourceDescriptorChanged(m_index, m_sourceDesc);
         }

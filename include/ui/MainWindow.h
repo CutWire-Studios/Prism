@@ -11,6 +11,9 @@
 
 class QShortcut;
 class QComboBox;
+class QSlider;
+class QPushButton;
+class QLabel;
 
 namespace Ui { class MainWindow; }
 
@@ -48,7 +51,7 @@ private slots:
     void onAddElementCamera();
     void onAddElementScreen();
     void onAddElementWindow();
-    void onAddElementColor();
+    void onAddElementCanvas();
     void onAddElementShader();
 
     // ── Transition mode ───────────────────────────────────────────────────────
@@ -73,6 +76,13 @@ private:
 
     // Add an element node to the editor
     void addElementNode(const SourceDescriptor &desc, const QPixmap &thumb);
+    void appendClipsToEditor(const QStringList &clipPaths);
+
+    // Assign a clip node to a deck using the clip's SourceDescriptor.
+    void assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA,
+                         VideoWidget *out,
+                         QSlider *progressSlider, QPushButton *playBtn,
+                         QLabel *selectedLabel, QLabel *timeLabel);
 
     // Assign a ready-made source to the active deck (based on crossfader).
     void assignSourceToActiveDeck(std::unique_ptr<MediaSource> src,
@@ -105,7 +115,10 @@ private:
 
 
     static QPixmap makeIconThumb(const QString &glyph, int w = 110, int h = 65);
-    static QPixmap makeColorThumb(const QColor &color, int w = 110, int h = 65);
+    static QPixmap makeCanvasThumb(const QString &label,
+                                   SourceDescriptor::CanvasFill fill,
+                                   const QColor &color = Qt::white,
+                                   int w = 110, int h = 65);
     static QPixmap makeShaderThumb(const QString &code, int w = 110, int h = 65);
     static QString formatTimeShort(double secs);
 };
