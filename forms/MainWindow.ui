@@ -58,58 +58,6 @@
         <number>10</number>
        </property>
        <item>
-        <widget class="QWidget" name="mediaToolbar" native="true">
-         <layout class="QHBoxLayout" name="mediaToolbarLayout">
-          <property name="spacing"><number>6</number></property>
-          <property name="leftMargin"><number>0</number></property>
-          <property name="topMargin"><number>0</number></property>
-          <property name="rightMargin"><number>0</number></property>
-          <property name="bottomMargin"><number>0</number></property>
-          <item>
-           <widget class="QPushButton" name="loadFolderBtn">
-            <property name="text"><string>📁  Load Folder</string></property>
-            <property name="toolTip"><string>Load a folder — replaces current clips</string></property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="addFolderBtn">
-            <property name="text"><string>📂  Add Folder</string></property>
-            <property name="toolTip"><string>Append another folder's clips without replacing the current ones</string></property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="addFilesBtn">
-            <property name="text"><string>＋  Add Files</string></property>
-            <property name="toolTip"><string>Pick individual media files to add to the grid</string></property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="addElementBtn">
-            <property name="text"><string>⬡  Add Element ▾</string></property>
-            <property name="toolTip"><string>Add a new source element — video, photo, slideshow, camera, screen or colour</string></property>
-            <property name="styleSheet">
-             <string notr="true">QPushButton { color: #a0d0d8; border-color: #2a5c66; }
-QPushButton:hover { color: #c0e8f0; }</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <spacer>
-            <property name="orientation"><enum>Qt::Horizontal</enum></property>
-            <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
-           </spacer>
-          </item>
-          <item>
-           <widget class="QPushButton" name="clearAllBtn">
-            <property name="text"><string>🗑  Clear All</string></property>
-            <property name="toolTip"><string>Remove all clips from the grid</string></property>
-            <property name="styleSheet"><string notr="true">QPushButton { color: #c06060; } QPushButton:hover { color: #e07070; }</string></property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
         <widget class="QScrollArea" name="clipsScrollArea">
          <property name="styleSheet">
           <string notr="true">QScrollArea { border: none; background: transparent; }</string>
@@ -543,6 +491,86 @@ QPushButton:hover { color: #c0e8f0; }</string>
     </item>
    </layout>
   </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1200</width>
+     <height>22</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuMedia">
+    <property name="title">
+     <string>Media</string>
+    </property>
+    <addaction name="actionLoadFolder"/>
+    <addaction name="actionAddFolder"/>
+    <addaction name="actionAddFiles"/>
+    <addaction name="separator"/>
+    <addaction name="actionClearAll"/>
+   </widget>
+   <widget class="QMenu" name="menuView">
+    <property name="title">
+     <string>View</string>
+    </property>
+    <addaction name="actionShowOutput"/>
+    <addaction name="actionStayOnTop"/>
+   </widget>
+   <addaction name="menuMedia"/>
+   <addaction name="menuView"/>
+  </widget>
+  <action name="actionLoadFolder">
+   <property name="text">
+    <string>Load Folder</string>
+   </property>
+   <property name="toolTip">
+    <string>Load a folder — replaces current clips</string>
+   </property>
+  </action>
+  <action name="actionAddFolder">
+   <property name="text">
+    <string>Add Folder</string>
+   </property>
+   <property name="toolTip">
+    <string>Append another folder's clips without replacing the current ones</string>
+   </property>
+  </action>
+  <action name="actionAddFiles">
+   <property name="text">
+    <string>Add Files…</string>
+   </property>
+   <property name="toolTip">
+    <string>Pick individual media files to add to the grid</string>
+   </property>
+  </action>
+  <action name="actionClearAll">
+   <property name="text">
+    <string>Clear All</string>
+   </property>
+   <property name="toolTip">
+    <string>Remove all clips from the grid</string>
+   </property>
+  </action>
+  <action name="actionShowOutput">
+   <property name="text">
+    <string>Output Window</string>
+   </property>
+   <property name="toolTip">
+    <string>Show the output window</string>
+   </property>
+  </action>
+  <action name="actionStayOnTop">
+   <property name="text">
+    <string>Stay on Top</string>
+   </property>
+   <property name="toolTip">
+    <string>Keep the output window above all other windows</string>
+   </property>
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+  </action>
  </widget>
  <resources/>
  <connections/>

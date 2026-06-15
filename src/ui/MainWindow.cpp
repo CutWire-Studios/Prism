@@ -106,15 +106,29 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::setupConnections() {
-    connect(ui->loadFolderBtn,    &QPushButton::clicked,  this, &MainWindow::onLoadFolderClicked);
-    connect(ui->addFolderBtn,     &QPushButton::clicked,  this, &MainWindow::onAddFolderClicked);
-    connect(ui->addFilesBtn,      &QPushButton::clicked,  this, &MainWindow::onAddFilesClicked);
-    connect(ui->clearAllBtn,      &QPushButton::clicked,  this, &MainWindow::onClearAllClicked);
+    connect(ui->actionLoadFolder, &QAction::triggered, this, &MainWindow::onLoadFolderClicked);
+    connect(ui->actionAddFolder,  &QAction::triggered, this, &MainWindow::onAddFolderClicked);
+    connect(ui->actionAddFiles,   &QAction::triggered, this, &MainWindow::onAddFilesClicked);
+    connect(ui->actionClearAll,   &QAction::triggered, this, &MainWindow::onClearAllClicked);
+    connect(ui->actionShowOutput, &QAction::triggered, this, [this]() {
+        outputWindow->show();
+        outputWindow->raise();
+        outputWindow->activateWindow();
+    });
+    connect(ui->actionStayOnTop, &QAction::toggled, this, [this](bool on) {
+        Qt::WindowFlags flags = outputWindow->windowFlags();
+        if (on)
+            flags |= Qt::WindowStaysOnTopHint;
+        else
+            flags &= ~Qt::WindowStaysOnTopHint;
+        outputWindow->setWindowFlags(flags);
+        outputWindow->show();
+    });
 
-    // ── Add Element dropdown ──────────────────────────────────────────────────
-    auto *elemMenu = new QMenu(this);
-    elemMenu->addAction("🎬  Video File…",  this, &MainWindow::onAddFilesClicked);
-    elemMenu->addAction("🖼  Photo…",       this, [this]() {
+    // ── Add Element submenu in menubar ────────────────────────────────────────
+    auto *addElemMenu = ui->menuMedia->addMenu("Add Element");
+    addElemMenu->addAction("🎬  Video File…",  this, &MainWindow::onAddFilesClicked);
+    addElemMenu->addAction("🖼  Photo…",       this, [this]() {
         QStringList files = QFileDialog::getOpenFileNames(
             this, "Add Photos", "",
             "Images (*.png *.jpg *.jpeg *.bmp *.webp *.gif)");
@@ -122,18 +136,17 @@ void MainWindow::setupConnections() {
         clipManager.addFiles(files);
         rebuildGrid();
     });
-    elemMenu->addSeparator();
-    elemMenu->addAction("📁  Slideshow…",   this, &MainWindow::onAddElementSlideshow);
-    elemMenu->addSeparator();
-    elemMenu->addAction("📷  Camera…",          this, &MainWindow::onAddElementCamera);
-    elemMenu->addAction("🖥  Screen Capture…",  this, &MainWindow::onAddElementScreen);
-    elemMenu->addAction("🪟  Window / Tab…",    this, &MainWindow::onAddElementWindow);
-    elemMenu->addSeparator();
-    elemMenu->addAction("⬛  Solid Color…",     this, &MainWindow::onAddElementColor);
-    elemMenu->addSeparator();
-    elemMenu->addAction("≋  Shader…",           this, &MainWindow::onAddElementShader);
+    addElemMenu->addSeparator();
+    addElemMenu->addAction("📁  Slideshow…",   this, &MainWindow::onAddElementSlideshow);
+    addElemMenu->addSeparator();
+    addElemMenu->addAction("📷  Camera…",          this, &MainWindow::onAddElementCamera);
+    addElemMenu->addAction("🖥  Screen Capture…",  this, &MainWindow::onAddElementScreen);
+    addElemMenu->addAction("🪟  Window / Tab…",    this, &MainWindow::onAddElementWindow);
+    addElemMenu->addSeparator();
+    addElemMenu->addAction("⬛  Solid Color…",     this, &MainWindow::onAddElementColor);
+    addElemMenu->addSeparator();
+    addElemMenu->addAction("≋  Shader…",           this, &MainWindow::onAddElementShader);
 
-    ui->addElementBtn->setMenu(elemMenu);
     connect(ui->aDeckPlayBtn,     &QPushButton::clicked,  this, &MainWindow::onADeckPlayClicked);
     connect(ui->bDeckPlayBtn,     &QPushButton::clicked,  this, &MainWindow::onBDeckPlayClicked);
     connect(ui->aDeckSpeedSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::onADeckSpeedChanged);
