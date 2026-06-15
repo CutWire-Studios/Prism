@@ -74,10 +74,10 @@ private:
     int               m_index;
     QString           m_clipPath;
     SourceDescriptor  m_sourceDesc;
-    bool              m_muted      = false;
-    bool              m_repeat     = false;
-    bool              m_aSelected  = false;
-    bool              m_bSelected  = false;
+    bool              m_muted    = false;
+    bool              m_repeat   = false;
+    bool              m_aSelected = false;
+    bool              m_bSelected = false;
     ClipSettings      m_settings;
     QLabel           *m_hotkeyBadge = nullptr;
 };

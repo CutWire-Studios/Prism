@@ -14,6 +14,8 @@ class QComboBox;
 class QSlider;
 class QPushButton;
 class QLabel;
+class QDoubleSpinBox;
+class QVariantAnimation;
 
 namespace Ui { class MainWindow; }
 
@@ -53,10 +55,11 @@ private slots:
     void onAddElementWindow();
     void onAddElementCanvas();
     void onAddElementShader();
-    void onAddElementDynamicInterface();
 
     // ── Transition mode ───────────────────────────────────────────────────────
     void onTransitionModeChanged(int index);
+    void onAutoTransitionClicked();
+    void onCutTransitionClicked();
 
 private:
     Ui::MainWindow  *ui;
@@ -113,6 +116,10 @@ private:
 
     // ── Transition combobox ───────────────────────────────────────────────────
     QComboBox *m_transitionCombo = nullptr;
+    QDoubleSpinBox *m_durationSpin = nullptr;
+    QPushButton *m_autoBtn = nullptr;
+    QPushButton *m_cutBtn = nullptr;
+    QVariantAnimation *m_transitionAnimation = nullptr;
 
 
     static QPixmap makeIconThumb(const QString &glyph, int w = 110, int h = 65);
@@ -121,6 +128,5 @@ private:
                                    const QColor &color = Qt::white,
                                    int w = 110, int h = 65);
     static QPixmap makeShaderThumb(const QString &code, int w = 110, int h = 65);
-    static QPixmap makeQmlThumb(const QString &code, int w = 110, int h = 65); // kept for ABI compat
     static QString formatTimeShort(double secs);
 };

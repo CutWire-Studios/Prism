@@ -27,10 +27,6 @@ public:
     void setSourceA(std::unique_ptr<MediaSource> source);
     void setSourceB(std::unique_ptr<MediaSource> source);
 
-    // HTML overlay composited on top of the A/B crossfade (RGBA, alpha-blended).
-    void setHtmlOverlay(std::unique_ptr<MediaSource> source);
-    void clearHtmlOverlay();
-
     void playA();
     void pauseA();
     void playB();
@@ -52,10 +48,6 @@ public:
     void setBaseA(float x, float y, float w, float h);
     void setBaseB(float x, float y, float w, float h);
 
-    // Canvas size for transform context (0 = no context, use full window)
-    void setCanvasSizeA(int width, int height);
-    void setCanvasSizeB(int width, int height);
-
     // Overlays drawn on top of the output
     void setOverlaysA(const QList<OverlayItem> &overlays);
     void setOverlaysB(const QList<OverlayItem> &overlays);
@@ -68,7 +60,6 @@ public:
         float cropX = 0.f, cropY = 0.f, cropW = 1.f, cropH = 1.f;
         float baseX = 0.f, baseY = 0.f, baseW = 1.f, baseH = 1.f;
         bool  playing = false;   // whether to call nextFrame() each tick
-        int   canvasWidth = 0, canvasHeight = 0;  // transform context canvas size (0 = no context)
     };
     void setNodeChainA(std::vector<NodeChainSource> chain);
     void setNodeChainB(std::vector<NodeChainSource> chain);
@@ -89,8 +80,21 @@ public:
         Crossfade,   // alpha blend A→B (default)
         Cut,         // hard switch at fader centre (t = 0.5)
         WipeLeft,    // B wipes in from the left edge
+        WipeRight,   // B wipes in from the right edge
+        WipeUp,      // B wipes in from the bottom edge (moves up)
+        WipeDown,    // B wipes in from the top edge (moves down)
         SlideLeft,   // A slides out left; B pushes in from the right
+        SlideRight,  // A slides out right; B pushes in from the left
+        SlideUp,     // A slides out top; B pushes in from the bottom
+        SlideDown,   // A slides out bottom; B pushes in from the top
         DipToBlack,  // A fades to black, then B fades in (dip at t = 0.5)
+        DipToWhite,  // A fades to white, then B fades in (dip at t = 0.5)
+        Additive,    // Additive mix (bright glow)
+        CrossZoom,   // Scale zooming transition
+        SplitDoor,   // Horizontal split doors sliding apart
+        SplitDoorVert, // Vertical split doors sliding apart
+        VortexSpin,   // Spinning warp transition
+        SplitQuadrants // 4-corner split reveal
     };
     void           setTransitionMode(TransitionMode mode) { m_transitionMode = mode; update(); }
     TransitionMode transitionMode() const { return m_transitionMode; }
@@ -127,13 +131,10 @@ private slots:
 private:
     std::unique_ptr<MediaSource> m_sourceA;
     std::unique_ptr<MediaSource> m_sourceB;
-    std::unique_ptr<MediaSource> m_htmlOverlay;
-    GLuint m_textureA       = 0;
-    GLuint m_textureB       = 0;
-    GLuint m_textureOverlay = 0;
-    bool   m_playingA       = false;
-    bool   m_playingB       = false;
-    bool   m_playingOverlay = false;
+    GLuint m_textureA = 0;
+    GLuint m_textureB = 0;
+    bool   m_playingA = false;
+    bool   m_playingB = false;
     float  m_crossfadeB = 0.f;
     bool   m_repeatA = false;
     bool   m_repeatB = false;
@@ -147,10 +148,6 @@ private:
     // Base placement: normalised [0, 1]
     float m_baseXA = 0.f, m_baseYA = 0.f, m_baseWA = 1.f, m_baseHA = 1.f;
     float m_baseXB = 0.f, m_baseYB = 0.f, m_baseWB = 1.f, m_baseHB = 1.f;
-
-    // Canvas size (from transform context node)
-    int m_canvasWidthA = 0, m_canvasHeightA = 0;
-    int m_canvasWidthB = 0, m_canvasHeightB = 0;
 
     // Overlays
     QList<OverlayItem>       m_overlaysA;
@@ -170,7 +167,7 @@ private:
     QRectF  m_videoRectB;
 
     // ── GL helpers ────────────────────────────────────────────────────────────
-    void   setupTextureGL(GLuint &tex, QSize sz, bool alpha = false);
+    void   setupTextureGL(GLuint &tex, QSize sz);
     // Takes tex by reference so it can recreate the texture if the frame size changes.
     void   uploadSourceFrameGL(GLuint &tex, MediaSource *source);
     QRectF computeContainedRect(QSize frameSize, float cw, float ch,

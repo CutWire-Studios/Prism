@@ -2,11 +2,8 @@
 #include "ui_ClipCard.h"
 #include "ui/ClipEditDialog.h"
 #include "ui/ShaderEditDialog.h"
-#include "ui/HtmlEditDialog.h"
 #include "core/ImageSource.h"
 #include "core/ShaderSource.h"
-#include "core/HtmlSource.h"
-#include <QCoreApplication>
 #include <QFileInfo>
 #include <QFontMetrics>
 #include <QDialog>
@@ -147,7 +144,6 @@ void ClipCard::loadSource(const SourceDescriptor &desc, const QPixmap &thumbnail
     ui->volumeSlider->setEnabled(false);
     ui->aBtn->setEnabled(true);
     ui->bBtn->setEnabled(true);
-    ui->ovlBtn->setVisible(false);
     setActive(false);
 }
 
@@ -164,7 +160,6 @@ void ClipCard::clearClip() {
     ui->volumeSlider->setEnabled(false);
     ui->aBtn->setEnabled(false);
     ui->bBtn->setEnabled(false);
-    ui->ovlBtn->setVisible(false);
     setActive(false);
     setASelected(false);
     setBSelected(false);
@@ -485,28 +480,13 @@ void ClipCard::onEditClicked() {
             QString newCode = dlg.resultCode().trimmed();
             if (!newCode.isEmpty()) {
                 m_sourceDesc.shaderCode = newCode;
+                // Re-render thumbnail
                 ShaderSource src(newCode, QSize(110, 65));
                 if (src.nextFrame() && src.isReady()) {
                     const uint8_t *data = src.frameData();
                     QImage img(data, 110, 65, 110 * 3, QImage::Format_RGB888);
                     ui->thumbnailBtn->setIcon(QIcon(QPixmap::fromImage(img.copy())));
                 }
-                emit sourceDescriptorChanged(m_index, m_sourceDesc);
-            }
-        }
-        break;
-    }
-
-    case Kind::Html: {
-        HtmlEditDialog dlg(m_sourceDesc.htmlContent, this);
-        if (dlg.exec() == QDialog::Accepted) {
-            QString filePath = dlg.resultFilePath();
-            QString html     = dlg.resultHtml().trimmed();
-            if (!filePath.isEmpty() || !html.isEmpty()) {
-                m_sourceDesc.path        = filePath;
-                m_sourceDesc.htmlContent = html;
-                if (!filePath.isEmpty())
-                    m_sourceDesc.displayName = QFileInfo(filePath).fileName();
                 emit sourceDescriptorChanged(m_index, m_sourceDesc);
             }
         }

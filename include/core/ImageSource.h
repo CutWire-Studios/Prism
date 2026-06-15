@@ -24,9 +24,8 @@ public:
     }
     bool    nextFrame()         override { return false; }  // static — never changes
     QString displayName() const override { return m_name; }
-    bool    hasAlpha()    const override { return true; }
 
 private:
-    QImage  m_image;   // Always QImage::Format_RGBA8888 for proper compositing over other images
+    QImage  m_image;   // always QImage::Format_RGB888
     QString m_name;
 };

@@ -9,11 +9,8 @@
 #include "core/CanvasSource.h"
 #include "core/ImageSource.h"
 #include "core/ShaderSource.h"
-#include "core/HtmlSource.h"
 #include "ui/ShaderEditDialog.h"
-#include "ui/HtmlEditDialog.h"
 #include <QApplication>
-#include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
 #include <QShortcut>
@@ -39,6 +36,9 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QStackedWidget>
+#include <QVariantAnimation>
+#include <QEasingCurve>
+#include <QDoubleSpinBox>
 #include <algorithm>
 #include <numeric>
 
@@ -98,8 +98,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_stackWidget->addWidget(m_emptyPlaceholder);
     m_stackWidget->setCurrentWidget(m_emptyPlaceholder);
 
-    // ── Transition mode combobox ──────────────────────────────────────────────
-    // Inject a label + combobox into the A/B Crossfader group (faderGroup),
+    // ── Transition mode combobox & Auto/Cut controls ──────────────────────────
+    // Inject transition controls into the A/B Crossfader group (faderGroup),
     // right after the "B ►" label and before the vertical spacer.
     {
         auto *faderLayout = qobject_cast<QVBoxLayout *>(ui->faderGroup->layout());
@@ -109,16 +109,90 @@ MainWindow::MainWindow(QWidget *parent)
 
             m_transitionCombo = new QComboBox(ui->faderGroup);
             m_transitionCombo->addItems({
-                "Crossfade", "Cut", "Wipe ←", "Slide ←", "Dip to Black"});
+                "Crossfade", "Cut",
+                "Wipe ←", "Wipe →", "Wipe ↑", "Wipe ↓",
+                "Slide ←", "Slide →", "Slide ↑", "Slide ↓",
+                "Dip to Black", "Dip to White",
+                "Additive Glow", "Cross Zoom",
+                "Split Door (H)", "Split Door (V)",
+                "Vortex Spin", "Split 4-Corner"
+            });
             m_transitionCombo->setToolTip(
                 "Crossfade: alpha blend\n"
                 "Cut: hard switch at fader centre\n"
                 "Wipe ←: B reveals from the left\n"
+                "Wipe →: B reveals from the right\n"
+                "Wipe ↑: B reveals from bottom to top\n"
+                "Wipe ↓: B reveals from top to bottom\n"
                 "Slide ←: A exits left, B enters right\n"
-                "Dip to Black: fade through black");
+                "Slide →: A exits right, B enters left\n"
+                "Slide ↑: A exits top, B enters bottom\n"
+                "Slide ↓: A exits bottom, B enters top\n"
+                "Dip to Black: fade through black\n"
+                "Dip to White: fade through white\n"
+                "Additive Glow: add colors for VJ brightness\n"
+                "Cross Zoom: dynamic zoom scaling\n"
+                "Split Door (H): horizontal split reveal\n"
+                "Split Door (V): vertical split reveal\n"
+                "Vortex Spin: spinning vortex wrap\n"
+                "Split 4-Corner: split into 4 quadrants sliding outwards"
+            );
             m_transitionCombo->setStyleSheet("font-size: 10px;");
 
+            // Time/Duration spinbox
+            auto *durContainer = new QWidget(ui->faderGroup);
+            auto *durLayout = new QHBoxLayout(durContainer);
+            durLayout->setContentsMargins(0, 0, 0, 0);
+            durLayout->setSpacing(4);
+            auto *durLbl = new QLabel("Time (s):", durContainer);
+            durLbl->setStyleSheet("font-size: 10px;");
+            m_durationSpin = new QDoubleSpinBox(durContainer);
+            m_durationSpin->setRange(0.1, 10.0);
+            m_durationSpin->setSingleStep(0.1);
+            m_durationSpin->setValue(1.0);
+            m_durationSpin->setStyleSheet("font-size: 10px; background-color: #1e1e1e; color: #fff;");
+            durLayout->addWidget(durLbl);
+            durLayout->addWidget(m_durationSpin);
+
+            // Auto / Cut buttons
+            auto *btnContainer = new QWidget(ui->faderGroup);
+            auto *btnLayout = new QHBoxLayout(btnContainer);
+            btnLayout->setContentsMargins(0, 0, 0, 0);
+            btnLayout->setSpacing(6);
+            m_autoBtn = new QPushButton("AUTO", btnContainer);
+            m_autoBtn->setToolTip("Smooth auto transition using selected mode");
+            m_autoBtn->setStyleSheet(
+                "QPushButton {"
+                "  font-size: 10px; font-weight: bold; background-color: #1E1E1E; color: #00FFFF; "
+                "  border: 1px solid #00BFFF; border-radius: 3px; padding: 4px;"
+                "}"
+                "QPushButton:hover {"
+                "  background-color: #00BFFF; color: #0F0F0F; border: 1px solid #00FFFF;"
+                "}"
+                "QPushButton:pressed {"
+                "  background-color: #FF4500; border: 1px solid #FFD700; color: #0F0F0F;"
+                "}"
+            );
+            m_cutBtn = new QPushButton("CUT", btnContainer);
+            m_cutBtn->setToolTip("Instant cut to opposite deck");
+            m_cutBtn->setStyleSheet(
+                "QPushButton {"
+                "  font-size: 10px; font-weight: bold; background-color: #1E1E1E; color: #FF4500; "
+                "  border: 1px solid #FF4500; border-radius: 3px; padding: 4px;"
+                "}"
+                "QPushButton:hover {"
+                "  background-color: #FF4500; color: #0F0F0F; border: 1px solid #FFD700;"
+                "}"
+                "QPushButton:pressed {"
+                "  background-color: #00BFFF; border: 1px solid #00FFFF; color: #0F0F0F;"
+                "}"
+            );
+            btnLayout->addWidget(m_autoBtn);
+            btnLayout->addWidget(m_cutBtn);
+
             // Insert before the spacer (index 3: labelA=0, slider=1, labelB=2, spacer=3)
+            faderLayout->insertWidget(3, btnContainer);
+            faderLayout->insertWidget(3, durContainer);
             faderLayout->insertWidget(3, m_transitionCombo);
             faderLayout->insertWidget(3, lbl);
         }
@@ -194,7 +268,6 @@ void MainWindow::setupConnections() {
     addElemMenu->addAction("⬜  Canvas…",          this, &MainWindow::onAddElementCanvas);
     addElemMenu->addSeparator();
     addElemMenu->addAction("≋  Shader…",           this, &MainWindow::onAddElementShader);
-    addElemMenu->addAction("🌐  HTML Overlay…",        this, &MainWindow::onAddElementDynamicInterface);
 
     // ── ClipNodeEditor signals ────────────────────────────────────────────────
     connect(m_clipNodeEditor, &ClipNodeEditor::deckAClipChanged, this, &MainWindow::onNodeAButtonClicked);
@@ -202,11 +275,24 @@ void MainWindow::setupConnections() {
     connect(m_clipNodeEditor, &ClipNodeEditor::nodeAdded,   this, &MainWindow::assignHotkeyToNode);
     connect(m_clipNodeEditor, &ClipNodeEditor::nodeRemoved, this, &MainWindow::onNodeRemoveRequested);
 
-    // ── Transition combobox ───────────────────────────────────────────────────
+    // ── Transition combobox & buttons ─────────────────────────────────────────
     if (m_transitionCombo) {
         connect(m_transitionCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
                 this, &MainWindow::onTransitionModeChanged);
     }
+    if (m_autoBtn) {
+        connect(m_autoBtn, &QPushButton::clicked, this, &MainWindow::onAutoTransitionClicked);
+    }
+    if (m_cutBtn) {
+        connect(m_cutBtn, &QPushButton::clicked, this, &MainWindow::onCutTransitionClicked);
+    }
+    connect(ui->crossfaderSlider, &QSlider::sliderPressed, this, [this]() {
+        if (m_transitionAnimation) {
+            m_transitionAnimation->stop();
+            m_transitionAnimation->deleteLater();
+            m_transitionAnimation = nullptr;
+        }
+    });
 
     connect(ui->aDeckPlayBtn,     &QPushButton::clicked,  this, &MainWindow::onADeckPlayClicked);
     connect(ui->bDeckPlayBtn,     &QPushButton::clicked,  this, &MainWindow::onBDeckPlayClicked);
@@ -393,10 +479,6 @@ QPixmap MainWindow::makeShaderThumb(const QString &code, int w, int h) {
     const uint8_t *data = src.frameData();
     QImage img(data, w, h, w * 3, QImage::Format_RGB888);
     return QPixmap::fromImage(img.copy());
-}
-
-QPixmap MainWindow::makeQmlThumb(const QString &, int w, int h) {
-    return makeIconThumb("🌐", w, h);
 }
 
 // ── Crossfader ────────────────────────────────────────────────────────────────
@@ -786,19 +868,8 @@ void MainWindow::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA
             QMessageBox::warning(nullptr, "Slideshow", "No images found in folder.");
             return;
         }
-
-        float baseX, baseY, baseW, baseH;
-        if (!m_clipNodeEditor->clipTransform(nodeId, baseX, baseY, baseW, baseH)) {
-            baseX = 0.f; baseY = 0.f; baseW = 1.f; baseH = 1.f;
-        }
-
-        if (deckA) {
-            out->setBaseA(baseX, baseY, baseW, baseH);
-            out->setSourceA(std::move(src)); out->playA();
-        } else {
-            out->setBaseB(baseX, baseY, baseW, baseH);
-            out->setSourceB(std::move(src)); out->playB();
-        }
+        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
+        else        { out->setSourceB(std::move(src)); out->playB(); }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(true);
         selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
@@ -826,18 +897,8 @@ void MainWindow::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA
             }
         }
 
-        float baseX, baseY, baseW, baseH;
-        if (!m_clipNodeEditor->clipTransform(nodeId, baseX, baseY, baseW, baseH)) {
-            baseX = 0.f; baseY = 0.f; baseW = 1.f; baseH = 1.f;
-        }
-
-        if (deckA) {
-            out->setBaseA(baseX, baseY, baseW, baseH);
-            out->setSourceA(std::move(src)); out->playA();
-        } else {
-            out->setBaseB(baseX, baseY, baseW, baseH);
-            out->setSourceB(std::move(src)); out->playB();
-        }
+        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
+        else        { out->setSourceB(std::move(src)); out->playB(); }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(true);
         selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
@@ -848,19 +909,8 @@ void MainWindow::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA
     case Kind::Screen: {
         auto src = std::make_unique<ScreenSource>();
         if (!src->start(ScreenSource::CaptureType::Monitor)) return;
-
-        float baseX, baseY, baseW, baseH;
-        if (!m_clipNodeEditor->clipTransform(nodeId, baseX, baseY, baseW, baseH)) {
-            baseX = 0.f; baseY = 0.f; baseW = 1.f; baseH = 1.f;
-        }
-
-        if (deckA) {
-            out->setBaseA(baseX, baseY, baseW, baseH);
-            out->setSourceA(std::move(src)); out->playA();
-        } else {
-            out->setBaseB(baseX, baseY, baseW, baseH);
-            out->setSourceB(std::move(src)); out->playB();
-        }
+        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
+        else        { out->setSourceB(std::move(src)); out->playB(); }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(true);
         selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
@@ -871,19 +921,8 @@ void MainWindow::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA
     case Kind::Window: {
         auto src = std::make_unique<ScreenSource>();
         if (!src->start(ScreenSource::CaptureType::Window)) return;
-
-        float baseX, baseY, baseW, baseH;
-        if (!m_clipNodeEditor->clipTransform(nodeId, baseX, baseY, baseW, baseH)) {
-            baseX = 0.f; baseY = 0.f; baseW = 1.f; baseH = 1.f;
-        }
-
-        if (deckA) {
-            out->setBaseA(baseX, baseY, baseW, baseH);
-            out->setSourceA(std::move(src)); out->playA();
-        } else {
-            out->setBaseB(baseX, baseY, baseW, baseH);
-            out->setSourceB(std::move(src)); out->playB();
-        }
+        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
+        else        { out->setSourceB(std::move(src)); out->playB(); }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(true);
         selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
@@ -893,12 +932,6 @@ void MainWindow::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA
 
     case Kind::Canvas: {
         const QSize size(desc.canvasWidth, desc.canvasHeight);
-
-        float baseX, baseY, baseW, baseH;
-        if (!m_clipNodeEditor->clipTransform(nodeId, baseX, baseY, baseW, baseH)) {
-            baseX = 0.f; baseY = 0.f; baseW = 1.f; baseH = 1.f;
-        }
-
         if (desc.canvasFill == SourceDescriptor::CanvasFill::Transparent) {
             if (deckA) out->setSourceA(nullptr);
             else        out->setSourceB(nullptr);
@@ -907,13 +940,8 @@ void MainWindow::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA
                 ? CanvasSource::Fill::SolidColor
                 : CanvasSource::Fill::Checkered;
             auto src = std::make_unique<CanvasSource>(fill, size, desc.color);
-            if (deckA) {
-                out->setBaseA(baseX, baseY, baseW, baseH);
-                out->setSourceA(std::move(src));
-            } else {
-                out->setBaseB(baseX, baseY, baseW, baseH);
-                out->setSourceB(std::move(src));
-            }
+            if (deckA) out->setSourceA(std::move(src));
+            else        out->setSourceB(std::move(src));
         }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(false);
@@ -924,41 +952,8 @@ void MainWindow::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA
 
     case Kind::Shader: {
         auto src = std::make_unique<ShaderSource>(desc.shaderCode);
-
-        float baseX, baseY, baseW, baseH;
-        if (!m_clipNodeEditor->clipTransform(nodeId, baseX, baseY, baseW, baseH)) {
-            baseX = 0.f; baseY = 0.f; baseW = 1.f; baseH = 1.f;
-        }
-
-        if (deckA) {
-            out->setBaseA(baseX, baseY, baseW, baseH);
-            out->setSourceA(std::move(src)); out->playA();
-        } else {
-            out->setBaseB(baseX, baseY, baseW, baseH);
-            out->setSourceB(std::move(src)); out->playB();
-        }
-        progressSlider->setEnabled(false);
-        playBtn->setEnabled(false);
-        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
-        timeLabel->setText("LIVE");
-        break;
-    }
-
-    case Kind::Html: {
-        auto src = std::make_unique<HtmlSource>(desc.htmlContent, desc.path);
-
-        float baseX, baseY, baseW, baseH;
-        if (!m_clipNodeEditor->clipTransform(nodeId, baseX, baseY, baseW, baseH)) {
-            baseX = 0.f; baseY = 0.f; baseW = 1.f; baseH = 1.f;
-        }
-
-        if (deckA) {
-            out->setBaseA(baseX, baseY, baseW, baseH);
-            out->setSourceA(std::move(src)); out->playA();
-        } else {
-            out->setBaseB(baseX, baseY, baseW, baseH);
-            out->setSourceB(std::move(src)); out->playB();
-        }
+        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
+        else        { out->setSourceB(std::move(src)); out->playB(); }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(false);
         selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
@@ -1056,24 +1051,16 @@ static VideoWidget::NodeChainSource makeNodeChainSource(ClipNodeModel *node, Cli
         entry.source  = std::make_unique<ShaderSource>(desc.shaderCode);
         entry.playing = true;
         break;
-    case Kind::Html:
-        entry.source  = std::make_unique<HtmlSource>(desc.htmlContent, desc.path);
-        entry.playing = true;
-        break;
     }
     return entry;
 }
 
 static std::vector<VideoWidget::NodeChainSource>
-buildNodeChain(const QVector<ClipNodeModel *> &chain, ClipNodeEditor *editor, int canvasWidth = 0, int canvasHeight = 0) {
+buildNodeChain(const QVector<ClipNodeModel *> &chain, ClipNodeEditor *editor) {
     std::vector<VideoWidget::NodeChainSource> out;
     for (int i = 1; i < chain.size(); ++i) {
         auto entry = makeNodeChainSource(chain[i], editor);
-        if (entry.source) {
-            entry.canvasWidth = canvasWidth;
-            entry.canvasHeight = canvasHeight;
-            out.push_back(std::move(entry));
-        }
+        if (entry.source) out.push_back(std::move(entry));
     }
     return out;
 }
@@ -1090,14 +1077,10 @@ void MainWindow::onNodeAButtonClicked(NodeId nodeId) {
     m_aClipNodeId = nodeId;
     node->setASelected(true);
 
-    int canvasW = 0, canvasH = 0;
-    m_clipNodeEditor->contextCanvasSize(nodeId, canvasW, canvasH);
-
     auto *out = outputWindow->videoWidget();
-    out->setCanvasSizeA(canvasW, canvasH);
     assignNodeToDeck(node, nodeId, true, out, ui->aProgressSlider, ui->aDeckPlayBtn,
                      ui->aSelectedLabel, ui->aTimeLabel);
-    out->setNodeChainA(buildNodeChain(m_clipNodeEditor->getClipChain(nodeId), m_clipNodeEditor, canvasW, canvasH));
+    out->setNodeChainA(buildNodeChain(m_clipNodeEditor->getClipChain(nodeId), m_clipNodeEditor));
 }
 
 void MainWindow::onNodeBButtonClicked(NodeId nodeId) {
@@ -1112,14 +1095,10 @@ void MainWindow::onNodeBButtonClicked(NodeId nodeId) {
     m_bClipNodeId = nodeId;
     node->setBSelected(true);
 
-    int canvasW = 0, canvasH = 0;
-    m_clipNodeEditor->contextCanvasSize(nodeId, canvasW, canvasH);
-
     auto *out = outputWindow->videoWidget();
-    out->setCanvasSizeB(canvasW, canvasH);
     assignNodeToDeck(node, nodeId, false, out, ui->bProgressSlider, ui->bDeckPlayBtn,
                      ui->bSelectedLabel, ui->bTimeLabel);
-    out->setNodeChainB(buildNodeChain(m_clipNodeEditor->getClipChain(nodeId), m_clipNodeEditor, canvasW, canvasH));
+    out->setNodeChainB(buildNodeChain(m_clipNodeEditor->getClipChain(nodeId), m_clipNodeEditor));
 }
 
 void MainWindow::onNodeRemoveRequested(NodeId nodeId) {
@@ -1327,24 +1306,6 @@ void MainWindow::onAddElementShader() {
     addElementNode(desc, makeShaderThumb(code));
 }
 
-void MainWindow::onAddElementDynamicInterface() {
-    HtmlEditDialog dlg(QString(), this);
-    if (dlg.exec() != QDialog::Accepted) return;
-
-    QString filePath = dlg.resultFilePath();
-    QString html     = dlg.resultHtml().trimmed();
-    if (filePath.isEmpty() && html.isEmpty()) return;
-
-    SourceDescriptor desc;
-    desc.kind        = SourceDescriptor::Kind::Html;
-    desc.htmlContent = html;
-    desc.path        = filePath;
-    desc.displayName = filePath.isEmpty() ? "HTML Overlay"
-                                          : QFileInfo(filePath).fileName();
-
-    addElementNode(desc, makeIconThumb("🌐"));
-}
-
 // ── Hotkey grid ───────────────────────────────────────────────────────────────
 
 const QList<Qt::Key> &MainWindow::hotkeySequence() {
@@ -1428,10 +1389,62 @@ void MainWindow::releaseHotkeyForNode(NodeId nodeId) {
 void MainWindow::onTransitionModeChanged(int index) {
     using TM = VideoWidget::TransitionMode;
     static const TM modes[] = {
-        TM::Crossfade, TM::Cut, TM::WipeLeft, TM::SlideLeft, TM::DipToBlack
+        TM::Crossfade, TM::Cut,
+        TM::WipeLeft, TM::WipeRight, TM::WipeUp, TM::WipeDown,
+        TM::SlideLeft, TM::SlideRight, TM::SlideUp, TM::SlideDown,
+        TM::DipToBlack, TM::DipToWhite,
+        TM::Additive, TM::CrossZoom, TM::SplitDoor, TM::SplitDoorVert,
+        TM::VortexSpin, TM::SplitQuadrants
     };
-    if (index >= 0 && index < 5)
+    if (index >= 0 && index < 18)
         outputWindow->videoWidget()->setTransitionMode(modes[index]);
+}
+
+void MainWindow::onAutoTransitionClicked() {
+    if (m_transitionAnimation) {
+        m_transitionAnimation->stop();
+        delete m_transitionAnimation;
+        m_transitionAnimation = nullptr;
+    }
+
+    int currentVal = ui->crossfaderSlider->value();
+    int targetVal = (currentVal <= 50) ? 100 : 0;
+    if (currentVal == targetVal)
+        return;
+
+    double durationSec = m_durationSpin ? m_durationSpin->value() : 1.0;
+    int durationMs = static_cast<int>(durationSec * 1000.0);
+
+    m_transitionAnimation = new QVariantAnimation(this);
+    m_transitionAnimation->setDuration(durationMs);
+    m_transitionAnimation->setStartValue(currentVal);
+    m_transitionAnimation->setEndValue(targetVal);
+    m_transitionAnimation->setEasingCurve(QEasingCurve::InOutQuad);
+
+    connect(m_transitionAnimation, &QVariantAnimation::valueChanged, this, [this](const QVariant &value) {
+        ui->crossfaderSlider->setValue(value.toInt());
+    });
+
+    connect(m_transitionAnimation, &QVariantAnimation::finished, this, [this]() {
+        if (m_transitionAnimation) {
+            m_transitionAnimation->deleteLater();
+            m_transitionAnimation = nullptr;
+        }
+    });
+
+    m_transitionAnimation->start();
+}
+
+void MainWindow::onCutTransitionClicked() {
+    if (m_transitionAnimation) {
+        m_transitionAnimation->stop();
+        delete m_transitionAnimation;
+        m_transitionAnimation = nullptr;
+    }
+
+    int currentVal = ui->crossfaderSlider->value();
+    int targetVal = (currentVal <= 50) ? 100 : 0;
+    ui->crossfaderSlider->setValue(targetVal);
 }
 
 

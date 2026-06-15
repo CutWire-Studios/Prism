@@ -24,9 +24,8 @@ VideoWidget::VideoWidget(QWidget *parent)
 VideoWidget::~VideoWidget() {
     m_frameTimer->stop();
     makeCurrent();
-    if (m_textureA)       glDeleteTextures(1, &m_textureA);
-    if (m_textureB)       glDeleteTextures(1, &m_textureB);
-    if (m_textureOverlay) glDeleteTextures(1, &m_textureOverlay);
+    if (m_textureA) glDeleteTextures(1, &m_textureA);
+    if (m_textureB) glDeleteTextures(1, &m_textureB);
     clearChainTextures(m_chainTexA);
     clearChainTextures(m_chainTexB);
     doneCurrent();
@@ -53,20 +52,38 @@ std::pair<float,float> VideoWidget::computeDeckAlphas() const {
     const float t = std::clamp(m_crossfadeB, 0.f, 1.f);
     switch (m_transitionMode) {
     case TransitionMode::Crossfade:
+    case TransitionMode::Additive:
+    case TransitionMode::CrossZoom:
+    case TransitionMode::VortexSpin:
         return {1.f - t, t};
     case TransitionMode::Cut:
         return t < 0.5f ? std::make_pair(1.f, 0.f) : std::make_pair(0.f, 1.f);
     case TransitionMode::WipeLeft:
+    case TransitionMode::WipeRight:
+    case TransitionMode::WipeUp:
+    case TransitionMode::WipeDown:
     case TransitionMode::SlideLeft:
+    case TransitionMode::SlideRight:
+    case TransitionMode::SlideUp:
+    case TransitionMode::SlideDown:
+    case TransitionMode::SplitDoor:
+    case TransitionMode::SplitDoorVert:
+    case TransitionMode::SplitQuadrants:
         // Both decks render at full opacity; masking is done geometrically.
         return {1.f, t > 0.f ? 1.f : 0.f};
     case TransitionMode::DipToBlack:
+    case TransitionMode::DipToWhite:
         return {std::max(0.f, 1.f - 2.f * t), std::max(0.f, 2.f * t - 1.f)};
     }
     return {1.f - t, t};
 }
 
 void VideoWidget::paintGL() {
+    if (m_transitionMode == TransitionMode::DipToWhite) {
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    } else {
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    }
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     m_videoRectA = QRectF();
@@ -82,34 +99,15 @@ void VideoWidget::paintGL() {
     auto drawDeck = [&](GLuint tex, MediaSource *src,
                         float cx, float cy, float cw, float ch,
                         float baseX, float baseY, float baseW, float baseH,
-                        float alpha, QRectF &outRect, int canvasW, int canvasH) {
+                        float alpha, QRectF &outRect) {
         if (!tex || !src || !src->isReady() || alpha <= 0.f) return;
-
-        QRectF canvasBounds(0, 0, width(), height());
-        if (canvasW > 0 && canvasH > 0) {
-            float canvasAR = (float)canvasW / canvasH;
-            float windowAR = height() > 0.f ? (float)width() / height() : canvasAR;
-
-            float canvasX, canvasY, canvasRW, canvasRH;
-            if (canvasAR > windowAR) {
-                canvasRW = width();
-                canvasRH = canvasRW / canvasAR;
-            } else {
-                canvasRH = height();
-                canvasRW = canvasRH * canvasAR;
-            }
-            canvasBounds = QRectF((width() - canvasRW) / 2, (height() - canvasRH) / 2, canvasRW, canvasRH);
-        }
-
-        const QRectF bounds(canvasBounds.left() + baseX * canvasBounds.width(),
-                            canvasBounds.top()  + baseY * canvasBounds.height(),
-                            baseW * canvasBounds.width(),
-                            baseH * canvasBounds.height());
-        outRect = bounds;
+        const QRectF bounds(baseX * width(), baseY * height(),
+                            baseW * width(), baseH * height());
+        outRect = computeContainedRect(src->frameSize(), cw, ch, bounds);
         glColor4f(1.f, 1.f, 1.f, alpha);
         renderTexture(tex, cx, cy, cw, ch,
-                      (float)bounds.x(),     (float)bounds.y(),
-                      (float)bounds.width(), (float)bounds.height());
+                      (float)outRect.x(),     (float)outRect.y(),
+                      (float)outRect.width(), (float)outRect.height());
     };
 
     switch (m_transitionMode) {
@@ -118,11 +116,11 @@ void VideoWidget::paintGL() {
         const float alphaA = 1.f - t, alphaB = t;
         drawDeck(m_textureA, m_sourceA.get(),
                  m_cropXA, m_cropYA, m_cropWA, m_cropHA,
-                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, alphaA, m_videoRectA, m_canvasWidthA, m_canvasHeightA);
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, alphaA, m_videoRectA);
         drawChainSources(m_chainA, m_chainTexA, alphaA, m_videoRectA);
         drawDeck(m_textureB, m_sourceB.get(),
                  m_cropXB, m_cropYB, m_cropWB, m_cropHB,
-                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, alphaB, m_videoRectB, m_canvasWidthB, m_canvasHeightB);
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, alphaB, m_videoRectB);
         drawChainSources(m_chainB, m_chainTexB, alphaB, m_videoRectB);
         break;
     }
@@ -132,12 +130,12 @@ void VideoWidget::paintGL() {
         if (t < 0.5f) {
             drawDeck(m_textureA, m_sourceA.get(),
                      m_cropXA, m_cropYA, m_cropWA, m_cropHA,
-                     m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA, m_canvasWidthA, m_canvasHeightA);
+                     m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
             drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
         } else {
             drawDeck(m_textureB, m_sourceB.get(),
                      m_cropXB, m_cropYB, m_cropWB, m_cropHB,
-                     m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB, m_canvasWidthB, m_canvasHeightB);
+                     m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
             drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
         }
         break;
@@ -148,7 +146,7 @@ void VideoWidget::paintGL() {
         // using a scissor rectangle [0, t*W] × [0, H].
         drawDeck(m_textureA, m_sourceA.get(),
                  m_cropXA, m_cropYA, m_cropWA, m_cropHA,
-                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA, m_canvasWidthA, m_canvasHeightA);
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
         drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
 
         if (t > 0.f) {
@@ -157,7 +155,63 @@ void VideoWidget::paintGL() {
             glScissor(0, 0, static_cast<GLint>(t * width()), height());
             drawDeck(m_textureB, m_sourceB.get(),
                      m_cropXB, m_cropYB, m_cropWB, m_cropHB,
-                     m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB, m_canvasWidthB, m_canvasHeightB);
+                     m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
+            drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
+            glDisable(GL_SCISSOR_TEST);
+        }
+        break;
+    }
+
+    case TransitionMode::WipeRight: {
+        drawDeck(m_textureA, m_sourceA.get(),
+                 m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+        drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+
+        if (t > 0.f) {
+            glEnable(GL_SCISSOR_TEST);
+            glScissor(static_cast<GLint>((1.f - t) * width()), 0,
+                      static_cast<GLint>(t * width()), height());
+            drawDeck(m_textureB, m_sourceB.get(),
+                     m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                     m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
+            drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
+            glDisable(GL_SCISSOR_TEST);
+        }
+        break;
+    }
+
+    case TransitionMode::WipeUp: {
+        drawDeck(m_textureA, m_sourceA.get(),
+                 m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+        drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+
+        if (t > 0.f) {
+            glEnable(GL_SCISSOR_TEST);
+            glScissor(0, 0, width(), static_cast<GLint>(t * height()));
+            drawDeck(m_textureB, m_sourceB.get(),
+                     m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                     m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
+            drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
+            glDisable(GL_SCISSOR_TEST);
+        }
+        break;
+    }
+
+    case TransitionMode::WipeDown: {
+        drawDeck(m_textureA, m_sourceA.get(),
+                 m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+        drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+
+        if (t > 0.f) {
+            glEnable(GL_SCISSOR_TEST);
+            glScissor(0, static_cast<GLint>((1.f - t) * height()),
+                      width(), static_cast<GLint>(t * height()));
+            drawDeck(m_textureB, m_sourceB.get(),
+                     m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                     m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
             drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
             glDisable(GL_SCISSOR_TEST);
         }
@@ -174,7 +228,7 @@ void VideoWidget::paintGL() {
         glTranslatef(offA, 0.f, 0.f);
         drawDeck(m_textureA, m_sourceA.get(),
                  m_cropXA, m_cropYA, m_cropWA, m_cropHA,
-                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA, m_canvasWidthA, m_canvasHeightA);
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
         drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
         glPopMatrix();
 
@@ -182,38 +236,312 @@ void VideoWidget::paintGL() {
         glTranslatef(offB, 0.f, 0.f);
         drawDeck(m_textureB, m_sourceB.get(),
                  m_cropXB, m_cropYB, m_cropWB, m_cropHB,
-                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB, m_canvasWidthB, m_canvasHeightB);
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
         drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
         glPopMatrix();
         break;
     }
 
-    case TransitionMode::DipToBlack: {
-        // A fades to black as t reaches 0.5; B fades up from black as t passes 0.5.
+    case TransitionMode::SlideRight: {
+        const float offA = t * width();
+        const float offB = -(1.f - t) * width();
+
+        glPushMatrix();
+        glTranslatef(offA, 0.f, 0.f);
+        drawDeck(m_textureA, m_sourceA.get(),
+                 m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+        drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+        glPopMatrix();
+
+        glPushMatrix();
+        glTranslatef(offB, 0.f, 0.f);
+        drawDeck(m_textureB, m_sourceB.get(),
+                 m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
+        drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
+        glPopMatrix();
+        break;
+    }
+
+    case TransitionMode::SlideUp: {
+        const float offA = -(t * height());
+        const float offB = (1.f - t) * height();
+
+        glPushMatrix();
+        glTranslatef(0.f, offA, 0.f);
+        drawDeck(m_textureA, m_sourceA.get(),
+                 m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+        drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+        glPopMatrix();
+
+        glPushMatrix();
+        glTranslatef(0.f, offB, 0.f);
+        drawDeck(m_textureB, m_sourceB.get(),
+                 m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
+        drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
+        glPopMatrix();
+        break;
+    }
+
+    case TransitionMode::SlideDown: {
+        const float offA = t * height();
+        const float offB = -(1.f - t) * height();
+
+        glPushMatrix();
+        glTranslatef(0.f, offA, 0.f);
+        drawDeck(m_textureA, m_sourceA.get(),
+                 m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+        drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+        glPopMatrix();
+
+        glPushMatrix();
+        glTranslatef(0.f, offB, 0.f);
+        drawDeck(m_textureB, m_sourceB.get(),
+                 m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
+        drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
+        glPopMatrix();
+        break;
+    }
+
+    case TransitionMode::DipToBlack:
+    case TransitionMode::DipToWhite: {
         const float alphaA = std::max(0.f, 1.f - 2.f * t);
         const float alphaB = std::max(0.f, 2.f * t - 1.f);
         drawDeck(m_textureA, m_sourceA.get(),
                  m_cropXA, m_cropYA, m_cropWA, m_cropHA,
-                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, alphaA, m_videoRectA, m_canvasWidthA, m_canvasHeightA);
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, alphaA, m_videoRectA);
         drawChainSources(m_chainA, m_chainTexA, alphaA, m_videoRectA);
         drawDeck(m_textureB, m_sourceB.get(),
                  m_cropXB, m_cropYB, m_cropWB, m_cropHB,
-                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, alphaB, m_videoRectB, m_canvasWidthB, m_canvasHeightB);
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, alphaB, m_videoRectB);
         drawChainSources(m_chainB, m_chainTexB, alphaB, m_videoRectB);
         break;
     }
 
-    } // switch
-
-    // HTML overlay composited on top (RGBA, transparent parts show the A/B video)
-    if (m_textureOverlay && m_htmlOverlay && m_htmlOverlay->isReady()) {
-        const QRectF screenBounds(0, 0, width(), height());
-        QRectF ovlRect = computeContainedRect(m_htmlOverlay->frameSize(), 1, 1, screenBounds);
-        glColor4f(1.f, 1.f, 1.f, 1.f);
-        renderTexture(m_textureOverlay, 0, 0, 1, 1,
-                      (float)ovlRect.x(),     (float)ovlRect.y(),
-                      (float)ovlRect.width(), (float)ovlRect.height());
+    case TransitionMode::Additive: {
+        const float alphaA = 1.f - t;
+        const float alphaB = t;
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Set blend func to additive
+        drawDeck(m_textureA, m_sourceA.get(),
+                 m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, alphaA, m_videoRectA);
+        drawChainSources(m_chainA, m_chainTexA, alphaA, m_videoRectA);
+        drawDeck(m_textureB, m_sourceB.get(),
+                 m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, alphaB, m_videoRectB);
+        drawChainSources(m_chainB, m_chainTexB, alphaB, m_videoRectB);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Restore standard
+        break;
     }
+
+    case TransitionMode::CrossZoom: {
+        const float alphaA = 1.f - t;
+        const float alphaB = t;
+
+        // Draw Deck A zoomed in
+        if (alphaA > 0.f) {
+            glPushMatrix();
+            glTranslatef(width() / 2.f, height() / 2.f, 0.f);
+            float scaleA = 1.f + t * 1.5f; // Zoom in
+            glScalef(scaleA, scaleA, 1.f);
+            glTranslatef(-width() / 2.f, -height() / 2.f, 0.f);
+
+            drawDeck(m_textureA, m_sourceA.get(),
+                     m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                     m_baseXA, m_baseYA, m_baseWA, m_baseHA, alphaA, m_videoRectA);
+            drawChainSources(m_chainA, m_chainTexA, alphaA, m_videoRectA);
+            glPopMatrix();
+        }
+
+        // Draw Deck B zooming in
+        if (alphaB > 0.f) {
+            glPushMatrix();
+            glTranslatef(width() / 2.f, height() / 2.f, 0.f);
+            float scaleB = 0.5f + t * 0.5f; // Zoom in from 0.5 to 1.0
+            glScalef(scaleB, scaleB, 1.f);
+            glTranslatef(-width() / 2.f, -height() / 2.f, 0.f);
+
+            drawDeck(m_textureB, m_sourceB.get(),
+                     m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                     m_baseXB, m_baseYB, m_baseWB, m_baseHB, alphaB, m_videoRectB);
+            drawChainSources(m_chainB, m_chainTexB, alphaB, m_videoRectB);
+            glPopMatrix();
+        }
+        break;
+    }
+
+    case TransitionMode::SplitDoor: {
+        // Draw Deck B in background
+        drawDeck(m_textureB, m_sourceB.get(),
+                 m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
+        drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
+
+        // Draw Deck A split doors sliding apart
+        if (t < 1.f) {
+            glEnable(GL_SCISSOR_TEST);
+
+            // Left half door of A
+            glScissor(0, 0, width() / 2, height());
+            glPushMatrix();
+            glTranslatef(-t * (width() / 2.f), 0.f, 0.f);
+            drawDeck(m_textureA, m_sourceA.get(),
+                     m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                     m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+            drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+            glPopMatrix();
+
+            // Right half door of A
+            glScissor(width() / 2, 0, width() - (width() / 2), height());
+            glPushMatrix();
+            glTranslatef(t * (width() / 2.f), 0.f, 0.f);
+            drawDeck(m_textureA, m_sourceA.get(),
+                     m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                     m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+            drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+            glPopMatrix();
+
+            glDisable(GL_SCISSOR_TEST);
+        }
+        break;
+    }
+
+    case TransitionMode::SplitDoorVert: {
+        // Draw Deck B in background
+        drawDeck(m_textureB, m_sourceB.get(),
+                 m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
+        drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
+
+        // Draw Deck A split doors sliding vertically apart
+        if (t < 1.f) {
+            glEnable(GL_SCISSOR_TEST);
+
+            // Bottom half door of A
+            glScissor(0, 0, width(), height() / 2);
+            glPushMatrix();
+            glTranslatef(0.f, t * (height() / 2.f), 0.f);
+            drawDeck(m_textureA, m_sourceA.get(),
+                     m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                     m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+            drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+            glPopMatrix();
+
+            // Top half door of A
+            glScissor(0, height() / 2, width(), height() - (height() / 2));
+            glPushMatrix();
+            glTranslatef(0.f, -t * (height() / 2.f), 0.f);
+            drawDeck(m_textureA, m_sourceA.get(),
+                     m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                     m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+            drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+            glPopMatrix();
+
+            glDisable(GL_SCISSOR_TEST);
+        }
+        break;
+    }
+
+    case TransitionMode::VortexSpin: {
+        const float alphaA = 1.f - t;
+        const float alphaB = t;
+
+        // Draw Deck A spinning and shrinking
+        if (alphaA > 0.f) {
+            glPushMatrix();
+            glTranslatef(width() / 2.f, height() / 2.f, 0.f);
+            glScalef(alphaA, alphaA, 1.f);
+            glRotatef(t * 180.f, 0.f, 0.f, 1.f);
+            glTranslatef(-width() / 2.f, -height() / 2.f, 0.f);
+
+            drawDeck(m_textureA, m_sourceA.get(),
+                     m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                     m_baseXA, m_baseYA, m_baseWA, m_baseHA, alphaA, m_videoRectA);
+            drawChainSources(m_chainA, m_chainTexA, alphaA, m_videoRectA);
+            glPopMatrix();
+        }
+
+        // Draw Deck B spinning and growing
+        if (alphaB > 0.f) {
+            glPushMatrix();
+            glTranslatef(width() / 2.f, height() / 2.f, 0.f);
+            glScalef(alphaB, alphaB, 1.f);
+            glRotatef((t - 1.f) * 180.f, 0.f, 0.f, 1.f);
+            glTranslatef(-width() / 2.f, -height() / 2.f, 0.f);
+
+            drawDeck(m_textureB, m_sourceB.get(),
+                     m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                     m_baseXB, m_baseYB, m_baseWB, m_baseHB, alphaB, m_videoRectB);
+            drawChainSources(m_chainB, m_chainTexB, alphaB, m_videoRectB);
+            glPopMatrix();
+        }
+        break;
+    }
+
+    case TransitionMode::SplitQuadrants: {
+        // Draw Deck B in background
+        drawDeck(m_textureB, m_sourceB.get(),
+                 m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
+        drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
+
+        // Draw Deck A split into 4 quadrants sliding towards corners
+        if (t < 1.f) {
+            glEnable(GL_SCISSOR_TEST);
+            const int w2 = width() / 2;
+            const int h2 = height() / 2;
+
+            // Top-Left quadrant
+            glScissor(0, h2, w2, height() - h2);
+            glPushMatrix();
+            glTranslatef(-t * w2, -t * h2, 0.f);
+            drawDeck(m_textureA, m_sourceA.get(),
+                     m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                     m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+            drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+            glPopMatrix();
+
+            // Top-Right quadrant
+            glScissor(w2, h2, width() - w2, height() - h2);
+            glPushMatrix();
+            glTranslatef(t * w2, -t * h2, 0.f);
+            drawDeck(m_textureA, m_sourceA.get(),
+                     m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                     m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+            drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+            glPopMatrix();
+
+            // Bottom-Left quadrant
+            glScissor(0, 0, w2, h2);
+            glPushMatrix();
+            glTranslatef(-t * w2, t * h2, 0.f);
+            drawDeck(m_textureA, m_sourceA.get(),
+                     m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                     m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+            drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+            glPopMatrix();
+
+            // Bottom-Right quadrant
+            glScissor(w2, 0, width() - w2, h2);
+            glPushMatrix();
+            glTranslatef(t * w2, t * h2, 0.f);
+            drawDeck(m_textureA, m_sourceA.get(),
+                     m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                     m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+            drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+            glPopMatrix();
+
+            glDisable(GL_SCISSOR_TEST);
+        }
+        break;
+    }
+
+    } // switch
 
     glDisable(GL_BLEND);
     glColor4f(1.f, 1.f, 1.f, 1.f);
@@ -358,21 +686,16 @@ void VideoWidget::setSourceA(std::unique_ptr<MediaSource> source) {
     // frameSize() may be (0,0) for async sources like Camera; uploadSourceFrameGL
     // handles resizing the texture when the first real frame arrives.
     setupTextureGL(m_textureA, m_sourceA->frameSize());
-    if (m_sourceA->nextFrame()) {
-        // nextFrame() may switch GL contexts internally (e.g. DynamicInterfaceSource
-        // creates its own context for offscreen QML rendering). Re-assert ours.
-        makeCurrent();
+    if (m_sourceA->nextFrame())
         uploadSourceFrameGL(m_textureA, m_sourceA.get());
-    }
     doneCurrent();
-    // Live sources deliver frames continuously via the frame timer.
+    // Live sources (Camera, Screen, Window, Slideshow, Color) deliver frames
+    // asynchronously and are never "ready" at construction time.
     const auto t = m_sourceA->type();
-    m_playingA = (t == MediaSource::Type::Camera    ||
-                  t == MediaSource::Type::Screen     ||
-                  t == MediaSource::Type::Window     ||
-                  t == MediaSource::Type::Slideshow  ||
-                  t == MediaSource::Type::Canvas     ||
-                  t == MediaSource::Type::Html);
+    m_playingA = (t == MediaSource::Type::Camera   ||
+                  t == MediaSource::Type::Screen    ||
+                  t == MediaSource::Type::Window    ||
+                  t == MediaSource::Type::Slideshow);
     update();
 }
 
@@ -382,48 +705,15 @@ void VideoWidget::setSourceB(std::unique_ptr<MediaSource> source) {
     if (!m_sourceB) return;
     makeCurrent();
     setupTextureGL(m_textureB, m_sourceB->frameSize());
-    if (m_sourceB->nextFrame()) {
-        makeCurrent();
+    if (m_sourceB->nextFrame())
         uploadSourceFrameGL(m_textureB, m_sourceB.get());
-    }
     doneCurrent();
     const auto t = m_sourceB->type();
-    m_playingB = (t == MediaSource::Type::Camera    ||
-                  t == MediaSource::Type::Screen     ||
-                  t == MediaSource::Type::Window     ||
-                  t == MediaSource::Type::Slideshow  ||
-                  t == MediaSource::Type::Canvas     ||
-                  t == MediaSource::Type::Html);
+    m_playingB = (t == MediaSource::Type::Camera   ||
+                  t == MediaSource::Type::Screen    ||
+                  t == MediaSource::Type::Window    ||
+                  t == MediaSource::Type::Slideshow);
     update();
-}
-
-void VideoWidget::setHtmlOverlay(std::unique_ptr<MediaSource> source) {
-    m_playingOverlay = false;
-    m_htmlOverlay    = std::move(source);
-    if (!m_htmlOverlay) {
-        makeCurrent();
-        if (m_textureOverlay) {
-            glDeleteTextures(1, &m_textureOverlay);
-            m_textureOverlay = 0;
-        }
-        doneCurrent();
-        update();
-        return;
-    }
-    makeCurrent();
-    // Overlay textures are always RGBA so transparent HTML parts show the video underneath.
-    setupTextureGL(m_textureOverlay, m_htmlOverlay->frameSize(), true);
-    if (m_htmlOverlay->nextFrame()) {
-        makeCurrent();
-        uploadSourceFrameGL(m_textureOverlay, m_htmlOverlay.get());
-    }
-    doneCurrent();
-    m_playingOverlay = true;
-    update();
-}
-
-void VideoWidget::clearHtmlOverlay() {
-    setHtmlOverlay(nullptr);
 }
 
 // ── Playback control ──────────────────────────────────────────────────────────
@@ -487,18 +777,6 @@ void VideoWidget::setBaseB(float x, float y, float w, float h) {
     update();
 }
 
-void VideoWidget::setCanvasSizeA(int width, int height) {
-    m_canvasWidthA = width;
-    m_canvasHeightA = height;
-    update();
-}
-
-void VideoWidget::setCanvasSizeB(int width, int height) {
-    m_canvasWidthB = width;
-    m_canvasHeightB = height;
-    update();
-}
-
 // ── Overlays ─────────────────────────────────────────────────────────────────
 
 void VideoWidget::setOverlaysA(const QList<OverlayItem> &overlays) {
@@ -557,39 +835,20 @@ void VideoWidget::drawChainSources(std::vector<NodeChainSource> &chain,
                                     std::vector<GLuint> &texList, float alpha,
                                     const QRectF &bounds) {
     if (alpha <= 0.f) return;
-
-    QRectF canvasBounds = bounds;
-    if (!chain.empty() && chain[0].canvasWidth > 0 && chain[0].canvasHeight > 0) {
-        float canvasAR = (float)chain[0].canvasWidth / chain[0].canvasHeight;
-        float boundsAR = bounds.height() > 0.f ? bounds.width() / bounds.height() : canvasAR;
-
-        float canvasW, canvasH;
-        if (canvasAR > boundsAR) {
-            canvasW = bounds.width();
-            canvasH = canvasW / canvasAR;
-        } else {
-            canvasH = bounds.height();
-            canvasW = canvasH * canvasAR;
-        }
-
-        canvasBounds = QRectF(bounds.left() + (bounds.width() - canvasW) / 2,
-                              bounds.top() + (bounds.height() - canvasH) / 2,
-                              canvasW, canvasH);
-    }
-
     for (size_t i = 0; i < chain.size() && i < texList.size(); ++i) {
         auto *src = chain[i].source.get();
         GLuint tex = texList[i];
         if (!tex || !src || !src->isReady()) continue;
         const float cx = chain[i].cropX, cy = chain[i].cropY;
         const float cw = chain[i].cropW, ch = chain[i].cropH;
-        const QRectF placement(canvasBounds.left() + chain[i].baseX * canvasBounds.width(),
-                               canvasBounds.top()  + chain[i].baseY * canvasBounds.height(),
-                               chain[i].baseW * canvasBounds.width(),
-                               chain[i].baseH * canvasBounds.height());
+        const QRectF placement(bounds.left() + chain[i].baseX * bounds.width(),
+                               bounds.top()  + chain[i].baseY * bounds.height(),
+                               chain[i].baseW * bounds.width(),
+                               chain[i].baseH * bounds.height());
+        const QRectF r = computeContainedRect(src->frameSize(), cw, ch, placement);
         glColor4f(1.f, 1.f, 1.f, alpha);
         renderTexture(tex, cx, cy, cw, ch,
-                      (float)placement.x(), (float)placement.y(), (float)placement.width(), (float)placement.height());
+                      (float)r.x(), (float)r.y(), (float)r.width(), (float)r.height());
     }
 }
 
@@ -656,7 +915,7 @@ QImage VideoWidget::getFrameB() const {
 
 // ── GL helpers ────────────────────────────────────────────────────────────────
 
-void VideoWidget::setupTextureGL(GLuint &tex, QSize sz, bool alpha) {
+void VideoWidget::setupTextureGL(GLuint &tex, QSize sz) {
     if (tex) { glDeleteTextures(1, &tex); tex = 0; }
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
@@ -664,9 +923,8 @@ void VideoWidget::setupTextureGL(GLuint &tex, QSize sz, bool alpha) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    const GLenum fmt = alpha ? GL_RGBA : GL_RGB;
-    glTexImage2D(GL_TEXTURE_2D, 0, fmt, sz.width(), sz.height(),
-                 0, fmt, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, sz.width(), sz.height(),
+                 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
@@ -674,9 +932,6 @@ void VideoWidget::uploadSourceFrameGL(GLuint &tex, MediaSource *source) {
     if (!source || !source->isReady()) return;
     QSize sz = source->frameSize();
     if (sz.isEmpty()) return;
-
-    const bool alpha = source->hasAlpha();
-    const GLenum fmt = alpha ? GL_RGBA : GL_RGB;
 
     // Check whether the existing texture matches the incoming frame size.
     // This handles async sources (Camera, Screen) whose first frame size
@@ -688,14 +943,14 @@ void VideoWidget::uploadSourceFrameGL(GLuint &tex, MediaSource *source) {
         glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texH);
         glBindTexture(GL_TEXTURE_2D, 0);
         if (texW != sz.width() || texH != sz.height())
-            setupTextureGL(tex, sz, alpha);
+            setupTextureGL(tex, sz); // recreate at correct size
     } else {
-        setupTextureGL(tex, sz, alpha);
+        setupTextureGL(tex, sz);
     }
 
     glBindTexture(GL_TEXTURE_2D, tex);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sz.width(), sz.height(),
-                    fmt, GL_UNSIGNED_BYTE, source->frameData());
+                    GL_RGB, GL_UNSIGNED_BYTE, source->frameData());
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
@@ -705,13 +960,7 @@ void VideoWidget::uploadSourceFrameGL(GLuint &tex, MediaSource *source) {
 // Returns true if a new frame was decoded and should be uploaded.
 bool VideoWidget::advanceSource(MediaSource *source, bool &playing, bool repeat,
                                 double trimStart, double trimEnd) {
-    if (!source) return false;
-    // Allow lazy-init sources (e.g. DynamicInterfaceSource) to initialize on
-    // the first timer tick where no VideoWidget GL context is current.
-    if (!source->isReady()) {
-        source->nextFrame();
-        return false;
-    }
+    if (!source || !source->isReady()) return false;
 
     double endLimit = (trimEnd > 0) ? trimEnd : source->duration();
     if (endLimit > 0 && source->currentTime() >= endLimit) {
@@ -729,9 +978,9 @@ bool VideoWidget::advanceSource(MediaSource *source, bool &playing, bool repeat,
 void VideoWidget::updateFrame() {
     const bool hasChainA = !m_chainA.empty();
     const bool hasChainB = !m_chainB.empty();
-    if (!m_playingA && !m_playingB && !m_playingOverlay && !hasChainA && !hasChainB) return;
+    if (!m_playingA && !m_playingB && !hasChainA && !hasChainB) return;
 
-    bool decodedA = false, decodedB = false, decodedOverlay = false;
+    bool decodedA = false, decodedB = false;
 
     if (m_playingA)
         decodedA = advanceSource(m_sourceA.get(), m_playingA,
@@ -739,28 +988,23 @@ void VideoWidget::updateFrame() {
     if (m_playingB)
         decodedB = advanceSource(m_sourceB.get(), m_playingB,
                                  m_repeatB, m_trimStartB, m_trimEndB);
-    if (m_playingOverlay && m_htmlOverlay)
-        decodedOverlay = advanceSource(m_htmlOverlay.get(), m_playingOverlay,
-                                       false, 0.0, -1.0);
 
     bool chainADecoded = false, chainBDecoded = false;
     advanceChainSources(m_chainA, m_chainTexA, chainADecoded);
     advanceChainSources(m_chainB, m_chainTexB, chainBDecoded);
 
-    if (decodedA || decodedB || decodedOverlay || chainADecoded || chainBDecoded) {
+    if (decodedA || decodedB || chainADecoded || chainBDecoded) {
         makeCurrent();
-        if (decodedA)       uploadSourceFrameGL(m_textureA,       m_sourceA.get());
-        if (decodedB)       uploadSourceFrameGL(m_textureB,       m_sourceB.get());
-        if (decodedOverlay) uploadSourceFrameGL(m_textureOverlay, m_htmlOverlay.get());
+        if (decodedA) uploadSourceFrameGL(m_textureA, m_sourceA.get());
+        if (decodedB) uploadSourceFrameGL(m_textureB, m_sourceB.get());
         doneCurrent();
         update();
     }
 
     // For live sources that are not yet ready (e.g. camera still starting),
     // keep triggering repaints so the first frame appears as soon as it arrives.
-    if ((m_playingA       && m_sourceA    && !m_sourceA->isReady())    ||
-        (m_playingB       && m_sourceB    && !m_sourceB->isReady())    ||
-        (m_playingOverlay && m_htmlOverlay && !m_htmlOverlay->isReady())) {
+    if ((m_playingA && m_sourceA && !m_sourceA->isReady()) ||
+        (m_playingB && m_sourceB && !m_sourceB->isReady())) {
         update();
     }
 }

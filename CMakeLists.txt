@@ -8,8 +8,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Qt
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets Gui Multimedia WebEngineWidgets DBus)
-find_package(re2 REQUIRED)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets Gui Multimedia DBus)
 
 # GStreamer (for ScreenSource PipeWire frame capture)
 find_package(PkgConfig REQUIRED)
@@ -35,7 +34,6 @@ set(SOURCES
     src/core/ThumbnailExtractor.cpp
     src/core/OverlayItem.cpp
     src/core/ShaderSource.cpp
-    src/core/HtmlSource.cpp
     src/ui/MainWindow.cpp
     src/ui/VideoWidget.cpp
     src/ui/ClipCard.cpp
@@ -47,7 +45,6 @@ set(SOURCES
     src/ui/TransformEditorDialog.cpp
     src/ui/OutputWindow.cpp
     src/ui/ShaderEditDialog.cpp
-    src/ui/HtmlEditDialog.cpp
 )
 
 set(HEADERS
@@ -65,7 +62,6 @@ set(HEADERS
     include/core/ThumbnailExtractor.h
     include/core/OverlayItem.h
     include/core/ShaderSource.h
-    include/core/HtmlSource.h
     include/ui/MainWindow.h
     include/ui/VideoWidget.h
     include/ui/ClipCard.h
@@ -77,7 +73,6 @@ set(HEADERS
     include/ui/TransformEditorDialog.h
     include/ui/OutputWindow.h
     include/ui/ShaderEditDialog.h
-    include/ui/HtmlEditDialog.h
 )
 
 set(UI_FILES
@@ -86,7 +81,6 @@ set(UI_FILES
     forms/ClipEditDialog.ui
     forms/OutputWindow.ui
     forms/ShaderEditDialog.ui
-    forms/HtmlEditDialog.ui
 )
 
 # Create executable
@@ -113,9 +107,7 @@ target_link_libraries(Prism PRIVATE
     Qt6::OpenGLWidgets
     Qt6::Gui
     Qt6::Multimedia
-    Qt6::WebEngineWidgets
     Qt6::DBus
-    re2::re2
     ${FFMPEG_LIBRARIES}
     ${GSTREAMER_LIBRARIES}
     ${GSTREAMER_APP_LIBRARIES}

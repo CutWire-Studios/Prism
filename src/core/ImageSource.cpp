@@ -3,10 +3,7 @@
 
 bool ImageSource::load(const QString &filePath) {
     m_name  = QFileInfo(filePath).fileName();
-    QImage loaded(filePath);
-    if (loaded.isNull()) return false;
-
-    m_image = loaded.convertToFormat(QImage::Format_RGBA8888);
+    m_image = QImage(filePath).convertToFormat(QImage::Format_RGB888);
     return !m_image.isNull();
 }
 

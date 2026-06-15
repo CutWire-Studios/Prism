@@ -7,7 +7,7 @@
 TransformCanvasWidget::TransformCanvasWidget(QWidget *parent)
     : QWidget(parent)
 {
-    setMinimumSize(800, 600);
+    setMinimumSize(400, 300);
     setFocusPolicy(Qt::StrongFocus);
 }
 
