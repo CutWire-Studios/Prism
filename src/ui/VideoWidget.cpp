@@ -575,14 +575,6 @@ void VideoWidget::drawChainSources(std::vector<NodeChainSource> &chain,
         canvasBounds = QRectF(bounds.left() + (bounds.width() - canvasW) / 2,
                               bounds.top() + (bounds.height() - canvasH) / 2,
                               canvasW, canvasH);
-
-        glColor4f(0.f, 0.f, 0.f, alpha);
-        glBegin(GL_QUADS);
-        glVertex2f(canvasBounds.left(), canvasBounds.top());
-        glVertex2f(canvasBounds.right(), canvasBounds.top());
-        glVertex2f(canvasBounds.right(), canvasBounds.bottom());
-        glVertex2f(canvasBounds.left(), canvasBounds.bottom());
-        glEnd();
     }
 
     for (size_t i = 0; i < chain.size() && i < texList.size(); ++i) {
