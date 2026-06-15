@@ -39,6 +39,10 @@ private slots:
     void onCropPreviewToggled(bool checked);
     void onTabChanged(int index);
 
+    // ── Base placement tab ────────────────────────────────────────────────
+    void onBasePlacementChanged(float x, float y, float w, float h);
+    void onResetBasePlacement();
+
     // ── Overlays tab ──────────────────────────────────────────────────────
     void onAddTextOverlay();
     void onAddImageOverlay();
@@ -66,6 +70,8 @@ private:
     float         m_cropX = 0.f, m_cropY = 0.f, m_cropW = 1.f, m_cropH = 1.f;
     bool          m_cropSpinChanging = false;
 
+    float         m_baseX = 0.f, m_baseY = 0.f, m_baseW = 1.f, m_baseH = 1.f;
+
     QList<OverlayItem> m_overlays;
     int                m_selectedOverlayIdx = -1;
     QColor             m_currentOverlayColor = Qt::white;
@@ -85,6 +91,10 @@ private:
     // ── Crop helpers ──────────────────────────────────────────────────────
     void syncCropSpinsFromValues();
     void applyCropToPreview();
+
+    // ── Base placement helpers ────────────────────────────────────────────
+    void syncBasePlacementFromValues();
+    void applyBaseToPreview();
 
     // ── Overlay helpers ───────────────────────────────────────────────────
     void populatePropsFromOverlay(int index);

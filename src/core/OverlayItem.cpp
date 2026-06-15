@@ -53,6 +53,10 @@ QJsonObject ClipSettings::toJson() const {
     o["cropY"]     = static_cast<double>(cropY);
     o["cropW"]     = static_cast<double>(cropW);
     o["cropH"]     = static_cast<double>(cropH);
+    o["baseX"]     = static_cast<double>(baseX);
+    o["baseY"]     = static_cast<double>(baseY);
+    o["baseW"]     = static_cast<double>(baseW);
+    o["baseH"]     = static_cast<double>(baseH);
     QJsonArray arr;
     for (const auto &ov : overlays)
         arr.append(ov.toJson());
@@ -68,6 +72,10 @@ ClipSettings ClipSettings::fromJson(const QJsonObject &o) {
     s.cropY     = static_cast<float>(o["cropY"].toDouble(0.0));
     s.cropW     = static_cast<float>(o["cropW"].toDouble(1.0));
     s.cropH     = static_cast<float>(o["cropH"].toDouble(1.0));
+    s.baseX     = static_cast<float>(o["baseX"].toDouble(0.0));
+    s.baseY     = static_cast<float>(o["baseY"].toDouble(0.0));
+    s.baseW     = static_cast<float>(o["baseW"].toDouble(1.0));
+    s.baseH     = static_cast<float>(o["baseH"].toDouble(1.0));
     for (const auto &v : o["overlays"].toArray())
         s.overlays.append(OverlayItem::fromJson(v.toObject()));
     return s;

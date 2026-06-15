@@ -2,6 +2,7 @@
 #include "ui_MainWindow.h"
 #include "ui/VideoWidget.h"
 #include "core/ThumbnailExtractor.h"
+#include "core/VideoFileSource.h"
 #include "core/SlideshowSource.h"
 #include "core/CameraSource.h"
 #include "core/ScreenSource.h"
@@ -28,12 +29,11 @@
 #include <QMessageBox>
 #include <QMediaDevices>
 #include <QCameraDevice>
-#include <QGuiApplication>
-#include <QScreen>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <algorithm>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -44,19 +44,17 @@ MainWindow::MainWindow(QWidget *parent)
     outputWindow = new OutputWindow(this);
     outputWindow->show();
 
-    setupConnections();
-    applyTheme();
+    // Create a stacked widget to manage placeholder vs. node editor
+    m_stackWidget = new QStackedWidget(ui->gridWidget);
+    ui->gridLayout->addWidget(m_stackWidget, 0, 0, 1, 1);
 
-    // Kick the Qt Multimedia GStreamer backend into life early so that
-    // QMediaDevices::videoInputs() is populated by the time the user
-    // clicks "Add Camera".  The singleShot lets the event loop spin once
-    // first so the window is already shown.
-    QTimer::singleShot(0, []() {
-        [[maybe_unused]] auto _ = QMediaDevices::videoInputs();
-    });
+    // Initialize the ClipNodeEditor
+    m_clipNodeEditor = new ClipNodeEditor();
+    m_clipNodeEditor->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_stackWidget->addWidget(m_clipNodeEditor);
 
     // Build the empty-state placeholder (shown before any media is loaded)
-    m_emptyPlaceholder = new QWidget(ui->gridWidget);
+    m_emptyPlaceholder = new QWidget();
     m_emptyPlaceholder->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     auto *phLayout = new QVBoxLayout(m_emptyPlaceholder);
     phLayout->setAlignment(Qt::AlignCenter);
@@ -91,7 +89,19 @@ MainWindow::MainWindow(QWidget *parent)
     phLayout->addWidget(phText);
     phLayout->addWidget(phBtnRow);
 
-    ui->gridLayout->addWidget(m_emptyPlaceholder, 0, 0, 1, 1);
+    m_stackWidget->addWidget(m_emptyPlaceholder);
+    m_stackWidget->setCurrentWidget(m_emptyPlaceholder);
+
+    setupConnections();
+    applyTheme();
+
+    // Kick the Qt Multimedia GStreamer backend into life early so that
+    // QMediaDevices::videoInputs() is populated by the time the user
+    // clicks "Add Camera".  The singleShot lets the event loop spin once
+    // first so the window is already shown.
+    QTimer::singleShot(0, []() {
+        [[maybe_unused]] auto _ = QMediaDevices::videoInputs();
+    });
 
     updateTimer = new QTimer(this);
     connect(updateTimer, &QTimer::timeout, this, &MainWindow::onTimerUpdate);
@@ -133,7 +143,18 @@ void MainWindow::setupConnections() {
             "Images (*.png *.jpg *.jpeg *.bmp *.webp *.gif)");
         if (files.isEmpty()) return;
         clipManager.addFiles(files);
-        rebuildGrid();
+        
+        // Clear and rebuild the editor with all clips
+        m_clipNodeEditor->clearAllNodes();
+        m_aClipNodeId = 0;
+        m_bClipNodeId = 0;
+        
+        for (int i = 0; i < clipManager.getClipCount(); ++i) {
+            QString clipPath = clipManager.getClipPath(i);
+            QPixmap thumb = ThumbnailExtractor::extract(clipPath, 110, 65);
+            m_clipNodeEditor->addClipNode(clipPath, thumb);
+        }
+        m_stackWidget->setCurrentWidget(m_clipNodeEditor);
     });
     addElemMenu->addSeparator();
     addElemMenu->addAction("📁  Slideshow…",   this, &MainWindow::onAddElementSlideshow);
@@ -145,6 +166,11 @@ void MainWindow::setupConnections() {
     addElemMenu->addAction("⬛  Solid Color…",     this, &MainWindow::onAddElementColor);
     addElemMenu->addSeparator();
     addElemMenu->addAction("≋  Shader…",           this, &MainWindow::onAddElementShader);
+
+    // ── ClipNodeEditor signals ────────────────────────────────────────────────
+    connect(m_clipNodeEditor, &ClipNodeEditor::deckAClipChanged, this, &MainWindow::onNodeAButtonClicked);
+    connect(m_clipNodeEditor, &ClipNodeEditor::deckBClipChanged, this, &MainWindow::onNodeBButtonClicked);
+    connect(m_clipNodeEditor, &ClipNodeEditor::nodeRemoved, this, &MainWindow::onNodeRemoveRequested);
 
     connect(ui->aDeckPlayBtn,     &QPushButton::clicked,  this, &MainWindow::onADeckPlayClicked);
     connect(ui->bDeckPlayBtn,     &QPushButton::clicked,  this, &MainWindow::onBDeckPlayClicked);
@@ -187,34 +213,41 @@ void MainWindow::setupConnections() {
     });
 }
 
-void MainWindow::onClipGridClicked(int index) {
-    if (index < 0 || index >= m_clipCards.size()) return;
-    ClipCard *card = m_clipCards[index];
-    if (!card || card->clipPath().isEmpty()) return;
-
-    for (ClipCard *c : m_clipCards) c->setActive(false);
-    selectedClipIndex = index;
-    card->setActive(true);
-
-    if (ui->crossfaderSlider->value() <= 50)
-        onAButtonClicked(index);
-    else
-        onBButtonClicked(index);
-}
-
 void MainWindow::onLoadFolderClicked() {
     QString path = QFileDialog::getExistingDirectory(this, "Select Media Folder");
     if (path.isEmpty()) return;
+    m_clipNodeEditor->clearAllNodes();
     clipManager.loadFolder(path);
-    selectedClipIndex = aClipIndex = bClipIndex = -1;
-    rebuildGrid();
+    m_aClipNodeId = 0;
+    m_bClipNodeId = 0;
+    outputWindow->videoWidget()->setNodeChainA({});
+    outputWindow->videoWidget()->setNodeChainB({});
+    for (int i = 0; i < clipManager.getClipCount(); ++i) {
+        QString clipPath = clipManager.getClipPath(i);
+        QPixmap thumb = ThumbnailExtractor::extract(clipPath, 110, 65);
+        m_clipNodeEditor->addClipNode(clipPath, thumb);
+    }
+    m_stackWidget->setCurrentWidget(m_clipNodeEditor);
 }
 
 void MainWindow::onAddFolderClicked() {
     QString path = QFileDialog::getExistingDirectory(this, "Add Media Folder");
     if (path.isEmpty()) return;
     clipManager.addFolder(path);
-    rebuildGrid();
+    
+    // Clear and rebuild the editor with all clips
+    m_clipNodeEditor->clearAllNodes();
+    m_aClipNodeId = 0;
+    m_bClipNodeId = 0;
+    outputWindow->videoWidget()->setNodeChainA({});
+    outputWindow->videoWidget()->setNodeChainB({});
+    
+    for (int i = 0; i < clipManager.getClipCount(); ++i) {
+        QString clipPath = clipManager.getClipPath(i);
+        QPixmap thumb = ThumbnailExtractor::extract(clipPath, 110, 65);
+        m_clipNodeEditor->addClipNode(clipPath, thumb);
+    }
+    m_stackWidget->setCurrentWidget(m_clipNodeEditor);
 }
 
 void MainWindow::onAddFilesClicked() {
@@ -223,101 +256,38 @@ void MainWindow::onAddFilesClicked() {
         "Media Files (*.mp4 *.avi *.mov *.mkv *.webm *.png *.jpg *.jpeg)");
     if (files.isEmpty()) return;
     clipManager.addFiles(files);
-    rebuildGrid();
+    
+    // Clear and rebuild the editor with all clips
+    m_clipNodeEditor->clearAllNodes();
+    m_aClipNodeId = 0;
+    m_bClipNodeId = 0;
+    outputWindow->videoWidget()->setNodeChainA({});
+    outputWindow->videoWidget()->setNodeChainB({});
+    
+    for (int i = 0; i < clipManager.getClipCount(); ++i) {
+        QString clipPath = clipManager.getClipPath(i);
+        QPixmap thumb = ThumbnailExtractor::extract(clipPath, 110, 65);
+        m_clipNodeEditor->addClipNode(clipPath, thumb);
+    }
+    m_stackWidget->setCurrentWidget(m_clipNodeEditor);
 }
 
 void MainWindow::onClearAllClicked() {
     clipManager.clear();
-    selectedClipIndex = aClipIndex = bClipIndex = -1;
-    rebuildGrid();
+    m_clipNodeEditor->clearAllNodes();
+    m_aClipNodeId = 0;
+    m_bClipNodeId = 0;
+    outputWindow->videoWidget()->setNodeChainA({});
+    outputWindow->videoWidget()->setNodeChainB({});
+    m_clipNodeEditor->hide();
+    m_emptyPlaceholder->show();
 }
 
-// ── Grid management ───────────────────────────────────────────────────────────
+// ── Element management ────────────────────────────────────────────────────────
 
-void MainWindow::rebuildGrid() {
-    // Clear layout without destroying live-source cards.
-    while (QLayoutItem *item = ui->gridLayout->takeAt(0)) {
-        if (item->widget()) item->widget()->hide();
-        delete item;
-    }
-
-    // Delete file-based cards only; live cards stay alive in m_liveCards.
-    for (ClipCard *c : m_clipCards) c->deleteLater();
-    m_clipCards.clear();
-
-    int n = clipManager.getClipCount();
-    bool hasAnything = (n > 0) || !m_liveCards.isEmpty();
-
-    if (!hasAnything) {
-        m_emptyPlaceholder->show();
-        ui->gridLayout->addWidget(m_emptyPlaceholder, 0, 0, 1, 1);
-        return;
-    }
-
-    m_emptyPlaceholder->hide();
-
-    int availW = ui->clipsScrollArea->viewport()->width();
-    if (availW < 10) availW = width() - 40;
-    dynamicCols = std::max(MIN_COLS, availW / (CARD_WIDTH + 4));
-
-    // Rebuild file-based cards.
-    for (int i = 0; i < n; ++i) {
-        auto *card = new ClipCard(i, ui->gridWidget);
-        connect(card, &ClipCard::triggered,               this, &MainWindow::onClipGridClicked);
-        connect(card, &ClipCard::aButtonClicked,           this, &MainWindow::onAButtonClicked);
-        connect(card, &ClipCard::bButtonClicked,           this, &MainWindow::onBButtonClicked);
-        connect(card, &ClipCard::removeRequested,          this, &MainWindow::onCardRemoveRequested);
-        connect(card, &ClipCard::sourceDescriptorChanged,  this, &MainWindow::onCardSourceDescriptorChanged);
-
-        QString path  = clipManager.getClipPath(i);
-        QPixmap thumb = ThumbnailExtractor::extract(path, 110, 65);
-        card->loadClip(path, thumb);
-
-        ui->gridLayout->addWidget(card, i / dynamicCols, i % dynamicCols);
-        card->show();
-        m_clipCards.append(card);
-    }
-
-    // Re-append live-source cards after the file cards.
-    for (int j = 0; j < m_liveCards.size(); ++j) {
-        ClipCard *card = m_liveCards[j];
-        int idx = n + j;
-        card->setIndex(idx);
-        card->setParent(ui->gridWidget);
-        ui->gridLayout->addWidget(card, idx / dynamicCols, idx % dynamicCols);
-        card->show();
-    }
-
-    qDebug() << "Grid rebuilt with" << n << "clips +" << m_liveCards.size() << "live";
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-ClipCard *MainWindow::cardAtIndex(int index) const {
-    if (index < m_clipCards.size()) return m_clipCards.value(index, nullptr);
-    index -= m_clipCards.size();
-    return m_liveCards.value(index, nullptr);
-}
-
-void MainWindow::addElementCard(const SourceDescriptor &desc, const QPixmap &thumb) {
-    int idx = m_clipCards.size() + m_liveCards.size();
-    auto *card = new ClipCard(idx, ui->gridWidget);
-    connect(card, &ClipCard::triggered,               this, &MainWindow::onClipGridClicked);
-    connect(card, &ClipCard::aButtonClicked,           this, &MainWindow::onAButtonClicked);
-    connect(card, &ClipCard::bButtonClicked,           this, &MainWindow::onBButtonClicked);
-    connect(card, &ClipCard::removeRequested,          this, &MainWindow::onCardRemoveRequested);
-    connect(card, &ClipCard::sourceDescriptorChanged,  this, &MainWindow::onCardSourceDescriptorChanged);
-    card->loadSource(desc, thumb);
-    m_liveCards.append(card);
-
-    m_emptyPlaceholder->hide();
-
-    int availW = ui->clipsScrollArea->viewport()->width();
-    if (availW < 10) availW = width() - 40;
-    dynamicCols = std::max(MIN_COLS, availW / (CARD_WIDTH + 4));
-
-    ui->gridLayout->addWidget(card, idx / dynamicCols, idx % dynamicCols);
-    card->show();
+void MainWindow::addElementNode(const SourceDescriptor &desc, const QPixmap &thumb) {
+    m_clipNodeEditor->addSourceNode(desc, thumb);
+    m_stackWidget->setCurrentWidget(m_clipNodeEditor);
 }
 
 void MainWindow::assignSourceToActiveDeck(std::unique_ptr<MediaSource> src,
@@ -443,27 +413,9 @@ void MainWindow::onTimerUpdate() {
             frameB.scaled(160, 90, Qt::KeepAspectRatio, Qt::FastTransformation)));
 }
 
-void MainWindow::updateGridLayout() {
-    if (m_clipCards.isEmpty()) return;
-
-    while (QLayoutItem *item = ui->gridLayout->takeAt(0)) {
-        if (item->widget()) item->widget()->hide();
-        delete item;
-    }
-
-    int availW = ui->clipsScrollArea->viewport()->width();
-    if (availW < 10) availW = width() - 40;
-    dynamicCols = std::max(MIN_COLS, availW / (CARD_WIDTH + 4));
-
-    for (int i = 0; i < m_clipCards.size(); ++i) {
-        m_clipCards[i]->show();
-        ui->gridLayout->addWidget(m_clipCards[i], i / dynamicCols, i % dynamicCols);
-    }
-}
-
 void MainWindow::resizeEvent(QResizeEvent *event) {
     QMainWindow::resizeEvent(event);
-    updateGridLayout();
+    // ClipNodeEditor handles its own layout updates.
 }
 
 void MainWindow::applyTheme() {
@@ -680,19 +632,38 @@ void MainWindow::dropEvent(QDropEvent *event) {
     const QMimeData *mimeData = event->mimeData();
     if (!mimeData->hasUrls()) return;
 
-    QStringList paths;
+    bool hasContent = false;
     for (const QUrl &url : mimeData->urls()) {
         QString p = url.toLocalFile();
         QFileInfo fi(p);
         if (fi.isDir()) {
             clipManager.addFolder(p);
-        } else {
-            paths << p;
+            hasContent = true;
         }
     }
-    if (!paths.isEmpty())
+
+    QStringList paths;
+    for (const QUrl &url : mimeData->urls()) {
+        QString p = url.toLocalFile();
+        QFileInfo fi(p);
+        if (!fi.isDir()) {
+            paths << p;
+            hasContent = true;
+        }
+    }
+
+    if (!paths.isEmpty()) {
         clipManager.addFiles(paths);
-    rebuildGrid();
+        for (const auto &path : paths) {
+            QPixmap thumb = ThumbnailExtractor::extract(path, 110, 65);
+            m_clipNodeEditor->addClipNode(path, thumb);
+        }
+    }
+
+    if (hasContent) {
+        m_stackWidget->setCurrentWidget(m_clipNodeEditor);
+    }
+
     event->acceptProposedAction();
 }
 
@@ -702,33 +673,39 @@ static QString formatTimeShort(double secs) {
     return QString("%1:%2").arg(m).arg(s, 2, 10, QChar('0'));
 }
 
-// Shared logic for assigning any card to a deck.
-static void assignCardToDeck(ClipCard *card, bool deckA,
+// Assign a clip node to a deck using the clip's SourceDescriptor.
+static void assignNodeToDeck(ClipNodeModel *node, bool deckA,
                              VideoWidget *out,
                              QSlider *progressSlider, QPushButton *playBtn,
                              QLabel *selectedLabel, QLabel *timeLabel) {
+    if (!node) return;
+
     using Kind = SourceDescriptor::Kind;
-    const SourceDescriptor &desc = card->sourceDescriptor();
+    const SourceDescriptor &desc = node->sourceDescriptor();
 
     switch (desc.kind) {
 
     case Kind::VideoFile:
     case Kind::Image: {
         if (deckA) {
-            out->setRepeatA(card->isRepeat());
-            out->setTrimPointsA(card->startTime(), card->endTime());
-            out->setCropA(card->cropX(), card->cropY(), card->cropW(), card->cropH());
-            out->setOverlaysA(card->overlays());
+            out->setRepeatA(node->isRepeat());
+            out->setTrimPointsA(node->startTime(), node->endTime());
+            out->setBaseA(node->settings().baseX, node->settings().baseY,
+                          node->settings().baseW, node->settings().baseH);
+            out->setCropA(node->cropX(), node->cropY(), node->cropW(), node->cropH());
+            out->setOverlaysA(node->overlays());
             out->loadVideoA(desc.path);
-            if (card->startTime() > 0) out->seekA(card->startTime());
+            if (node->startTime() > 0) out->seekA(node->startTime());
             out->playA();
         } else {
-            out->setRepeatB(card->isRepeat());
-            out->setTrimPointsB(card->startTime(), card->endTime());
-            out->setCropB(card->cropX(), card->cropY(), card->cropW(), card->cropH());
-            out->setOverlaysB(card->overlays());
+            out->setRepeatB(node->isRepeat());
+            out->setTrimPointsB(node->startTime(), node->endTime());
+            out->setBaseB(node->settings().baseX, node->settings().baseY,
+                          node->settings().baseW, node->settings().baseH);
+            out->setCropB(node->cropX(), node->cropY(), node->cropW(), node->cropH());
+            out->setOverlaysB(node->overlays());
             out->loadVideoB(desc.path);
-            if (card->startTime() > 0) out->seekB(card->startTime());
+            if (node->startTime() > 0) out->seekB(node->startTime());
             out->playB();
         }
         double dur = deckA ? out->getDurationA() : out->getDurationB();
@@ -736,8 +713,8 @@ static void assignCardToDeck(ClipCard *card, bool deckA,
         progressSlider->setValue(0);
         progressSlider->setEnabled(desc.kind == Kind::VideoFile && dur > 0);
         playBtn->setEnabled(true);
-        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", card->sourceName()));
-        timeLabel->setText(formatTimeShort(card->startTime()) + " / " + formatTimeShort(dur));
+        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
+        timeLabel->setText(formatTimeShort(node->startTime()) + " / " + formatTimeShort(dur));
         break;
     }
 
@@ -751,7 +728,7 @@ static void assignCardToDeck(ClipCard *card, bool deckA,
         else        { out->setSourceB(std::move(src)); out->playB(); }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(true);
-        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", card->sourceName()));
+        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
         timeLabel->setText("—");
         break;
     }
@@ -760,11 +737,8 @@ static void assignCardToDeck(ClipCard *card, bool deckA,
         auto src = std::make_unique<CameraSource>();
 
         if (desc.path.isEmpty()) {
-            // "Default Camera" — QCamera() with no device arg; Qt picks the
-            // default camera internally bypassing QMediaDevices enumeration.
             src->start({});
         } else {
-            // Try to match stored device ID against Qt's enumerated list.
             bool matched = false;
             const auto qtDevices = QMediaDevices::videoInputs();
             for (const auto &dev : qtDevices) {
@@ -775,8 +749,6 @@ static void assignCardToDeck(ClipCard *card, bool deckA,
                 }
             }
             if (!matched) {
-                // Device not in Qt list (e.g. pure V4L2 path) — use startDevice
-                // which also falls back to default if unmatched.
                 src->startDevice(desc.path);
             }
         }
@@ -785,7 +757,7 @@ static void assignCardToDeck(ClipCard *card, bool deckA,
         else        { out->setSourceB(std::move(src)); out->playB(); }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(true);
-        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", card->sourceName()));
+        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
         timeLabel->setText("LIVE");
         break;
     }
@@ -797,7 +769,7 @@ static void assignCardToDeck(ClipCard *card, bool deckA,
         else        { out->setSourceB(std::move(src)); out->playB(); }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(true);
-        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", card->sourceName()));
+        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
         timeLabel->setText("LIVE");
         break;
     }
@@ -809,7 +781,7 @@ static void assignCardToDeck(ClipCard *card, bool deckA,
         else        { out->setSourceB(std::move(src)); out->playB(); }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(true);
-        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", card->sourceName()));
+        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
         timeLabel->setText("LIVE");
         break;
     }
@@ -820,7 +792,7 @@ static void assignCardToDeck(ClipCard *card, bool deckA,
         else        out->setSourceB(std::move(src));
         progressSlider->setEnabled(false);
         playBtn->setEnabled(false);
-        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", card->sourceName()));
+        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
         timeLabel->setText("—");
         break;
     }
@@ -831,7 +803,7 @@ static void assignCardToDeck(ClipCard *card, bool deckA,
         else        { out->setSourceB(std::move(src)); out->playB(); }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(false);
-        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", card->sourceName()));
+        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
         timeLabel->setText("LIVE");
         break;
     }
@@ -839,30 +811,147 @@ static void assignCardToDeck(ClipCard *card, bool deckA,
     }
 }
 
-void MainWindow::onAButtonClicked(int index) {
-    ClipCard *card = cardAtIndex(index);
-    if (!card || !card->hasSource()) return;
+// Creates a VideoWidget chain source for a single node (used for upstream overlays).
+// Mirrors the source-creation logic in assignNodeToDeck without the UI side effects.
+static VideoWidget::NodeChainSource makeNodeChainSource(ClipNodeModel *node) {
+    using Kind = SourceDescriptor::Kind;
+    const SourceDescriptor &desc = node->sourceDescriptor();
+    VideoWidget::NodeChainSource entry;
+    entry.cropX = node->cropX(); entry.cropY = node->cropY();
+    entry.cropW = node->cropW(); entry.cropH = node->cropH();
+    entry.baseX = node->settings().baseX;
+    entry.baseY = node->settings().baseY;
+    entry.baseW = node->settings().baseW;
+    entry.baseH = node->settings().baseH;
 
-    if (aClipIndex >= 0) { if (auto *c = cardAtIndex(aClipIndex)) c->setASelected(false); }
-    aClipIndex = index;
-    card->setASelected(true);
-
-    assignCardToDeck(card, true, outputWindow->videoWidget(),
-                     ui->aProgressSlider, ui->aDeckPlayBtn,
-                     ui->aSelectedLabel,  ui->aTimeLabel);
+    switch (desc.kind) {
+    case Kind::VideoFile: {
+        auto src = std::make_unique<VideoFileSource>();
+        if (!src->open(desc.path)) break;
+        if (node->startTime() > 0) src->seek(node->startTime());
+        src->nextFrame();
+        entry.playing = true;
+        entry.source  = std::move(src);
+        break;
+    }
+    case Kind::Image: {
+        auto src = std::make_unique<ImageSource>();
+        if (!src->load(desc.path)) break;
+        src->nextFrame();
+        entry.source = std::move(src);
+        break;
+    }
+    case Kind::Color:
+        entry.source  = std::make_unique<ColorSource>(desc.color);
+        entry.playing = true;
+        break;
+    case Kind::Slideshow: {
+        auto src = std::make_unique<SlideshowSource>();
+        if (!src->loadFolder(desc.path, desc.slideshowIntervalMs)) break;
+        entry.source  = std::move(src);
+        entry.playing = true;
+        break;
+    }
+    case Kind::Camera: {
+        auto src = std::make_unique<CameraSource>();
+        if (desc.path.isEmpty()) {
+            src->start({});
+        } else {
+            bool matched = false;
+            const auto devs = QMediaDevices::videoInputs();
+            for (const auto &dev : devs) {
+                if (QString::fromUtf8(dev.id()) == desc.path) {
+                    src->start(dev); matched = true; break;
+                }
+            }
+            if (!matched) src->startDevice(desc.path);
+        }
+        entry.source  = std::move(src);
+        entry.playing = true;
+        break;
+    }
+    case Kind::Screen: {
+        auto src = std::make_unique<ScreenSource>();
+        if (src->start(ScreenSource::CaptureType::Monitor)) {
+            entry.source = std::move(src);
+            entry.playing = true;
+        }
+        break;
+    }
+    case Kind::Window: {
+        auto src = std::make_unique<ScreenSource>();
+        if (src->start(ScreenSource::CaptureType::Window)) {
+            entry.source = std::move(src);
+            entry.playing = true;
+        }
+        break;
+    }
+    case Kind::Shader:
+        entry.source  = std::make_unique<ShaderSource>(desc.shaderCode);
+        entry.playing = true;
+        break;
+    }
+    return entry;
 }
 
-void MainWindow::onBButtonClicked(int index) {
-    ClipCard *card = cardAtIndex(index);
-    if (!card || !card->hasSource()) return;
+// Builds the VideoWidget chain from chain[1..n] (upstream nodes, 0 = base).
+static std::vector<VideoWidget::NodeChainSource>
+buildNodeChain(const QVector<ClipNodeModel *> &chain) {
+    std::vector<VideoWidget::NodeChainSource> out;
+    for (int i = 1; i < chain.size(); ++i) {
+        auto entry = makeNodeChainSource(chain[i]);
+        if (entry.source) out.push_back(std::move(entry));
+    }
+    return out;
+}
 
-    if (bClipIndex >= 0) { if (auto *c = cardAtIndex(bClipIndex)) c->setBSelected(false); }
-    bClipIndex = index;
-    card->setBSelected(true);
+void MainWindow::onNodeAButtonClicked(NodeId nodeId) {
+    if (!nodeId) return;
+    ClipNodeModel *node = m_clipNodeEditor->nodeAt(nodeId);
+    if (!node || !node->hasSource()) return;
 
-    assignCardToDeck(card, false, outputWindow->videoWidget(),
-                     ui->bProgressSlider, ui->bDeckPlayBtn,
-                     ui->bSelectedLabel,  ui->bTimeLabel);
+    if (m_aClipNodeId) {
+        if (auto *oldNode = m_clipNodeEditor->nodeAt(m_aClipNodeId))
+            oldNode->setASelected(false);
+    }
+    m_aClipNodeId = nodeId;
+    node->setASelected(true);
+
+    auto *out = outputWindow->videoWidget();
+    // Assign the selected (base) node to deck A as usual
+    assignNodeToDeck(node, true, out, ui->aProgressSlider, ui->aDeckPlayBtn,
+                     ui->aSelectedLabel, ui->aTimeLabel);
+    // Overlay upstream nodes on top, in chain order (nearest first)
+    out->setNodeChainA(buildNodeChain(m_clipNodeEditor->getClipChain(nodeId)));
+}
+
+void MainWindow::onNodeBButtonClicked(NodeId nodeId) {
+    if (!nodeId) return;
+    ClipNodeModel *node = m_clipNodeEditor->nodeAt(nodeId);
+    if (!node || !node->hasSource()) return;
+
+    if (m_bClipNodeId) {
+        if (auto *oldNode = m_clipNodeEditor->nodeAt(m_bClipNodeId))
+            oldNode->setBSelected(false);
+    }
+    m_bClipNodeId = nodeId;
+    node->setBSelected(true);
+
+    auto *out = outputWindow->videoWidget();
+    assignNodeToDeck(node, false, out, ui->bProgressSlider, ui->bDeckPlayBtn,
+                     ui->bSelectedLabel, ui->bTimeLabel);
+    out->setNodeChainB(buildNodeChain(m_clipNodeEditor->getClipChain(nodeId)));
+}
+
+void MainWindow::onNodeRemoveRequested(NodeId nodeId) {
+    m_clipNodeEditor->removeNode(nodeId);
+    auto *out = outputWindow->videoWidget();
+    if (m_aClipNodeId == nodeId) { m_aClipNodeId = 0; out->setNodeChainA({}); }
+    if (m_bClipNodeId == nodeId) { m_bClipNodeId = 0; out->setNodeChainB({}); }
+    if (m_clipNodeEditor->allNodes().isEmpty()) {
+        m_clipNodeEditor->hide();
+        m_emptyPlaceholder->show();
+    }
 }
 
 QString MainWindow::formatTimeShort(double secs) {
@@ -877,13 +966,13 @@ void MainWindow::onAddElementSlideshow() {
 
     bool ok = false;
     int interval = QInputDialog::getInt(this, "Slideshow Interval",
-                                        "Seconds per slide:", 3, 1, 60, 1, &ok);
+                                       "Seconds per slide:", 3, 1, 60, 1, &ok);
     if (!ok) return;
 
     // Use the first image as the thumbnail.
     QDir dir(folder);
     QStringList imgs = dir.entryList({"*.png","*.jpg","*.jpeg","*.bmp","*.webp"},
-                                     QDir::Files, QDir::Name);
+                                    QDir::Files, QDir::Name);
     QPixmap thumb;
     if (!imgs.isEmpty())
         thumb = ThumbnailExtractor::extract(dir.absoluteFilePath(imgs.first()), 110, 65);
@@ -896,19 +985,10 @@ void MainWindow::onAddElementSlideshow() {
     desc.displayName         = QFileInfo(folder).fileName();
     desc.slideshowIntervalMs = interval * 1000;
 
-    addElementCard(desc, thumb);
+    addElementNode(desc, thumb);
 }
 
 void MainWindow::onAddElementCamera() {
-    // Build device list ────────────────────────────────────────────────────────
-    // Strategy:
-    //   1. Qt/GStreamer enumeration (nice names). Retry once after 800 ms to let
-    //      GStreamer's device monitor finish lazy initialisation.
-    //   2. POSIX glob for /dev/video* to catch devices GStreamer doesn't surface.
-    //   3. Always add a "Default Camera" fallback entry so the user is never
-    //      blocked — QCamera() with no device arg can work even when
-    //      QMediaDevices::videoInputs() returns empty (Intel IPU6 / MIPI cameras).
-
     auto qtDevices = QMediaDevices::videoInputs();
     if (qtDevices.isEmpty()) {
         QEventLoop loop;
@@ -927,14 +1007,13 @@ void MainWindow::onAddElementCamera() {
         devices.append({id, label, false});
     }
 
-    // Merge /dev/videoN nodes not already in the Qt list
     {
         glob_t g{};
         if (::glob("/dev/video*", GLOB_NOSORT, nullptr, &g) == 0) {
             for (size_t i = 0; i < g.gl_pathc; ++i) {
                 QString path = QString::fromLocal8Bit(g.gl_pathv[i]);
                 bool already = std::any_of(devices.begin(), devices.end(),
-                                           [&](const CamEntry &e){ return e.id == path; });
+                                          [&](const CamEntry &e){ return e.id == path; });
                 if (!already)
                     devices.append({path, path, false});
             }
@@ -942,7 +1021,6 @@ void MainWindow::onAddElementCamera() {
         ::globfree(&g);
     }
 
-    // Always include a "Default Camera" option (QCamera with no device arg)
     devices.append({"", "Default Camera  (let the system choose)", true});
 
     QStringList names;
@@ -950,7 +1028,7 @@ void MainWindow::onAddElementCamera() {
 
     bool ok = false;
     QString chosen = QInputDialog::getItem(this, "Select Camera",
-                                           "Camera device:", names, 0, false, &ok);
+                                          "Camera device:", names, 0, false, &ok);
     if (!ok) return;
 
     int idx = names.indexOf(chosen);
@@ -958,33 +1036,31 @@ void MainWindow::onAddElementCamera() {
 
     SourceDescriptor desc;
     desc.kind        = SourceDescriptor::Kind::Camera;
-    desc.path        = entry.id;          // empty string → default camera
+    desc.path        = entry.id;
     desc.displayName = entry.isDefault ? "Default Camera"
                      : entry.label.section("  [", 0, 0).trimmed();
     if (desc.displayName.isEmpty()) desc.displayName = entry.id;
     desc.cameraIndex = idx;
 
-    addElementCard(desc, makeIconThumb("📷"));
+    addElementNode(desc, makeIconThumb("📷"));
 }
 
 void MainWindow::onAddElementScreen() {
-    // The portal shows its own screen picker when the card is assigned to a deck.
     SourceDescriptor desc;
     desc.kind        = SourceDescriptor::Kind::Screen;
     desc.displayName = "Screen Capture";
     desc.screenIndex = 0;
 
-    addElementCard(desc, makeIconThumb("🖥"));
+    addElementNode(desc, makeIconThumb("🖥"));
 }
 
 void MainWindow::onAddElementWindow() {
-    // The portal shows its own window/tab picker when the card is assigned to a deck.
     SourceDescriptor desc;
     desc.kind        = SourceDescriptor::Kind::Window;
     desc.displayName = "Window / Tab";
     desc.windowIndex = 0;
 
-    addElementCard(desc, makeIconThumb("🪟"));
+    addElementNode(desc, makeIconThumb("🪟"));
 }
 
 void MainWindow::onAddElementColor() {
@@ -996,11 +1072,10 @@ void MainWindow::onAddElementColor() {
     desc.color       = color;
     desc.displayName = color.name().toUpper();
 
-    addElementCard(desc, makeColorThumb(color));
+    addElementNode(desc, makeColorThumb(color));
 }
 
 void MainWindow::onAddElementShader() {
-    // Add a card immediately with the first preset, then let the user edit it.
     ShaderEditDialog dlg(QString(), this);
     if (dlg.exec() != QDialog::Accepted) return;
 
@@ -1012,30 +1087,7 @@ void MainWindow::onAddElementShader() {
     desc.shaderCode  = code;
     desc.displayName = "Shader";
 
-    addElementCard(desc, makeShaderThumb(code));
+    addElementNode(desc, makeShaderThumb(code));
 }
 
-// ── Card management ────────────────────────────────────────────────────────────
-
-void MainWindow::onCardRemoveRequested(int index) {
-    const int nFile = m_clipCards.size();
-
-    if (index < nFile) {
-        // File-based clip — remove from ClipManager and rebuild.
-        clipManager.removeClip(index);
-        rebuildGrid();
-    } else {
-        // Live element card — remove from m_liveCards and delete.
-        int liveIdx = index - nFile;
-        if (liveIdx < 0 || liveIdx >= m_liveCards.size()) return;
-        ClipCard *card = m_liveCards.takeAt(liveIdx);
-        card->deleteLater();
-        rebuildGrid();
-    }
-}
-
-void MainWindow::onCardSourceDescriptorChanged(int /*index*/, const SourceDescriptor & /*desc*/) {
-    // The card already updated its own m_sourceDesc.
-    // If the card is currently assigned to a deck, re-assign the new source.
-    // For now, no automatic re-push — user can press A/B again to pick it up.
-}
+// ── Card management (obsolete methods removed - now handled by ClipNodeEditor) ──

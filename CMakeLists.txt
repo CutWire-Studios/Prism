@@ -19,7 +19,7 @@ pkg_check_modules(GSTREAMER_APP REQUIRED gstreamer-app-1.0)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat avutil swscale)
 
-# Source files
+
 set(SOURCES
     src/main.cpp
     src/core/VideoPlayer.cpp
@@ -37,8 +37,11 @@ set(SOURCES
     src/ui/MainWindow.cpp
     src/ui/VideoWidget.cpp
     src/ui/ClipCard.cpp
+    src/ui/ClipNodeModel.cpp
+    src/ui/ClipNodeEditor.cpp
     src/ui/ClipEditDialog.cpp
     src/ui/CropSelectorWidget.cpp
+    src/ui/BasePlacementWidget.cpp
     src/ui/OverlayCanvasWidget.cpp
     src/ui/OutputWindow.cpp
     src/ui/ShaderEditDialog.cpp
@@ -62,8 +65,11 @@ set(HEADERS
     include/ui/MainWindow.h
     include/ui/VideoWidget.h
     include/ui/ClipCard.h
+    include/ui/ClipNodeModel.h
+    include/ui/ClipNodeEditor.h
     include/ui/ClipEditDialog.h
     include/ui/CropSelectorWidget.h
+    include/ui/BasePlacementWidget.h
     include/ui/OverlayCanvasWidget.h
     include/ui/OutputWindow.h
     include/ui/ShaderEditDialog.h

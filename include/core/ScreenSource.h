@@ -10,28 +10,14 @@
 
 class QScreen;
 
-// MediaSource that captures a display or window via the XDG Desktop Portal
-// ScreenCast D-Bus API (org.freedesktop.portal.ScreenCast), reading frames
-// through a PipeWire stream via GStreamer's pipewiresrc element.
-//
-// The portal shows its own picker UI — the user selects the capture source
-// interactively. Pass CaptureType to control which sources are offered.
-//
-// Usage:
-//   auto scr = std::make_unique<ScreenSource>();
-//   scr->start(ScreenSource::CaptureType::Monitor);   // screen picker
-//   scr->start(ScreenSource::CaptureType::Window);    // window/tab picker
-//   videoWidget->setSourceB(std::move(scr));
-//   videoWidget->playB();
-
 class ScreenSource : public QObject, public MediaSource {
     Q_OBJECT
 
 public:
     enum class CaptureType {
-        Monitor = 1,  // physical displays only
-        Window  = 2,  // application windows / browser tabs
-        Any     = 3,  // let the user choose either
+        Monitor = 1,
+        Window  = 2,
+        Any     = 3,
     };
 
     ScreenSource();
@@ -70,6 +56,6 @@ private:
     GstElement *m_pipeline = nullptr;
     GstElement *m_appsink  = nullptr;
 
-    QImage  m_frame;
-    bool    m_dirty = false;
+    QImage m_frame;
+    bool   m_dirty = false;
 };

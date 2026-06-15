@@ -1,10 +1,24 @@
 #include "ui/OverlayCanvasWidget.h"
+#include <QBrush>
 #include <QPainter>
+#include <QPixmap>
 #include <QMouseEvent>
 #include <algorithm>
 
 static constexpr double HS  = 9.0;   // handle size
 static constexpr double HS2 = HS / 2.0;
+
+static const QBrush &checkerBrush() {
+    static const QBrush brush = [] {
+        QPixmap pm(16, 16);
+        pm.fill(QColor(0x2b, 0x2d, 0x31));
+        QPainter tp(&pm);
+        tp.fillRect(0, 0, 8, 8, QColor(0x37, 0x3a, 0x3f));
+        tp.fillRect(8, 8, 8, 8, QColor(0x37, 0x3a, 0x3f));
+        return QBrush(pm);
+    }();
+    return brush;
+}
 
 OverlayCanvasWidget::OverlayCanvasWidget(QWidget *parent) : QWidget(parent) {
     setMouseTracking(true);
@@ -200,6 +214,7 @@ void OverlayCanvasWidget::paintEvent(QPaintEvent *) {
     p.fillRect(rect(), QColor(0x18, 0x19, 0x1b));
 
     QRectF fr = frameRect();
+    p.fillRect(fr, checkerBrush());
     if (!m_frame.isNull())
         p.drawImage(fr, m_frame);
     else {
@@ -223,5 +238,5 @@ void OverlayCanvasWidget::paintEvent(QPaintEvent *) {
     p.drawText(QRectF(0, height() - 18, width(), 18), Qt::AlignCenter,
         m_overlays.isEmpty()
             ? "Click  '＋ Text'  or  '＋ Image'  to add an overlay"
-            : "Click overlay to select  ·  Drag to move  ·  Drag corners to resize");
+            : "Click text/image overlay to select  ·  Drag to move  ·  Drag corners to resize");
 }

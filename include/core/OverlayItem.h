@@ -31,10 +31,18 @@ struct ClipSettings {
     float cropX = 0.0f, cropY = 0.0f;
     float cropW = 1.0f, cropH = 1.0f;
 
+    // Base placement inside the canvas: normalized [0,1]. Default = full canvas.
+    float baseX = 0.0f, baseY = 0.0f;
+    float baseW = 1.0f, baseH = 1.0f;
+
     QList<OverlayItem> overlays;
 
     bool hasCrop() const {
         return !(cropX == 0.f && cropY == 0.f && cropW == 1.f && cropH == 1.f);
+    }
+
+    bool hasBasePlacement() const {
+        return !(baseX == 0.f && baseY == 0.f && baseW == 1.f && baseH == 1.f);
     }
 
     QJsonObject toJson() const;

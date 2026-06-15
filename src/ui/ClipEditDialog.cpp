@@ -1,6 +1,7 @@
 #include "ui/ClipEditDialog.h"
 #include "ui_ClipEditDialog.h"
 #include "core/VideoPlayer.h"
+#include "ui/BasePlacementWidget.h"
 #include "ui/OverlayCanvasWidget.h"
 #include <QShowEvent>
 #include <QColorDialog>
@@ -18,6 +19,8 @@ ClipEditDialog::ClipEditDialog(const QString &clipPath, const ClipSettings &sett
     , m_endTime(settings.endTime)
     , m_cropX(settings.cropX), m_cropY(settings.cropY)
     , m_cropW(settings.cropW), m_cropH(settings.cropH)
+    , m_baseX(settings.baseX), m_baseY(settings.baseY)
+    , m_baseW(settings.baseW), m_baseH(settings.baseH)
     , m_overlays(settings.overlays)
 {
     ui->setupUi(this);
@@ -80,6 +83,13 @@ ClipEditDialog::ClipEditDialog(const QString &clipPath, const ClipSettings &sett
     connect(ui->cropPreviewCheck,&QCheckBox::toggled,   this, &ClipEditDialog::onCropPreviewToggled);
     connect(ui->tabWidget, &QTabWidget::currentChanged, this, &ClipEditDialog::onTabChanged);
 
+    // ── Base placement tab setup ─────────────────────────────────────────
+    syncBasePlacementFromValues();
+    connect(ui->baseCanvas, &BasePlacementWidget::placementChanged,
+            this, &ClipEditDialog::onBasePlacementChanged);
+    connect(ui->resetBaseBtn, &QPushButton::clicked,
+            this, &ClipEditDialog::onResetBasePlacement);
+
     // ── Overlays tab setup ────────────────────────────────────────────────
     ui->overlayCanvas->setOverlays(m_overlays);
     setPropsEnabled(false);
@@ -123,6 +133,8 @@ ClipSettings ClipEditDialog::resultSettings() const {
     s.endTime   = m_endTime;
     s.cropX = m_cropX; s.cropY = m_cropY;
     s.cropW = m_cropW; s.cropH = m_cropH;
+    s.baseX = m_baseX; s.baseY = m_baseY;
+    s.baseW = m_baseW; s.baseH = m_baseH;
     s.overlays = m_overlays;
     return s;
 }
@@ -138,8 +150,16 @@ void ClipEditDialog::showEvent(QShowEvent *event) {
         QTimer::singleShot(60, this, [this]() {
             ui->preview->loadVideo(m_clipPath);
             ui->preview->setOverlaysA(m_overlays);
+            ui->preview->setBaseA(m_baseX, m_baseY, m_baseW, m_baseH);
             ui->overlayCanvas->setOverlays(m_overlays);
             applyCropToPreview();
+            applyBaseToPreview();
+            if (ui->tabWidget->currentWidget() == ui->baseTab) {
+                QImage frame = ui->preview->getFrameA();
+                if (!frame.isNull())
+                    ui->baseCanvas->setFrame(frame);
+                ui->baseCanvas->setPlacement(m_baseX, m_baseY, m_baseW, m_baseH);
+            }
 
             double d = ui->preview->getDuration();
             if (d > 0.0 && std::fabs(d - m_duration) > 0.5) {
@@ -264,13 +284,24 @@ void ClipEditDialog::onTabChanged(int index) {
         ui->cropSelector->blockSignals(false);
         // Apply crop to the preview VideoWidget above the tabs
         applyCropToPreview();
+        applyBaseToPreview();
+    } else if (tab == ui->baseTab) {
+        QImage frame = ui->preview->getFrameA();
+        if (!frame.isNull())
+            ui->baseCanvas->setFrame(frame);
+        ui->baseCanvas->blockSignals(true);
+        ui->baseCanvas->setPlacement(m_baseX, m_baseY, m_baseW, m_baseH);
+        ui->baseCanvas->blockSignals(false);
+        applyBaseToPreview();
     } else if (tab == ui->trimTab) {
         // Remove crop from preview when back on Trim tab so scrubbing
         // shows the full frame (makes trimming easier).
         ui->preview->setCropA(0.f, 0.f, 1.f, 1.f);
+        applyBaseToPreview();
     } else if (tab == ui->overlaysTab) {
         // Show crop on preview while editing overlays so the framing is correct.
         applyCropToPreview();
+        applyBaseToPreview();
     }
 }
 
@@ -309,6 +340,20 @@ void ClipEditDialog::onCropPreviewToggled(bool checked) {
         ui->preview->setCropA(0.f, 0.f, 1.f, 1.f);
 }
 
+void ClipEditDialog::onBasePlacementChanged(float x, float y, float w, float h) {
+    m_baseX = x; m_baseY = y; m_baseW = w; m_baseH = h;
+    applyBaseToPreview();
+}
+
+void ClipEditDialog::onResetBasePlacement() {
+    m_baseX = 0.f; m_baseY = 0.f; m_baseW = 1.f; m_baseH = 1.f;
+    syncBasePlacementFromValues();
+    ui->baseCanvas->blockSignals(true);
+    ui->baseCanvas->setPlacement(0.f, 0.f, 1.f, 1.f);
+    ui->baseCanvas->blockSignals(false);
+    applyBaseToPreview();
+}
+
 void ClipEditDialog::syncCropSpinsFromValues() {
     m_cropSpinChanging = true;
     ui->cropXSpin->setValue(m_cropX * 100.0);
@@ -323,6 +368,15 @@ void ClipEditDialog::applyCropToPreview() {
         ui->preview->setCropA(m_cropX, m_cropY, m_cropW, m_cropH);
         ui->preview->update();   // force immediate repaint
     }
+}
+
+void ClipEditDialog::syncBasePlacementFromValues() {
+    ui->baseCanvas->setPlacement(m_baseX, m_baseY, m_baseW, m_baseH);
+}
+
+void ClipEditDialog::applyBaseToPreview() {
+    ui->preview->setBaseA(m_baseX, m_baseY, m_baseW, m_baseH);
+    ui->preview->update();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

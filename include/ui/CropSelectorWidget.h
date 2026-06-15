@@ -2,9 +2,12 @@
 #include <QWidget>
 #include <QImage>
 #include <QPointF>
+#include <QRectF>
+#include <array>
 
 // Interactive crop-region selector widget.
-// Shows a scaled video frame and lets the user drag a rectangle to define the crop.
+// Shows a scaled video frame and lets the user drag the crop body to move it or
+// drag the corner handles to resize it.
 // All coordinates exposed/emitted are normalized [0,1] relative to the frame.
 class CropSelectorWidget : public QWidget {
     Q_OBJECT
@@ -31,13 +34,18 @@ protected:
     QSize sizeHint() const override { return QSize(480, 270); }
 
 private:
+    enum class DragMode { None, Create, Move, ResizeTL, ResizeTR, ResizeBR, ResizeBL };
+
     QImage  m_frame;
     float   m_cx = 0.f, m_cy = 0.f, m_cw = 1.f, m_ch = 1.f;
-    bool    m_dragging = false;
-    QPointF m_p0, m_p1;
+    DragMode m_dragMode = DragMode::None;
+    QPointF  m_dragOrigin;
+    QRectF   m_dragRect;
+    bool     m_dragMoved = false;
 
     QRectF frameRect() const;
-    QPointF toNorm(QPointF pt) const;
     QRectF  cropInWidget() const;
-    void    commitDrag();
+    std::array<QRectF, 4> handles(const QRectF &crop) const;
+    DragMode hitTest(QPointF pt) const;
+    void    commitDrag(const QRectF &crop);
 };

@@ -181,7 +181,7 @@
           </sizepolicy>
          </property>
          <property name="minimumSize"><size><width>0</width><height>180</height></size></property>
-         <property name="toolTip"><string>Drag to define crop region. Double-click to reset to full frame.</string></property>
+         <property name="toolTip"><string>Drag inside the crop to move it, drag corners to resize, or double-click to reset to full frame.</string></property>
         </widget>
        </item>
 
@@ -252,6 +252,43 @@
          <property name="text"><string>Apply crop to preview</string></property>
          <property name="checked"><bool>true</bool></property>
         </widget>
+       </item>
+
+      </layout>
+     </widget>
+
+     <!-- ── Base placement tab ───────────────────────────────────────────── -->
+     <widget class="QWidget" name="baseTab">
+      <attribute name="title"><string>◫  Base Canvas</string></attribute>
+      <layout class="QVBoxLayout" name="baseLayout">
+       <property name="spacing"><number>8</number></property>
+       <property name="leftMargin"><number>8</number></property>
+       <property name="topMargin"><number>8</number></property>
+       <property name="rightMargin"><number>8</number></property>
+       <property name="bottomMargin"><number>8</number></property>
+
+       <item>
+        <widget class="BasePlacementWidget" name="baseCanvas">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>0</horstretch><verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize"><size><width>0</width><height>180</height></size></property>
+         <property name="toolTip"><string>Drag the image to move it inside the canvas, drag corners to resize it, or double-click to reset.</string></property>
+        </widget>
+       </item>
+
+       <item>
+        <layout class="QHBoxLayout" name="baseButtonsLayout">
+         <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>20</height></size></property></spacer></item>
+         <item>
+          <widget class="QPushButton" name="resetBaseBtn">
+           <property name="text"><string>Reset</string></property>
+           <property name="toolTip"><string>Reset the base image to fill the full canvas</string></property>
+          </widget>
+         </item>
+        </layout>
        </item>
 
       </layout>
@@ -442,6 +479,12 @@
    <class>CropSelectorWidget</class>
    <extends>QWidget</extends>
    <header>ui/CropSelectorWidget.h</header>
+   <container>0</container>
+  </customwidget>
+  <customwidget>
+   <class>BasePlacementWidget</class>
+   <extends>QWidget</extends>
+   <header>ui/BasePlacementWidget.h</header>
    <container>0</container>
   </customwidget>
   <customwidget>

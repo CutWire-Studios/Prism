@@ -1,6 +1,7 @@
 #include "core/ThumbnailExtractor.h"
 #include <QDebug>
 #include <QImage>
+#include <QFileInfo>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -9,7 +10,23 @@ extern "C" {
 #include <libavutil/imgutils.h>
 }
 
+bool ThumbnailExtractor::isStaticImageFile(const QString &path) {
+    const QString l = path.toLower();
+    return l.endsWith(".png")  || l.endsWith(".jpg")  || l.endsWith(".jpeg") ||
+           l.endsWith(".bmp")  || l.endsWith(".webp") || l.endsWith(".gif");
+}
+
 QPixmap ThumbnailExtractor::extract(const QString &filePath, int width, int height) {
+    // For static image files, use Qt's image loading which is faster and more reliable
+    if (isStaticImageFile(filePath)) {
+        QImage img(filePath);
+        if (!img.isNull()) {
+            return QPixmap::fromImage(img.scaledToWidth(width, Qt::SmoothTransformation));
+        }
+        return {};
+    }
+
+    // For video files, use FFmpeg
     AVFormatContext *formatCtx = nullptr;
     if (avformat_open_input(&formatCtx, filePath.toUtf8().constData(), nullptr, nullptr) < 0)
         return {};
@@ -73,6 +90,10 @@ QPixmap ThumbnailExtractor::extract(const QString &filePath, int width, int heig
     QPixmap result;
 
     if (gotFrame) {
+        // Ensure proper color range is set to avoid deprecation warnings
+        if (frame->color_range == AVCOL_RANGE_UNSPECIFIED)
+            frame->color_range = AVCOL_RANGE_MPEG;
+
         SwsContext *swsCtx = sws_getContext(
             codecCtx->width, codecCtx->height, codecCtx->pix_fmt,
             width, height, AV_PIX_FMT_RGB24,

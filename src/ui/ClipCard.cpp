@@ -24,6 +24,16 @@
 #include <QScreen>
 #include <QCapturableWindow>
 #include <QWindowCapture>
+#include <QApplication>
+
+// When the card is embedded in a QGraphicsProxyWidget (node editor), parenting a
+// dialog to the card would embed the dialog inside the scene. In that case fall
+// back to the active top-level window so dialogs appear as normal windows.
+static QWidget *dialogParent(QWidget *w) {
+    if (w->graphicsProxyWidget())
+        return QApplication::activeWindow();
+    return w;
+}
 
 ClipCard::ClipCard(int index, QWidget *parent)
     : QFrame(parent), m_index(index), ui(new Ui::ClipCard) {
@@ -167,11 +177,13 @@ void ClipCard::onRepeatClicked() {
 void ClipCard::onEditClicked() {
     using Kind = SourceDescriptor::Kind;
 
+    QWidget *parent = dialogParent(this);
+
     switch (m_sourceDesc.kind) {
 
     case Kind::VideoFile: {
         if (m_clipPath.isEmpty()) return;
-        ClipEditDialog dlg(m_clipPath, m_settings, this);
+        ClipEditDialog dlg(m_clipPath, m_settings, parent);
         if (dlg.exec() == QDialog::Accepted) {
             m_settings = dlg.resultSettings();
             m_settings.saveFor(m_clipPath);
@@ -181,7 +193,7 @@ void ClipCard::onEditClicked() {
 
     case Kind::Image: {
         if (m_clipPath.isEmpty()) return;
-        ClipEditDialog dlg(m_clipPath, m_settings, this);
+        ClipEditDialog dlg(m_clipPath, m_settings, parent);
         dlg.hideTrimTab();
         if (dlg.exec() == QDialog::Accepted) {
             m_settings = dlg.resultSettings();
@@ -191,7 +203,7 @@ void ClipCard::onEditClicked() {
     }
 
     case Kind::Slideshow: {
-        QDialog dlg(this);
+        QDialog dlg(parent);
         dlg.setWindowTitle("Edit Slideshow");
         dlg.setMinimumWidth(400);
 
@@ -235,7 +247,7 @@ void ClipCard::onEditClicked() {
     case Kind::Camera: {
         const auto cameras = QMediaDevices::videoInputs();
         if (cameras.isEmpty()) {
-            QDialog info(this);
+            QDialog info(parent);
             info.setWindowTitle("No Cameras");
             auto *lbl = new QLabel("No camera devices were found.", &info);
             auto *btn = new QDialogButtonBox(QDialogButtonBox::Ok, &info);
@@ -247,7 +259,7 @@ void ClipCard::onEditClicked() {
             break;
         }
 
-        QDialog dlg(this);
+        QDialog dlg(parent);
         dlg.setWindowTitle("Select Camera");
         dlg.setMinimumWidth(360);
 
@@ -278,7 +290,7 @@ void ClipCard::onEditClicked() {
 
     case Kind::Screen: {
         const auto screens = QGuiApplication::screens();
-        QDialog dlg(this);
+        QDialog dlg(parent);
         dlg.setWindowTitle("Select Screen");
         dlg.setMinimumWidth(360);
 
@@ -314,7 +326,7 @@ void ClipCard::onEditClicked() {
             break;
         }
 
-        QDialog dlg(this);
+        QDialog dlg(parent);
         dlg.setWindowTitle("Select Window / Tab");
         dlg.setMinimumWidth(400);
 
@@ -344,7 +356,7 @@ void ClipCard::onEditClicked() {
     }
 
     case Kind::Color: {
-        QColor chosen = QColorDialog::getColor(m_sourceDesc.color, this, "Choose Color",
+        QColor chosen = QColorDialog::getColor(m_sourceDesc.color, parent, "Choose Color",
                                                QColorDialog::ShowAlphaChannel);
         if (chosen.isValid()) {
             m_sourceDesc.color       = chosen;
@@ -361,7 +373,7 @@ void ClipCard::onEditClicked() {
     }
 
     case Kind::Shader: {
-        ShaderEditDialog dlg(m_sourceDesc.shaderCode, this);
+        ShaderEditDialog dlg(m_sourceDesc.shaderCode, parent);
         if (dlg.exec() == QDialog::Accepted) {
             QString newCode = dlg.resultCode().trimmed();
             if (!newCode.isEmpty()) {

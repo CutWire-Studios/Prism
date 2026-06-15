@@ -6,6 +6,7 @@
 #include <QHash>
 #include <QPixmap>
 #include <memory>
+#include <vector>
 #include "core/MediaSource.h"
 #include "core/OverlayItem.h"
 
@@ -43,9 +44,25 @@ public:
     void setCropA(float x, float y, float w, float h);
     void setCropB(float x, float y, float w, float h);
 
+    // Base placement inside the canvas (normalised 0..1; default 0,0,1,1).
+    void setBaseA(float x, float y, float w, float h);
+    void setBaseB(float x, float y, float w, float h);
+
     // Overlays drawn on top of the output
     void setOverlaysA(const QList<OverlayItem> &overlays);
     void setOverlaysB(const QList<OverlayItem> &overlays);
+
+    // ── Node chain compositing ────────────────────────────────────────────────
+    // Sources from upstream nodes are rendered on top of the base deck source,
+    // in order (index 0 = directly above base, last index = topmost).
+    struct NodeChainSource {
+        std::unique_ptr<MediaSource> source;
+        float cropX = 0.f, cropY = 0.f, cropW = 1.f, cropH = 1.f;
+        float baseX = 0.f, baseY = 0.f, baseW = 1.f, baseH = 1.f;
+        bool  playing = false;   // whether to call nextFrame() each tick
+    };
+    void setNodeChainA(std::vector<NodeChainSource> chain);
+    void setNodeChainB(std::vector<NodeChainSource> chain);
 
     bool   isPlayingA()      const { return m_playingA; }
     bool   isPlayingB()      const { return m_playingB; }
@@ -104,10 +121,20 @@ private:
     float m_cropXA = 0.f, m_cropYA = 0.f, m_cropWA = 1.f, m_cropHA = 1.f;
     float m_cropXB = 0.f, m_cropYB = 0.f, m_cropWB = 1.f, m_cropHB = 1.f;
 
+    // Base placement: normalised [0, 1]
+    float m_baseXA = 0.f, m_baseYA = 0.f, m_baseWA = 1.f, m_baseHA = 1.f;
+    float m_baseXB = 0.f, m_baseYB = 0.f, m_baseWB = 1.f, m_baseHB = 1.f;
+
     // Overlays
     QList<OverlayItem>       m_overlaysA;
     QList<OverlayItem>       m_overlaysB;
     QHash<QString, QPixmap>  m_overlayPixCache;
+
+    // Node chain sources (upstream overlays)
+    std::vector<NodeChainSource> m_chainA;
+    std::vector<NodeChainSource> m_chainB;
+    std::vector<GLuint>          m_chainTexA;
+    std::vector<GLuint>          m_chainTexB;
 
     QTimer *m_frameTimer = nullptr;
     QRectF  m_videoRectA;
@@ -117,8 +144,8 @@ private:
     void   setupTextureGL(GLuint &tex, QSize sz);
     // Takes tex by reference so it can recreate the texture if the frame size changes.
     void   uploadSourceFrameGL(GLuint &tex, MediaSource *source);
-    QRectF computeVideoRect(QSize frameSize, float cx, float cy,
-                            float cw, float ch) const;
+    QRectF computeContainedRect(QSize frameSize, float cw, float ch,
+                                const QRectF &bounds) const;
     void   renderTexture(GLuint tex, float cx, float cy, float cw, float ch,
                          float dstX, float dstY, float dstW, float dstH);
     void   renderOverlays(QPainter &p, const QList<OverlayItem> &overlays,
@@ -128,4 +155,13 @@ private:
     void   loadSourceInternal(const QString &filePath,
                               std::unique_ptr<MediaSource> &target,
                               GLuint &tex, bool &playing);
+
+    void clearChainTextures(std::vector<GLuint> &texList);
+    void primeChainSources(std::vector<NodeChainSource> &chain,
+                           std::vector<GLuint> &texList);
+    void drawChainSources(std::vector<NodeChainSource> &chain,
+                          std::vector<GLuint> &texList, float alpha,
+                          const QRectF &bounds);
+    void advanceChainSources(std::vector<NodeChainSource> &chain,
+                             std::vector<GLuint> &texList, bool &anyDecoded);
 };

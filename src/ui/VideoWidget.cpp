@@ -26,6 +26,8 @@ VideoWidget::~VideoWidget() {
     makeCurrent();
     if (m_textureA) glDeleteTextures(1, &m_textureA);
     if (m_textureB) glDeleteTextures(1, &m_textureB);
+    clearChainTextures(m_chainTexA);
+    clearChainTextures(m_chainTexB);
     doneCurrent();
 }
 
@@ -61,19 +63,31 @@ void VideoWidget::paintGL() {
 
     auto drawDeck = [&](GLuint tex, MediaSource *src,
                         float cx, float cy, float cw, float ch,
+                        float baseX, float baseY, float baseW, float baseH,
                         float alpha, QRectF &outRect) {
         if (!tex || !src || !src->isReady() || alpha <= 0.f) return;
-        outRect = computeVideoRect(src->frameSize(), cx, cy, cw, ch);
+        const QRectF bounds(baseX * width(), baseY * height(),
+                            baseW * width(), baseH * height());
+        outRect = computeContainedRect(src->frameSize(), cw, ch, bounds);
         glColor4f(1.f, 1.f, 1.f, alpha);
         renderTexture(tex, cx, cy, cw, ch,
                       (float)outRect.x(),     (float)outRect.y(),
                       (float)outRect.width(), (float)outRect.height());
     };
 
+    // Draw base deck A, then its chain overlays on top
     drawDeck(m_textureA, m_sourceA.get(),
-             m_cropXA, m_cropYA, m_cropWA, m_cropHA, alphaA, m_videoRectA);
+             m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+             m_baseXA, m_baseYA, m_baseWA, m_baseHA,
+             alphaA, m_videoRectA);
+    drawChainSources(m_chainA, m_chainTexA, alphaA, m_videoRectA);
+
+    // Draw base deck B, then its chain overlays on top
     drawDeck(m_textureB, m_sourceB.get(),
-             m_cropXB, m_cropYB, m_cropWB, m_cropHB, alphaB, m_videoRectB);
+             m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+             m_baseXB, m_baseYB, m_baseWB, m_baseHB,
+             alphaB, m_videoRectB);
+    drawChainSources(m_chainB, m_chainTexB, alphaB, m_videoRectB);
 
     glDisable(GL_BLEND);
     glColor4f(1.f, 1.f, 1.f, 1.f);
@@ -115,26 +129,24 @@ void VideoWidget::renderTexture(GLuint tex, float cx, float cy, float cw, float 
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-// Returns the letterboxed destination rect (widget pixels) for a given frame/crop.
-QRectF VideoWidget::computeVideoRect(QSize fs,
-                                     float cx, float cy, float cw, float ch) const {
-    Q_UNUSED(cx); Q_UNUSED(cy);
-    if (fs.isEmpty()) return QRectF(0, 0, width(), height());
+QRectF VideoWidget::computeContainedRect(QSize fs, float cw, float ch, const QRectF &bounds) const {
+    if (fs.isEmpty()) return bounds.isEmpty() ? QRectF(0, 0, width(), height()) : bounds;
 
+    QRectF box = bounds.isEmpty() ? QRectF(0, 0, width(), height()) : bounds;
     float videoAR  = (fs.width()  * cw) / (fs.height() * ch);
-    float widgetAR = (float)width() / (float)height();
+    float widgetAR = box.height() > 0.f ? (float)box.width() / (float)box.height() : videoAR;
 
     float dstW, dstH, dstX, dstY;
     if (videoAR > widgetAR) {           // wider — letterbox top/bottom
-        dstW = (float)width();
+        dstW = box.width();
         dstH = dstW / videoAR;
-        dstX = 0.f;
-        dstY = ((float)height() - dstH) / 2.f;
+        dstX = box.left();
+        dstY = box.top() + (box.height() - dstH) / 2.f;
     } else {                            // taller — pillarbox left/right
-        dstH = (float)height();
+        dstH = box.height();
         dstW = dstH * videoAR;
-        dstX = ((float)width() - dstW) / 2.f;
-        dstY = 0.f;
+        dstX = box.left() + (box.width() - dstW) / 2.f;
+        dstY = box.top();
     }
     return QRectF(dstX, dstY, dstW, dstH);
 }
@@ -302,6 +314,16 @@ void VideoWidget::setCropB(float x, float y, float w, float h) {
     update();
 }
 
+void VideoWidget::setBaseA(float x, float y, float w, float h) {
+    m_baseXA = x; m_baseYA = y; m_baseWA = w; m_baseHA = h;
+    update();
+}
+
+void VideoWidget::setBaseB(float x, float y, float w, float h) {
+    m_baseXB = x; m_baseYB = y; m_baseWB = w; m_baseHB = h;
+    update();
+}
+
 // ── Overlays ─────────────────────────────────────────────────────────────────
 
 void VideoWidget::setOverlaysA(const QList<OverlayItem> &overlays) {
@@ -314,6 +336,94 @@ void VideoWidget::setOverlaysB(const QList<OverlayItem> &overlays) {
     m_overlaysB = overlays;
     m_overlayPixCache.clear();
     update();
+}
+
+// ── Node chain compositing ────────────────────────────────────────────────────
+
+void VideoWidget::clearChainTextures(std::vector<GLuint> &texList) {
+    for (GLuint t : texList)
+        if (t) glDeleteTextures(1, &t);
+    texList.clear();
+}
+
+void VideoWidget::primeChainSources(std::vector<NodeChainSource> &chain,
+                                     std::vector<GLuint> &texList) {
+    texList.resize(chain.size(), 0);
+    for (size_t i = 0; i < chain.size(); ++i) {
+        auto *src = chain[i].source.get();
+        if (!src) continue;
+        if (!src->isReady()) src->nextFrame(); // prime first frame if possible
+        if (src->isReady())
+            setupTextureGL(texList[i], src->frameSize());
+        if (src->isReady())
+            uploadSourceFrameGL(texList[i], src);
+    }
+}
+
+void VideoWidget::setNodeChainA(std::vector<NodeChainSource> chain) {
+    makeCurrent();
+    clearChainTextures(m_chainTexA);
+    m_chainA = std::move(chain);
+    primeChainSources(m_chainA, m_chainTexA);
+    doneCurrent();
+    update();
+}
+
+void VideoWidget::setNodeChainB(std::vector<NodeChainSource> chain) {
+    makeCurrent();
+    clearChainTextures(m_chainTexB);
+    m_chainB = std::move(chain);
+    primeChainSources(m_chainB, m_chainTexB);
+    doneCurrent();
+    update();
+}
+
+void VideoWidget::drawChainSources(std::vector<NodeChainSource> &chain,
+                                    std::vector<GLuint> &texList, float alpha,
+                                    const QRectF &bounds) {
+    if (alpha <= 0.f) return;
+    for (size_t i = 0; i < chain.size() && i < texList.size(); ++i) {
+        auto *src = chain[i].source.get();
+        GLuint tex = texList[i];
+        if (!tex || !src || !src->isReady()) continue;
+        const float cx = chain[i].cropX, cy = chain[i].cropY;
+        const float cw = chain[i].cropW, ch = chain[i].cropH;
+        const QRectF placement(bounds.left() + chain[i].baseX * bounds.width(),
+                               bounds.top()  + chain[i].baseY * bounds.height(),
+                               chain[i].baseW * bounds.width(),
+                               chain[i].baseH * bounds.height());
+        const QRectF r = computeContainedRect(src->frameSize(), cw, ch, placement);
+        glColor4f(1.f, 1.f, 1.f, alpha);
+        renderTexture(tex, cx, cy, cw, ch,
+                      (float)r.x(), (float)r.y(), (float)r.width(), (float)r.height());
+    }
+}
+
+void VideoWidget::advanceChainSources(std::vector<NodeChainSource> &chain,
+                                       std::vector<GLuint> &texList, bool &anyDecoded) {
+    for (size_t i = 0; i < chain.size() && i < texList.size(); ++i) {
+        auto *src = chain[i].source.get();
+        if (!src) continue;
+        // Live/async sources that aren't yet ready: try to prime them
+        if (!src->isReady()) {
+            src->nextFrame();
+            if (src->isReady()) {
+                makeCurrent();
+                setupTextureGL(texList[i], src->frameSize());
+                uploadSourceFrameGL(texList[i], src);
+                doneCurrent();
+                anyDecoded = true;
+            }
+            continue;
+        }
+        if (!chain[i].playing) continue;
+        if (src->nextFrame()) {
+            makeCurrent();
+            uploadSourceFrameGL(texList[i], src);
+            doneCurrent();
+            anyDecoded = true;
+        }
+    }
 }
 
 // ── Query ─────────────────────────────────────────────────────────────────────
@@ -413,7 +523,9 @@ bool VideoWidget::advanceSource(MediaSource *source, bool &playing, bool repeat,
 }
 
 void VideoWidget::updateFrame() {
-    if (!m_playingA && !m_playingB) return;
+    const bool hasChainA = !m_chainA.empty();
+    const bool hasChainB = !m_chainB.empty();
+    if (!m_playingA && !m_playingB && !hasChainA && !hasChainB) return;
 
     bool decodedA = false, decodedB = false;
 
@@ -424,7 +536,11 @@ void VideoWidget::updateFrame() {
         decodedB = advanceSource(m_sourceB.get(), m_playingB,
                                  m_repeatB, m_trimStartB, m_trimEndB);
 
-    if (decodedA || decodedB) {
+    bool chainADecoded = false, chainBDecoded = false;
+    advanceChainSources(m_chainA, m_chainTexA, chainADecoded);
+    advanceChainSources(m_chainB, m_chainTexB, chainBDecoded);
+
+    if (decodedA || decodedB || chainADecoded || chainBDecoded) {
         makeCurrent();
         if (decodedA) uploadSourceFrameGL(m_textureA, m_sourceA.get());
         if (decodedB) uploadSourceFrameGL(m_textureB, m_sourceB.get());
