@@ -16,6 +16,9 @@ public:
 
     ClipSettings resultSettings() const;
 
+    // Call before exec() to remove the Trim tab (e.g. for static images).
+    void hideTrimTab();
+
 protected:
     void showEvent(QShowEvent *event) override;
 

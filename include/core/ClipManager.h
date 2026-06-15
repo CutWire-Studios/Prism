@@ -21,6 +21,7 @@ public:
     int         getClipCount() const { return clips.count(); }
     bool        isEmpty() const { return clips.isEmpty(); }
     void        clear() { clips.clear(); }
+    void        removeClip(int index) { if (index >= 0 && index < clips.size()) clips.removeAt(index); }
 
 private:
     QStringList clips;

@@ -235,6 +235,31 @@ QPushButton:pressed { background-color: #1a3d45; }</string>
         </property>
        </widget>
       </item>
+      <item>
+       <widget class="QPushButton" name="removeBtn">
+        <property name="minimumSize">
+         <size>
+          <width>20</width>
+          <height>20</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>20</width>
+          <height>20</height>
+         </size>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">QPushButton { font-size: 10px; min-height: 0; height: 20px; padding: 0; color: #888; background: transparent; border: none; } QPushButton:hover { color: #e05555; }</string>
+        </property>
+        <property name="text">
+         <string>✕</string>
+        </property>
+        <property name="toolTip">
+         <string>Remove this card</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

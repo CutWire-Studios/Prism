@@ -8,7 +8,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Qt
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets Gui)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets Gui Multimedia)
 
 # FFmpeg
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
@@ -18,6 +18,13 @@ find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat avutil swscale)
 set(SOURCES
     src/main.cpp
     src/core/VideoPlayer.cpp
+    src/core/VideoFileSource.cpp
+    src/core/ImageSource.cpp
+    src/core/SlideshowSource.cpp
+    src/core/ColorSource.cpp
+    src/core/CameraSource.cpp
+    src/core/ScreenSource.cpp
+    src/core/WindowCaptureSource.cpp
     src/core/ClipManager.cpp
     src/core/ThumbnailExtractor.cpp
     src/core/OverlayItem.cpp
@@ -31,7 +38,16 @@ set(SOURCES
 )
 
 set(HEADERS
+    include/core/MediaSource.h
+    include/core/SourceDescriptor.h
     include/core/VideoPlayer.h
+    include/core/VideoFileSource.h
+    include/core/ImageSource.h
+    include/core/SlideshowSource.h
+    include/core/ColorSource.h
+    include/core/CameraSource.h
+    include/core/ScreenSource.h
+    include/core/WindowCaptureSource.h
     include/core/ClipManager.h
     include/core/ThumbnailExtractor.h
     include/core/OverlayItem.h
@@ -72,6 +88,7 @@ target_link_libraries(Prism PRIVATE
     Qt6::OpenGL
     Qt6::OpenGLWidgets
     Qt6::Gui
+    Qt6::Multimedia
     ${FFMPEG_LIBRARIES}
 )
 

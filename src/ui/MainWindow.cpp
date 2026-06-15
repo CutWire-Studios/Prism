@@ -2,7 +2,16 @@
 #include "ui_MainWindow.h"
 #include "ui/VideoWidget.h"
 #include "core/ThumbnailExtractor.h"
+#include "core/SlideshowSource.h"
+#include "core/CameraSource.h"
+#include "core/ScreenSource.h"
+#include "core/WindowCaptureSource.h"
+#include "core/ColorSource.h"
+#include "core/ImageSource.h"
 #include <QApplication>
+#include <QDir>
+#include <QEventLoop>
+#include <glob.h>
 #include <QFileDialog>
 #include <QTimer>
 #include <QDebug>
@@ -11,6 +20,15 @@
 #include <QUrl>
 #include <QFileInfo>
 #include <QPixmap>
+#include <QPainter>
+#include <QMenu>
+#include <QInputDialog>
+#include <QColorDialog>
+#include <QMessageBox>
+#include <QMediaDevices>
+#include <QCameraDevice>
+#include <QGuiApplication>
+#include <QScreen>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -27,6 +45,14 @@ MainWindow::MainWindow(QWidget *parent)
 
     setupConnections();
     applyTheme();
+
+    // Kick the Qt Multimedia GStreamer backend into life early so that
+    // QMediaDevices::videoInputs() is populated by the time the user
+    // clicks "Add Camera".  The singleShot lets the event loop spin once
+    // first so the window is already shown.
+    QTimer::singleShot(0, []() {
+        [[maybe_unused]] auto _ = QMediaDevices::videoInputs();
+    });
 
     // Build the empty-state placeholder (shown before any media is loaded)
     m_emptyPlaceholder = new QWidget(ui->gridWidget);
@@ -82,6 +108,28 @@ void MainWindow::setupConnections() {
     connect(ui->addFolderBtn,     &QPushButton::clicked,  this, &MainWindow::onAddFolderClicked);
     connect(ui->addFilesBtn,      &QPushButton::clicked,  this, &MainWindow::onAddFilesClicked);
     connect(ui->clearAllBtn,      &QPushButton::clicked,  this, &MainWindow::onClearAllClicked);
+
+    // ── Add Element dropdown ──────────────────────────────────────────────────
+    auto *elemMenu = new QMenu(this);
+    elemMenu->addAction("🎬  Video File…",  this, &MainWindow::onAddFilesClicked);
+    elemMenu->addAction("🖼  Photo…",       this, [this]() {
+        QStringList files = QFileDialog::getOpenFileNames(
+            this, "Add Photos", "",
+            "Images (*.png *.jpg *.jpeg *.bmp *.webp *.gif)");
+        if (files.isEmpty()) return;
+        clipManager.addFiles(files);
+        rebuildGrid();
+    });
+    elemMenu->addSeparator();
+    elemMenu->addAction("📁  Slideshow…",   this, &MainWindow::onAddElementSlideshow);
+    elemMenu->addSeparator();
+    elemMenu->addAction("📷  Camera…",          this, &MainWindow::onAddElementCamera);
+    elemMenu->addAction("🖥  Screen Capture…",  this, &MainWindow::onAddElementScreen);
+    elemMenu->addAction("🪟  Window / Tab…",    this, &MainWindow::onAddElementWindow);
+    elemMenu->addSeparator();
+    elemMenu->addAction("⬛  Solid Color…",     this, &MainWindow::onAddElementColor);
+
+    ui->addElementBtn->setMenu(elemMenu);
     connect(ui->aDeckPlayBtn,     &QPushButton::clicked,  this, &MainWindow::onADeckPlayClicked);
     connect(ui->bDeckPlayBtn,     &QPushButton::clicked,  this, &MainWindow::onBDeckPlayClicked);
     connect(ui->aDeckSpeedSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::onADeckSpeedChanged);
@@ -171,20 +219,20 @@ void MainWindow::onClearAllClicked() {
 // ── Grid management ───────────────────────────────────────────────────────────
 
 void MainWindow::rebuildGrid() {
-    // Remove every item from the layout
+    // Clear layout without destroying live-source cards.
     while (QLayoutItem *item = ui->gridLayout->takeAt(0)) {
         if (item->widget()) item->widget()->hide();
         delete item;
     }
 
-    // Delete all old ClipCards
+    // Delete file-based cards only; live cards stay alive in m_liveCards.
     for (ClipCard *c : m_clipCards) c->deleteLater();
     m_clipCards.clear();
 
     int n = clipManager.getClipCount();
+    bool hasAnything = (n > 0) || !m_liveCards.isEmpty();
 
-    if (n == 0) {
-        // Show the "no media" placeholder
+    if (!hasAnything) {
         m_emptyPlaceholder->show();
         ui->gridLayout->addWidget(m_emptyPlaceholder, 0, 0, 1, 1);
         return;
@@ -192,16 +240,18 @@ void MainWindow::rebuildGrid() {
 
     m_emptyPlaceholder->hide();
 
-    // Create exactly n ClipCards
     int availW = ui->clipsScrollArea->viewport()->width();
     if (availW < 10) availW = width() - 40;
     dynamicCols = std::max(MIN_COLS, availW / (CARD_WIDTH + 4));
 
+    // Rebuild file-based cards.
     for (int i = 0; i < n; ++i) {
         auto *card = new ClipCard(i, ui->gridWidget);
-        connect(card, &ClipCard::triggered,      this, &MainWindow::onClipGridClicked);
-        connect(card, &ClipCard::aButtonClicked, this, &MainWindow::onAButtonClicked);
-        connect(card, &ClipCard::bButtonClicked, this, &MainWindow::onBButtonClicked);
+        connect(card, &ClipCard::triggered,               this, &MainWindow::onClipGridClicked);
+        connect(card, &ClipCard::aButtonClicked,           this, &MainWindow::onAButtonClicked);
+        connect(card, &ClipCard::bButtonClicked,           this, &MainWindow::onBButtonClicked);
+        connect(card, &ClipCard::removeRequested,          this, &MainWindow::onCardRemoveRequested);
+        connect(card, &ClipCard::sourceDescriptorChanged,  this, &MainWindow::onCardSourceDescriptorChanged);
 
         QString path  = clipManager.getClipPath(i);
         QPixmap thumb = ThumbnailExtractor::extract(path, 110, 65);
@@ -212,11 +262,98 @@ void MainWindow::rebuildGrid() {
         m_clipCards.append(card);
     }
 
-    qDebug() << "Grid rebuilt with" << n << "clips";
+    // Re-append live-source cards after the file cards.
+    for (int j = 0; j < m_liveCards.size(); ++j) {
+        ClipCard *card = m_liveCards[j];
+        int idx = n + j;
+        card->setIndex(idx);
+        card->setParent(ui->gridWidget);
+        ui->gridLayout->addWidget(card, idx / dynamicCols, idx % dynamicCols);
+        card->show();
+    }
+
+    qDebug() << "Grid rebuilt with" << n << "clips +" << m_liveCards.size() << "live";
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+ClipCard *MainWindow::cardAtIndex(int index) const {
+    if (index < m_clipCards.size()) return m_clipCards.value(index, nullptr);
+    index -= m_clipCards.size();
+    return m_liveCards.value(index, nullptr);
+}
+
+void MainWindow::addElementCard(const SourceDescriptor &desc, const QPixmap &thumb) {
+    int idx = m_clipCards.size() + m_liveCards.size();
+    auto *card = new ClipCard(idx, ui->gridWidget);
+    connect(card, &ClipCard::triggered,               this, &MainWindow::onClipGridClicked);
+    connect(card, &ClipCard::aButtonClicked,           this, &MainWindow::onAButtonClicked);
+    connect(card, &ClipCard::bButtonClicked,           this, &MainWindow::onBButtonClicked);
+    connect(card, &ClipCard::removeRequested,          this, &MainWindow::onCardRemoveRequested);
+    connect(card, &ClipCard::sourceDescriptorChanged,  this, &MainWindow::onCardSourceDescriptorChanged);
+    card->loadSource(desc, thumb);
+    m_liveCards.append(card);
+
+    m_emptyPlaceholder->hide();
+
+    int availW = ui->clipsScrollArea->viewport()->width();
+    if (availW < 10) availW = width() - 40;
+    dynamicCols = std::max(MIN_COLS, availW / (CARD_WIDTH + 4));
+
+    ui->gridLayout->addWidget(card, idx / dynamicCols, idx % dynamicCols);
+    card->show();
+}
+
+void MainWindow::assignSourceToActiveDeck(std::unique_ptr<MediaSource> src,
+                                          const QString &name) {
+    const bool toA = (ui->crossfaderSlider->value() <= 50);
+    VideoWidget *out = outputWindow->videoWidget();
+    if (toA) {
+        out->setSourceA(std::move(src));
+        out->playA();
+    } else {
+        out->setSourceB(std::move(src));
+        out->playB();
+    }
+    updateDeckUI(toA, name, false);
+}
+
+void MainWindow::updateDeckUI(bool deckA, const QString &name, bool hasTimeline) {
+    if (deckA) {
+        ui->aSelectedLabel->setText(QString("A: %1").arg(name));
+        ui->aProgressSlider->setEnabled(hasTimeline);
+        ui->aDeckPlayBtn->setEnabled(true);
+        if (!hasTimeline) { ui->aProgressSlider->setValue(0); ui->aTimeLabel->setText("—"); }
+    } else {
+        ui->bSelectedLabel->setText(QString("B: %1").arg(name));
+        ui->bProgressSlider->setEnabled(hasTimeline);
+        ui->bDeckPlayBtn->setEnabled(true);
+        if (!hasTimeline) { ui->bProgressSlider->setValue(0); ui->bTimeLabel->setText("—"); }
+    }
+}
+
+QPixmap MainWindow::makeIconThumb(const QString &glyph, int w, int h) {
+    QPixmap pix(w, h);
+    pix.fill(QColor("#1c1d1f"));
+    QPainter p(&pix);
+    QFont f;
+    f.setPixelSize(32);
+    p.setFont(f);
+    p.setPen(QColor("#888888"));
+    p.drawText(pix.rect(), Qt::AlignCenter, glyph);
+    return pix;
+}
+
+QPixmap MainWindow::makeColorThumb(const QColor &color, int w, int h) {
+    QPixmap pix(w, h);
+    pix.fill(color);
+    return pix;
+}
+
+// ── Crossfader ────────────────────────────────────────────────────────────────
+
 void MainWindow::onCrossfaderMoved(int value) {
-    outputWindow->videoWidget()->setShowA(value <= 50);
+    outputWindow->videoWidget()->setCrossfade(value / 100.f);
 }
 
 void MainWindow::onADeckPlayClicked() {
@@ -534,65 +671,373 @@ void MainWindow::dropEvent(QDropEvent *event) {
     event->acceptProposedAction();
 }
 
-void MainWindow::onAButtonClicked(int index) {
-    if (index < 0 || index >= m_clipCards.size()) return;
-    ClipCard *card = m_clipCards[index];
-    if (!card || card->clipPath().isEmpty()) return;
+static QString formatTimeShort(double secs) {
+    if (secs < 0) secs = 0;
+    int m = (int)secs / 60, s = (int)secs % 60;
+    return QString("%1:%2").arg(m).arg(s, 2, 10, QChar('0'));
+}
 
-    if (aClipIndex >= 0 && aClipIndex < m_clipCards.size())
-        m_clipCards[aClipIndex]->setASelected(false);
+// Shared logic for assigning any card to a deck.
+static void assignCardToDeck(ClipCard *card, bool deckA,
+                             VideoWidget *out,
+                             QSlider *progressSlider, QPushButton *playBtn,
+                             QLabel *selectedLabel, QLabel *timeLabel) {
+    using Kind = SourceDescriptor::Kind;
+    const SourceDescriptor &desc = card->sourceDescriptor();
+
+    switch (desc.kind) {
+
+    case Kind::VideoFile:
+    case Kind::Image: {
+        if (deckA) {
+            out->setRepeatA(card->isRepeat());
+            out->setTrimPointsA(card->startTime(), card->endTime());
+            out->setCropA(card->cropX(), card->cropY(), card->cropW(), card->cropH());
+            out->setOverlaysA(card->overlays());
+            out->loadVideoA(desc.path);
+            if (card->startTime() > 0) out->seekA(card->startTime());
+            out->playA();
+        } else {
+            out->setRepeatB(card->isRepeat());
+            out->setTrimPointsB(card->startTime(), card->endTime());
+            out->setCropB(card->cropX(), card->cropY(), card->cropW(), card->cropH());
+            out->setOverlaysB(card->overlays());
+            out->loadVideoB(desc.path);
+            if (card->startTime() > 0) out->seekB(card->startTime());
+            out->playB();
+        }
+        double dur = deckA ? out->getDurationA() : out->getDurationB();
+        progressSlider->setRange(0, 1000);
+        progressSlider->setValue(0);
+        progressSlider->setEnabled(desc.kind == Kind::VideoFile && dur > 0);
+        playBtn->setEnabled(true);
+        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", card->sourceName()));
+        timeLabel->setText(formatTimeShort(card->startTime()) + " / " + formatTimeShort(dur));
+        break;
+    }
+
+    case Kind::Slideshow: {
+        auto src = std::make_unique<SlideshowSource>();
+        if (!src->loadFolder(desc.path, desc.slideshowIntervalMs)) {
+            QMessageBox::warning(nullptr, "Slideshow", "No images found in folder.");
+            return;
+        }
+        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
+        else        { out->setSourceB(std::move(src)); out->playB(); }
+        progressSlider->setEnabled(false);
+        playBtn->setEnabled(true);
+        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", card->sourceName()));
+        timeLabel->setText("—");
+        break;
+    }
+
+    case Kind::Camera: {
+        auto src = std::make_unique<CameraSource>();
+
+        if (desc.path.isEmpty()) {
+            // "Default Camera" — QCamera() with no device arg; Qt picks the
+            // default camera internally bypassing QMediaDevices enumeration.
+            src->start({});
+        } else {
+            // Try to match stored device ID against Qt's enumerated list.
+            bool matched = false;
+            const auto qtDevices = QMediaDevices::videoInputs();
+            for (const auto &dev : qtDevices) {
+                if (QString::fromUtf8(dev.id()) == desc.path) {
+                    src->start(dev);
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                // Device not in Qt list (e.g. pure V4L2 path) — use startDevice
+                // which also falls back to default if unmatched.
+                src->startDevice(desc.path);
+            }
+        }
+
+        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
+        else        { out->setSourceB(std::move(src)); out->playB(); }
+        progressSlider->setEnabled(false);
+        playBtn->setEnabled(true);
+        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", card->sourceName()));
+        timeLabel->setText("LIVE");
+        break;
+    }
+
+    case Kind::Screen: {
+        auto scrs = QGuiApplication::screens();
+        if (desc.screenIndex >= scrs.size()) return;
+        auto src = std::make_unique<ScreenSource>();
+        if (!src->start(scrs[desc.screenIndex])) return;
+        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
+        else        { out->setSourceB(std::move(src)); out->playB(); }
+        progressSlider->setEnabled(false);
+        playBtn->setEnabled(true);
+        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", card->sourceName()));
+        timeLabel->setText("LIVE");
+        break;
+    }
+
+    case Kind::Window: {
+        const auto wins = WindowCaptureSource::capturableWindows();
+        if (desc.windowIndex >= wins.size()) {
+            QMessageBox::warning(nullptr, "Window Capture",
+                "The selected window is no longer available.\nPlease add a new Window Capture source.");
+            return;
+        }
+        auto src = std::make_unique<WindowCaptureSource>();
+        if (!src->start(wins[desc.windowIndex])) return;
+        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
+        else        { out->setSourceB(std::move(src)); out->playB(); }
+        progressSlider->setEnabled(false);
+        playBtn->setEnabled(true);
+        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", card->sourceName()));
+        timeLabel->setText("LIVE");
+        break;
+    }
+
+    case Kind::Color: {
+        auto src = std::make_unique<ColorSource>(desc.color);
+        if (deckA) out->setSourceA(std::move(src));
+        else        out->setSourceB(std::move(src));
+        progressSlider->setEnabled(false);
+        playBtn->setEnabled(false);
+        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", card->sourceName()));
+        timeLabel->setText("—");
+        break;
+    }
+
+    }
+}
+
+void MainWindow::onAButtonClicked(int index) {
+    ClipCard *card = cardAtIndex(index);
+    if (!card || !card->hasSource()) return;
+
+    if (aClipIndex >= 0) { if (auto *c = cardAtIndex(aClipIndex)) c->setASelected(false); }
     aClipIndex = index;
     card->setASelected(true);
 
-    VideoWidget *out = outputWindow->videoWidget();
-    out->setRepeatA(card->isRepeat());
-    out->setTrimPointsA(card->startTime(), card->endTime());
-    out->setCropA(card->cropX(), card->cropY(), card->cropW(), card->cropH());
-    out->setOverlaysA(card->overlays());
-    out->loadVideoA(card->clipPath());
-    if (card->startTime() > 0) out->seekA(card->startTime());
-    out->playA();
-
-    double dur = out->getDurationA();
-    ui->aProgressSlider->setRange(0, 1000);
-    ui->aProgressSlider->setValue(0);
-    ui->aProgressSlider->setEnabled(true);
-    ui->aDeckPlayBtn->setEnabled(true);
-    ui->aSelectedLabel->setText(QString("A: %1").arg(QFileInfo(card->clipPath()).baseName()));
-    ui->aTimeLabel->setText(formatTimeShort(card->startTime()) + " / " + formatTimeShort(dur));
+    assignCardToDeck(card, true, outputWindow->videoWidget(),
+                     ui->aProgressSlider, ui->aDeckPlayBtn,
+                     ui->aSelectedLabel,  ui->aTimeLabel);
 }
 
 void MainWindow::onBButtonClicked(int index) {
-    if (index < 0 || index >= m_clipCards.size()) return;
-    ClipCard *card = m_clipCards[index];
-    if (!card || card->clipPath().isEmpty()) return;
+    ClipCard *card = cardAtIndex(index);
+    if (!card || !card->hasSource()) return;
 
-    if (bClipIndex >= 0 && bClipIndex < m_clipCards.size())
-        m_clipCards[bClipIndex]->setBSelected(false);
+    if (bClipIndex >= 0) { if (auto *c = cardAtIndex(bClipIndex)) c->setBSelected(false); }
     bClipIndex = index;
     card->setBSelected(true);
 
-    VideoWidget *out = outputWindow->videoWidget();
-    out->setRepeatB(card->isRepeat());
-    out->setTrimPointsB(card->startTime(), card->endTime());
-    out->setCropB(card->cropX(), card->cropY(), card->cropW(), card->cropH());
-    out->setOverlaysB(card->overlays());
-    out->loadVideoB(card->clipPath());
-    if (card->startTime() > 0) out->seekB(card->startTime());
-    out->playB();
-
-    double dur = out->getDurationB();
-    ui->bProgressSlider->setRange(0, 1000);
-    ui->bProgressSlider->setValue(0);
-    ui->bProgressSlider->setEnabled(true);
-    ui->bDeckPlayBtn->setEnabled(true);
-    ui->bSelectedLabel->setText(QString("B: %1").arg(QFileInfo(card->clipPath()).baseName()));
-    ui->bTimeLabel->setText(formatTimeShort(card->startTime()) + " / " + formatTimeShort(dur));
+    assignCardToDeck(card, false, outputWindow->videoWidget(),
+                     ui->bProgressSlider, ui->bDeckPlayBtn,
+                     ui->bSelectedLabel,  ui->bTimeLabel);
 }
 
 QString MainWindow::formatTimeShort(double secs) {
-    if (secs < 0) secs = 0;
-    int m = (int)secs / 60;
-    int s = (int)secs % 60;
-    return QString("%1:%2").arg(m).arg(s, 2, 10, QChar('0'));
+    return ::formatTimeShort(secs);   // delegates to the file-scope helper above
+}
+
+// ── Add Element handlers ──────────────────────────────────────────────────────
+
+void MainWindow::onAddElementSlideshow() {
+    QString folder = QFileDialog::getExistingDirectory(this, "Select Image Folder for Slideshow");
+    if (folder.isEmpty()) return;
+
+    bool ok = false;
+    int interval = QInputDialog::getInt(this, "Slideshow Interval",
+                                        "Seconds per slide:", 3, 1, 60, 1, &ok);
+    if (!ok) return;
+
+    // Use the first image as the thumbnail.
+    QDir dir(folder);
+    QStringList imgs = dir.entryList({"*.png","*.jpg","*.jpeg","*.bmp","*.webp"},
+                                     QDir::Files, QDir::Name);
+    QPixmap thumb;
+    if (!imgs.isEmpty())
+        thumb = ThumbnailExtractor::extract(dir.absoluteFilePath(imgs.first()), 110, 65);
+    if (thumb.isNull())
+        thumb = makeIconThumb("📁");
+
+    SourceDescriptor desc;
+    desc.kind                = SourceDescriptor::Kind::Slideshow;
+    desc.path                = folder;
+    desc.displayName         = QFileInfo(folder).fileName();
+    desc.slideshowIntervalMs = interval * 1000;
+
+    addElementCard(desc, thumb);
+}
+
+void MainWindow::onAddElementCamera() {
+    // Build device list ────────────────────────────────────────────────────────
+    // Strategy:
+    //   1. Qt/GStreamer enumeration (nice names). Retry once after 800 ms to let
+    //      GStreamer's device monitor finish lazy initialisation.
+    //   2. POSIX glob for /dev/video* to catch devices GStreamer doesn't surface.
+    //   3. Always add a "Default Camera" fallback entry so the user is never
+    //      blocked — QCamera() with no device arg can work even when
+    //      QMediaDevices::videoInputs() returns empty (Intel IPU6 / MIPI cameras).
+
+    auto qtDevices = QMediaDevices::videoInputs();
+    if (qtDevices.isEmpty()) {
+        QEventLoop loop;
+        QTimer::singleShot(1200, &loop, &QEventLoop::quit);
+        loop.exec();
+        qtDevices = QMediaDevices::videoInputs();
+    }
+
+    struct CamEntry { QString id; QString label; bool isDefault; };
+    QList<CamEntry> devices;
+
+    for (const auto &d : qtDevices) {
+        QString id    = QString::fromUtf8(d.id());
+        QString label = d.description().isEmpty() ? id
+                      : QString("%1  [%2]").arg(d.description(), id);
+        devices.append({id, label, false});
+    }
+
+    // Merge /dev/videoN nodes not already in the Qt list
+    {
+        glob_t g{};
+        if (::glob("/dev/video*", GLOB_NOSORT, nullptr, &g) == 0) {
+            for (size_t i = 0; i < g.gl_pathc; ++i) {
+                QString path = QString::fromLocal8Bit(g.gl_pathv[i]);
+                bool already = std::any_of(devices.begin(), devices.end(),
+                                           [&](const CamEntry &e){ return e.id == path; });
+                if (!already)
+                    devices.append({path, path, false});
+            }
+        }
+        ::globfree(&g);
+    }
+
+    // Always include a "Default Camera" option (QCamera with no device arg)
+    devices.append({"", "Default Camera  (let the system choose)", true});
+
+    QStringList names;
+    for (const auto &e : devices) names << e.label;
+
+    bool ok = false;
+    QString chosen = QInputDialog::getItem(this, "Select Camera",
+                                           "Camera device:", names, 0, false, &ok);
+    if (!ok) return;
+
+    int idx = names.indexOf(chosen);
+    const CamEntry &entry = devices[idx];
+
+    SourceDescriptor desc;
+    desc.kind        = SourceDescriptor::Kind::Camera;
+    desc.path        = entry.id;          // empty string → default camera
+    desc.displayName = entry.isDefault ? "Default Camera"
+                     : entry.label.section("  [", 0, 0).trimmed();
+    if (desc.displayName.isEmpty()) desc.displayName = entry.id;
+    desc.cameraIndex = idx;
+
+    addElementCard(desc, makeIconThumb("📷"));
+}
+
+void MainWindow::onAddElementScreen() {
+    const auto screens = QGuiApplication::screens();
+    if (screens.isEmpty()) {
+        QMessageBox::information(this, "Screen", "No screens found.");
+        return;
+    }
+
+    QStringList names;
+    for (const auto *s : screens)
+        names << QString("%1 (%2×%3)").arg(s->name())
+                                      .arg(s->size().width())
+                                      .arg(s->size().height());
+
+    bool ok = false;
+    QString chosen = QInputDialog::getItem(this, "Select Screen", "Screen:", names, 0, false, &ok);
+    if (!ok) return;
+
+    int idx = names.indexOf(chosen);
+
+    SourceDescriptor desc;
+    desc.kind        = SourceDescriptor::Kind::Screen;
+    desc.displayName = screens[idx]->name();
+    desc.screenIndex = idx;
+
+    addElementCard(desc, makeIconThumb("🖥"));
+}
+
+void MainWindow::onAddElementWindow() {
+    const auto windows = WindowCaptureSource::capturableWindows();
+
+    if (windows.isEmpty()) {
+        QMessageBox::information(this, "Window / Tab Capture",
+            "No capturable windows were found.\n\n"
+            "On Wayland the system portal will let you choose any window "
+            "or browser tab when the source is sent to a deck.\n\n"
+            "Try adding the source anyway and pressing A or B — "
+            "the portal picker will appear at that point.");
+
+        // Add a generic 'Portal Window' card that triggers the portal at assign time
+        SourceDescriptor desc;
+        desc.kind        = SourceDescriptor::Kind::Window;
+        desc.displayName = "Portal Window";
+        desc.windowIndex = 0;
+        addElementCard(desc, makeIconThumb("🪟"));
+        return;
+    }
+
+    QStringList names;
+    for (const auto &w : windows)
+        names << (w.description().isEmpty() ? "(unnamed)" : w.description());
+
+    bool ok = false;
+    QString chosen = QInputDialog::getItem(this, "Select Window / Tab",
+                                           "Capturable windows:", names, 0, false, &ok);
+    if (!ok) return;
+
+    int idx = names.indexOf(chosen);
+
+    SourceDescriptor desc;
+    desc.kind        = SourceDescriptor::Kind::Window;
+    desc.displayName = names[idx];
+    desc.windowIndex = idx;
+
+    addElementCard(desc, makeIconThumb("🪟"));
+}
+
+void MainWindow::onAddElementColor() {
+    QColor color = QColorDialog::getColor(Qt::black, this, "Pick Solid Color");
+    if (!color.isValid()) return;
+
+    SourceDescriptor desc;
+    desc.kind        = SourceDescriptor::Kind::Color;
+    desc.color       = color;
+    desc.displayName = color.name().toUpper();
+
+    addElementCard(desc, makeColorThumb(color));
+}
+
+// ── Card management ────────────────────────────────────────────────────────────
+
+void MainWindow::onCardRemoveRequested(int index) {
+    const int nFile = m_clipCards.size();
+
+    if (index < nFile) {
+        // File-based clip — remove from ClipManager and rebuild.
+        clipManager.removeClip(index);
+        rebuildGrid();
+    } else {
+        // Live element card — remove from m_liveCards and delete.
+        int liveIdx = index - nFile;
+        if (liveIdx < 0 || liveIdx >= m_liveCards.size()) return;
+        ClipCard *card = m_liveCards.takeAt(liveIdx);
+        card->deleteLater();
+        rebuildGrid();
+    }
+}
+
+void MainWindow::onCardSourceDescriptorChanged(int /*index*/, const SourceDescriptor & /*desc*/) {
+    // The card already updated its own m_sourceDesc.
+    // If the card is currently assigned to a deck, re-assign the new source.
+    // For now, no automatic re-push — user can press A/B again to pick it up.
 }

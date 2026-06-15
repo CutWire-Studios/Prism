@@ -84,6 +84,16 @@
            </widget>
           </item>
           <item>
+           <widget class="QPushButton" name="addElementBtn">
+            <property name="text"><string>⬡  Add Element ▾</string></property>
+            <property name="toolTip"><string>Add a new source element — video, photo, slideshow, camera, screen or colour</string></property>
+            <property name="styleSheet">
+             <string notr="true">QPushButton { color: #a0d0d8; border-color: #2a5c66; }
+QPushButton:hover { color: #c0e8f0; }</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <spacer>
             <property name="orientation"><enum>Qt::Horizontal</enum></property>
             <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>

@@ -111,6 +111,12 @@ ClipEditDialog::~ClipEditDialog() {
     delete ui;
 }
 
+void ClipEditDialog::hideTrimTab() {
+    // Tab 0 is the Trim tab — remove it so only Crop and Overlays remain.
+    ui->tabWidget->removeTab(0);
+    setWindowTitle("Edit — " + m_clipPath.section('/', -1));
+}
+
 ClipSettings ClipEditDialog::resultSettings() const {
     ClipSettings s;
     s.startTime = m_startTime;
