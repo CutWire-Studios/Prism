@@ -145,10 +145,8 @@ void ClipCard::loadSource(const SourceDescriptor &desc, const QPixmap &thumbnail
     ui->editBtn->setEnabled(true);
     ui->muteBtn->setEnabled(false);
     ui->volumeSlider->setEnabled(false);
-    // HTML sources are treated as regular clips, no A/B selection
-    const bool isHtml = (desc.kind == SourceDescriptor::Kind::Html);
-    ui->aBtn->setEnabled(!isHtml);
-    ui->bBtn->setEnabled(!isHtml);
+    ui->aBtn->setEnabled(true);
+    ui->bBtn->setEnabled(true);
     ui->ovlBtn->setVisible(false);
     setActive(false);
 }

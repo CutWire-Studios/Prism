@@ -786,8 +786,19 @@ void MainWindow::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA
             QMessageBox::warning(nullptr, "Slideshow", "No images found in folder.");
             return;
         }
-        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
-        else        { out->setSourceB(std::move(src)); out->playB(); }
+
+        float baseX, baseY, baseW, baseH;
+        if (!m_clipNodeEditor->clipTransform(nodeId, baseX, baseY, baseW, baseH)) {
+            baseX = 0.f; baseY = 0.f; baseW = 1.f; baseH = 1.f;
+        }
+
+        if (deckA) {
+            out->setBaseA(baseX, baseY, baseW, baseH);
+            out->setSourceA(std::move(src)); out->playA();
+        } else {
+            out->setBaseB(baseX, baseY, baseW, baseH);
+            out->setSourceB(std::move(src)); out->playB();
+        }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(true);
         selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
@@ -815,8 +826,18 @@ void MainWindow::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA
             }
         }
 
-        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
-        else        { out->setSourceB(std::move(src)); out->playB(); }
+        float baseX, baseY, baseW, baseH;
+        if (!m_clipNodeEditor->clipTransform(nodeId, baseX, baseY, baseW, baseH)) {
+            baseX = 0.f; baseY = 0.f; baseW = 1.f; baseH = 1.f;
+        }
+
+        if (deckA) {
+            out->setBaseA(baseX, baseY, baseW, baseH);
+            out->setSourceA(std::move(src)); out->playA();
+        } else {
+            out->setBaseB(baseX, baseY, baseW, baseH);
+            out->setSourceB(std::move(src)); out->playB();
+        }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(true);
         selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
@@ -827,8 +848,19 @@ void MainWindow::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA
     case Kind::Screen: {
         auto src = std::make_unique<ScreenSource>();
         if (!src->start(ScreenSource::CaptureType::Monitor)) return;
-        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
-        else        { out->setSourceB(std::move(src)); out->playB(); }
+
+        float baseX, baseY, baseW, baseH;
+        if (!m_clipNodeEditor->clipTransform(nodeId, baseX, baseY, baseW, baseH)) {
+            baseX = 0.f; baseY = 0.f; baseW = 1.f; baseH = 1.f;
+        }
+
+        if (deckA) {
+            out->setBaseA(baseX, baseY, baseW, baseH);
+            out->setSourceA(std::move(src)); out->playA();
+        } else {
+            out->setBaseB(baseX, baseY, baseW, baseH);
+            out->setSourceB(std::move(src)); out->playB();
+        }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(true);
         selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
@@ -839,8 +871,19 @@ void MainWindow::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA
     case Kind::Window: {
         auto src = std::make_unique<ScreenSource>();
         if (!src->start(ScreenSource::CaptureType::Window)) return;
-        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
-        else        { out->setSourceB(std::move(src)); out->playB(); }
+
+        float baseX, baseY, baseW, baseH;
+        if (!m_clipNodeEditor->clipTransform(nodeId, baseX, baseY, baseW, baseH)) {
+            baseX = 0.f; baseY = 0.f; baseW = 1.f; baseH = 1.f;
+        }
+
+        if (deckA) {
+            out->setBaseA(baseX, baseY, baseW, baseH);
+            out->setSourceA(std::move(src)); out->playA();
+        } else {
+            out->setBaseB(baseX, baseY, baseW, baseH);
+            out->setSourceB(std::move(src)); out->playB();
+        }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(true);
         selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
@@ -850,6 +893,12 @@ void MainWindow::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA
 
     case Kind::Canvas: {
         const QSize size(desc.canvasWidth, desc.canvasHeight);
+
+        float baseX, baseY, baseW, baseH;
+        if (!m_clipNodeEditor->clipTransform(nodeId, baseX, baseY, baseW, baseH)) {
+            baseX = 0.f; baseY = 0.f; baseW = 1.f; baseH = 1.f;
+        }
+
         if (desc.canvasFill == SourceDescriptor::CanvasFill::Transparent) {
             if (deckA) out->setSourceA(nullptr);
             else        out->setSourceB(nullptr);
@@ -858,8 +907,13 @@ void MainWindow::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA
                 ? CanvasSource::Fill::SolidColor
                 : CanvasSource::Fill::Checkered;
             auto src = std::make_unique<CanvasSource>(fill, size, desc.color);
-            if (deckA) out->setSourceA(std::move(src));
-            else        out->setSourceB(std::move(src));
+            if (deckA) {
+                out->setBaseA(baseX, baseY, baseW, baseH);
+                out->setSourceA(std::move(src));
+            } else {
+                out->setBaseB(baseX, baseY, baseW, baseH);
+                out->setSourceB(std::move(src));
+            }
         }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(false);
@@ -870,8 +924,19 @@ void MainWindow::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA
 
     case Kind::Shader: {
         auto src = std::make_unique<ShaderSource>(desc.shaderCode);
-        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
-        else        { out->setSourceB(std::move(src)); out->playB(); }
+
+        float baseX, baseY, baseW, baseH;
+        if (!m_clipNodeEditor->clipTransform(nodeId, baseX, baseY, baseW, baseH)) {
+            baseX = 0.f; baseY = 0.f; baseW = 1.f; baseH = 1.f;
+        }
+
+        if (deckA) {
+            out->setBaseA(baseX, baseY, baseW, baseH);
+            out->setSourceA(std::move(src)); out->playA();
+        } else {
+            out->setBaseB(baseX, baseY, baseW, baseH);
+            out->setSourceB(std::move(src)); out->playB();
+        }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(false);
         selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
@@ -881,8 +946,19 @@ void MainWindow::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA
 
     case Kind::Html: {
         auto src = std::make_unique<HtmlSource>(desc.htmlContent, desc.path);
-        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
-        else        { out->setSourceB(std::move(src)); out->playB(); }
+
+        float baseX, baseY, baseW, baseH;
+        if (!m_clipNodeEditor->clipTransform(nodeId, baseX, baseY, baseW, baseH)) {
+            baseX = 0.f; baseY = 0.f; baseW = 1.f; baseH = 1.f;
+        }
+
+        if (deckA) {
+            out->setBaseA(baseX, baseY, baseW, baseH);
+            out->setSourceA(std::move(src)); out->playA();
+        } else {
+            out->setBaseB(baseX, baseY, baseW, baseH);
+            out->setSourceB(std::move(src)); out->playB();
+        }
         progressSlider->setEnabled(false);
         playBtn->setEnabled(false);
         selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
@@ -980,16 +1056,24 @@ static VideoWidget::NodeChainSource makeNodeChainSource(ClipNodeModel *node, Cli
         entry.source  = std::make_unique<ShaderSource>(desc.shaderCode);
         entry.playing = true;
         break;
+    case Kind::Html:
+        entry.source  = std::make_unique<HtmlSource>(desc.htmlContent, desc.path);
+        entry.playing = true;
+        break;
     }
     return entry;
 }
 
 static std::vector<VideoWidget::NodeChainSource>
-buildNodeChain(const QVector<ClipNodeModel *> &chain, ClipNodeEditor *editor) {
+buildNodeChain(const QVector<ClipNodeModel *> &chain, ClipNodeEditor *editor, int canvasWidth = 0, int canvasHeight = 0) {
     std::vector<VideoWidget::NodeChainSource> out;
     for (int i = 1; i < chain.size(); ++i) {
         auto entry = makeNodeChainSource(chain[i], editor);
-        if (entry.source) out.push_back(std::move(entry));
+        if (entry.source) {
+            entry.canvasWidth = canvasWidth;
+            entry.canvasHeight = canvasHeight;
+            out.push_back(std::move(entry));
+        }
     }
     return out;
 }
@@ -1006,10 +1090,14 @@ void MainWindow::onNodeAButtonClicked(NodeId nodeId) {
     m_aClipNodeId = nodeId;
     node->setASelected(true);
 
+    int canvasW = 0, canvasH = 0;
+    m_clipNodeEditor->contextCanvasSize(nodeId, canvasW, canvasH);
+
     auto *out = outputWindow->videoWidget();
+    out->setCanvasSizeA(canvasW, canvasH);
     assignNodeToDeck(node, nodeId, true, out, ui->aProgressSlider, ui->aDeckPlayBtn,
                      ui->aSelectedLabel, ui->aTimeLabel);
-    out->setNodeChainA(buildNodeChain(m_clipNodeEditor->getClipChain(nodeId), m_clipNodeEditor));
+    out->setNodeChainA(buildNodeChain(m_clipNodeEditor->getClipChain(nodeId), m_clipNodeEditor, canvasW, canvasH));
 }
 
 void MainWindow::onNodeBButtonClicked(NodeId nodeId) {
@@ -1024,10 +1112,14 @@ void MainWindow::onNodeBButtonClicked(NodeId nodeId) {
     m_bClipNodeId = nodeId;
     node->setBSelected(true);
 
+    int canvasW = 0, canvasH = 0;
+    m_clipNodeEditor->contextCanvasSize(nodeId, canvasW, canvasH);
+
     auto *out = outputWindow->videoWidget();
+    out->setCanvasSizeB(canvasW, canvasH);
     assignNodeToDeck(node, nodeId, false, out, ui->bProgressSlider, ui->bDeckPlayBtn,
                      ui->bSelectedLabel, ui->bTimeLabel);
-    out->setNodeChainB(buildNodeChain(m_clipNodeEditor->getClipChain(nodeId), m_clipNodeEditor));
+    out->setNodeChainB(buildNodeChain(m_clipNodeEditor->getClipChain(nodeId), m_clipNodeEditor, canvasW, canvasH));
 }
 
 void MainWindow::onNodeRemoveRequested(NodeId nodeId) {

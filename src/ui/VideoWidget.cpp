@@ -82,15 +82,34 @@ void VideoWidget::paintGL() {
     auto drawDeck = [&](GLuint tex, MediaSource *src,
                         float cx, float cy, float cw, float ch,
                         float baseX, float baseY, float baseW, float baseH,
-                        float alpha, QRectF &outRect) {
+                        float alpha, QRectF &outRect, int canvasW, int canvasH) {
         if (!tex || !src || !src->isReady() || alpha <= 0.f) return;
-        const QRectF bounds(baseX * width(), baseY * height(),
-                            baseW * width(), baseH * height());
-        outRect = computeContainedRect(src->frameSize(), cw, ch, bounds);
+
+        QRectF canvasBounds(0, 0, width(), height());
+        if (canvasW > 0 && canvasH > 0) {
+            float canvasAR = (float)canvasW / canvasH;
+            float windowAR = height() > 0.f ? (float)width() / height() : canvasAR;
+
+            float canvasX, canvasY, canvasRW, canvasRH;
+            if (canvasAR > windowAR) {
+                canvasRW = width();
+                canvasRH = canvasRW / canvasAR;
+            } else {
+                canvasRH = height();
+                canvasRW = canvasRH * canvasAR;
+            }
+            canvasBounds = QRectF((width() - canvasRW) / 2, (height() - canvasRH) / 2, canvasRW, canvasRH);
+        }
+
+        const QRectF bounds(canvasBounds.left() + baseX * canvasBounds.width(),
+                            canvasBounds.top()  + baseY * canvasBounds.height(),
+                            baseW * canvasBounds.width(),
+                            baseH * canvasBounds.height());
+        outRect = bounds;
         glColor4f(1.f, 1.f, 1.f, alpha);
         renderTexture(tex, cx, cy, cw, ch,
-                      (float)outRect.x(),     (float)outRect.y(),
-                      (float)outRect.width(), (float)outRect.height());
+                      (float)bounds.x(),     (float)bounds.y(),
+                      (float)bounds.width(), (float)bounds.height());
     };
 
     switch (m_transitionMode) {
@@ -99,11 +118,11 @@ void VideoWidget::paintGL() {
         const float alphaA = 1.f - t, alphaB = t;
         drawDeck(m_textureA, m_sourceA.get(),
                  m_cropXA, m_cropYA, m_cropWA, m_cropHA,
-                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, alphaA, m_videoRectA);
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, alphaA, m_videoRectA, m_canvasWidthA, m_canvasHeightA);
         drawChainSources(m_chainA, m_chainTexA, alphaA, m_videoRectA);
         drawDeck(m_textureB, m_sourceB.get(),
                  m_cropXB, m_cropYB, m_cropWB, m_cropHB,
-                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, alphaB, m_videoRectB);
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, alphaB, m_videoRectB, m_canvasWidthB, m_canvasHeightB);
         drawChainSources(m_chainB, m_chainTexB, alphaB, m_videoRectB);
         break;
     }
@@ -113,12 +132,12 @@ void VideoWidget::paintGL() {
         if (t < 0.5f) {
             drawDeck(m_textureA, m_sourceA.get(),
                      m_cropXA, m_cropYA, m_cropWA, m_cropHA,
-                     m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+                     m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA, m_canvasWidthA, m_canvasHeightA);
             drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
         } else {
             drawDeck(m_textureB, m_sourceB.get(),
                      m_cropXB, m_cropYB, m_cropWB, m_cropHB,
-                     m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
+                     m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB, m_canvasWidthB, m_canvasHeightB);
             drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
         }
         break;
@@ -129,7 +148,7 @@ void VideoWidget::paintGL() {
         // using a scissor rectangle [0, t*W] × [0, H].
         drawDeck(m_textureA, m_sourceA.get(),
                  m_cropXA, m_cropYA, m_cropWA, m_cropHA,
-                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA, m_canvasWidthA, m_canvasHeightA);
         drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
 
         if (t > 0.f) {
@@ -138,7 +157,7 @@ void VideoWidget::paintGL() {
             glScissor(0, 0, static_cast<GLint>(t * width()), height());
             drawDeck(m_textureB, m_sourceB.get(),
                      m_cropXB, m_cropYB, m_cropWB, m_cropHB,
-                     m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
+                     m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB, m_canvasWidthB, m_canvasHeightB);
             drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
             glDisable(GL_SCISSOR_TEST);
         }
@@ -155,7 +174,7 @@ void VideoWidget::paintGL() {
         glTranslatef(offA, 0.f, 0.f);
         drawDeck(m_textureA, m_sourceA.get(),
                  m_cropXA, m_cropYA, m_cropWA, m_cropHA,
-                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA, m_canvasWidthA, m_canvasHeightA);
         drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
         glPopMatrix();
 
@@ -163,7 +182,7 @@ void VideoWidget::paintGL() {
         glTranslatef(offB, 0.f, 0.f);
         drawDeck(m_textureB, m_sourceB.get(),
                  m_cropXB, m_cropYB, m_cropWB, m_cropHB,
-                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB, m_canvasWidthB, m_canvasHeightB);
         drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
         glPopMatrix();
         break;
@@ -175,11 +194,11 @@ void VideoWidget::paintGL() {
         const float alphaB = std::max(0.f, 2.f * t - 1.f);
         drawDeck(m_textureA, m_sourceA.get(),
                  m_cropXA, m_cropYA, m_cropWA, m_cropHA,
-                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, alphaA, m_videoRectA);
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, alphaA, m_videoRectA, m_canvasWidthA, m_canvasHeightA);
         drawChainSources(m_chainA, m_chainTexA, alphaA, m_videoRectA);
         drawDeck(m_textureB, m_sourceB.get(),
                  m_cropXB, m_cropYB, m_cropWB, m_cropHB,
-                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, alphaB, m_videoRectB);
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, alphaB, m_videoRectB, m_canvasWidthB, m_canvasHeightB);
         drawChainSources(m_chainB, m_chainTexB, alphaB, m_videoRectB);
         break;
     }
@@ -468,6 +487,18 @@ void VideoWidget::setBaseB(float x, float y, float w, float h) {
     update();
 }
 
+void VideoWidget::setCanvasSizeA(int width, int height) {
+    m_canvasWidthA = width;
+    m_canvasHeightA = height;
+    update();
+}
+
+void VideoWidget::setCanvasSizeB(int width, int height) {
+    m_canvasWidthB = width;
+    m_canvasHeightB = height;
+    update();
+}
+
 // ── Overlays ─────────────────────────────────────────────────────────────────
 
 void VideoWidget::setOverlaysA(const QList<OverlayItem> &overlays) {
@@ -526,20 +557,47 @@ void VideoWidget::drawChainSources(std::vector<NodeChainSource> &chain,
                                     std::vector<GLuint> &texList, float alpha,
                                     const QRectF &bounds) {
     if (alpha <= 0.f) return;
+
+    QRectF canvasBounds = bounds;
+    if (!chain.empty() && chain[0].canvasWidth > 0 && chain[0].canvasHeight > 0) {
+        float canvasAR = (float)chain[0].canvasWidth / chain[0].canvasHeight;
+        float boundsAR = bounds.height() > 0.f ? bounds.width() / bounds.height() : canvasAR;
+
+        float canvasW, canvasH;
+        if (canvasAR > boundsAR) {
+            canvasW = bounds.width();
+            canvasH = canvasW / canvasAR;
+        } else {
+            canvasH = bounds.height();
+            canvasW = canvasH * canvasAR;
+        }
+
+        canvasBounds = QRectF(bounds.left() + (bounds.width() - canvasW) / 2,
+                              bounds.top() + (bounds.height() - canvasH) / 2,
+                              canvasW, canvasH);
+
+        glColor4f(0.f, 0.f, 0.f, alpha);
+        glBegin(GL_QUADS);
+        glVertex2f(canvasBounds.left(), canvasBounds.top());
+        glVertex2f(canvasBounds.right(), canvasBounds.top());
+        glVertex2f(canvasBounds.right(), canvasBounds.bottom());
+        glVertex2f(canvasBounds.left(), canvasBounds.bottom());
+        glEnd();
+    }
+
     for (size_t i = 0; i < chain.size() && i < texList.size(); ++i) {
         auto *src = chain[i].source.get();
         GLuint tex = texList[i];
         if (!tex || !src || !src->isReady()) continue;
         const float cx = chain[i].cropX, cy = chain[i].cropY;
         const float cw = chain[i].cropW, ch = chain[i].cropH;
-        const QRectF placement(bounds.left() + chain[i].baseX * bounds.width(),
-                               bounds.top()  + chain[i].baseY * bounds.height(),
-                               chain[i].baseW * bounds.width(),
-                               chain[i].baseH * bounds.height());
-        const QRectF r = computeContainedRect(src->frameSize(), cw, ch, placement);
+        const QRectF placement(canvasBounds.left() + chain[i].baseX * canvasBounds.width(),
+                               canvasBounds.top()  + chain[i].baseY * canvasBounds.height(),
+                               chain[i].baseW * canvasBounds.width(),
+                               chain[i].baseH * canvasBounds.height());
         glColor4f(1.f, 1.f, 1.f, alpha);
         renderTexture(tex, cx, cy, cw, ch,
-                      (float)r.x(), (float)r.y(), (float)r.width(), (float)r.height());
+                      (float)placement.x(), (float)placement.y(), (float)placement.width(), (float)placement.height());
     }
 }
 

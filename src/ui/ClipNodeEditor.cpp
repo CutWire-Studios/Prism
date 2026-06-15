@@ -1005,3 +1005,23 @@ void ClipNodeEditor::setClipTransform(NodeId clipId, float x, float y, float w, 
 QVector<NodeId> ClipNodeEditor::clipsForContext(NodeId contextId) const {
     return m_scene->clipsForContext(contextId);
 }
+
+bool ClipNodeEditor::contextCanvasSize(NodeId clipId, int &w, int &h) const {
+    NodeId transformId = transformNodeForClip(clipId);
+    if (transformId == 0) return false;
+
+    for (const auto &[contextId, contextPtr] : m_contextNodes.asKeyValueRange()) {
+        auto *contextNode = static_cast<TransformContextNodeItem *>(contextPtr);
+        const auto clips = m_scene->clipsForContext(contextId);
+
+        for (const auto &cid : clips) {
+            NodeId clipTransformId = transformNodeForClip(cid);
+            if (clipTransformId == transformId) {
+                w = contextNode->canvasW();
+                h = contextNode->canvasH();
+                return true;
+            }
+        }
+    }
+    return false;
+}

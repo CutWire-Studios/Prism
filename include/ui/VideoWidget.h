@@ -52,6 +52,10 @@ public:
     void setBaseA(float x, float y, float w, float h);
     void setBaseB(float x, float y, float w, float h);
 
+    // Canvas size for transform context (0 = no context, use full window)
+    void setCanvasSizeA(int width, int height);
+    void setCanvasSizeB(int width, int height);
+
     // Overlays drawn on top of the output
     void setOverlaysA(const QList<OverlayItem> &overlays);
     void setOverlaysB(const QList<OverlayItem> &overlays);
@@ -64,6 +68,7 @@ public:
         float cropX = 0.f, cropY = 0.f, cropW = 1.f, cropH = 1.f;
         float baseX = 0.f, baseY = 0.f, baseW = 1.f, baseH = 1.f;
         bool  playing = false;   // whether to call nextFrame() each tick
+        int   canvasWidth = 0, canvasHeight = 0;  // transform context canvas size (0 = no context)
     };
     void setNodeChainA(std::vector<NodeChainSource> chain);
     void setNodeChainB(std::vector<NodeChainSource> chain);
@@ -142,6 +147,10 @@ private:
     // Base placement: normalised [0, 1]
     float m_baseXA = 0.f, m_baseYA = 0.f, m_baseWA = 1.f, m_baseHA = 1.f;
     float m_baseXB = 0.f, m_baseYB = 0.f, m_baseWB = 1.f, m_baseHB = 1.f;
+
+    // Canvas size (from transform context node)
+    int m_canvasWidthA = 0, m_canvasHeightA = 0;
+    int m_canvasWidthB = 0, m_canvasHeightB = 0;
 
     // Overlays
     QList<OverlayItem>       m_overlaysA;

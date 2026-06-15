@@ -39,6 +39,7 @@ public:
     bool clipTransform(NodeId clipId, float &x, float &y, float &w, float &h) const;
     void setClipTransform(NodeId clipId, float x, float y, float w, float h);
     QVector<NodeId> clipsForContext(NodeId contextId) const;
+    bool contextCanvasSize(NodeId clipId, int &w, int &h) const;
 
 signals:
     void clipChainChanged();
