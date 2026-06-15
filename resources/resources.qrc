@@ -2,5 +2,15 @@
 <RCC>
     <qresource prefix="/">
         <file>styles/dark.qss</file>
+        <file>shaders/neon_kaleidoscope.glsl</file>
+        <file>shaders/cyberpunk_horizon_grid.glsl</file>
+        <file>shaders/audio_reactive_wave.glsl</file>
+        <file>shaders/falling_cyber_particles.glsl</file>
+        <file>shaders/rotating_hypnotic_rings.glsl</file>
+        <file>shaders/abstract_quantum_strings.glsl</file>
+        <file>shaders/geometric_portal_matrix.glsl</file>
+        <file>shaders/neon_particle_swarm.glsl</file>
+        <file>shaders/cosmic_plasma_flares.glsl</file>
+        <file>shaders/audio_pulse_vu_bars.glsl</file>
     </qresource>
 </RCC>
