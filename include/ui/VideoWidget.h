@@ -75,6 +75,17 @@ public:
     void  setCrossfade(float mixB);
     float crossfade() const { return m_crossfadeB; }
 
+    // ── Transition mode ───────────────────────────────────────────────────────
+    enum class TransitionMode {
+        Crossfade,   // alpha blend A→B (default)
+        Cut,         // hard switch at fader centre (t = 0.5)
+        WipeLeft,    // B wipes in from the left edge
+        SlideLeft,   // A slides out left; B pushes in from the right
+        DipToBlack,  // A fades to black, then B fades in (dip at t = 0.5)
+    };
+    void           setTransitionMode(TransitionMode mode) { m_transitionMode = mode; update(); }
+    TransitionMode transitionMode() const { return m_transitionMode; }
+
     // Current frame as QImage for deck preview labels
     QImage getFrameA() const;
     QImage getFrameB() const;
@@ -136,6 +147,8 @@ private:
     std::vector<GLuint>          m_chainTexA;
     std::vector<GLuint>          m_chainTexB;
 
+    TransitionMode m_transitionMode = TransitionMode::Crossfade;
+
     QTimer *m_frameTimer = nullptr;
     QRectF  m_videoRectA;
     QRectF  m_videoRectB;
@@ -155,6 +168,10 @@ private:
     void   loadSourceInternal(const QString &filePath,
                               std::unique_ptr<MediaSource> &target,
                               GLuint &tex, bool &playing);
+
+    // Returns {alphaA, alphaB} for the current crossfader position and mode.
+    // Used by both paintGL() and paintEvent() to keep overlay rendering consistent.
+    std::pair<float,float> computeDeckAlphas() const;
 
     void clearChainTextures(std::vector<GLuint> &texList);
     void primeChainSources(std::vector<NodeChainSource> &chain,

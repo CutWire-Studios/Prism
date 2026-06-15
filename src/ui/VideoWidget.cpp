@@ -48,19 +48,36 @@ void VideoWidget::resizeGL(int w, int h) {
     glLoadIdentity();
 }
 
+std::pair<float,float> VideoWidget::computeDeckAlphas() const {
+    const float t = std::clamp(m_crossfadeB, 0.f, 1.f);
+    switch (m_transitionMode) {
+    case TransitionMode::Crossfade:
+        return {1.f - t, t};
+    case TransitionMode::Cut:
+        return t < 0.5f ? std::make_pair(1.f, 0.f) : std::make_pair(0.f, 1.f);
+    case TransitionMode::WipeLeft:
+    case TransitionMode::SlideLeft:
+        // Both decks render at full opacity; masking is done geometrically.
+        return {1.f, t > 0.f ? 1.f : 0.f};
+    case TransitionMode::DipToBlack:
+        return {std::max(0.f, 1.f - 2.f * t), std::max(0.f, 2.f * t - 1.f)};
+    }
+    return {1.f - t, t};
+}
+
 void VideoWidget::paintGL() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     m_videoRectA = QRectF();
     m_videoRectB = QRectF();
 
-    const float mixB   = std::clamp(m_crossfadeB, 0.f, 1.f);
-    const float alphaA = 1.f - mixB;
-    const float alphaB = mixB;
+    const float t = std::clamp(m_crossfadeB, 0.f, 1.f);
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    // Draws one deck at the given alpha. Sets outRect to the computed video rect
+    // so overlay painting in paintEvent() can position text/image overlays correctly.
     auto drawDeck = [&](GLuint tex, MediaSource *src,
                         float cx, float cy, float cw, float ch,
                         float baseX, float baseY, float baseW, float baseH,
@@ -75,19 +92,98 @@ void VideoWidget::paintGL() {
                       (float)outRect.width(), (float)outRect.height());
     };
 
-    // Draw base deck A, then its chain overlays on top
-    drawDeck(m_textureA, m_sourceA.get(),
-             m_cropXA, m_cropYA, m_cropWA, m_cropHA,
-             m_baseXA, m_baseYA, m_baseWA, m_baseHA,
-             alphaA, m_videoRectA);
-    drawChainSources(m_chainA, m_chainTexA, alphaA, m_videoRectA);
+    switch (m_transitionMode) {
 
-    // Draw base deck B, then its chain overlays on top
-    drawDeck(m_textureB, m_sourceB.get(),
-             m_cropXB, m_cropYB, m_cropWB, m_cropHB,
-             m_baseXB, m_baseYB, m_baseWB, m_baseHB,
-             alphaB, m_videoRectB);
-    drawChainSources(m_chainB, m_chainTexB, alphaB, m_videoRectB);
+    case TransitionMode::Crossfade: {
+        const float alphaA = 1.f - t, alphaB = t;
+        drawDeck(m_textureA, m_sourceA.get(),
+                 m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, alphaA, m_videoRectA);
+        drawChainSources(m_chainA, m_chainTexA, alphaA, m_videoRectA);
+        drawDeck(m_textureB, m_sourceB.get(),
+                 m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, alphaB, m_videoRectB);
+        drawChainSources(m_chainB, m_chainTexB, alphaB, m_videoRectB);
+        break;
+    }
+
+    case TransitionMode::Cut: {
+        // Hard switch: deck A shown until the crossfader passes centre, then deck B.
+        if (t < 0.5f) {
+            drawDeck(m_textureA, m_sourceA.get(),
+                     m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                     m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+            drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+        } else {
+            drawDeck(m_textureB, m_sourceB.get(),
+                     m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                     m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
+            drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
+        }
+        break;
+    }
+
+    case TransitionMode::WipeLeft: {
+        // A fills the whole frame. B is revealed from the left as t increases,
+        // using a scissor rectangle [0, t*W] × [0, H].
+        drawDeck(m_textureA, m_sourceA.get(),
+                 m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+        drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+
+        if (t > 0.f) {
+            glEnable(GL_SCISSOR_TEST);
+            // glScissor origin is bottom-left in framebuffer coordinates.
+            glScissor(0, 0, static_cast<GLint>(t * width()), height());
+            drawDeck(m_textureB, m_sourceB.get(),
+                     m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                     m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
+            drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
+            glDisable(GL_SCISSOR_TEST);
+        }
+        break;
+    }
+
+    case TransitionMode::SlideLeft: {
+        // A slides out to the left; B pushes in from the right edge.
+        // glTranslatef shifts all vertex positions for the wrapped draw calls.
+        const float offA = -(t * width());
+        const float offB = (1.f - t) * width();
+
+        glPushMatrix();
+        glTranslatef(offA, 0.f, 0.f);
+        drawDeck(m_textureA, m_sourceA.get(),
+                 m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, 1.f, m_videoRectA);
+        drawChainSources(m_chainA, m_chainTexA, 1.f, m_videoRectA);
+        glPopMatrix();
+
+        glPushMatrix();
+        glTranslatef(offB, 0.f, 0.f);
+        drawDeck(m_textureB, m_sourceB.get(),
+                 m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, 1.f, m_videoRectB);
+        drawChainSources(m_chainB, m_chainTexB, 1.f, m_videoRectB);
+        glPopMatrix();
+        break;
+    }
+
+    case TransitionMode::DipToBlack: {
+        // A fades to black as t reaches 0.5; B fades up from black as t passes 0.5.
+        const float alphaA = std::max(0.f, 1.f - 2.f * t);
+        const float alphaB = std::max(0.f, 2.f * t - 1.f);
+        drawDeck(m_textureA, m_sourceA.get(),
+                 m_cropXA, m_cropYA, m_cropWA, m_cropHA,
+                 m_baseXA, m_baseYA, m_baseWA, m_baseHA, alphaA, m_videoRectA);
+        drawChainSources(m_chainA, m_chainTexA, alphaA, m_videoRectA);
+        drawDeck(m_textureB, m_sourceB.get(),
+                 m_cropXB, m_cropYB, m_cropWB, m_cropHB,
+                 m_baseXB, m_baseYB, m_baseWB, m_baseHB, alphaB, m_videoRectB);
+        drawChainSources(m_chainB, m_chainTexB, alphaB, m_videoRectB);
+        break;
+    }
+
+    } // switch
 
     glDisable(GL_BLEND);
     glColor4f(1.f, 1.f, 1.f, 1.f);
@@ -96,22 +192,23 @@ void VideoWidget::paintGL() {
 void VideoWidget::paintEvent(QPaintEvent *e) {
     QOpenGLWidget::paintEvent(e);
 
-    const float mixB = std::clamp(m_crossfadeB, 0.f, 1.f);
-    if (mixB >= 1.f && m_overlaysB.isEmpty()) return;
-    if (mixB <= 0.f && m_overlaysA.isEmpty()) return;
+    const auto [alphaA, alphaB] = computeDeckAlphas();
+    if (alphaA <= 0.f && m_overlaysA.isEmpty()) {
+        if (alphaB <= 0.f && m_overlaysB.isEmpty()) return;
+    }
 
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
 
-    if (!m_overlaysA.isEmpty() && mixB < 1.f) {
+    if (!m_overlaysA.isEmpty() && alphaA > 0.f) {
         const QRectF vr = m_videoRectA.isEmpty()
                         ? QRectF(0, 0, width(), height()) : m_videoRectA;
-        renderOverlays(p, m_overlaysA, vr, 1.f - mixB);
+        renderOverlays(p, m_overlaysA, vr, alphaA);
     }
-    if (!m_overlaysB.isEmpty() && mixB > 0.f) {
+    if (!m_overlaysB.isEmpty() && alphaB > 0.f) {
         const QRectF vr = m_videoRectB.isEmpty()
                         ? QRectF(0, 0, width(), height()) : m_videoRectB;
-        renderOverlays(p, m_overlaysB, vr, mixB);
+        renderOverlays(p, m_overlaysB, vr, alphaB);
     }
 }
 
@@ -240,7 +337,8 @@ void VideoWidget::setSourceA(std::unique_ptr<MediaSource> source) {
     m_playingA = (t == MediaSource::Type::Camera   ||
                   t == MediaSource::Type::Screen    ||
                   t == MediaSource::Type::Window    ||
-                  t == MediaSource::Type::Slideshow);
+                  t == MediaSource::Type::Slideshow ||
+                  t == MediaSource::Type::Color);
     update();
 }
 
@@ -257,7 +355,8 @@ void VideoWidget::setSourceB(std::unique_ptr<MediaSource> source) {
     m_playingB = (t == MediaSource::Type::Camera   ||
                   t == MediaSource::Type::Screen    ||
                   t == MediaSource::Type::Window    ||
-                  t == MediaSource::Type::Slideshow);
+                  t == MediaSource::Type::Slideshow ||
+                  t == MediaSource::Type::Color);
     update();
 }
 

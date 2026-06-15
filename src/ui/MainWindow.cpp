@@ -6,13 +6,15 @@
 #include "core/SlideshowSource.h"
 #include "core/CameraSource.h"
 #include "core/ScreenSource.h"
-#include "core/CanvasSource.h"
+#include "core/ColorSource.h"
 #include "core/ImageSource.h"
 #include "core/ShaderSource.h"
 #include "ui/ShaderEditDialog.h"
 #include <QApplication>
 #include <QDir>
 #include <QEventLoop>
+#include <QShortcut>
+#include <QComboBox>
 #include <glob.h>
 #include <QFileDialog>
 #include <QTimer>
@@ -35,7 +37,6 @@
 #include <QPushButton>
 #include <QStackedWidget>
 #include <algorithm>
-#include <numeric>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow) {
@@ -93,6 +94,32 @@ MainWindow::MainWindow(QWidget *parent)
     m_stackWidget->addWidget(m_emptyPlaceholder);
     m_stackWidget->setCurrentWidget(m_emptyPlaceholder);
 
+    // ── Transition mode combobox ──────────────────────────────────────────────
+    // Inject a label + combobox into the A/B Crossfader group (faderGroup),
+    // right after the "B ►" label and before the vertical spacer.
+    {
+        auto *faderLayout = qobject_cast<QVBoxLayout *>(ui->faderGroup->layout());
+        if (faderLayout) {
+            auto *lbl = new QLabel("Transition:", ui->faderGroup);
+            lbl->setStyleSheet("font-size: 10px;");
+
+            m_transitionCombo = new QComboBox(ui->faderGroup);
+            m_transitionCombo->addItems({
+                "Crossfade", "Cut", "Wipe ←", "Slide ←", "Dip to Black"});
+            m_transitionCombo->setToolTip(
+                "Crossfade: alpha blend\n"
+                "Cut: hard switch at fader centre\n"
+                "Wipe ←: B reveals from the left\n"
+                "Slide ←: A exits left, B enters right\n"
+                "Dip to Black: fade through black");
+            m_transitionCombo->setStyleSheet("font-size: 10px;");
+
+            // Insert before the spacer (index 3: labelA=0, slider=1, labelB=2, spacer=3)
+            faderLayout->insertWidget(3, m_transitionCombo);
+            faderLayout->insertWidget(3, lbl);
+        }
+    }
+
     setupConnections();
     applyTheme();
 
@@ -143,15 +170,19 @@ void MainWindow::setupConnections() {
             this, "Add Photos", "",
             "Images (*.png *.jpg *.jpeg *.bmp *.webp *.gif)");
         if (files.isEmpty()) return;
-        const QStringList before = clipManager.getClips();
         clipManager.addFiles(files);
-        QStringList added;
-        const QStringList after = clipManager.getClips();
-        for (const QString &clipPath : after) {
-            if (!before.contains(clipPath))
-                added << clipPath;
+        
+        // Clear and rebuild the editor with all clips
+        m_clipNodeEditor->clearAllNodes();
+        m_aClipNodeId = 0;
+        m_bClipNodeId = 0;
+        
+        for (int i = 0; i < clipManager.getClipCount(); ++i) {
+            QString clipPath = clipManager.getClipPath(i);
+            QPixmap thumb = ThumbnailExtractor::extract(clipPath, 110, 65);
+            m_clipNodeEditor->addClipNode(clipPath, thumb);
         }
-        appendClipsToEditor(added);
+        m_stackWidget->setCurrentWidget(m_clipNodeEditor);
     });
     addElemMenu->addSeparator();
     addElemMenu->addAction("📁  Slideshow…",   this, &MainWindow::onAddElementSlideshow);
@@ -160,14 +191,21 @@ void MainWindow::setupConnections() {
     addElemMenu->addAction("🖥  Screen Capture…",  this, &MainWindow::onAddElementScreen);
     addElemMenu->addAction("🪟  Window / Tab…",    this, &MainWindow::onAddElementWindow);
     addElemMenu->addSeparator();
-    addElemMenu->addAction("⬜  Canvas…",          this, &MainWindow::onAddElementCanvas);
+    addElemMenu->addAction("⬛  Solid Color…",     this, &MainWindow::onAddElementColor);
     addElemMenu->addSeparator();
     addElemMenu->addAction("≋  Shader…",           this, &MainWindow::onAddElementShader);
 
     // ── ClipNodeEditor signals ────────────────────────────────────────────────
     connect(m_clipNodeEditor, &ClipNodeEditor::deckAClipChanged, this, &MainWindow::onNodeAButtonClicked);
     connect(m_clipNodeEditor, &ClipNodeEditor::deckBClipChanged, this, &MainWindow::onNodeBButtonClicked);
+    connect(m_clipNodeEditor, &ClipNodeEditor::nodeAdded,   this, &MainWindow::assignHotkeyToNode);
     connect(m_clipNodeEditor, &ClipNodeEditor::nodeRemoved, this, &MainWindow::onNodeRemoveRequested);
+
+    // ── Transition combobox ───────────────────────────────────────────────────
+    if (m_transitionCombo) {
+        connect(m_transitionCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                this, &MainWindow::onTransitionModeChanged);
+    }
 
     connect(ui->aDeckPlayBtn,     &QPushButton::clicked,  this, &MainWindow::onADeckPlayClicked);
     connect(ui->bDeckPlayBtn,     &QPushButton::clicked,  this, &MainWindow::onBDeckPlayClicked);
@@ -230,15 +268,21 @@ void MainWindow::onLoadFolderClicked() {
 void MainWindow::onAddFolderClicked() {
     QString path = QFileDialog::getExistingDirectory(this, "Add Media Folder");
     if (path.isEmpty()) return;
-    const QStringList before = clipManager.getClips();
     clipManager.addFolder(path);
-    QStringList added;
-    const QStringList after = clipManager.getClips();
-    for (const QString &clipPath : after) {
-        if (!before.contains(clipPath))
-            added << clipPath;
+    
+    // Clear and rebuild the editor with all clips
+    m_clipNodeEditor->clearAllNodes();
+    m_aClipNodeId = 0;
+    m_bClipNodeId = 0;
+    outputWindow->videoWidget()->setNodeChainA({});
+    outputWindow->videoWidget()->setNodeChainB({});
+    
+    for (int i = 0; i < clipManager.getClipCount(); ++i) {
+        QString clipPath = clipManager.getClipPath(i);
+        QPixmap thumb = ThumbnailExtractor::extract(clipPath, 110, 65);
+        m_clipNodeEditor->addClipNode(clipPath, thumb);
     }
-    appendClipsToEditor(added);
+    m_stackWidget->setCurrentWidget(m_clipNodeEditor);
 }
 
 void MainWindow::onAddFilesClicked() {
@@ -246,15 +290,21 @@ void MainWindow::onAddFilesClicked() {
         this, "Add Media Files", "",
         "Media Files (*.mp4 *.avi *.mov *.mkv *.webm *.png *.jpg *.jpeg)");
     if (files.isEmpty()) return;
-    const QStringList before = clipManager.getClips();
     clipManager.addFiles(files);
-    QStringList added;
-    const QStringList after = clipManager.getClips();
-    for (const QString &clipPath : after) {
-        if (!before.contains(clipPath))
-            added << clipPath;
+    
+    // Clear and rebuild the editor with all clips
+    m_clipNodeEditor->clearAllNodes();
+    m_aClipNodeId = 0;
+    m_bClipNodeId = 0;
+    outputWindow->videoWidget()->setNodeChainA({});
+    outputWindow->videoWidget()->setNodeChainB({});
+    
+    for (int i = 0; i < clipManager.getClipCount(); ++i) {
+        QString clipPath = clipManager.getClipPath(i);
+        QPixmap thumb = ThumbnailExtractor::extract(clipPath, 110, 65);
+        m_clipNodeEditor->addClipNode(clipPath, thumb);
     }
-    appendClipsToEditor(added);
+    m_stackWidget->setCurrentWidget(m_clipNodeEditor);
 }
 
 void MainWindow::onClearAllClicked() {
@@ -272,16 +322,6 @@ void MainWindow::onClearAllClicked() {
 
 void MainWindow::addElementNode(const SourceDescriptor &desc, const QPixmap &thumb) {
     m_clipNodeEditor->addSourceNode(desc, thumb);
-    m_stackWidget->setCurrentWidget(m_clipNodeEditor);
-}
-
-void MainWindow::appendClipsToEditor(const QStringList &clipPaths) {
-    if (clipPaths.isEmpty()) return;
-
-    for (const QString &path : clipPaths) {
-        QPixmap thumb = ThumbnailExtractor::extract(path, 110, 65);
-        m_clipNodeEditor->addClipNode(path, thumb);
-    }
     m_stackWidget->setCurrentWidget(m_clipNodeEditor);
 }
 
@@ -325,25 +365,9 @@ QPixmap MainWindow::makeIconThumb(const QString &glyph, int w, int h) {
     return pix;
 }
 
-QPixmap MainWindow::makeCanvasThumb(const QString &label,
-                                    SourceDescriptor::CanvasFill fill,
-                                    const QColor &color,
-                                    int w, int h) {
+QPixmap MainWindow::makeColorThumb(const QColor &color, int w, int h) {
     QPixmap pix(w, h);
-    if (fill == SourceDescriptor::CanvasFill::Color) {
-        pix.fill(color);
-        return pix;
-    }
-
-    pix.fill(QColor("#1c1d1f"));
-    QPainter p(&pix);
-    p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QColor("#8b93a1"));
-    p.setBrush(Qt::NoBrush);
-    p.drawRect(8, 8, w - 16, h - 16);
-    p.setPen(QColor("#c8ccd4"));
-    p.drawText(pix.rect(), Qt::AlignCenter,
-               fill == SourceDescriptor::CanvasFill::Transparent ? "TR" : label);
+    pix.fill(color);
     return pix;
 }
 
@@ -643,7 +667,6 @@ void MainWindow::dropEvent(QDropEvent *event) {
     const QMimeData *mimeData = event->mimeData();
     if (!mimeData->hasUrls()) return;
 
-    const QStringList before = clipManager.getClips();
     bool hasContent = false;
     for (const QUrl &url : mimeData->urls()) {
         QString p = url.toLocalFile();
@@ -666,17 +689,14 @@ void MainWindow::dropEvent(QDropEvent *event) {
 
     if (!paths.isEmpty()) {
         clipManager.addFiles(paths);
-        hasContent = true;
+        for (const auto &path : paths) {
+            QPixmap thumb = ThumbnailExtractor::extract(path, 110, 65);
+            m_clipNodeEditor->addClipNode(path, thumb);
+        }
     }
 
     if (hasContent) {
-        QStringList added;
-        const QStringList after = clipManager.getClips();
-        for (const QString &clipPath : after) {
-            if (!before.contains(clipPath))
-                added << clipPath;
-        }
-        appendClipsToEditor(added);
+        m_stackWidget->setCurrentWidget(m_clipNodeEditor);
     }
 
     event->acceptProposedAction();
@@ -801,23 +821,14 @@ static void assignNodeToDeck(ClipNodeModel *node, bool deckA,
         break;
     }
 
-    case Kind::Canvas: {
-        const QSize size(desc.canvasWidth, desc.canvasHeight);
-        if (desc.canvasFill == SourceDescriptor::CanvasFill::Transparent) {
-            if (deckA) out->setSourceA(nullptr);
-            else        out->setSourceB(nullptr);
-        } else {
-            auto fill = (desc.canvasFill == SourceDescriptor::CanvasFill::Color)
-                ? CanvasSource::Fill::SolidColor
-                : CanvasSource::Fill::Checkered;
-            auto src = std::make_unique<CanvasSource>(fill, size, desc.color);
-            if (deckA) out->setSourceA(std::move(src));
-            else        out->setSourceB(std::move(src));
-        }
+    case Kind::Color: {
+        auto src = std::make_unique<ColorSource>(desc.color);
+        if (deckA) out->setSourceA(std::move(src));
+        else        out->setSourceB(std::move(src));
         progressSlider->setEnabled(false);
         playBtn->setEnabled(false);
         selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
-        timeLabel->setText(QString("%1x%2").arg(desc.canvasWidth).arg(desc.canvasHeight));
+        timeLabel->setText("—");
         break;
     }
 
@@ -865,18 +876,8 @@ static VideoWidget::NodeChainSource makeNodeChainSource(ClipNodeModel *node) {
         entry.source = std::move(src);
         break;
     }
-    case Kind::Canvas:
-        if (desc.canvasFill == SourceDescriptor::CanvasFill::Transparent) {
-            entry.source.reset();
-            entry.playing = false;
-            break;
-        }
-        entry.source = std::make_unique<CanvasSource>(
-            desc.canvasFill == SourceDescriptor::CanvasFill::Color
-                ? CanvasSource::Fill::SolidColor
-                : CanvasSource::Fill::Checkered,
-            QSize(desc.canvasWidth, desc.canvasHeight),
-            desc.color);
+    case Kind::Color:
+        entry.source  = std::make_unique<ColorSource>(desc.color);
         entry.playing = true;
         break;
     case Kind::Slideshow: {
@@ -978,6 +979,7 @@ void MainWindow::onNodeBButtonClicked(NodeId nodeId) {
 }
 
 void MainWindow::onNodeRemoveRequested(NodeId nodeId) {
+    releaseHotkeyForNode(nodeId);
     m_clipNodeEditor->removeNode(nodeId);
     auto *out = outputWindow->videoWidget();
     if (m_aClipNodeId == nodeId) { m_aClipNodeId = 0; out->setNodeChainA({}); }
@@ -1097,73 +1099,16 @@ void MainWindow::onAddElementWindow() {
     addElementNode(desc, makeIconThumb("🪟"));
 }
 
-void MainWindow::onAddElementCanvas() {
-    struct CanvasPreset {
-        const char *label;
-        int width;
-        int height;
-    };
-    const CanvasPreset presets[] = {
-        {"16:9  (1280x720)", 1280, 720},
-        {"4:3  (1024x768)", 1024, 768},
-        {"1:1  (1080x1080)", 1080, 1080},
-        {"9:16  (1080x1920)", 1080, 1920},
-    };
-
-    QStringList options;
-    for (const auto &preset : presets) options << QString::fromUtf8(preset.label);
-    options << "Custom…";
-
-    bool ok = false;
-    const QString choice = QInputDialog::getItem(this, "Canvas",
-                                                 "Aspect ratio:", options, 0, false, &ok);
-    if (!ok || choice.isEmpty()) return;
-
-    int width = 1280;
-    int height = 720;
-    if (choice == "Custom…") {
-        width = QInputDialog::getInt(this, "Canvas Width", "Width:", 1280, 16, 16384, 1, &ok);
-        if (!ok) return;
-        height = QInputDialog::getInt(this, "Canvas Height", "Height:", 720, 16, 16384, 1, &ok);
-        if (!ok) return;
-    } else {
-        for (const auto &preset : presets) {
-            if (choice == QString::fromUtf8(preset.label)) {
-                width = preset.width;
-                height = preset.height;
-                break;
-            }
-        }
-    }
-
-    const int g = std::gcd(width, height);
-    const QString ratioText = QString("%1:%2").arg(width / g).arg(height / g);
-
-    const QStringList fillOptions = {"Checkered", "Transparent", "Color"};
-    const QString fillChoice = QInputDialog::getItem(this, "Canvas Fill",
-                                                     "Fill type:", fillOptions, 0, false, &ok);
-    if (!ok || fillChoice.isEmpty()) return;
+void MainWindow::onAddElementColor() {
+    QColor color = QColorDialog::getColor(Qt::black, this, "Pick Solid Color");
+    if (!color.isValid()) return;
 
     SourceDescriptor desc;
-    desc.kind         = SourceDescriptor::Kind::Canvas;
-    desc.canvasWidth  = width;
-    desc.canvasHeight = height;
-    desc.canvasFill   = SourceDescriptor::CanvasFill::Checkered;
-    desc.color        = Qt::white;
-    QString fillLabel = "Checkered";
-    if (fillChoice == "Transparent") {
-        desc.canvasFill = SourceDescriptor::CanvasFill::Transparent;
-        fillLabel = "Transparent";
-    } else if (fillChoice == "Color") {
-        QColor c = QColorDialog::getColor(Qt::white, this, "Pick Canvas Color");
-        if (!c.isValid()) return;
-        desc.canvasFill = SourceDescriptor::CanvasFill::Color;
-        desc.color = c;
-        fillLabel = c.name().toUpper();
-    }
+    desc.kind        = SourceDescriptor::Kind::Color;
+    desc.color       = color;
+    desc.displayName = color.name().toUpper();
 
-    desc.displayName  = QString("Canvas %1 (%2)").arg(ratioText, fillLabel);
-    addElementNode(desc, makeCanvasThumb(ratioText, desc.canvasFill, desc.color));
+    addElementNode(desc, makeColorThumb(color));
 }
 
 void MainWindow::onAddElementShader() {
@@ -1180,5 +1125,95 @@ void MainWindow::onAddElementShader() {
 
     addElementNode(desc, makeShaderThumb(code));
 }
+
+// ── Hotkey grid ───────────────────────────────────────────────────────────────
+
+const QList<Qt::Key> &MainWindow::hotkeySequence() {
+    static const QList<Qt::Key> seq = {
+        // Row 1: number row
+        Qt::Key_1, Qt::Key_2, Qt::Key_3, Qt::Key_4, Qt::Key_5,
+        Qt::Key_6, Qt::Key_7, Qt::Key_8, Qt::Key_9, Qt::Key_0,
+        // Row 2: QWERTY top
+        Qt::Key_Q, Qt::Key_W, Qt::Key_E, Qt::Key_R, Qt::Key_T,
+        Qt::Key_Y, Qt::Key_U, Qt::Key_I, Qt::Key_O, Qt::Key_P,
+        // Row 3: home row
+        Qt::Key_A, Qt::Key_S, Qt::Key_D, Qt::Key_F, Qt::Key_G,
+        Qt::Key_H, Qt::Key_J, Qt::Key_K, Qt::Key_L,
+        // Row 4: bottom row
+        Qt::Key_Z, Qt::Key_X, Qt::Key_C, Qt::Key_V, Qt::Key_B,
+        Qt::Key_N, Qt::Key_M,
+    };
+    return seq;
+}
+
+void MainWindow::assignHotkeyToNode(NodeId nodeId) {
+    ClipNodeModel *node = m_clipNodeEditor->nodeAt(nodeId);
+    if (!node) return;
+
+    // Find the first unoccupied slot in the VJ grid sequence.
+    Qt::Key chosen = Qt::Key_unknown;
+    for (Qt::Key k : hotkeySequence()) {
+        if (!m_keyToNode.contains(k)) { chosen = k; break; }
+    }
+    if (chosen == Qt::Key_unknown) return; // All 36 slots occupied
+
+    // Register the mapping.
+    m_nodeHotkeys[nodeId]  = chosen;
+    m_keyToNode[chosen]    = nodeId;
+
+    // Deck-A shortcut: bare key press.
+    auto *scA = new QShortcut(QKeySequence(chosen), this);
+    scA->setContext(Qt::ApplicationShortcut);
+    connect(scA, &QShortcut::activated, this, [this, chosen]() {
+        NodeId id = m_keyToNode.value(chosen, 0);
+        if (id) onNodeAButtonClicked(id);
+    });
+
+    // Deck-B shortcut: Shift + key.
+    auto *scB = new QShortcut(QKeySequence(Qt::SHIFT | chosen), this);
+    scB->setContext(Qt::ApplicationShortcut);
+    connect(scB, &QShortcut::activated, this, [this, chosen]() {
+        NodeId id = m_keyToNode.value(chosen, 0);
+        if (id) onNodeBButtonClicked(id);
+    });
+
+    m_nodeShortcuts[nodeId] = {scA, scB};
+
+    // Show the badge on the card.
+    const QString keyName = QKeySequence(chosen).toString();
+    node->setHotkeyLabel(keyName);
+}
+
+void MainWindow::releaseHotkeyForNode(NodeId nodeId) {
+    auto hit = m_nodeHotkeys.find(nodeId);
+    if (hit == m_nodeHotkeys.end()) return;
+
+    Qt::Key key = hit.value();
+    m_nodeHotkeys.erase(hit);
+    m_keyToNode.remove(key);
+
+    auto sit = m_nodeShortcuts.find(nodeId);
+    if (sit != m_nodeShortcuts.end()) {
+        delete sit.value().deckA;
+        delete sit.value().deckB;
+        m_nodeShortcuts.erase(sit);
+    }
+    // The ClipCard widget is still alive here (removal happens after this call),
+    // so clear its badge to avoid stale display if the card is somehow reused.
+    if (ClipNodeModel *node = m_clipNodeEditor->nodeAt(nodeId))
+        node->setHotkeyLabel({});
+}
+
+// ── Transition mode ───────────────────────────────────────────────────────────
+
+void MainWindow::onTransitionModeChanged(int index) {
+    using TM = VideoWidget::TransitionMode;
+    static const TM modes[] = {
+        TM::Crossfade, TM::Cut, TM::WipeLeft, TM::SlideLeft, TM::DipToBlack
+    };
+    if (index >= 0 && index < 5)
+        outputWindow->videoWidget()->setTransitionMode(modes[index]);
+}
+
 
 // ── Card management (obsolete methods removed - now handled by ClipNodeEditor) ──

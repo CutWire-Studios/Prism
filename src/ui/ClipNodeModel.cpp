@@ -1,7 +1,12 @@
 #include "ui/ClipNodeModel.h"
+#include "ui/ClipCard.h"
 
 ClipNodeModel::ClipNodeModel(QObject *parent)
     : QObject(parent) {
+}
+
+void ClipNodeModel::setHotkeyLabel(const QString &key) {
+    if (m_card) m_card->setHotkeyLabel(key);
 }
 
 void ClipNodeModel::setCard(ClipCard *card) {

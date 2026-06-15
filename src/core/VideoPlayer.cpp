@@ -10,7 +10,11 @@ VideoPlayer::~VideoPlayer() {
 bool VideoPlayer::open(const QString &filePath) {
     close();
 
-    const char *filename = filePath.toUtf8().constData();
+    // Keep the QByteArray alive for the duration of avformat_open_input.
+    // filePath.toUtf8().constData() would be a dangling pointer because
+    // the temporary QByteArray is destroyed at the semicolon.
+    const QByteArray utf8Path = filePath.toUtf8();
+    const char *filename = utf8Path.constData();
 
     if (avformat_open_input(&formatContext, filename, nullptr, nullptr) < 0) {
         qWarning() << "Could not open file:" << filePath;
@@ -64,11 +68,19 @@ bool VideoPlayer::open(const QString &filePath) {
     }
 
     frameRGB = av_frame_alloc();
-    int numBytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24, codecContext->width, codecContext->height, 1);
-    buffer = (uint8_t *)av_malloc(numBytes);
+
+    // Use alignment=32 so that each row's stride is padded to the next 32-byte
+    // boundary.  sws_scale uses SIMD (SSE/AVX) writes that can overshoot the end
+    // of a tightly-packed row (align=1) and corrupt the malloc chunk header of
+    // the next heap allocation, causing "free(): invalid size" when that block is
+    // later freed.  AV_INPUT_BUFFER_PADDING_SIZE adds extra tail bytes as a final
+    // safeguard.
+    int numBytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24,
+                                            codecContext->width, codecContext->height, 32);
+    buffer = (uint8_t *)av_malloc(numBytes + AV_INPUT_BUFFER_PADDING_SIZE);
 
     av_image_fill_arrays(&frameRGB->data[0], &frameRGB->linesize[0], buffer, AV_PIX_FMT_RGB24,
-                         codecContext->width, codecContext->height, 1);
+                         codecContext->width, codecContext->height, 32);
 
     swsContext = sws_getContext(codecContext->width, codecContext->height, codecContext->pix_fmt,
                                 codecContext->width, codecContext->height, AV_PIX_FMT_RGB24,
@@ -137,39 +149,43 @@ bool VideoPlayer::decodeFrame() {
         return false;
     }
 
-    AVPacket packet;
-    AVFrame *frame = av_frame_alloc();
-    bool frameDecoded = false;
+    // av_packet_alloc() zero-initialises the packet so av_packet_unref() is safe
+    // to call on every exit path.  A plain "AVPacket packet;" leaves the struct
+    // uninitialized; av_packet_unref() would then try to free a garbage buf pointer
+    // which corrupts glibc's malloc arena (free(): invalid size).
+    AVPacket *packet = av_packet_alloc();
+    AVFrame  *frame  = av_frame_alloc();
 
-    while (av_read_frame(formatContext, &packet) >= 0) {
-        if (packet.stream_index == videoStreamIndex) {
-            int ret = avcodec_send_packet(codecContext, &packet);
+    while (av_read_frame(formatContext, packet) >= 0) {
+        if (packet->stream_index == videoStreamIndex) {
+            int ret = avcodec_send_packet(codecContext, packet);
             if (ret < 0) {
-                av_packet_unref(&packet);
+                av_packet_unref(packet);
+                av_packet_free(&packet);
                 av_frame_free(&frame);
                 return false;
             }
 
             ret = avcodec_receive_frame(codecContext, frame);
             if (ret == 0) {
-               // Ensure proper color range to avoid deprecation warnings
-               if (frame->color_range == AVCOL_RANGE_UNSPECIFIED)
-                   frame->color_range = AVCOL_RANGE_MPEG;
-                
-               sws_scale(swsContext, frame->data, frame->linesize, 0, codecContext->height,
-                        frameRGB->data, frameRGB->linesize);
-               frameCount++;
-               frameDecoded = true;
-               av_packet_unref(&packet);
-               av_frame_free(&frame);
-               return true;
+                if (frame->color_range == AVCOL_RANGE_UNSPECIFIED)
+                    frame->color_range = AVCOL_RANGE_MPEG;
+
+                sws_scale(swsContext, frame->data, frame->linesize, 0, codecContext->height,
+                          frameRGB->data, frameRGB->linesize);
+                frameCount++;
+                av_packet_unref(packet);
+                av_packet_free(&packet);
+                av_frame_free(&frame);
+                return true;
             }
         }
-        av_packet_unref(&packet);
+        av_packet_unref(packet);
     }
 
+    av_packet_free(&packet);
     av_frame_free(&frame);
-    return frameDecoded;
+    return false;
 }
 
 const uint8_t *VideoPlayer::getFrameData() const {

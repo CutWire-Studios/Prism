@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QFrame>
+#include <QLabel>
 #include "core/OverlayItem.h"
 #include "core/SourceDescriptor.h"
 
@@ -33,6 +34,10 @@ public:
     bool    isLiveSource() const { return m_sourceDesc.isLiveSource(); }
     QString sourceName() const { return m_sourceDesc.displayName; }
     const SourceDescriptor &sourceDescriptor() const { return m_sourceDesc; }
+
+    // Hotkey badge — shows the assigned key letter over the thumbnail.
+    void setHotkeyLabel(const QString &key);
+    QString hotkeyLabel() const { return m_hotkeyBadge->text(); }
 
     bool isMuted()   const { return m_muted; }
     int  volume()    const;
@@ -74,4 +79,5 @@ private:
     bool              m_aSelected = false;
     bool              m_bSelected = false;
     ClipSettings      m_settings;
+    QLabel           *m_hotkeyBadge = nullptr;
 };

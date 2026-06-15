@@ -26,7 +26,7 @@ set(SOURCES
     src/core/VideoFileSource.cpp
     src/core/ImageSource.cpp
     src/core/SlideshowSource.cpp
-    src/core/CanvasSource.cpp
+    src/core/ColorSource.cpp
     src/core/CameraSource.cpp
     src/core/ScreenSource.cpp
     src/core/WindowCaptureSource.cpp
@@ -54,7 +54,7 @@ set(HEADERS
     include/core/VideoFileSource.h
     include/core/ImageSource.h
     include/core/SlideshowSource.h
-    include/core/CanvasSource.h
+    include/core/ColorSource.h
     include/core/CameraSource.h
     include/core/ScreenSource.h
     include/core/WindowCaptureSource.h
