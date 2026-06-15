@@ -14,7 +14,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets Gui Multi
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat avutil swscale)
 
-# Source files
+
 set(SOURCES
     src/main.cpp
     src/core/VideoPlayer.cpp
@@ -32,6 +32,8 @@ set(SOURCES
     src/ui/MainWindow.cpp
     src/ui/VideoWidget.cpp
     src/ui/ClipCard.cpp
+    src/ui/ClipNodeModel.cpp
+    src/ui/ClipNodeEditor.cpp
     src/ui/ClipEditDialog.cpp
     src/ui/CropSelectorWidget.cpp
     src/ui/OverlayCanvasWidget.cpp
@@ -57,6 +59,8 @@ set(HEADERS
     include/ui/MainWindow.h
     include/ui/VideoWidget.h
     include/ui/ClipCard.h
+    include/ui/ClipNodeModel.h
+    include/ui/ClipNodeEditor.h
     include/ui/ClipEditDialog.h
     include/ui/CropSelectorWidget.h
     include/ui/OverlayCanvasWidget.h

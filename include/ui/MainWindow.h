@@ -2,7 +2,8 @@
 
 #include <QMainWindow>
 #include <QVector>
-#include "ui/ClipCard.h"
+#include <QMap>
+#include "ui/ClipNodeEditor.h"
 #include "ui/OutputWindow.h"
 #include "core/ClipManager.h"
 #include "core/SourceDescriptor.h"
@@ -23,7 +24,6 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
 
 private slots:
-    void onClipGridClicked(int index);
     void onLoadFolderClicked();
     void onAddFolderClicked();
     void onAddFilesClicked();
@@ -34,8 +34,11 @@ private slots:
     void onADeckSpeedChanged(int value);
     void onBDeckSpeedChanged(int value);
     void onTimerUpdate();
-    void onAButtonClicked(int index);
-    void onBButtonClicked(int index);
+
+    // ── Node editor signals ───────────────────────────────────────────────────
+    void onNodeAButtonClicked(NodeId nodeId);
+    void onNodeBButtonClicked(NodeId nodeId);
+    void onNodeRemoveRequested(NodeId nodeId);
 
     // ── Add Element handlers ──────────────────────────────────────────────────
     void onAddElementSlideshow();
@@ -45,36 +48,25 @@ private slots:
     void onAddElementColor();
     void onAddElementShader();
 
-    // ── Card management ───────────────────────────────────────────────────────
-    void onCardRemoveRequested(int index);
-    void onCardSourceDescriptorChanged(int index, const SourceDescriptor &desc);
-
 private:
-    static constexpr int CARD_WIDTH = 122;
-    static constexpr int MIN_COLS   = 2;
-    int dynamicCols = 8;
-
     Ui::MainWindow  *ui;
     OutputWindow    *outputWindow       = nullptr;
-    QWidget         *m_emptyPlaceholder = nullptr;
 
-    QVector<ClipCard *> m_clipCards;   // file clips — rebuilt by rebuildGrid()
-    QVector<ClipCard *> m_liveCards;   // element cards — survive rebuildGrid()
+    class QStackedWidget *m_stackWidget = nullptr;
+    ClipNodeEditor  *m_clipNodeEditor   = nullptr;
+    QWidget        *m_emptyPlaceholder = nullptr;
 
     bool m_aSliderDragging = false;
     bool m_bSliderDragging = false;
 
     ClipManager clipManager;
     QTimer     *updateTimer       = nullptr;
-    int         selectedClipIndex = -1;
-    int         aClipIndex        = -1;
-    int         bClipIndex        = -1;
 
-    // Return the card at a unified index (file cards first, then live cards).
-    ClipCard *cardAtIndex(int index) const;
+    NodeId m_aClipNodeId = 0;
+    NodeId m_bClipNodeId = 0;
 
-    // Add an element card to m_liveCards and insert it into the grid.
-    void addElementCard(const SourceDescriptor &desc, const QPixmap &thumb);
+    // Add an element node to the editor
+    void addElementNode(const SourceDescriptor &desc, const QPixmap &thumb);
 
     // Assign a ready-made source to the active deck (based on crossfader).
     void assignSourceToActiveDeck(std::unique_ptr<MediaSource> src,
@@ -85,8 +77,6 @@ private:
 
     void setupConnections();
     void applyTheme();
-    void rebuildGrid();
-    void updateGridLayout();
 
     static QPixmap makeIconThumb(const QString &glyph, int w = 110, int h = 65);
     static QPixmap makeColorThumb(const QColor &color, int w = 110, int h = 65);
