@@ -8,6 +8,8 @@
 #include "core/WindowCaptureSource.h"
 #include "core/ColorSource.h"
 #include "core/ImageSource.h"
+#include "core/ShaderSource.h"
+#include "ui/ShaderEditDialog.h"
 #include <QApplication>
 #include <QDir>
 #include <QEventLoop>
@@ -128,6 +130,8 @@ void MainWindow::setupConnections() {
     elemMenu->addAction("🪟  Window / Tab…",    this, &MainWindow::onAddElementWindow);
     elemMenu->addSeparator();
     elemMenu->addAction("⬛  Solid Color…",     this, &MainWindow::onAddElementColor);
+    elemMenu->addSeparator();
+    elemMenu->addAction("≋  Shader…",           this, &MainWindow::onAddElementShader);
 
     ui->addElementBtn->setMenu(elemMenu);
     connect(ui->aDeckPlayBtn,     &QPushButton::clicked,  this, &MainWindow::onADeckPlayClicked);
@@ -348,6 +352,15 @@ QPixmap MainWindow::makeColorThumb(const QColor &color, int w, int h) {
     QPixmap pix(w, h);
     pix.fill(color);
     return pix;
+}
+
+QPixmap MainWindow::makeShaderThumb(const QString &code, int w, int h) {
+    ShaderSource src(code, QSize(w, h));
+    if (!src.nextFrame() || !src.isReady())
+        return makeIconThumb("≋", w, h);
+    const uint8_t *data = src.frameData();
+    QImage img(data, w, h, w * 3, QImage::Format_RGB888);
+    return QPixmap::fromImage(img.copy());
 }
 
 // ── Crossfader ────────────────────────────────────────────────────────────────
@@ -808,6 +821,17 @@ static void assignCardToDeck(ClipCard *card, bool deckA,
         break;
     }
 
+    case Kind::Shader: {
+        auto src = std::make_unique<ShaderSource>(desc.shaderCode);
+        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
+        else        { out->setSourceB(std::move(src)); out->playB(); }
+        progressSlider->setEnabled(false);
+        playBtn->setEnabled(false);
+        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", card->sourceName()));
+        timeLabel->setText("LIVE");
+        break;
+    }
+
     }
 }
 
@@ -1015,6 +1039,22 @@ void MainWindow::onAddElementColor() {
     desc.displayName = color.name().toUpper();
 
     addElementCard(desc, makeColorThumb(color));
+}
+
+void MainWindow::onAddElementShader() {
+    // Add a card immediately with the first preset, then let the user edit it.
+    ShaderEditDialog dlg(QString(), this);
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    QString code = dlg.resultCode().trimmed();
+    if (code.isEmpty()) return;
+
+    SourceDescriptor desc;
+    desc.kind        = SourceDescriptor::Kind::Shader;
+    desc.shaderCode  = code;
+    desc.displayName = "Shader";
+
+    addElementCard(desc, makeShaderThumb(code));
 }
 
 // ── Card management ────────────────────────────────────────────────────────────

@@ -1,7 +1,9 @@
 #include "ui/ClipCard.h"
 #include "ui_ClipCard.h"
 #include "ui/ClipEditDialog.h"
+#include "ui/ShaderEditDialog.h"
 #include "core/ImageSource.h"
+#include "core/ShaderSource.h"
 #include <QFileInfo>
 #include <QFontMetrics>
 #include <QDialog>
@@ -350,11 +352,29 @@ void ClipCard::onEditClicked() {
             QFontMetrics fm(ui->titleLabel->font());
             ui->titleLabel->setText(fm.elidedText(m_sourceDesc.displayName, Qt::ElideRight, 108));
             ui->titleLabel->setToolTip(m_sourceDesc.displayName);
-            // Update the thumbnail swatch
             QPixmap px(110, 65);
             px.fill(chosen);
             ui->thumbnailBtn->setIcon(QIcon(px));
             emit sourceDescriptorChanged(m_index, m_sourceDesc);
+        }
+        break;
+    }
+
+    case Kind::Shader: {
+        ShaderEditDialog dlg(m_sourceDesc.shaderCode, this);
+        if (dlg.exec() == QDialog::Accepted) {
+            QString newCode = dlg.resultCode().trimmed();
+            if (!newCode.isEmpty()) {
+                m_sourceDesc.shaderCode = newCode;
+                // Re-render thumbnail
+                ShaderSource src(newCode, QSize(110, 65));
+                if (src.nextFrame() && src.isReady()) {
+                    const uint8_t *data = src.frameData();
+                    QImage img(data, 110, 65, 110 * 3, QImage::Format_RGB888);
+                    ui->thumbnailBtn->setIcon(QIcon(QPixmap::fromImage(img.copy())));
+                }
+                emit sourceDescriptorChanged(m_index, m_sourceDesc);
+            }
         }
         break;
     }

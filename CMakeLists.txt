@@ -28,6 +28,7 @@ set(SOURCES
     src/core/ClipManager.cpp
     src/core/ThumbnailExtractor.cpp
     src/core/OverlayItem.cpp
+    src/core/ShaderSource.cpp
     src/ui/MainWindow.cpp
     src/ui/VideoWidget.cpp
     src/ui/ClipCard.cpp
@@ -35,6 +36,7 @@ set(SOURCES
     src/ui/CropSelectorWidget.cpp
     src/ui/OverlayCanvasWidget.cpp
     src/ui/OutputWindow.cpp
+    src/ui/ShaderEditDialog.cpp
 )
 
 set(HEADERS
@@ -51,6 +53,7 @@ set(HEADERS
     include/core/ClipManager.h
     include/core/ThumbnailExtractor.h
     include/core/OverlayItem.h
+    include/core/ShaderSource.h
     include/ui/MainWindow.h
     include/ui/VideoWidget.h
     include/ui/ClipCard.h
@@ -58,6 +61,7 @@ set(HEADERS
     include/ui/CropSelectorWidget.h
     include/ui/OverlayCanvasWidget.h
     include/ui/OutputWindow.h
+    include/ui/ShaderEditDialog.h
 )
 
 set(UI_FILES
@@ -65,6 +69,7 @@ set(UI_FILES
     forms/ClipCard.ui
     forms/ClipEditDialog.ui
     forms/OutputWindow.ui
+    forms/ShaderEditDialog.ui
 )
 
 # Create executable

@@ -43,6 +43,7 @@ private slots:
     void onAddElementScreen();
     void onAddElementWindow();
     void onAddElementColor();
+    void onAddElementShader();
 
     // ── Card management ───────────────────────────────────────────────────────
     void onCardRemoveRequested(int index);
@@ -89,5 +90,6 @@ private:
 
     static QPixmap makeIconThumb(const QString &glyph, int w = 110, int h = 65);
     static QPixmap makeColorThumb(const QColor &color, int w = 110, int h = 65);
+    static QPixmap makeShaderThumb(const QString &code, int w = 110, int h = 65);
     static QString formatTimeShort(double secs);
 };

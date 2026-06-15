@@ -15,7 +15,7 @@
 
 class MediaSource {
 public:
-    enum class Type { VideoFile, Image, Slideshow, Camera, Screen, Color, Window };
+    enum class Type { VideoFile, Image, Slideshow, Camera, Screen, Color, Window, Shader };
 
     virtual ~MediaSource() = default;
 
