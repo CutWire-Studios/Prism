@@ -15,7 +15,7 @@
 
 class MediaSource {
 public:
-    enum class Type { VideoFile, Image, Slideshow, Camera, Screen, Color, Window, Shader, DynamicInterface };
+    enum class Type { VideoFile, Image, Slideshow, Camera, Screen, Color, Window, Shader, Html };
 
     virtual ~MediaSource() = default;
 
@@ -38,4 +38,8 @@ public:
     virtual void    pause()             {}
 
     virtual QString displayName() const { return {}; }
+
+    // True if frameData() is RGBA32 rather than RGB24.
+    // Affects GL texture format selection in VideoWidget.
+    virtual bool hasAlpha() const { return false; }
 };

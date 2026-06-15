@@ -22,6 +22,7 @@ public:
     void setActive(bool active);
     void setASelected(bool selected);
     void setBSelected(bool selected);
+    void setOvlSelected(bool selected);
 
     // Update this card's grid index (called after rebuildGrid re-flows cards).
     void setIndex(int idx) { m_index = idx; }
@@ -50,6 +51,7 @@ signals:
     void triggered(int index);
     void aButtonClicked(int index);
     void bButtonClicked(int index);
+    void overlayButtonClicked(int index);
     void removeRequested(int index);
     // Emitted when the user changes a live source's settings via Edit.
     void sourceDescriptorChanged(int index, const SourceDescriptor &desc);
@@ -60,6 +62,7 @@ private slots:
     void onEditClicked();
     void onAButtonClicked();
     void onBButtonClicked();
+    void onOvlButtonClicked();
     void onRemoveClicked();
 
 private:
@@ -67,9 +70,10 @@ private:
     int               m_index;
     QString           m_clipPath;
     SourceDescriptor  m_sourceDesc;
-    bool              m_muted    = false;
-    bool              m_repeat   = false;
-    bool              m_aSelected = false;
-    bool              m_bSelected = false;
+    bool              m_muted      = false;
+    bool              m_repeat     = false;
+    bool              m_aSelected  = false;
+    bool              m_bSelected  = false;
+    bool              m_ovlSelected = false;
     ClipSettings      m_settings;
 };

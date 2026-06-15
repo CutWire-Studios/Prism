@@ -12,9 +12,9 @@
         <file>shaders/neon_particle_swarm.glsl</file>
         <file>shaders/cosmic_plasma_flares.glsl</file>
         <file>shaders/audio_pulse_vu_bars.glsl</file>
-        <file>qml/clock.qml</file>
-        <file>qml/countdown_timer.qml</file>
-        <file>qml/cricket_score_bar.qml</file>
-        <file>qml/cricket_score_table.qml</file>
+        <file>html/clock.html</file>
+        <file>html/countdown_timer.html</file>
+        <file>html/cricket_score_bar.html</file>
+        <file>html/cricket_score_table.html</file>
     </qresource>
 </RCC>

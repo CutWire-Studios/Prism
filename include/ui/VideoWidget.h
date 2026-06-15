@@ -26,6 +26,10 @@ public:
     void setSourceA(std::unique_ptr<MediaSource> source);
     void setSourceB(std::unique_ptr<MediaSource> source);
 
+    // HTML overlay composited on top of the A/B crossfade (RGBA, alpha-blended).
+    void setHtmlOverlay(std::unique_ptr<MediaSource> source);
+    void clearHtmlOverlay();
+
     void playA();
     void pauseA();
     void playB();
@@ -90,10 +94,13 @@ private slots:
 private:
     std::unique_ptr<MediaSource> m_sourceA;
     std::unique_ptr<MediaSource> m_sourceB;
-    GLuint m_textureA = 0;
-    GLuint m_textureB = 0;
-    bool   m_playingA = false;
-    bool   m_playingB = false;
+    std::unique_ptr<MediaSource> m_htmlOverlay;
+    GLuint m_textureA       = 0;
+    GLuint m_textureB       = 0;
+    GLuint m_textureOverlay = 0;
+    bool   m_playingA       = false;
+    bool   m_playingB       = false;
+    bool   m_playingOverlay = false;
     float  m_crossfadeB = 0.f;
     bool   m_repeatA = false;
     bool   m_repeatB = false;
@@ -114,7 +121,7 @@ private:
     QRectF  m_videoRectB;
 
     // ── GL helpers ────────────────────────────────────────────────────────────
-    void   setupTextureGL(GLuint &tex, QSize sz);
+    void   setupTextureGL(GLuint &tex, QSize sz, bool alpha = false);
     // Takes tex by reference so it can recreate the texture if the frame size changes.
     void   uploadSourceFrameGL(GLuint &tex, MediaSource *source);
     QRectF computeVideoRect(QSize frameSize, float cx, float cy,

@@ -36,6 +36,7 @@ private slots:
     void onTimerUpdate();
     void onAButtonClicked(int index);
     void onBButtonClicked(int index);
+    void onOverlayButtonClicked(int index);
 
     // ── Add Element handlers ──────────────────────────────────────────────────
     void onAddElementSlideshow();
@@ -70,6 +71,7 @@ private:
     int         selectedClipIndex = -1;
     int         aClipIndex        = -1;
     int         bClipIndex        = -1;
+    int         overlayCardIndex  = -1;
 
     // Return the card at a unified index (file cards first, then live cards).
     ClipCard *cardAtIndex(int index) const;
@@ -92,6 +94,6 @@ private:
     static QPixmap makeIconThumb(const QString &glyph, int w = 110, int h = 65);
     static QPixmap makeColorThumb(const QColor &color, int w = 110, int h = 65);
     static QPixmap makeShaderThumb(const QString &code, int w = 110, int h = 65);
-    static QPixmap makeQmlThumb(const QString &code, int w = 110, int h = 65);
+    static QPixmap makeQmlThumb(const QString &code, int w = 110, int h = 65); // kept for ABI compat
     static QString formatTimeShort(double secs);
 };

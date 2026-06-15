@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1280px; height: 720px; overflow: hidden;
+    background: #0d0d0d;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-family: 'Courier New', monospace;
+  }
+  #label { font-size: 28px; color: #607d8b; letter-spacing: 6px; margin-bottom: 20px; }
+  #timer {
+    font-size: 160px; font-weight: bold;
+    color: #ff6f00;
+    text-shadow: 0 0 50px #ff6f0066;
+    letter-spacing: 10px;
+  }
+  #timer.urgent { color: #f44336; text-shadow: 0 0 50px #f4433688; }
+</style>
+</head>
+<body>
+<div id="label">COUNTDOWN</div>
+<div id="timer">10:00</div>
+<script>
+  let total = 10 * 60; // 10 minutes — edit this
+  const el = document.getElementById('timer');
+  function tick() {
+    if (total <= 0) { el.textContent = '00:00'; return; }
+    const m = Math.floor(total / 60), s = total % 60;
+    el.textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+    el.className = total <= 60 ? 'urgent' : '';
+    total--;
+  }
+  tick();
+  setInterval(tick, 1000);
+</script>
+</body>
+</html>

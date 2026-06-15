@@ -24,8 +24,9 @@ VideoWidget::VideoWidget(QWidget *parent)
 VideoWidget::~VideoWidget() {
     m_frameTimer->stop();
     makeCurrent();
-    if (m_textureA) glDeleteTextures(1, &m_textureA);
-    if (m_textureB) glDeleteTextures(1, &m_textureB);
+    if (m_textureA)       glDeleteTextures(1, &m_textureA);
+    if (m_textureB)       glDeleteTextures(1, &m_textureB);
+    if (m_textureOverlay) glDeleteTextures(1, &m_textureOverlay);
     doneCurrent();
 }
 
@@ -74,6 +75,15 @@ void VideoWidget::paintGL() {
              m_cropXA, m_cropYA, m_cropWA, m_cropHA, alphaA, m_videoRectA);
     drawDeck(m_textureB, m_sourceB.get(),
              m_cropXB, m_cropYB, m_cropWB, m_cropHB, alphaB, m_videoRectB);
+
+    // HTML overlay composited on top (RGBA, transparent parts show the A/B video)
+    if (m_textureOverlay && m_htmlOverlay && m_htmlOverlay->isReady()) {
+        QRectF ovlRect = computeVideoRect(m_htmlOverlay->frameSize(), 0, 0, 1, 1);
+        glColor4f(1.f, 1.f, 1.f, 1.f);
+        renderTexture(m_textureOverlay, 0, 0, 1, 1,
+                      (float)ovlRect.x(),     (float)ovlRect.y(),
+                      (float)ovlRect.width(), (float)ovlRect.height());
+    }
 
     glDisable(GL_BLEND);
     glColor4f(1.f, 1.f, 1.f, 1.f);
@@ -219,17 +229,21 @@ void VideoWidget::setSourceA(std::unique_ptr<MediaSource> source) {
     // frameSize() may be (0,0) for async sources like Camera; uploadSourceFrameGL
     // handles resizing the texture when the first real frame arrives.
     setupTextureGL(m_textureA, m_sourceA->frameSize());
-    if (m_sourceA->nextFrame())
+    if (m_sourceA->nextFrame()) {
+        // nextFrame() may switch GL contexts internally (e.g. DynamicInterfaceSource
+        // creates its own context for offscreen QML rendering). Re-assert ours.
+        makeCurrent();
         uploadSourceFrameGL(m_textureA, m_sourceA.get());
+    }
     doneCurrent();
-    // Live sources (Camera, Screen, Window, Slideshow, Color) deliver frames
-    // asynchronously and are never "ready" at construction time.
+    // Live sources deliver frames continuously via the frame timer.
     const auto t = m_sourceA->type();
-    m_playingA = (t == MediaSource::Type::Camera   ||
-                  t == MediaSource::Type::Screen    ||
-                  t == MediaSource::Type::Window    ||
-                  t == MediaSource::Type::Slideshow ||
-                  t == MediaSource::Type::Color);
+    m_playingA = (t == MediaSource::Type::Camera          ||
+                  t == MediaSource::Type::Screen           ||
+                  t == MediaSource::Type::Window           ||
+                  t == MediaSource::Type::Slideshow        ||
+                  t == MediaSource::Type::Color            ||
+                  t == MediaSource::Type::Html);
     update();
 }
 
@@ -239,16 +253,48 @@ void VideoWidget::setSourceB(std::unique_ptr<MediaSource> source) {
     if (!m_sourceB) return;
     makeCurrent();
     setupTextureGL(m_textureB, m_sourceB->frameSize());
-    if (m_sourceB->nextFrame())
+    if (m_sourceB->nextFrame()) {
+        makeCurrent();
         uploadSourceFrameGL(m_textureB, m_sourceB.get());
+    }
     doneCurrent();
     const auto t = m_sourceB->type();
-    m_playingB = (t == MediaSource::Type::Camera   ||
-                  t == MediaSource::Type::Screen    ||
-                  t == MediaSource::Type::Window    ||
-                  t == MediaSource::Type::Slideshow ||
-                  t == MediaSource::Type::Color);
+    m_playingB = (t == MediaSource::Type::Camera          ||
+                  t == MediaSource::Type::Screen           ||
+                  t == MediaSource::Type::Window           ||
+                  t == MediaSource::Type::Slideshow        ||
+                  t == MediaSource::Type::Color            ||
+                  t == MediaSource::Type::Html);
     update();
+}
+
+void VideoWidget::setHtmlOverlay(std::unique_ptr<MediaSource> source) {
+    m_playingOverlay = false;
+    m_htmlOverlay    = std::move(source);
+    if (!m_htmlOverlay) {
+        makeCurrent();
+        if (m_textureOverlay) {
+            glDeleteTextures(1, &m_textureOverlay);
+            m_textureOverlay = 0;
+        }
+        doneCurrent();
+        update();
+        return;
+    }
+    makeCurrent();
+    // Overlay textures are always RGBA so transparent HTML parts show the video underneath.
+    setupTextureGL(m_textureOverlay, m_htmlOverlay->frameSize(), true);
+    if (m_htmlOverlay->nextFrame()) {
+        makeCurrent();
+        uploadSourceFrameGL(m_textureOverlay, m_htmlOverlay.get());
+    }
+    doneCurrent();
+    m_playingOverlay = true;
+    update();
+}
+
+void VideoWidget::clearHtmlOverlay() {
+    setHtmlOverlay(nullptr);
 }
 
 // ── Playback control ──────────────────────────────────────────────────────────
@@ -352,7 +398,7 @@ QImage VideoWidget::getFrameB() const {
 
 // ── GL helpers ────────────────────────────────────────────────────────────────
 
-void VideoWidget::setupTextureGL(GLuint &tex, QSize sz) {
+void VideoWidget::setupTextureGL(GLuint &tex, QSize sz, bool alpha) {
     if (tex) { glDeleteTextures(1, &tex); tex = 0; }
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
@@ -360,8 +406,9 @@ void VideoWidget::setupTextureGL(GLuint &tex, QSize sz) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, sz.width(), sz.height(),
-                 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    const GLenum fmt = alpha ? GL_RGBA : GL_RGB;
+    glTexImage2D(GL_TEXTURE_2D, 0, fmt, sz.width(), sz.height(),
+                 0, fmt, GL_UNSIGNED_BYTE, nullptr);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
@@ -369,6 +416,9 @@ void VideoWidget::uploadSourceFrameGL(GLuint &tex, MediaSource *source) {
     if (!source || !source->isReady()) return;
     QSize sz = source->frameSize();
     if (sz.isEmpty()) return;
+
+    const bool alpha = source->hasAlpha();
+    const GLenum fmt = alpha ? GL_RGBA : GL_RGB;
 
     // Check whether the existing texture matches the incoming frame size.
     // This handles async sources (Camera, Screen) whose first frame size
@@ -380,14 +430,14 @@ void VideoWidget::uploadSourceFrameGL(GLuint &tex, MediaSource *source) {
         glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texH);
         glBindTexture(GL_TEXTURE_2D, 0);
         if (texW != sz.width() || texH != sz.height())
-            setupTextureGL(tex, sz); // recreate at correct size
+            setupTextureGL(tex, sz, alpha);
     } else {
-        setupTextureGL(tex, sz);
+        setupTextureGL(tex, sz, alpha);
     }
 
     glBindTexture(GL_TEXTURE_2D, tex);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sz.width(), sz.height(),
-                    GL_RGB, GL_UNSIGNED_BYTE, source->frameData());
+                    fmt, GL_UNSIGNED_BYTE, source->frameData());
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
@@ -397,7 +447,13 @@ void VideoWidget::uploadSourceFrameGL(GLuint &tex, MediaSource *source) {
 // Returns true if a new frame was decoded and should be uploaded.
 bool VideoWidget::advanceSource(MediaSource *source, bool &playing, bool repeat,
                                 double trimStart, double trimEnd) {
-    if (!source || !source->isReady()) return false;
+    if (!source) return false;
+    // Allow lazy-init sources (e.g. DynamicInterfaceSource) to initialize on
+    // the first timer tick where no VideoWidget GL context is current.
+    if (!source->isReady()) {
+        source->nextFrame();
+        return false;
+    }
 
     double endLimit = (trimEnd > 0) ? trimEnd : source->duration();
     if (endLimit > 0 && source->currentTime() >= endLimit) {
@@ -413,9 +469,9 @@ bool VideoWidget::advanceSource(MediaSource *source, bool &playing, bool repeat,
 }
 
 void VideoWidget::updateFrame() {
-    if (!m_playingA && !m_playingB) return;
+    if (!m_playingA && !m_playingB && !m_playingOverlay) return;
 
-    bool decodedA = false, decodedB = false;
+    bool decodedA = false, decodedB = false, decodedOverlay = false;
 
     if (m_playingA)
         decodedA = advanceSource(m_sourceA.get(), m_playingA,
@@ -423,19 +479,24 @@ void VideoWidget::updateFrame() {
     if (m_playingB)
         decodedB = advanceSource(m_sourceB.get(), m_playingB,
                                  m_repeatB, m_trimStartB, m_trimEndB);
+    if (m_playingOverlay && m_htmlOverlay)
+        decodedOverlay = advanceSource(m_htmlOverlay.get(), m_playingOverlay,
+                                       false, 0.0, -1.0);
 
-    if (decodedA || decodedB) {
+    if (decodedA || decodedB || decodedOverlay) {
         makeCurrent();
-        if (decodedA) uploadSourceFrameGL(m_textureA, m_sourceA.get());
-        if (decodedB) uploadSourceFrameGL(m_textureB, m_sourceB.get());
+        if (decodedA)       uploadSourceFrameGL(m_textureA,       m_sourceA.get());
+        if (decodedB)       uploadSourceFrameGL(m_textureB,       m_sourceB.get());
+        if (decodedOverlay) uploadSourceFrameGL(m_textureOverlay, m_htmlOverlay.get());
         doneCurrent();
         update();
     }
 
     // For live sources that are not yet ready (e.g. camera still starting),
     // keep triggering repaints so the first frame appears as soon as it arrives.
-    if ((m_playingA && m_sourceA && !m_sourceA->isReady()) ||
-        (m_playingB && m_sourceB && !m_sourceB->isReady())) {
+    if ((m_playingA       && m_sourceA    && !m_sourceA->isReady())    ||
+        (m_playingB       && m_sourceB    && !m_sourceB->isReady())    ||
+        (m_playingOverlay && m_htmlOverlay && !m_htmlOverlay->isReady())) {
         update();
     }
 }

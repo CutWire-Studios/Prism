@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1280px; height: 720px; overflow: hidden;
+    background: transparent;
+    font-family: 'Arial', sans-serif;
+  }
+  .bar {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 88px; background: #0d1117;
+    border-top: 2px solid #00e5ff;
+    display: flex; align-items: center;
+    padding: 0 20px; gap: 0;
+  }
+  .accent { width: 4px; height: 50px; border-radius: 2px; flex-shrink: 0; }
+  .team { display: flex; flex-direction: column; gap: 2px; padding: 0 14px; }
+  .team-name { font-size: 20px; font-weight: bold; letter-spacing: 3px; }
+  .score { font-size: 26px; font-weight: bold; font-family: 'Courier New'; color: #fff; }
+  .overs { display: flex; flex-direction: column; gap: 2px; padding: 0 18px; }
+  .ov-label { font-size: 11px; font-weight: bold; letter-spacing: 2px; color: #607d8b; }
+  .ov-val { font-size: 20px; font-family: 'Courier New'; color: #90a4ae; }
+  .divider { width: 1px; height: 54px; background: #263238; flex-shrink: 0; }
+  .need { font-size: 18px; font-family: 'Courier New'; color: #b0bec5; padding: 0 20px; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="accent" style="background:#ff9800"></div>
+  <div class="team">
+    <span class="team-name" style="color:#ff9800">IND</span>
+    <span class="score">287 / 6</span>
+  </div>
+  <div class="overs">
+    <span class="ov-label">OV</span>
+    <span class="ov-val">47.2</span>
+  </div>
+  <div class="divider"></div>
+  <div class="need">Need &nbsp;63&nbsp; off &nbsp;16.4 ov</div>
+  <div class="divider"></div>
+  <div class="team" style="padding-left:20px">
+    <span class="team-name" style="color:#00bcd4">AUS</span>
+    <span class="score">224 / 10</span>
+  </div>
+  <div class="accent" style="background:#00bcd4; margin-left:12px"></div>
+</div>
+</body>
+</html>

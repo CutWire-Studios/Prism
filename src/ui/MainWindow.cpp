@@ -9,9 +9,9 @@
 #include "core/ColorSource.h"
 #include "core/ImageSource.h"
 #include "core/ShaderSource.h"
-#include "core/DynamicInterfaceSource.h"
+#include "core/HtmlSource.h"
 #include "ui/ShaderEditDialog.h"
-#include "ui/QmlEditDialog.h"
+#include "ui/HtmlEditDialog.h"
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
@@ -149,7 +149,7 @@ void MainWindow::setupConnections() {
     addElemMenu->addAction("⬛  Solid Color…",     this, &MainWindow::onAddElementColor);
     addElemMenu->addSeparator();
     addElemMenu->addAction("≋  Shader…",           this, &MainWindow::onAddElementShader);
-    addElemMenu->addAction("⬡  Dynamic Interface…", this, &MainWindow::onAddElementDynamicInterface);
+    addElemMenu->addAction("🌐  HTML Overlay…",        this, &MainWindow::onAddElementDynamicInterface);
 
     connect(ui->aDeckPlayBtn,     &QPushButton::clicked,  this, &MainWindow::onADeckPlayClicked);
     connect(ui->bDeckPlayBtn,     &QPushButton::clicked,  this, &MainWindow::onBDeckPlayClicked);
@@ -310,6 +310,7 @@ void MainWindow::addElementCard(const SourceDescriptor &desc, const QPixmap &thu
     connect(card, &ClipCard::triggered,               this, &MainWindow::onClipGridClicked);
     connect(card, &ClipCard::aButtonClicked,           this, &MainWindow::onAButtonClicked);
     connect(card, &ClipCard::bButtonClicked,           this, &MainWindow::onBButtonClicked);
+    connect(card, &ClipCard::overlayButtonClicked,     this, &MainWindow::onOverlayButtonClicked);
     connect(card, &ClipCard::removeRequested,          this, &MainWindow::onCardRemoveRequested);
     connect(card, &ClipCard::sourceDescriptorChanged,  this, &MainWindow::onCardSourceDescriptorChanged);
     card->loadSource(desc, thumb);
@@ -380,14 +381,8 @@ QPixmap MainWindow::makeShaderThumb(const QString &code, int w, int h) {
     return QPixmap::fromImage(img.copy());
 }
 
-QPixmap MainWindow::makeQmlThumb(const QString &code, int w, int h) {
-    DynamicInterfaceSource src(code, QSize(w, h));
-    QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
-    if (!src.nextFrame() || !src.isReady())
-        return makeIconThumb("⬡", w, h);
-    const uint8_t *data = src.frameData();
-    QImage img(data, w, h, w * 3, QImage::Format_RGB888);
-    return QPixmap::fromImage(img.copy());
+QPixmap MainWindow::makeQmlThumb(const QString &, int w, int h) {
+    return makeIconThumb("🌐", w, h);
 }
 
 // ── Crossfader ────────────────────────────────────────────────────────────────
@@ -859,8 +854,8 @@ static void assignCardToDeck(ClipCard *card, bool deckA,
         break;
     }
 
-    case Kind::DynamicInterface: {
-        auto src = std::make_unique<DynamicInterfaceSource>(desc.qmlCode);
+    case Kind::Html: {
+        auto src = std::make_unique<HtmlSource>(desc.htmlContent, desc.path);
         if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
         else        { out->setSourceB(std::move(src)); out->playB(); }
         progressSlider->setEnabled(false);
@@ -897,6 +892,37 @@ void MainWindow::onBButtonClicked(int index) {
     assignCardToDeck(card, false, outputWindow->videoWidget(),
                      ui->bProgressSlider, ui->bDeckPlayBtn,
                      ui->bSelectedLabel,  ui->bTimeLabel);
+}
+
+void MainWindow::onOverlayButtonClicked(int index) {
+    using Kind = SourceDescriptor::Kind;
+
+    ClipCard *card = cardAtIndex(index);
+    if (!card || !card->hasSource()) return;
+
+    VideoWidget *out = outputWindow->videoWidget();
+
+    // Toggle: if this card is already the active overlay, clear it.
+    if (overlayCardIndex == index) {
+        if (auto *prev = cardAtIndex(overlayCardIndex)) prev->setOvlSelected(false);
+        overlayCardIndex = -1;
+        out->clearHtmlOverlay();
+        return;
+    }
+
+    // Deselect previous overlay card.
+    if (overlayCardIndex >= 0) {
+        if (auto *prev = cardAtIndex(overlayCardIndex)) prev->setOvlSelected(false);
+    }
+
+    const SourceDescriptor &desc = card->sourceDescriptor();
+    if (desc.kind != Kind::Html) return;
+
+    overlayCardIndex = index;
+    card->setOvlSelected(true);
+
+    auto src = std::make_unique<HtmlSource>(desc.htmlContent, desc.path);
+    out->setHtmlOverlay(std::move(src));
 }
 
 QString MainWindow::formatTimeShort(double secs) {
@@ -1095,18 +1121,21 @@ void MainWindow::onAddElementShader() {
 }
 
 void MainWindow::onAddElementDynamicInterface() {
-    QmlEditDialog dlg(QString(), this);
+    HtmlEditDialog dlg(QString(), this);
     if (dlg.exec() != QDialog::Accepted) return;
 
-    QString code = dlg.resultCode().trimmed();
-    if (code.isEmpty()) return;
+    QString filePath = dlg.resultFilePath();
+    QString html     = dlg.resultHtml().trimmed();
+    if (filePath.isEmpty() && html.isEmpty()) return;
 
     SourceDescriptor desc;
-    desc.kind        = SourceDescriptor::Kind::DynamicInterface;
-    desc.qmlCode     = code;
-    desc.displayName = "Dynamic Interface";
+    desc.kind        = SourceDescriptor::Kind::Html;
+    desc.htmlContent = html;
+    desc.path        = filePath;
+    desc.displayName = filePath.isEmpty() ? "HTML Overlay"
+                                          : QFileInfo(filePath).fileName();
 
-    addElementCard(desc, makeQmlThumb(code));
+    addElementCard(desc, makeIconThumb("🌐"));
 }
 
 // ── Card management ────────────────────────────────────────────────────────────
