@@ -39,6 +39,19 @@ ClipCard::ClipCard(int index, QWidget *parent)
     : QFrame(parent), m_index(index), ui(new Ui::ClipCard) {
     ui->setupUi(this);
 
+    // Hotkey badge — floats over the top-left corner of the thumbnail area.
+    // The thumbnail button is at (5, 5) in ClipCard's local coords (layout margins).
+    m_hotkeyBadge = new QLabel(this);
+    m_hotkeyBadge->setAlignment(Qt::AlignCenter);
+    m_hotkeyBadge->setFixedSize(20, 15);
+    m_hotkeyBadge->move(6, 6);
+    m_hotkeyBadge->setStyleSheet(
+        "QLabel { background-color: #152a30; color: #2adcf5; "
+        "border: 1px solid #2a8fa0; border-radius: 3px; "
+        "font-size: 8px; font-weight: bold; padding: 0 2px; }");
+    m_hotkeyBadge->hide();
+    m_hotkeyBadge->raise();
+
     connect(ui->thumbnailBtn, &QPushButton::clicked, this, [this]() {
         if (!m_clipPath.isEmpty()) emit triggered(m_index);
     });
@@ -54,6 +67,18 @@ ClipCard::ClipCard(int index, QWidget *parent)
 
 ClipCard::~ClipCard() {
     delete ui;
+}
+
+void ClipCard::setHotkeyLabel(const QString &key) {
+    if (key.isEmpty()) {
+        m_hotkeyBadge->hide();
+    } else {
+        m_hotkeyBadge->setText(key);
+        m_hotkeyBadge->setToolTip(
+            QString("Hotkey: %1\nPress  %1       → Deck A\nPress  Shift+%1 → Deck B").arg(key));
+        m_hotkeyBadge->show();
+        m_hotkeyBadge->raise();
+    }
 }
 
 int ClipCard::volume() const {

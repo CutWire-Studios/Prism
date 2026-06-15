@@ -38,6 +38,7 @@ signals:
     void clipChainChanged();
     void deckAClipChanged(NodeId clipId);
     void deckBClipChanged(NodeId clipId);
+    void nodeAdded(NodeId nodeId);
     void nodeRemoved(NodeId nodeId);
 
 private slots:

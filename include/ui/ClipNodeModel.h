@@ -19,6 +19,13 @@ public:
 
     void setCard(ClipCard *card);
 
+    // Auto-assigned slot identifier (set by ClipNodeEditor on creation).
+    void    setNodeId(NodeId id) { m_nodeId = id; }
+    NodeId  nodeId()       const { return m_nodeId; }
+
+    // Show / clear the hotkey badge on the embedded card.
+    void setHotkeyLabel(const QString &key);
+
     void loadClip(const QString &path, const QPixmap &thumbnail) { m_card->loadClip(path, thumbnail); }
     void loadSource(const SourceDescriptor &desc, const QPixmap &thumbnail) { m_card->loadSource(desc, thumbnail); }
     void clearClip() { m_card->clearClip(); }
@@ -56,5 +63,6 @@ signals:
     void sourceDescriptorChanged(const SourceDescriptor &desc);
 
 private:
-    ClipCard *m_card = nullptr;  // borrowed — owned by QGraphicsProxyWidget inside ClipNodeItem
+    ClipCard *m_card   = nullptr;  // borrowed — owned by QGraphicsProxyWidget inside ClipNodeItem
+    NodeId    m_nodeId = 0;
 };

@@ -13,6 +13,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QEventLoop>
+#include <QShortcut>
 #include <glob.h>
 #include <QFileDialog>
 #include <QTimer>
@@ -170,6 +171,7 @@ void MainWindow::setupConnections() {
     // ── ClipNodeEditor signals ────────────────────────────────────────────────
     connect(m_clipNodeEditor, &ClipNodeEditor::deckAClipChanged, this, &MainWindow::onNodeAButtonClicked);
     connect(m_clipNodeEditor, &ClipNodeEditor::deckBClipChanged, this, &MainWindow::onNodeBButtonClicked);
+    connect(m_clipNodeEditor, &ClipNodeEditor::nodeAdded,   this, &MainWindow::assignHotkeyToNode);
     connect(m_clipNodeEditor, &ClipNodeEditor::nodeRemoved, this, &MainWindow::onNodeRemoveRequested);
 
     connect(ui->aDeckPlayBtn,     &QPushButton::clicked,  this, &MainWindow::onADeckPlayClicked);
@@ -944,6 +946,7 @@ void MainWindow::onNodeBButtonClicked(NodeId nodeId) {
 }
 
 void MainWindow::onNodeRemoveRequested(NodeId nodeId) {
+    releaseHotkeyForNode(nodeId);
     m_clipNodeEditor->removeNode(nodeId);
     auto *out = outputWindow->videoWidget();
     if (m_aClipNodeId == nodeId) { m_aClipNodeId = 0; out->setNodeChainA({}); }
@@ -1088,6 +1091,84 @@ void MainWindow::onAddElementShader() {
     desc.displayName = "Shader";
 
     addElementNode(desc, makeShaderThumb(code));
+}
+
+// ── Hotkey grid ───────────────────────────────────────────────────────────────
+
+const QList<Qt::Key> &MainWindow::hotkeySequence() {
+    static const QList<Qt::Key> seq = {
+        // Row 1: number row
+        Qt::Key_1, Qt::Key_2, Qt::Key_3, Qt::Key_4, Qt::Key_5,
+        Qt::Key_6, Qt::Key_7, Qt::Key_8, Qt::Key_9, Qt::Key_0,
+        // Row 2: QWERTY top
+        Qt::Key_Q, Qt::Key_W, Qt::Key_E, Qt::Key_R, Qt::Key_T,
+        Qt::Key_Y, Qt::Key_U, Qt::Key_I, Qt::Key_O, Qt::Key_P,
+        // Row 3: home row
+        Qt::Key_A, Qt::Key_S, Qt::Key_D, Qt::Key_F, Qt::Key_G,
+        Qt::Key_H, Qt::Key_J, Qt::Key_K, Qt::Key_L,
+        // Row 4: bottom row
+        Qt::Key_Z, Qt::Key_X, Qt::Key_C, Qt::Key_V, Qt::Key_B,
+        Qt::Key_N, Qt::Key_M,
+    };
+    return seq;
+}
+
+void MainWindow::assignHotkeyToNode(NodeId nodeId) {
+    ClipNodeModel *node = m_clipNodeEditor->nodeAt(nodeId);
+    if (!node) return;
+
+    // Find the first unoccupied slot in the VJ grid sequence.
+    Qt::Key chosen = Qt::Key_unknown;
+    for (Qt::Key k : hotkeySequence()) {
+        if (!m_keyToNode.contains(k)) { chosen = k; break; }
+    }
+    if (chosen == Qt::Key_unknown) return; // All 36 slots occupied
+
+    // Register the mapping.
+    m_nodeHotkeys[nodeId]  = chosen;
+    m_keyToNode[chosen]    = nodeId;
+
+    // Deck-A shortcut: bare key press.
+    auto *scA = new QShortcut(QKeySequence(chosen), this);
+    scA->setContext(Qt::ApplicationShortcut);
+    connect(scA, &QShortcut::activated, this, [this, chosen]() {
+        NodeId id = m_keyToNode.value(chosen, 0);
+        if (id) onNodeAButtonClicked(id);
+    });
+
+    // Deck-B shortcut: Shift + key.
+    auto *scB = new QShortcut(QKeySequence(Qt::SHIFT | chosen), this);
+    scB->setContext(Qt::ApplicationShortcut);
+    connect(scB, &QShortcut::activated, this, [this, chosen]() {
+        NodeId id = m_keyToNode.value(chosen, 0);
+        if (id) onNodeBButtonClicked(id);
+    });
+
+    m_nodeShortcuts[nodeId] = {scA, scB};
+
+    // Show the badge on the card.
+    const QString keyName = QKeySequence(chosen).toString();
+    node->setHotkeyLabel(keyName);
+}
+
+void MainWindow::releaseHotkeyForNode(NodeId nodeId) {
+    auto hit = m_nodeHotkeys.find(nodeId);
+    if (hit == m_nodeHotkeys.end()) return;
+
+    Qt::Key key = hit.value();
+    m_nodeHotkeys.erase(hit);
+    m_keyToNode.remove(key);
+
+    auto sit = m_nodeShortcuts.find(nodeId);
+    if (sit != m_nodeShortcuts.end()) {
+        delete sit.value().deckA;
+        delete sit.value().deckB;
+        m_nodeShortcuts.erase(sit);
+    }
+    // The ClipCard widget is still alive here (removal happens after this call),
+    // so clear its badge to avoid stale display if the card is somehow reused.
+    if (ClipNodeModel *node = m_clipNodeEditor->nodeAt(nodeId))
+        node->setHotkeyLabel({});
 }
 
 // ── Card management (obsolete methods removed - now handled by ClipNodeEditor) ──
