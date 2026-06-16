@@ -1,5 +1,8 @@
 #include "ui/ClipNodeEditor.h"
 #include "ui/TransformEditorDialog.h"
+#include "ui_TransformNodeDialog.h"
+#include "ui_ContextNodeDialog.h"
+#include "ui_AudioNodeDialog.h"
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QGraphicsScene>
@@ -582,6 +585,53 @@ public:
         setBackgroundBrush(QColor(20, 21, 23));
     }
 
+protected:
+    void drawBackground(QPainter *painter, const QRectF &rect) override {
+        // Fill base background
+        painter->fillRect(rect, QColor(20, 21, 23));
+
+        // Use cosmetic pens so line widths are constant regardless of zoom level
+        QPen minorPen(QColor(26, 27, 30), 0);
+        minorPen.setCosmetic(true);
+
+        QPen majorPen(QColor(33, 35, 38), 0);
+        majorPen.setCosmetic(true);
+
+        const int gridSize = 20;
+        const int majorGridSize = 100;
+
+        qreal left = std::floor(rect.left() / gridSize) * gridSize;
+        qreal top = std::floor(rect.top() / gridSize) * gridSize;
+
+        QVector<QLineF> minorLines;
+        QVector<QLineF> majorLines;
+
+        for (qreal x = left; x < rect.right(); x += gridSize) {
+            long long ix = std::llround(x);
+            if (ix % majorGridSize == 0) {
+                majorLines.append(QLineF(x, rect.top(), x, rect.bottom()));
+            } else {
+                minorLines.append(QLineF(x, rect.top(), x, rect.bottom()));
+            }
+        }
+
+        for (qreal y = top; y < rect.bottom(); y += gridSize) {
+            long long iy = std::llround(y);
+            if (iy % majorGridSize == 0) {
+                majorLines.append(QLineF(rect.left(), y, rect.right(), y));
+            } else {
+                minorLines.append(QLineF(rect.left(), y, rect.right(), y));
+            }
+        }
+
+        painter->setPen(minorPen);
+        painter->drawLines(minorLines);
+
+        painter->setPen(majorPen);
+        painter->drawLines(majorLines);
+    }
+
+public:
     std::function<void()> onConnectionChanged;
 
     void onPortPressed(PortItem *port, const QPointF &scenePos) {
@@ -1120,47 +1170,20 @@ void ClipNodeEditor::onEditTransformNode(NodeId nodeId) {
     TransformNodeItem *transform = static_cast<TransformNodeItem *>(*it);
 
     QDialog dialog(this);
-    dialog.setWindowTitle("Edit Transform");
-    dialog.setModal(true);
+    Ui::TransformNodeDialog ui;
+    ui.setupUi(&dialog);
 
-    auto *layout = new QFormLayout(&dialog);
-
-    auto *xSpin = new QDoubleSpinBox();
-    xSpin->setRange(0, 100);
-    xSpin->setDecimals(1);
-    xSpin->setSuffix("%");
-    xSpin->setValue(transform->x() * 100);
-    layout->addRow("X Position:", xSpin);
-
-    auto *ySpin = new QDoubleSpinBox();
-    ySpin->setRange(0, 100);
-    ySpin->setDecimals(1);
-    ySpin->setSuffix("%");
-    ySpin->setValue(transform->y() * 100);
-    layout->addRow("Y Position:", ySpin);
-
-    auto *wSpin = new QDoubleSpinBox();
-    wSpin->setRange(1, 100);
-    wSpin->setDecimals(1);
-    wSpin->setSuffix("%");
-    wSpin->setValue(transform->w() * 100);
-    layout->addRow("Width:", wSpin);
-
-    auto *hSpin = new QDoubleSpinBox();
-    hSpin->setRange(1, 100);
-    hSpin->setDecimals(1);
-    hSpin->setSuffix("%");
-    hSpin->setValue(transform->h() * 100);
-    layout->addRow("Height:", hSpin);
-
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addRow(buttons);
+    ui.xSpin->setValue(transform->x() * 100.0);
+    ui.ySpin->setValue(transform->y() * 100.0);
+    ui.wSpin->setValue(transform->w() * 100.0);
+    ui.hSpin->setValue(transform->h() * 100.0);
 
     if (dialog.exec() == QDialog::Accepted) {
-        transform->setTransform(xSpin->value() / 100.f, ySpin->value() / 100.f,
-                               wSpin->value() / 100.f, hSpin->value() / 100.f);
+        transform->setTransform(
+            (float)(ui.xSpin->value() / 100.0),
+            (float)(ui.ySpin->value() / 100.0),
+            (float)(ui.wSpin->value() / 100.0),
+            (float)(ui.hSpin->value() / 100.0));
         emit clipChainChanged();
     }
 }
@@ -1172,41 +1195,21 @@ void ClipNodeEditor::onEditContextNode(NodeId nodeId) {
     TransformContextNodeItem *context = static_cast<TransformContextNodeItem *>(*it);
 
     QDialog dialog(this);
-    dialog.setWindowTitle("Canvas Size");
-    dialog.setModal(true);
+    Ui::ContextNodeDialog ui;
+    ui.setupUi(&dialog);
 
-    auto *layout = new QFormLayout(&dialog);
+    ui.wSpin->setValue(context->canvasW());
+    ui.hSpin->setValue(context->canvasH());
 
-    auto *wSpin = new QSpinBox();
-    wSpin->setRange(1, 7680);
-    wSpin->setValue(context->canvasW());
-    layout->addRow("Width:", wSpin);
-
-    auto *hSpin = new QSpinBox();
-    hSpin->setRange(1, 4320);
-    hSpin->setValue(context->canvasH());
-    layout->addRow("Height:", hSpin);
-
-    auto *preset = new QComboBox();
-    preset->addItem("Custom");
-    preset->addItem("16:9 (1280×720)");
-    preset->addItem("16:9 (1920×1080)");
-    preset->addItem("4:3 (1024×768)");
-    layout->addRow("Preset:", preset);
-
-    connect(preset, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [wSpin, hSpin, preset]() {
-        if (preset->currentIndex() == 1) { wSpin->setValue(1280); hSpin->setValue(720); }
-        else if (preset->currentIndex() == 2) { wSpin->setValue(1920); hSpin->setValue(1080); }
-        else if (preset->currentIndex() == 3) { wSpin->setValue(1024); hSpin->setValue(768); }
+    connect(ui.presetCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            &dialog, [&ui](int idx) {
+        if      (idx == 1) { ui.wSpin->setValue(1280); ui.hSpin->setValue(720);  }
+        else if (idx == 2) { ui.wSpin->setValue(1920); ui.hSpin->setValue(1080); }
+        else if (idx == 3) { ui.wSpin->setValue(1024); ui.hSpin->setValue(768);  }
     });
 
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addRow(buttons);
-
     if (dialog.exec() == QDialog::Accepted) {
-        context->setCanvasSize(wSpin->value(), hSpin->value());
+        context->setCanvasSize(ui.wSpin->value(), ui.hSpin->value());
         emit clipChainChanged();
     }
 }
@@ -1223,47 +1226,20 @@ void ClipNodeEditor::onEditAudioNode(NodeId nodeId) {
     AudioControllerNodeItem *audio = static_cast<AudioControllerNodeItem *>(*it);
 
     QDialog dialog(this);
-    dialog.setWindowTitle("Audio Settings");
-    dialog.setModal(true);
+    Ui::AudioNodeDialog ui;
+    ui.setupUi(&dialog);
 
-    auto *layout = new QFormLayout(&dialog);
-
-    auto *volSpin = new QSpinBox();
-    volSpin->setRange(0, 100);
-    volSpin->setSuffix("%");
-    volSpin->setValue(audio->volume());
-    layout->addRow("Volume:", volSpin);
-
-    auto *mutedCheck = new QCheckBox("Muted");
-    mutedCheck->setChecked(audio->muted());
-    layout->addRow(mutedCheck);
-
-    auto *modeCombo = new QComboBox();
-    modeCombo->addItem("Play only when Deck A is active", (int)AudioPlaybackMode::DeckAOnly);
-    modeCombo->addItem("Play only when Deck B is active", (int)AudioPlaybackMode::DeckBOnly);
-    modeCombo->addItem("Continue playing disregards active track", (int)AudioPlaybackMode::Always);
-    int currentModeIdx = modeCombo->findData((int)audio->playbackMode());
-    if (currentModeIdx != -1) {
-        modeCombo->setCurrentIndex(currentModeIdx);
-    }
-    layout->addRow("Playback Mode:", modeCombo);
-
-    auto *delaySpin = new QSpinBox();
-    delaySpin->setRange(-5000, 5000);
-    delaySpin->setSuffix(" ms");
-    delaySpin->setValue(audio->delayMs());
-    layout->addRow("Audio Delay:", delaySpin);
-
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addRow(buttons);
+    ui.volumeSpin->setValue(audio->volume());
+    ui.mutedCheck->setChecked(audio->muted());
+    // modeCombo order matches AudioPlaybackMode enum: DeckAOnly=0, DeckBOnly=1, Always=2
+    ui.modeCombo->setCurrentIndex((int)audio->playbackMode());
+    ui.delaySpin->setValue(audio->delayMs());
 
     if (dialog.exec() == QDialog::Accepted) {
-        audio->setVolume(volSpin->value());
-        audio->setMuted(mutedCheck->isChecked());
-        audio->setPlaybackMode((AudioPlaybackMode)modeCombo->currentData().toInt());
-        audio->setDelayMs(delaySpin->value());
+        audio->setVolume(ui.volumeSpin->value());
+        audio->setMuted(ui.mutedCheck->isChecked());
+        audio->setPlaybackMode((AudioPlaybackMode)ui.modeCombo->currentIndex());
+        audio->setDelayMs(ui.delaySpin->value());
         const NodeId clipId = m_scene->clipForAudioNode(nodeId);
         if (clipId != 0) emit audioControllerChanged(clipId);
     }

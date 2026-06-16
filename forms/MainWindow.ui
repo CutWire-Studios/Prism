@@ -271,6 +271,7 @@
         </widget>
        </item>
        <item>
+        <!-- ── A/B Crossfader + Transition Controls ─────────────────────── -->
         <widget class="QGroupBox" name="faderGroup">
          <property name="title">
           <string>A/B Crossfader</string>
@@ -319,6 +320,193 @@
             <property name="text">
              <string>B ►</string>
             </property>
+           </widget>
+          </item>
+          <!-- ── Transition controls ── -->
+          <item>
+           <widget class="QLabel" name="transitionLabel">
+            <property name="styleSheet">
+             <string notr="true">font-size: 10px;</string>
+            </property>
+            <property name="text">
+             <string>Transition:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="transitionCombo">
+            <property name="styleSheet">
+             <string notr="true">font-size: 10px;</string>
+            </property>
+            <property name="toolTip">
+             <string>Crossfade: alpha blend
+Cut: hard switch at fader centre
+Wipe ←: B reveals from the left
+Wipe →: B reveals from the right
+Wipe ↑: B reveals from bottom to top
+Wipe ↓: B reveals from top to bottom
+Slide ←: A exits left, B enters right
+Slide →: A exits right, B enters left
+Slide ↑: A exits top, B enters bottom
+Slide ↓: A exits bottom, B enters top
+Dip to Black: fade through black
+Dip to White: fade through white
+Additive Glow: add colors for VJ brightness
+Cross Zoom: dynamic zoom scaling
+Split Door (H): horizontal split reveal
+Split Door (V): vertical split reveal
+Vortex Spin: spinning vortex wrap
+Split 4-Corner: split into 4 quadrants sliding outwards
+3D Gallery Fly: cinematic 3D pan, zoom fly-past with soft warm light sweep
+3D Cube: rotate a 3D perspective cube to reveal next deck
+3D Flip: flip the screen 180 degrees in 3D perspective</string>
+            </property>
+            <item>
+             <property name="text"><string>Crossfade</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Cut</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Wipe ←</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Wipe →</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Wipe ↑</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Wipe ↓</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Slide ←</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Slide →</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Slide ↑</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Slide ↓</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Dip to Black</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Dip to White</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Additive Glow</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Cross Zoom</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Split Door (H)</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Split Door (V)</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Vortex Spin</string></property>
+            </item>
+            <item>
+             <property name="text"><string>Split 4-Corner</string></property>
+            </item>
+            <item>
+             <property name="text"><string>3D Gallery Fly</string></property>
+            </item>
+            <item>
+             <property name="text"><string>3D Cube</string></property>
+            </item>
+            <item>
+             <property name="text"><string>3D Flip</string></property>
+            </item>
+           </widget>
+          </item>
+          <!-- Duration row -->
+          <item>
+           <widget class="QWidget" name="durationRow" native="true">
+            <layout class="QHBoxLayout" name="durationLayout">
+             <property name="leftMargin"><number>0</number></property>
+             <property name="topMargin"><number>0</number></property>
+             <property name="rightMargin"><number>0</number></property>
+             <property name="bottomMargin"><number>0</number></property>
+             <property name="spacing">
+              <number>4</number>
+             </property>
+             <item>
+              <widget class="QLabel" name="durationLabel">
+               <property name="styleSheet">
+                <string notr="true">font-size: 10px;</string>
+               </property>
+               <property name="text">
+                <string>Time (s):</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QDoubleSpinBox" name="durationSpin">
+               <property name="styleSheet">
+                <string notr="true">font-size: 10px; background-color: #1e1e1e; color: #fff;</string>
+               </property>
+               <property name="minimum">
+                <double>0.100000000000000</double>
+               </property>
+               <property name="maximum">
+                <double>10.000000000000000</double>
+               </property>
+               <property name="singleStep">
+                <double>0.100000000000000</double>
+               </property>
+               <property name="value">
+                <double>1.000000000000000</double>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <!-- AUTO / CUT buttons row -->
+          <item>
+           <widget class="QWidget" name="transitionBtnRow" native="true">
+            <layout class="QHBoxLayout" name="transitionBtnLayout">
+             <property name="leftMargin"><number>0</number></property>
+             <property name="topMargin"><number>0</number></property>
+             <property name="rightMargin"><number>0</number></property>
+             <property name="bottomMargin"><number>0</number></property>
+             <property name="spacing">
+              <number>6</number>
+             </property>
+             <item>
+              <widget class="QPushButton" name="autoBtn">
+               <property name="toolTip">
+                <string>Smooth auto transition using selected mode</string>
+               </property>
+               <property name="text">
+                <string>AUTO</string>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">QPushButton { font-size: 10px; font-weight: bold; background-color: #1E1E1E; color: #00FFFF; border: 1px solid #00BFFF; border-radius: 3px; padding: 4px; } QPushButton:hover { background-color: #00BFFF; color: #0F0F0F; border: 1px solid #00FFFF; } QPushButton:pressed { background-color: #FF4500; border: 1px solid #FFD700; color: #0F0F0F; }</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="cutBtn">
+               <property name="toolTip">
+                <string>Instant cut to opposite deck</string>
+               </property>
+               <property name="text">
+                <string>CUT</string>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">QPushButton { font-size: 10px; font-weight: bold; background-color: #1E1E1E; color: #FF4500; border: 1px solid #FF4500; border-radius: 3px; padding: 4px; } QPushButton:hover { background-color: #FF4500; color: #0F0F0F; border: 1px solid #FFD700; } QPushButton:pressed { background-color: #00BFFF; border: 1px solid #00FFFF; color: #0F0F0F; }</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
           <item>
@@ -504,11 +692,41 @@
     <property name="title">
      <string>Media</string>
     </property>
+    <!-- Folder actions -->
     <addaction name="actionLoadFolder"/>
     <addaction name="actionAddFolder"/>
-    <addaction name="actionAddFiles"/>
     <addaction name="separator"/>
+    <!-- File actions -->
+    <addaction name="actionAddFiles"/>
+    <addaction name="actionAddPhotos"/>
+    <addaction name="separator"/>
+    <!-- Session -->
+    <addaction name="actionSaveSession"/>
+    <addaction name="actionLoadSession"/>
+    <addaction name="separator"/>
+    <!-- Clear -->
     <addaction name="actionClearAll"/>
+    <addaction name="separator"/>
+    <!-- Add Element submenu -->
+    <addaction name="menuAddElement"/>
+   </widget>
+   <widget class="QMenu" name="menuAddElement">
+    <property name="title">
+     <string>Add Element</string>
+    </property>
+    <addaction name="actionAddVideoFile"/>
+    <addaction name="actionAddPhoto"/>
+    <addaction name="separator"/>
+    <addaction name="actionAddSlideshow"/>
+    <addaction name="separator"/>
+    <addaction name="actionAddCamera"/>
+    <addaction name="actionAddScreen"/>
+    <addaction name="actionAddWindow"/>
+    <addaction name="separator"/>
+    <addaction name="actionAddCanvas"/>
+    <addaction name="separator"/>
+    <addaction name="actionAddShader"/>
+    <addaction name="actionAddHtml"/>
    </widget>
    <widget class="QMenu" name="menuView">
     <property name="title">
@@ -520,9 +738,10 @@
    <addaction name="menuMedia"/>
    <addaction name="menuView"/>
   </widget>
+  <!-- ── Actions ──────────────────────────────────────────────────────── -->
   <action name="actionLoadFolder">
    <property name="text">
-    <string>Load Folder</string>
+    <string>📁  Load Folder…</string>
    </property>
    <property name="toolTip">
     <string>Load a folder — replaces current clips</string>
@@ -530,7 +749,7 @@
   </action>
   <action name="actionAddFolder">
    <property name="text">
-    <string>Add Folder</string>
+    <string>📂  Add Folder…</string>
    </property>
    <property name="toolTip">
     <string>Append another folder's clips without replacing the current ones</string>
@@ -544,12 +763,82 @@
     <string>Pick individual media files to add to the grid</string>
    </property>
   </action>
+  <action name="actionAddPhotos">
+   <property name="text">
+    <string>🖼  Add Photos…</string>
+   </property>
+   <property name="toolTip">
+    <string>Pick image files to add to the grid</string>
+   </property>
+  </action>
+  <action name="actionSaveSession">
+   <property name="text">
+    <string>💾  Save Session…</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S</string>
+   </property>
+  </action>
+  <action name="actionLoadSession">
+   <property name="text">
+    <string>📂  Load Session…</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+O</string>
+   </property>
+  </action>
   <action name="actionClearAll">
    <property name="text">
     <string>Clear All</string>
    </property>
    <property name="toolTip">
     <string>Remove all clips from the grid</string>
+   </property>
+  </action>
+  <!-- Add Element actions (shared between menuAddElement and the placeholder button) -->
+  <action name="actionAddVideoFile">
+   <property name="text">
+    <string>🎬  Video File…</string>
+   </property>
+  </action>
+  <action name="actionAddPhoto">
+   <property name="text">
+    <string>🖼  Photo…</string>
+   </property>
+  </action>
+  <action name="actionAddSlideshow">
+   <property name="text">
+    <string>📁  Slideshow…</string>
+   </property>
+  </action>
+  <action name="actionAddCamera">
+   <property name="text">
+    <string>📷  Camera…</string>
+   </property>
+  </action>
+  <action name="actionAddScreen">
+   <property name="text">
+    <string>🖥  Screen Capture…</string>
+   </property>
+  </action>
+  <action name="actionAddWindow">
+   <property name="text">
+    <string>🪟  Window / Tab…</string>
+   </property>
+  </action>
+  <action name="actionAddCanvas">
+   <property name="text">
+    <string>⬜  Canvas…</string>
+   </property>
+  </action>
+  <action name="actionAddShader">
+   <property name="text">
+    <string>≋  Shader…</string>
+   </property>
+  </action>
+  <action name="actionAddHtml">
+   <property name="text">
+    <string>🌐  HTML Overlay…</string>
    </property>
   </action>
   <action name="actionShowOutput">

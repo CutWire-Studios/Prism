@@ -51,6 +51,13 @@ set(SOURCES
     src/ui/OutputWindow.cpp
     src/ui/ShaderEditDialog.cpp
     src/ui/HtmlEditDialog.cpp
+    # Extracted helper / controller classes
+    src/ui/ThumbHelper.cpp
+    src/ui/HotkeyManager.cpp
+    src/ui/SessionManager.cpp
+    src/ui/TransitionController.cpp
+    src/ui/DeckController.cpp
+    src/ui/SourceFactory.cpp
 )
 
 set(HEADERS
@@ -84,6 +91,13 @@ set(HEADERS
     include/ui/OutputWindow.h
     include/ui/ShaderEditDialog.h
     include/ui/HtmlEditDialog.h
+    # Extracted helper / controller headers
+    include/ui/ThumbHelper.h
+    include/ui/HotkeyManager.h
+    include/ui/SessionManager.h
+    include/ui/TransitionController.h
+    include/ui/DeckController.h
+    include/ui/SourceFactory.h
 )
 
 set(UI_FILES
@@ -93,6 +107,10 @@ set(UI_FILES
     forms/OutputWindow.ui
     forms/ShaderEditDialog.ui
     forms/HtmlEditDialog.ui
+    # New dialog UI files extracted from inline widget construction
+    forms/TransformNodeDialog.ui
+    forms/ContextNodeDialog.ui
+    forms/AudioNodeDialog.ui
 )
 
 # Create executable

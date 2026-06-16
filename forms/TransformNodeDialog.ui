@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>TransformNodeDialog</class>
+ <widget class="QDialog" name="TransformNodeDialog">
+  <property name="windowTitle">
+   <string>Edit Transform</string>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>260</width>
+    <height>0</height>
+   </size>
+  </property>
+  <layout class="QFormLayout" name="formLayout">
+   <property name="leftMargin"><number>12</number></property>
+   <property name="topMargin"><number>12</number></property>
+   <property name="rightMargin"><number>12</number></property>
+   <property name="bottomMargin"><number>12</number></property>
+   <property name="horizontalSpacing"><number>8</number></property>
+   <property name="verticalSpacing"><number>6</number></property>
+   <item row="0" column="0">
+    <widget class="QLabel" name="xLabel">
+     <property name="text"><string>X Position:</string></property>
+    </widget>
+   </item>
+   <item row="0" column="1">
+    <widget class="QDoubleSpinBox" name="xSpin">
+     <property name="suffix"><string>%</string></property>
+     <property name="decimals"><number>1</number></property>
+     <property name="minimum"><double>0.000000000000000</double></property>
+     <property name="maximum"><double>100.000000000000000</double></property>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QLabel" name="yLabel">
+     <property name="text"><string>Y Position:</string></property>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QDoubleSpinBox" name="ySpin">
+     <property name="suffix"><string>%</string></property>
+     <property name="decimals"><number>1</number></property>
+     <property name="minimum"><double>0.000000000000000</double></property>
+     <property name="maximum"><double>100.000000000000000</double></property>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QLabel" name="wLabel">
+     <property name="text"><string>Width:</string></property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QDoubleSpinBox" name="wSpin">
+     <property name="suffix"><string>%</string></property>
+     <property name="decimals"><number>1</number></property>
+     <property name="minimum"><double>1.000000000000000</double></property>
+     <property name="maximum"><double>100.000000000000000</double></property>
+    </widget>
+   </item>
+   <item row="3" column="0">
+    <widget class="QLabel" name="hLabel">
+     <property name="text"><string>Height:</string></property>
+    </widget>
+   </item>
+   <item row="3" column="1">
+    <widget class="QDoubleSpinBox" name="hSpin">
+     <property name="suffix"><string>%</string></property>
+     <property name="decimals"><number>1</number></property>
+     <property name="minimum"><double>1.000000000000000</double></property>
+     <property name="maximum"><double>100.000000000000000</double></property>
+    </widget>
+   </item>
+   <item row="4" column="0" colspan="2">
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>accepted()</signal>
+   <receiver>TransformNodeDialog</receiver>
+   <slot>accept()</slot>
+  </connection>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>rejected()</signal>
+   <receiver>TransformNodeDialog</receiver>
+   <slot>reject()</slot>
+  </connection>
+ </connections>
+</ui>

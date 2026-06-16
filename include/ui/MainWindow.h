@@ -6,18 +6,13 @@
 #include <memory>
 #include "ui/ClipNodeEditor.h"
 #include "ui/OutputWindow.h"
+#include "ui/HotkeyManager.h"
+#include "ui/SessionManager.h"
+#include "ui/TransitionController.h"
+#include "ui/DeckController.h"
 #include "core/ClipManager.h"
 #include "core/SourceDescriptor.h"
 #include "core/MediaSource.h"
-
-class QShortcut;
-class QComboBox;
-class QSlider;
-class QPushButton;
-class QLabel;
-class QDoubleSpinBox;
-class QVariantAnimation;
-class AudioPlayer;
 
 namespace Ui { class MainWindow; }
 
@@ -32,18 +27,15 @@ protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
 
 private slots:
+    // ── Media / folder actions ────────────────────────────────────────────────
     void onLoadFolderClicked();
     void onAddFolderClicked();
     void onAddFilesClicked();
+    void onAddPhotosClicked();
     void onClearAllClicked();
-    void onCrossfaderMoved(int value);
-    void onADeckPlayClicked();
-    void onBDeckPlayClicked();
-    void onADeckSpeedChanged(int value);
-    void onBDeckSpeedChanged(int value);
-    void onTimerUpdate();
 
     // ── Node editor signals ───────────────────────────────────────────────────
     void onNodeAButtonClicked(NodeId nodeId);
@@ -53,6 +45,7 @@ private slots:
     // ── Session persistence ───────────────────────────────────────────────────
     void onSaveSessionClicked();
     void onLoadSessionClicked();
+    void onSessionLoaded();
 
     // ── Add Element handlers ──────────────────────────────────────────────────
     void onAddElementSlideshow();
@@ -63,86 +56,41 @@ private slots:
     void onAddElementShader();
     void onAddElementDynamicInterface();
 
-    // ── Transition mode ───────────────────────────────────────────────────────
-    void onTransitionModeChanged(int index);
-    void onAutoTransitionClicked();
-    void onCutTransitionClicked();
+    // ── Deck controls ─────────────────────────────────────────────────────────
+    void onCrossfaderMoved(int value);
+    void onADeckPlayClicked();
+    void onBDeckPlayClicked();
+    void onADeckSpeedChanged(int value);
+    void onBDeckSpeedChanged(int value);
+    void onTimerUpdate();
 
 private:
-    Ui::MainWindow  *ui;
-    OutputWindow    *outputWindow       = nullptr;
+    Ui::MainWindow *ui;
+    OutputWindow   *m_outputWindow   = nullptr;
 
-    class QStackedWidget *m_stackWidget = nullptr;
-    ClipNodeEditor  *m_clipNodeEditor   = nullptr;
-    QWidget        *m_emptyPlaceholder = nullptr;
+    class QStackedWidget *m_stackWidget       = nullptr;
+    ClipNodeEditor       *m_clipNodeEditor    = nullptr;
+    QWidget              *m_emptyPlaceholder  = nullptr;
 
     bool m_aSliderDragging = false;
     bool m_bSliderDragging = false;
 
     ClipManager clipManager;
-    QTimer     *updateTimer       = nullptr;
+    QTimer     *updateTimer = nullptr;
 
-    NodeId m_aClipNodeId = 0;
-    NodeId m_bClipNodeId = 0;
+    // ── Extracted controllers ─────────────────────────────────────────────────
+    HotkeyManager      *m_hotkeyManager      = nullptr;
+    SessionManager     *m_sessionManager     = nullptr;
+    TransitionController *m_transitionCtrl   = nullptr;
+    DeckController     *m_deckController     = nullptr;
 
-    // Add an element node to the editor
-    void addElementNode(const SourceDescriptor &desc, const QPixmap &thumb);
-    void appendClipsToEditor(const QStringList &clipPaths);
-
-    // Assign a clip node to a deck using the clip's SourceDescriptor.
-    void assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA,
-                         VideoWidget *out,
-                         QSlider *progressSlider, QPushButton *playBtn,
-                         QLabel *selectedLabel, QLabel *timeLabel);
-
-    // Assign a ready-made source to the active deck (based on crossfader).
-    void assignSourceToActiveDeck(std::unique_ptr<MediaSource> src,
-                                  const QString &name);
-
-    // Update deck UI state after a source is assigned.
-    void updateDeckUI(bool deckA, const QString &name, bool hasTimeline);
-    void updateDeckAudio(bool deckA, NodeId clipId, const ClipNodeModel *node, double currentTimeHint = -1.0, bool forceSeek = false);
-    void applyAudioControllerToDeck(bool deckA, NodeId clipId);
-    void stopDeckAudio(bool deckA);
-
+    // ── Helpers ───────────────────────────────────────────────────────────────
     void setupConnections();
     void applyTheme();
 
-    // ── Hotkey grid ───────────────────────────────────────────────────────────
-    // Auto-assigns keyboard shortcuts (key → Deck A, Shift+key → Deck B) to
-    // each node as it is added.  Keys are taken in order from the standard VJ
-    // grid row sequence: 1–0, Q–P, A–L, Z–M (36 slots total).
-    void assignHotkeyToNode(NodeId nodeId);
-    void releaseHotkeyForNode(NodeId nodeId);
-    static const QList<Qt::Key> &hotkeySequence();
+    void loadFromFile(const QString &path, bool showErrors);
+    void addElementNode(const SourceDescriptor &desc, const QPixmap &thumb);
+    void appendClipsToEditor(const QStringList &clipPaths);
 
-    struct NodeShortcuts {
-        QShortcut *deckA = nullptr;
-        QShortcut *deckB = nullptr;
-    };
-    QMap<NodeId, Qt::Key>       m_nodeHotkeys;
-    QMap<Qt::Key,  NodeId>      m_keyToNode;
-    QMap<NodeId, NodeShortcuts> m_nodeShortcuts;
-
-    // ── Transition combobox ───────────────────────────────────────────────────
-    QComboBox *m_transitionCombo = nullptr;
-    QDoubleSpinBox *m_durationSpin = nullptr;
-    QPushButton *m_autoBtn = nullptr;
-    QPushButton *m_cutBtn = nullptr;
-    QVariantAnimation *m_transitionAnimation = nullptr;
-    std::unique_ptr<AudioPlayer> m_audioPlayerA;
-    std::unique_ptr<AudioPlayer> m_audioPlayerB;
-    double m_lastTimeA = 0.0;
-    double m_lastTimeB = 0.0;
-
-
-    static QPixmap makeIconThumb(const QString &glyph, int w = 110, int h = 65);
-    static QPixmap makeCanvasThumb(const QString &label,
-                                   SourceDescriptor::CanvasFill fill,
-                                   const QColor &color = Qt::white,
-                                   int w = 110, int h = 65);
-    static QPixmap makeShaderThumb(const QString &code, int w = 110, int h = 65);
-    static QPixmap makeHtmlThumb(const QString &html, const QString &filePath, int w = 110, int h = 65);
-    static QPixmap makeQmlThumb(const QString &code, int w = 110, int h = 65); // kept for ABI compat
-    static QString formatTimeShort(double secs);
+    void buildEmptyPlaceholder();
 };
