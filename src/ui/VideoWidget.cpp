@@ -56,6 +56,9 @@ std::pair<float,float> VideoWidget::computeDeckAlphas() const {
     case TransitionMode::Additive:
     case TransitionMode::CrossZoom:
     case TransitionMode::VortexSpin:
+    case TransitionMode::Gallery3D:
+    case TransitionMode::Cube3D:
+    case TransitionMode::Flip3D:
         return {1.f - t, t};
     case TransitionMode::Cut:
         return t < 0.5f ? std::make_pair(1.f, 0.f) : std::make_pair(0.f, 1.f);
@@ -124,10 +127,56 @@ void VideoWidget::paintGL() {
                             baseW * canvasBounds.width(),
                             baseH * canvasBounds.height());
         outRect = bounds;
+
+        // Draw a neat outer frame border around the video, but only if the video is not filling the full screen
+        // (to prevent drawing borders outside the screen area for normal full-screen play)
+        bool isFullScreen = std::abs(bounds.x()) < 1.0f && std::abs(bounds.y()) < 1.0f &&
+                            std::abs(bounds.width() - width()) < 2.0f && std::abs(bounds.height() - height()) < 2.0f;
+        if (!isFullScreen) {
+            glDisable(GL_TEXTURE_2D);
+            // Outer white frame border
+            glColor4f(0.9f, 0.9f, 0.9f, alpha);
+            float bx = std::max(4.f, (float)bounds.width() * 0.015f);
+            float by = std::max(4.f, (float)bounds.height() * 0.015f);
+            glBegin(GL_QUADS);
+            glVertex2f(bounds.x() - bx, bounds.y() - by);
+            glVertex2f(bounds.x() + bounds.width() + bx, bounds.y() - by);
+            glVertex2f(bounds.x() + bounds.width() + bx, bounds.y() + bounds.height() + by);
+            glVertex2f(bounds.x() - bx, bounds.y() + bounds.height() + by);
+            glEnd();
+
+            // Inner dark accent border
+            glColor4f(0.1f, 0.1f, 0.1f, alpha);
+            float ix = std::max(1.f, bx * 0.2f);
+            float iy = std::max(1.f, by * 0.2f);
+            glBegin(GL_QUADS);
+            glVertex2f(bounds.x() - ix, bounds.y() - iy);
+            glVertex2f(bounds.x() + bounds.width() + ix, bounds.y() - iy);
+            glVertex2f(bounds.x() + bounds.width() + ix, bounds.y() + bounds.height() + iy);
+            glVertex2f(bounds.x() - ix, bounds.y() + bounds.height() + iy);
+            glEnd();
+            glEnable(GL_TEXTURE_2D);
+        }
+
         glColor4f(1.f, 1.f, 1.f, alpha);
         renderTexture(tex, cx, cy, cw, ch,
                       (float)bounds.x(),     (float)bounds.y(),
                       (float)bounds.width(), (float)bounds.height());
+    };
+
+    auto draw3DDeck = [&](GLuint tex, MediaSource *src, float alpha, float aspect) {
+        if (!tex || !src || !src->isReady() || alpha <= 0.f) return;
+
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glColor4f(1.f, 1.f, 1.f, alpha);
+        glBegin(GL_QUADS);
+        glTexCoord2f(0.f, 1.f); glVertex3f(-aspect, -1.f, 0.f);
+        glTexCoord2f(1.f, 1.f); glVertex3f( aspect, -1.f, 0.f);
+        glTexCoord2f(1.f, 0.f); glVertex3f( aspect,  1.f, 0.f);
+        glTexCoord2f(0.f, 0.f); glVertex3f(-aspect,  1.f, 0.f);
+        glEnd();
+        glBindTexture(GL_TEXTURE_2D, 0);
     };
 
     switch (m_transitionMode) {
@@ -558,6 +607,390 @@ void VideoWidget::paintGL() {
 
             glDisable(GL_SCISSOR_TEST);
         }
+        break;
+    }
+
+    case TransitionMode::Gallery3D: {
+        const float alphaA = 1.f - t;
+        const float alphaB = t;
+
+        // Switch projection matrix to perspective
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glLoadIdentity();
+        
+        float aspect = (float)width() / height();
+        // Setup perspective frustum: FOV = 45 degrees
+        float fH = std::tan(22.5f / 180.f * 3.14159265f) * 1.f;
+        float fW = fH * aspect;
+        glFrustum(-fW, fW, -fH, fH, 1.f, 100.f);
+        
+        glMatrixMode(GL_MODELVIEW);
+        glPushMatrix();
+        glLoadIdentity();
+        
+        // Eased fader value for camera position
+        float ease = t * t * (3.f - 2.f * t);
+
+        // 3D Layout coordinates for slides
+        float XB = 2.4f * aspect; // Deck B is positioned to the right
+        float YB = -0.3f;          // Deck B is slightly lower
+        float ZB = -1.8f;          // Deck B is further back
+        float rotB = -15.f;        // Deck B is angled at -15 degrees
+
+        // Camera path animations:
+        float d = 2.41421356f;
+        float rotB_rad = rotB * 3.14159265f / 180.f;
+
+        // Slide B's target camera position (offset by distance d along Deck B's rotated normal)
+        float X1 = XB + d * std::sin(rotB_rad);
+        float Y1 = YB;
+        float Z1 = ZB + d * std::cos(rotB_rad);
+
+        // Interpolate camera position between Slide A's (0, 0, d) and Slide B's (X1, Y1, Z1)
+        float Cx = ease * X1;
+        float Cy = ease * Y1;
+        float Cz = (1.f - ease) * d + ease * Z1 + std::sin(t * 3.14159265f) * 1.0f; // zoom out in the middle!
+
+        float CrotY = ease * rotB; // pan from 0 to rotB
+        float CrotX = std::sin(t * 3.14159265f) * 4.f; // subtle camera pitch tilt for handheld look
+
+        // Apply camera view transformation (inverse of camera model matrix: R_x * R_y * T)
+        glRotatef(-CrotX, 1.f, 0.f, 0.f);
+        glRotatef(-CrotY, 0.f, 1.f, 0.f);
+        glTranslatef(-Cx, -Cy, -Cz);
+
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LEQUAL);
+
+        // 1. Draw a beautiful, styled studio gallery wall background (Z = -20)
+        // This includes a top-left spotlight gradient that matches our frame lighting,
+        // overlayed with a large, low-opacity ambient video texture glow.
+        glPushMatrix();
+        glTranslatef(XB * 0.5f, 0.f, -20.f);
+        glScalef(15.f * aspect, 15.f, 1.f);
+        glDisable(GL_TEXTURE_2D);
+        
+        // Studio spotlight gradient (Top-Left is warm golden-white, Bottom-Right is dark charcoal)
+        glBegin(GL_QUADS);
+        glColor4f(0.18f, 0.14f, 0.08f, 1.0f); // Warm top-left light
+        glVertex3f(-1.f,  1.f, 0.f); // top-left
+        
+        glColor4f(0.04f, 0.03f, 0.02f, 1.0f); // Dark top-right shadow
+        glVertex3f( 1.f,  1.f, 0.f); // top-right
+        
+        glColor4f(0.01f, 0.01f, 0.01f, 1.0f); // Pure black bottom-right
+        glVertex3f( 1.f, -1.f, 0.f); // bottom-right
+        
+        glColor4f(0.04f, 0.03f, 0.02f, 1.0f); // Dark bottom-left shadow
+        glVertex3f(-1.f, -1.f, 0.f); // bottom-left
+        glEnd();
+        
+        glEnable(GL_TEXTURE_2D);
+        glPopMatrix();
+
+        // 2. Draw ambient video glow textures in the background (Z = -18)
+        // Blends from Deck A's colors to Deck B's colors as t changes
+        if (alphaA > 0.f && m_textureA && m_sourceA && m_sourceA->isReady()) {
+            glPushMatrix();
+            glTranslatef(0.f, 0.f, -18.f);
+            glScalef(12.f * aspect, 12.f, 1.f);
+            
+            glBindTexture(GL_TEXTURE_2D, m_textureA);
+            glColor4f(0.35f, 0.35f, 0.35f, alphaA * 0.18f);
+            glBegin(GL_QUADS);
+            glTexCoord2f(0.f, 1.f); glVertex3f(-1.f, -1.f, 0.f);
+            glTexCoord2f(1.f, 1.f); glVertex3f( 1.f, -1.f, 0.f);
+            glTexCoord2f(1.f, 0.f); glVertex3f( 1.f,  1.f, 0.f);
+            glTexCoord2f(0.f, 0.f); glVertex3f(-1.f,  1.f, 0.f);
+            glEnd();
+            glPopMatrix();
+        }
+
+        if (alphaB > 0.f && m_textureB && m_sourceB && m_sourceB->isReady()) {
+            glPushMatrix();
+            glTranslatef(XB, YB, -18.f);
+            glScalef(12.f * aspect, 12.f, 1.f);
+            
+            glBindTexture(GL_TEXTURE_2D, m_textureB);
+            glColor4f(0.35f, 0.35f, 0.35f, alphaB * 0.18f);
+            glBegin(GL_QUADS);
+            glTexCoord2f(0.f, 1.f); glVertex3f(-1.f, -1.f, 0.f);
+            glTexCoord2f(1.f, 1.f); glVertex3f( 1.f, -1.f, 0.f);
+            glTexCoord2f(1.f, 0.f); glVertex3f( 1.f,  1.f, 0.f);
+            glTexCoord2f(0.f, 0.f); glVertex3f(-1.f,  1.f, 0.f);
+            glEnd();
+            glPopMatrix();
+        }
+
+        // Helper lambda for drawing 3D decks with the golden frame
+        auto drawGallery3DDeck = [&](GLuint tex, MediaSource *src, float alpha) {
+            if (!tex || !src || !src->isReady() || alpha <= 0.f) return;
+
+            glDisable(GL_TEXTURE_2D);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+            float d0 = 0.006f;
+            float d1 = 0.016f;
+            float d2 = 0.040f;
+            float d3 = 0.052f;
+            float d4 = 0.068f;
+
+            // Drop Shadow
+            for (int i = 4; i > 0; --i) {
+                float shadowOffset = i * 0.012f;
+                float shadowAlpha = 0.22f / i * alpha;
+                glColor4f(0.0f, 0.0f, 0.0f, shadowAlpha);
+                
+                float sx_min = -aspect - d4 - shadowOffset + 0.01f;
+                float sx_max =  aspect + d4 + shadowOffset + 0.01f;
+                float sy_min = -1.f - d4 - shadowOffset - 0.01f;
+                float sy_max =  1.f + d4 + shadowOffset - 0.01f;
+                
+                glBegin(GL_QUADS);
+                glVertex3f(sx_min, sy_min, -0.025f);
+                glVertex3f(sx_max, sy_min, -0.025f);
+                glVertex3f(sx_max, sy_max, -0.025f);
+                glVertex3f(sx_min, sy_max, -0.025f);
+                glEnd();
+            }
+
+            auto draw3DFrameTier = [&](float a, float b, 
+                                       float r_lt, float g_lt, float b_lt,
+                                       float r_rb, float g_rb, float b_rb,
+                                       float z_offset) {
+                glBegin(GL_QUADS);
+                glColor4f(r_lt, g_lt, b_lt, alpha);
+                glVertex3f(-aspect - b, -1.f - b, z_offset);
+                glVertex3f(-aspect - a, -1.f - a, z_offset);
+                glVertex3f(-aspect - a,  1.f + a, z_offset);
+                glVertex3f(-aspect - b,  1.f + b, z_offset);
+                glEnd();
+
+                glBegin(GL_QUADS);
+                glColor4f(r_rb, g_rb, b_rb, alpha);
+                glVertex3f(aspect + a, -1.f - a, z_offset);
+                glVertex3f(aspect + b, -1.f - b, z_offset);
+                glVertex3f(aspect + b,  1.f + b, z_offset);
+                glVertex3f(aspect + a,  1.f + a, z_offset);
+                glEnd();
+
+                glBegin(GL_QUADS);
+                glColor4f(r_lt, g_lt, b_lt, alpha);
+                glVertex3f(-aspect - b, -1.f - b, z_offset);
+                glVertex3f( aspect + b, -1.f - b, z_offset);
+                glVertex3f( aspect + a, -1.f - a, z_offset);
+                glVertex3f(-aspect - a, -1.f - a, z_offset);
+                glEnd();
+
+                glBegin(GL_QUADS);
+                glColor4f(r_rb, g_rb, b_rb, alpha);
+                glVertex3f(-aspect - a,  1.f + a, z_offset);
+                glVertex3f( aspect + a,  1.f + a, z_offset);
+                glVertex3f( aspect + b,  1.f + b, z_offset);
+                glVertex3f(-aspect - b,  1.f + b, z_offset);
+                glEnd();
+            };
+
+            // Render Concentric Moldings
+            draw3DFrameTier(0.f, d0, 0.08f, 0.06f, 0.04f, 0.04f, 0.03f, 0.02f, -0.002f);
+            draw3DFrameTier(d0, d1, 0.95f, 0.82f, 0.35f, 0.55f, 0.40f, 0.12f, -0.005f);
+            draw3DFrameTier(d1, d2, 0.45f, 0.32f, 0.15f, 0.28f, 0.18f, 0.08f, -0.010f);
+            draw3DFrameTier(d2, d3, 1.00f, 0.92f, 0.50f, 0.65f, 0.48f, 0.08f, -0.015f);
+            draw3DFrameTier(d3, d4, 0.90f, 0.75f, 0.25f, 0.50f, 0.35f, 0.05f, -0.020f);
+
+            // Specular shiny highlight sweep
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+            float shinePos = -aspect * 1.5f + t * (aspect * 3.0f);
+            float sw = aspect * 0.25f;
+            glColor4f(1.0f, 0.97f, 0.85f, 0.55f * alpha);
+            glBegin(GL_QUADS);
+            glVertex3f(shinePos - sw, -1.f - d4, -0.018f);
+            glVertex3f(shinePos + sw, -1.f - d4, -0.018f);
+            glVertex3f(shinePos + sw + 0.4f, 1.f + d4, -0.018f);
+            glVertex3f(shinePos - sw + 0.4f, 1.f + d4, -0.018f);
+            glEnd();
+
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+            // Video Quad
+            glEnable(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, tex);
+            glColor4f(1.f, 1.f, 1.f, alpha);
+            glBegin(GL_QUADS);
+            glTexCoord2f(0.f, 1.f); glVertex3f(-aspect, -1.f, 0.f);
+            glTexCoord2f(1.f, 1.f); glVertex3f( aspect, -1.f, 0.f);
+            glTexCoord2f(1.f, 0.f); glVertex3f( aspect,  1.f, 0.f);
+            glTexCoord2f(0.f, 0.f); glVertex3f(-aspect,  1.f, 0.f);
+            glEnd();
+            glBindTexture(GL_TEXTURE_2D, 0);
+        };
+
+        // 2. Draw Deck A at (0, 0, 0)
+        if (alphaA > 0.f) {
+            glPushMatrix();
+            drawGallery3DDeck(m_textureA, m_sourceA.get(), alphaA);
+            glPopMatrix();
+        }
+
+        // 3. Draw Deck B at (XB, YB, ZB) with Y-rotation rotB
+        if (alphaB > 0.f) {
+            glPushMatrix();
+            glTranslatef(XB, YB, ZB);
+            glRotatef(rotB, 0.f, 1.f, 0.f);
+            drawGallery3DDeck(m_textureB, m_sourceB.get(), alphaB);
+            glPopMatrix();
+        }
+
+        glDisable(GL_DEPTH_TEST);
+
+        // Pop matrices
+        glPopMatrix(); // modelview
+        glMatrixMode(GL_PROJECTION);
+        glPopMatrix(); // projection
+        glMatrixMode(GL_MODELVIEW);
+
+        // 4. Draw sweeping golden light leak screen-space overlay
+        float shineAlpha = 0.6f * std::sin(t * 3.14159265f);
+        if (shineAlpha > 0.f) {
+            float w = width();
+            float h = height();
+            float tilt = 120.f;
+            float bandWidth = 280.f;
+            float center = -bandWidth + t * (w + bandWidth * 2.f);
+
+            glDisable(GL_TEXTURE_2D);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
+            glBegin(GL_QUADS);
+            // Left Half
+            glColor4f(1.f, 0.92f, 0.82f, 0.f);
+            glVertex2f(center - bandWidth / 2.f, 0.f);
+            glColor4f(1.f, 0.92f, 0.82f, shineAlpha);
+            glVertex2f(center, 0.f);
+            glColor4f(1.f, 0.92f, 0.82f, shineAlpha);
+            glVertex2f(center + tilt, h);
+            glColor4f(1.f, 0.92f, 0.82f, 0.f);
+            glVertex2f(center + tilt - bandWidth / 2.f, h);
+
+            // Right Half
+            glColor4f(1.f, 0.92f, 0.82f, shineAlpha);
+            glVertex2f(center, 0.f);
+            glColor4f(1.f, 0.92f, 0.82f, 0.f);
+            glVertex2f(center + bandWidth / 2.f, 0.f);
+            glColor4f(1.f, 0.92f, 0.82f, 0.f);
+            glVertex2f(center + tilt + bandWidth / 2.f, h);
+            glColor4f(1.f, 0.92f, 0.82f, shineAlpha);
+            glVertex2f(center + tilt, h);
+            glEnd();
+
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glEnable(GL_TEXTURE_2D);
+        }
+        break;
+    }
+
+    case TransitionMode::Cube3D: {
+        const float alphaA = 1.f - t;
+        const float alphaB = t;
+
+        // Switch projection matrix to perspective
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glLoadIdentity();
+        
+        float aspect = (float)width() / height();
+        // Setup perspective frustum: FOV = 45 degrees
+        float fH = std::tan(22.5f / 180.f * 3.14159265f) * 1.f;
+        float fW = fH * aspect;
+        glFrustum(-fW, fW, -fH, fH, 1.f, 100.f);
+        
+        glMatrixMode(GL_MODELVIEW);
+        glPushMatrix();
+        glLoadIdentity();
+        
+        // Z translation matches frustum/FOV so that scale=1 fits the viewport exactly.
+        // Face A is at Z = aspect locally, so camera moves back by 2.41421356f + aspect.
+        float cameraDist = 2.41421356f + aspect;
+        glTranslatef(0.f, 0.f, -cameraDist);
+        
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LEQUAL);
+
+        // Face A rotates out to the left (-Y rotation)
+        if (alphaA > 0.f) {
+            glPushMatrix();
+            glRotatef(-t * 90.f, 0.f, 1.f, 0.f);
+            glTranslatef(0.f, 0.f, aspect);
+            draw3DDeck(m_textureA, m_sourceA.get(), alphaA, aspect);
+            glPopMatrix();
+        }
+
+        // Face B rotates in from the right (+Y rotation)
+        if (alphaB > 0.f) {
+            glPushMatrix();
+            glRotatef(90.f - t * 90.f, 0.f, 1.f, 0.f);
+            glTranslatef(0.f, 0.f, aspect);
+            draw3DDeck(m_textureB, m_sourceB.get(), alphaB, aspect);
+            glPopMatrix();
+        }
+
+        glDisable(GL_DEPTH_TEST);
+
+        glPopMatrix(); // pop modelview
+        glMatrixMode(GL_PROJECTION);
+        glPopMatrix(); // pop projection
+        glMatrixMode(GL_MODELVIEW);
+        break;
+    }
+
+    case TransitionMode::Flip3D: {
+        const float alphaA = 1.f - t;
+        const float alphaB = t;
+
+        // Switch projection matrix to perspective
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glLoadIdentity();
+        
+        float aspect = (float)width() / height();
+        // Setup perspective frustum: FOV = 45 degrees
+        float fH = std::tan(22.5f / 180.f * 3.14159265f) * 1.f;
+        float fW = fH * aspect;
+        glFrustum(-fW, fW, -fH, fH, 1.f, 100.f);
+        
+        glMatrixMode(GL_MODELVIEW);
+        glPushMatrix();
+        glLoadIdentity();
+        
+        // Card is at Z = 0 locally, so camera moves back by 2.41421356f.
+        glTranslatef(0.f, 0.f, -2.41421356f);
+        
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LEQUAL);
+
+        // Rotate the entire scene by -t * 180 degrees
+        glPushMatrix();
+        glRotatef(-t * 180.f, 0.f, 1.f, 0.f);
+        
+        if (t < 0.5f) {
+            draw3DDeck(m_textureA, m_sourceA.get(), alphaA, aspect);
+        } else {
+            // Flip the back side card by 180 degrees so the video texture is facing the camera
+            glRotatef(180.f, 0.f, 1.f, 0.f);
+            draw3DDeck(m_textureB, m_sourceB.get(), alphaB, aspect);
+        }
+        
+        glPopMatrix();
+
+        glDisable(GL_DEPTH_TEST);
+
+        glPopMatrix(); // pop modelview
+        glMatrixMode(GL_PROJECTION);
+        glPopMatrix(); // pop projection
+        glMatrixMode(GL_MODELVIEW);
         break;
     }
 

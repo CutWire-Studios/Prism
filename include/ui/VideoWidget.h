@@ -103,7 +103,10 @@ public:
         SplitDoor,   // Horizontal split doors sliding apart
         SplitDoorVert, // Vertical split doors sliding apart
         VortexSpin,   // Spinning warp transition
-        SplitQuadrants // 4-corner split reveal
+        SplitQuadrants, // 4-corner split reveal
+        Gallery3D,      // 3D Picture Gallery Slideshow transition
+        Cube3D,         // 3D rotating cube transition
+        Flip3D          // 3D flipping card transition
     };
     void           setTransitionMode(TransitionMode mode) { m_transitionMode = mode; update(); }
     TransitionMode transitionMode() const { return m_transitionMode; }
