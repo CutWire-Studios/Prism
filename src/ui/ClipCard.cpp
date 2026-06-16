@@ -4,6 +4,7 @@
 #include "ui/ShaderEditDialog.h"
 #include "ui/HtmlEditDialog.h"
 #include "core/ImageSource.h"
+#include "core/SlideshowSource.h"
 #include "core/ShaderSource.h"
 #include "core/HtmlSource.h"
 #include <QCoreApplication>
@@ -263,8 +264,21 @@ void ClipCard::onEditClicked() {
         intervalSpin->setSuffix(" s");
         intervalSpin->setValue(m_sourceDesc.slideshowIntervalMs / 1000);
 
+        auto *effectCombo = new QComboBox(&dlg);
+        effectCombo->addItems(SlideshowSource::effectNames());
+        effectCombo->setCurrentIndex(qBound(0, m_sourceDesc.slideshowEffect,
+                                            SlideshowSource::effectCount() - 1));
+
+        auto *transitionSpin = new QSpinBox(&dlg);
+        transitionSpin->setRange(100, 10000);
+        transitionSpin->setSingleStep(100);
+        transitionSpin->setSuffix(" ms");
+        transitionSpin->setValue(m_sourceDesc.slideshowTransitionMs);
+
         form->addRow("Folder:", folderRow);
         form->addRow("Seconds per slide:", intervalSpin);
+        form->addRow("Transition effect:", effectCombo);
+        form->addRow("Transition duration:", transitionSpin);
 
         connect(browseBtn, &QPushButton::clicked, &dlg, [&]() {
             QString dir = QFileDialog::getExistingDirectory(&dlg, "Select Image Folder",
@@ -281,8 +295,10 @@ void ClipCard::onEditClicked() {
         layout->addWidget(buttons);
 
         if (dlg.exec() == QDialog::Accepted) {
-            m_sourceDesc.path               = folderEdit->text();
-            m_sourceDesc.slideshowIntervalMs = intervalSpin->value() * 1000;
+            m_sourceDesc.path                  = folderEdit->text();
+            m_sourceDesc.slideshowIntervalMs   = intervalSpin->value() * 1000;
+            m_sourceDesc.slideshowEffect       = effectCombo->currentIndex();
+            m_sourceDesc.slideshowTransitionMs = transitionSpin->value();
             emit sourceDescriptorChanged(m_index, m_sourceDesc);
         }
         break;

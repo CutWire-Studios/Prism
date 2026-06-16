@@ -791,6 +791,8 @@ void MainWindow::onAddElementSlideshow() {
     desc.path                = folder;
     desc.displayName         = QFileInfo(folder).fileName();
     desc.slideshowIntervalMs = interval * 1000;
+    desc.slideshowEffect = 0;
+    desc.slideshowTransitionMs = 800;
 
     addElementNode(desc, thumb);
 }

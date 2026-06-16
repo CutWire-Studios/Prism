@@ -34,6 +34,8 @@ struct SourceDescriptor {
     int     screenIndex      = 0;       // Screen kind
     int     windowIndex      = 0;       // Window kind
     int     slideshowIntervalMs = 3000; // Slideshow kind
+    int     slideshowEffect = 0;        // Slideshow kind — SlideshowSource::Effect index
+    int     slideshowTransitionMs = 800; // Slideshow kind — transition duration
     int     canvasWidth      = 1280;    // Canvas kind
     int     canvasHeight     = 720;     // Canvas kind
     CanvasFill canvasFill    = CanvasFill::Checkered; // Canvas kind

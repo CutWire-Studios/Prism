@@ -27,6 +27,8 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
     case Kind::Slideshow: {
         auto src = std::make_unique<SlideshowSource>();
         if (!src->loadFolder(desc.path, desc.slideshowIntervalMs)) return nullptr;
+        src->setEffect(static_cast<SlideshowSource::Effect>(desc.slideshowEffect));
+        src->setTransitionMs(desc.slideshowTransitionMs);
         return src;
     }
     case Kind::Camera: {

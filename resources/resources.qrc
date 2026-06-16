@@ -16,5 +16,14 @@
         <file>html/countdown_timer.html</file>
         <file>html/cricket_score_bar.html</file>
         <file>html/cricket_score_table.html</file>
+        <file>shaders/slideshow/cube.glsl</file>
+        <file>shaders/slideshow/flip.glsl</file>
+        <file>shaders/slideshow/pagecurl.glsl</file>
+        <file>shaders/slideshow/doorway.glsl</file>
+        <file>shaders/slideshow/crosszoom.glsl</file>
+        <file>shaders/slideshow/ripple.glsl</file>
+        <file>shaders/slideshow/glitch.glsl</file>
+        <file>shaders/slideshow/mosaicflip.glsl</file>
+        <file>shaders/slideshow/swirl.glsl</file>
     </qresource>
 </RCC>

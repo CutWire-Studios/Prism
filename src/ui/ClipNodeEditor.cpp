@@ -2102,6 +2102,8 @@ static QJsonObject descriptorToJson(const SourceDescriptor &d) {
     o["screenIndex"]        = d.screenIndex;
     o["windowIndex"]        = d.windowIndex;
     o["slideshowIntervalMs"]= d.slideshowIntervalMs;
+    o["slideshowEffect"]    = d.slideshowEffect;
+    o["slideshowTransitionMs"] = d.slideshowTransitionMs;
     o["canvasWidth"]        = d.canvasWidth;
     o["canvasHeight"]       = d.canvasHeight;
     o["canvasFill"]         = (int)d.canvasFill;
@@ -2120,6 +2122,8 @@ static SourceDescriptor descriptorFromJson(const QJsonObject &o) {
     d.screenIndex        = o["screenIndex"].toInt();
     d.windowIndex        = o["windowIndex"].toInt();
     d.slideshowIntervalMs= o["slideshowIntervalMs"].toInt(3000);
+    d.slideshowEffect    = o["slideshowEffect"].toInt(0);
+    d.slideshowTransitionMs = o["slideshowTransitionMs"].toInt(800);
     d.canvasWidth        = o["canvasWidth"].toInt(1280);
     d.canvasHeight       = o["canvasHeight"].toInt(720);
     d.canvasFill         = (SourceDescriptor::CanvasFill)o["canvasFill"].toInt();
