@@ -9,6 +9,7 @@
 #include <vector>
 #include "core/MediaSource.h"
 #include "core/OverlayItem.h"
+#include "ui/Transition.h"
 
 class VideoWidget : public QOpenGLWidget, protected QOpenGLFunctions {
     Q_OBJECT
@@ -85,29 +86,9 @@ public:
     float crossfade() const { return m_crossfadeB; }
 
     // ── Transition mode ───────────────────────────────────────────────────────
-    enum class TransitionMode {
-        Crossfade,   // alpha blend A→B (default)
-        Cut,         // hard switch at fader centre (t = 0.5)
-        WipeLeft,    // B wipes in from the left edge
-        WipeRight,   // B wipes in from the right edge
-        WipeUp,      // B wipes in from the bottom edge (moves up)
-        WipeDown,    // B wipes in from the top edge (moves down)
-        SlideLeft,   // A slides out left; B pushes in from the right
-        SlideRight,  // A slides out right; B pushes in from the left
-        SlideUp,     // A slides out top; B pushes in from the bottom
-        SlideDown,   // A slides out bottom; B pushes in from the top
-        DipToBlack,  // A fades to black, then B fades in (dip at t = 0.5)
-        DipToWhite,  // A fades to white, then B fades in (dip at t = 0.5)
-        Additive,    // Additive mix (bright glow)
-        CrossZoom,   // Scale zooming transition
-        SplitDoor,   // Horizontal split doors sliding apart
-        SplitDoorVert, // Vertical split doors sliding apart
-        VortexSpin,   // Spinning warp transition
-        SplitQuadrants, // 4-corner split reveal
-        Gallery3D,      // 3D Picture Gallery Slideshow transition
-        Cube3D,         // 3D rotating cube transition
-        Flip3D          // 3D flipping card transition
-    };
+    // Transition strategies live in Transition.h; the enum is aliased here so
+    // existing call sites can keep using VideoWidget::TransitionMode.
+    using TransitionMode = ::TransitionMode;
     void           setTransitionMode(TransitionMode mode) { m_transitionMode = mode; update(); }
     TransitionMode transitionMode() const { return m_transitionMode; }
 
@@ -151,6 +132,10 @@ private:
     bool   m_playingB       = false;
     bool   m_playingOverlay = false;
     float  m_crossfadeB = 0.f;
+    // Which deck is the incoming one. Committed when the fader leaves an end
+    // stop so directional transitions animate correctly in both directions
+    // and mid-fader reversals simply rewind instead of swapping roles.
+    bool   m_transitionTowardB = true;
     bool   m_repeatA = false;
     bool   m_repeatB = false;
     double m_trimStartA = 0.0,  m_trimEndA = -1.0;

@@ -122,8 +122,7 @@ MainWindow::MainWindow(QWidget *parent)
                 "Dip to Black", "Dip to White",
                 "Additive Glow", "Cross Zoom",
                 "Split Door (H)", "Split Door (V)",
-                "Vortex Spin", "Split 4-Corner",
-                "3D Gallery Fly", "3D Cube", "3D Flip"
+                "Vortex Spin", "Split 4-Corner"
             });
             m_transitionCombo->setToolTip(
                 "Crossfade: alpha blend\n"
@@ -143,10 +142,7 @@ MainWindow::MainWindow(QWidget *parent)
                 "Split Door (H): horizontal split reveal\n"
                 "Split Door (V): vertical split reveal\n"
                 "Vortex Spin: spinning vortex wrap\n"
-                "Split 4-Corner: split into 4 quadrants sliding outwards\n"
-                "3D Gallery Fly: cinematic 3D pan, zoom fly-past with soft warm light sweep\n"
-                "3D Cube: rotate a 3D perspective cube to reveal next deck\n"
-                "3D Flip: flip the screen 180 degrees in 3D perspective"
+                "Split 4-Corner: split into 4 quadrants sliding outwards"
             );
             m_transitionCombo->setStyleSheet("font-size: 10px;");
 
@@ -1571,10 +1567,9 @@ void MainWindow::onTransitionModeChanged(int index) {
         TM::SlideLeft, TM::SlideRight, TM::SlideUp, TM::SlideDown,
         TM::DipToBlack, TM::DipToWhite,
         TM::Additive, TM::CrossZoom, TM::SplitDoor, TM::SplitDoorVert,
-        TM::VortexSpin, TM::SplitQuadrants, TM::Gallery3D,
-        TM::Cube3D, TM::Flip3D
+        TM::VortexSpin, TM::SplitQuadrants
     };
-    if (index >= 0 && index < 21)
+    if (index >= 0 && index < 18)
         outputWindow->videoWidget()->setTransitionMode(modes[index]);
 }
 

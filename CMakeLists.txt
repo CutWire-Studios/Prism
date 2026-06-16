@@ -38,6 +38,7 @@ set(SOURCES
     src/core/HtmlSource.cpp
     src/ui/MainWindow.cpp
     src/ui/VideoWidget.cpp
+    src/ui/Transition.cpp
     src/ui/ClipCard.cpp
     src/ui/ClipNodeModel.cpp
     src/ui/ClipNodeEditor.cpp
@@ -68,6 +69,7 @@ set(HEADERS
     include/core/HtmlSource.h
     include/ui/MainWindow.h
     include/ui/VideoWidget.h
+    include/ui/Transition.h
     include/ui/ClipCard.h
     include/ui/ClipNodeModel.h
     include/ui/ClipNodeEditor.h
