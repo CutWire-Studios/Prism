@@ -3,7 +3,6 @@
 #include "core/MediaSource.h"
 #include <QImage>
 #include <QElapsedTimer>
-#include <QByteArray>
 #include <QStringList>
 
 class QOffscreenSurface;
@@ -59,12 +58,13 @@ public:
     Type    type()        const override { return Type::Slideshow; }
     bool    isReady()     const override {
         if (m_paths.isEmpty()) return false;
-        if (m_transitioning && m_effect != Effect::None && !m_buffer.isEmpty())
+        if (m_transitioning && m_effect != Effect::None && m_glInitialized)
             return true;
         return !m_currentSlide.isNull();
     }
     QSize   frameSize()   const override { return m_frameSize; }
     const uint8_t *frameData() const override;
+    unsigned int   glTexture() const override;
 
     // Returns true when the slide advances (triggers a GL texture re-upload).
     bool    nextFrame()         override;
@@ -95,9 +95,6 @@ private:
     int    m_prevIndex        = 0;
     QElapsedTimer m_transElapsed;
     bool   m_transitioning    = false;
-
-    QByteArray m_buffer;
-    QByteArray m_rgbaScratch;
 
     QOffscreenSurface        *m_surface = nullptr;
     QOpenGLContext           *m_context = nullptr;

@@ -8,6 +8,11 @@ int main(int argc, char *argv[]) {
     // Force software rendering to avoid the libgallium SIGSEGV.
     qputenv("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu");
 
+    // Let offscreen GL contexts (e.g. SlideshowSource's transition FBO) share
+    // textures with the VideoWidget QOpenGLWidget contexts, so rendered frames
+    // can be drawn directly without a GPU→CPU→GPU readback.
+    QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+
     QApplication app(argc, argv);
     app.setOrganizationName("SwitchX");
     app.setApplicationName("SwitchX");

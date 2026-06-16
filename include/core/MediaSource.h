@@ -42,4 +42,10 @@ public:
     // True if frameData() is RGBA32 rather than RGB24.
     // Affects GL texture format selection in VideoWidget.
     virtual bool hasAlpha() const { return false; }
+
+    // If non-zero, the source has already rendered its current frame into this
+    // GL texture (in a context sharing with VideoWidget's). VideoWidget binds it
+    // directly and skips the frameData() upload — avoids a GPU→CPU→GPU round
+    // trip. Returns 0 when the source has no GPU-resident frame this tick.
+    virtual unsigned int glTexture() const { return 0; }
 };

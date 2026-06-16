@@ -96,6 +96,14 @@ void VideoWidget::paintGL() {
 
     const float t = std::clamp(m_crossfadeB, 0.f, 1.f);
 
+    // A source may render its frame straight into a shared GL texture (e.g.
+    // SlideshowSource during a transition); bind that directly instead of the
+    // CPU-uploaded deck texture.
+    const GLuint deckTexA = (m_sourceA && m_sourceA->glTexture())
+                          ? m_sourceA->glTexture() : m_textureA;
+    const GLuint deckTexB = (m_sourceB && m_sourceB->glTexture())
+                          ? m_sourceB->glTexture() : m_textureB;
+
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -174,13 +182,13 @@ void VideoWidget::paintGL() {
     };
 
     auto drawSideA = [&](float alpha) {
-        drawSide(m_textureA, m_sourceA.get(),
+        drawSide(deckTexA, m_sourceA.get(),
                  m_cropXA, m_cropYA, m_cropWA, m_cropHA,
                  m_baseXA, m_baseYA, m_baseWA, m_baseHA, alpha,
                  m_videoRectA, m_canvasWidthA, m_canvasHeightA, m_chainA, m_chainTexA);
     };
     auto drawSideB = [&](float alpha) {
-        drawSide(m_textureB, m_sourceB.get(),
+        drawSide(deckTexB, m_sourceB.get(),
                  m_cropXB, m_cropYB, m_cropWB, m_cropHB,
                  m_baseXB, m_baseYB, m_baseWB, m_baseHB, alpha,
                  m_videoRectB, m_canvasWidthB, m_canvasHeightB, m_chainB, m_chainTexB);
@@ -201,10 +209,10 @@ void VideoWidget::paintGL() {
     ctx.drawIn  = [&](float a) { inB ? drawSideB(a) : drawSideA(a); };
     // Raw deck textures, for transitions that composite full frames themselves
     // with their own projection (the 3D transitions).
-    ctx.texA   = m_textureA;
-    ctx.texB   = m_textureB;
-    ctx.readyA = m_textureA && m_sourceA && m_sourceA->isReady();
-    ctx.readyB = m_textureB && m_sourceB && m_sourceB->isReady();
+    ctx.texA   = deckTexA;
+    ctx.texB   = deckTexB;
+    ctx.readyA = deckTexA && m_sourceA && m_sourceA->isReady();
+    ctx.readyB = deckTexB && m_sourceB && m_sourceB->isReady();
     Transition::forMode(m_transitionMode).paint(ctx);
 
     // Restore known-good 2D state after any transition (3D transitions in
@@ -592,8 +600,9 @@ void VideoWidget::drawChainSources(std::vector<NodeChainSource> &chain,
 
     for (size_t i = 0; i < chain.size() && i < texList.size(); ++i) {
         auto *src = chain[i].source.get();
-        GLuint tex = texList[i];
-        if (!tex || !src || !src->isReady()) continue;
+        if (!src || !src->isReady()) continue;
+        GLuint tex = src->glTexture() ? src->glTexture() : texList[i];
+        if (!tex) continue;
         const float cx = chain[i].cropX, cy = chain[i].cropY;
         const float cw = chain[i].cropW, ch = chain[i].cropH;
         const QRectF placement(canvasBounds.left() + chain[i].baseX * canvasBounds.width(),
@@ -694,6 +703,8 @@ void VideoWidget::setupTextureGL(GLuint &tex, QSize sz, bool alpha) {
 
 void VideoWidget::uploadSourceFrameGL(GLuint &tex, MediaSource *source) {
     if (!source || !source->isReady()) return;
+    // Source already has its frame in a shared GL texture — nothing to upload.
+    if (source->glTexture()) return;
     QSize sz = source->frameSize();
     if (sz.isEmpty()) return;
 

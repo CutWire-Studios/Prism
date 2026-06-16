@@ -17,7 +17,10 @@ static const char *kVertexShader =
     "varying vec2 v_uv;\n"
     "void main() {\n"
     "  v_uv = vec2(position.x * 0.5 + 0.5, 1.0 - (position.y * 0.5 + 0.5));\n"
-    "  gl_Position = vec4(position, 0.0, 1.0);\n"
+    // Flip Y in clip space so the FBO's texel row 0 holds the image's top row,
+    // matching VideoWidget's top-row-first texture convention when the FBO
+    // texture is sampled directly (no CPU readback/flip).
+    "  gl_Position = vec4(position.x, -position.y, 0.0, 1.0);\n"
     "}\n";
 
 static const char *kFragmentHeader =
@@ -119,8 +122,6 @@ bool SlideshowSource::loadFiles(const QStringList &filePaths, int intervalMs) {
     m_frameSize = {};
     m_elapsed.invalidate();
     m_transitioning = false;
-    m_buffer.clear();
-    m_rgbaScratch.clear();
 
     for (const QString &path : filePaths) {
         QImageReader reader(path);
@@ -174,6 +175,9 @@ bool SlideshowSource::initGL() {
 
     m_context = new QOpenGLContext();
     m_context->setFormat(fmt);
+    // Share with the global context so the FBO texture is usable by VideoWidget.
+    if (QOpenGLContext *share = QOpenGLContext::globalShareContext())
+        m_context->setShareContext(share);
     if (!m_context->create()) {
         qWarning() << "SlideshowSource: failed to create GL context";
         delete m_surface; m_surface = nullptr;
@@ -203,7 +207,6 @@ bool SlideshowSource::initGL() {
     f->glGenTextures(1, &m_texFrom);
     f->glGenTextures(1, &m_texTo);
 
-    m_buffer.resize(m_frameSize.width() * m_frameSize.height() * 3);
     m_glInitialized = true;
     m_compiled = false;
     m_compiledEffect = Effect::None;
@@ -331,35 +334,27 @@ void SlideshowSource::renderTransition(float progress) {
     f->glBindBuffer(GL_ARRAY_BUFFER, 0);
     m_program->release();
 
-    f->glFinish();
-
-    m_rgbaScratch.resize(w * h * 4);
-    f->glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    f->glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, m_rgbaScratch.data());
-
-    auto       *dst = reinterpret_cast<uint8_t *>(m_buffer.data());
-    const auto *src = reinterpret_cast<const uint8_t *>(m_rgbaScratch.constData());
-    for (int y = 0; y < h; ++y) {
-        const uint8_t *srcRow = src + (h - 1 - y) * w * 4;
-        uint8_t       *dstRow = dst + y * w * 3;
-        for (int x = 0; x < w; ++x) {
-            dstRow[x*3    ] = srcRow[x*4    ];
-            dstRow[x*3 + 1] = srcRow[x*4 + 1];
-            dstRow[x*3 + 2] = srcRow[x*4 + 2];
-        }
-    }
-
     m_fbo->release();
+
+    // Flush so the FBO texture is complete before VideoWidget's shared context
+    // samples it. No pixel readback — the texture is consumed directly on the GPU.
+    f->glFlush();
 }
 
 // ── MediaSource interface ─────────────────────────────────────────────────────
 
 const uint8_t *SlideshowSource::frameData() const {
-    if (m_paths.isEmpty()) return nullptr;
-    if (m_transitioning && m_effect != Effect::None && !m_buffer.isEmpty())
-        return reinterpret_cast<const uint8_t *>(m_buffer.constData());
-    if (m_currentSlide.isNull()) return nullptr;
+    // During a transition the live frame lives in the FBO texture (glTexture());
+    // frameData() returns the CPU slide only as a fallback for non-GL consumers
+    // (e.g. deck preview thumbnails), which is the outgoing slide mid-transition.
+    if (m_paths.isEmpty() || m_currentSlide.isNull()) return nullptr;
     return reinterpret_cast<const uint8_t *>(m_currentSlide.constBits());
+}
+
+unsigned int SlideshowSource::glTexture() const {
+    if (m_transitioning && m_effect != Effect::None && m_glInitialized && m_fbo)
+        return m_fbo->texture();
+    return 0;
 }
 
 bool SlideshowSource::nextFrame() {
