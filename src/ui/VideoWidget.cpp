@@ -57,6 +57,9 @@ std::pair<float,float> VideoWidget::computeDeckAlphas() const {
     case TransitionMode::Additive:
     case TransitionMode::CrossZoom:
     case TransitionMode::VortexSpin:
+    case TransitionMode::Gallery3D:
+    case TransitionMode::Cube3D:
+    case TransitionMode::Flip3D:
         return {1.f - t, t};
     case TransitionMode::Cut:
         return t < 0.5f ? std::make_pair(1.f, 0.f) : std::make_pair(0.f, 1.f);
@@ -98,9 +101,9 @@ void VideoWidget::paintGL() {
 
     // Draws one full side at the given alpha: the deck clip first, then its node
     // chain sources composited on top, under whatever transform/scissor the
-    // calling transition case has set up. The chain is drawn even when the deck
-    // has no main clip, so a side may consist of chain sources only. Sets outRect
-    // to the deck's video rect so paintEvent() can position text/image overlays.
+    // calling transition has set up. The chain is drawn even when the deck has
+    // no main clip, so a side may consist of chain sources only. Sets outRect to
+    // the deck's video rect so paintEvent() can position text/image overlays.
     auto drawSide = [&](GLuint tex, MediaSource *src,
                         float cx, float cy, float cw, float ch,
                         float baseX, float baseY, float baseW, float baseH,
@@ -131,6 +134,37 @@ void VideoWidget::paintGL() {
                                 baseW * canvasBounds.width(),
                                 baseH * canvasBounds.height());
             outRect = bounds;
+
+            // Decorative frame border around the clip, unless it fills the whole
+            // screen (avoids drawing borders off-screen during normal playback).
+            bool isFullScreen = std::abs(bounds.x()) < 1.0f && std::abs(bounds.y()) < 1.0f &&
+                                std::abs(bounds.width() - width()) < 2.0f && std::abs(bounds.height() - height()) < 2.0f;
+            if (!isFullScreen) {
+                glDisable(GL_TEXTURE_2D);
+                // Outer light frame border
+                glColor4f(0.9f, 0.9f, 0.9f, alpha);
+                float bx = std::max(4.f, (float)bounds.width() * 0.015f);
+                float by = std::max(4.f, (float)bounds.height() * 0.015f);
+                glBegin(GL_QUADS);
+                glVertex2f(bounds.x() - bx, bounds.y() - by);
+                glVertex2f(bounds.x() + bounds.width() + bx, bounds.y() - by);
+                glVertex2f(bounds.x() + bounds.width() + bx, bounds.y() + bounds.height() + by);
+                glVertex2f(bounds.x() - bx, bounds.y() + bounds.height() + by);
+                glEnd();
+
+                // Inner dark accent border
+                glColor4f(0.1f, 0.1f, 0.1f, alpha);
+                float ix = std::max(1.f, bx * 0.2f);
+                float iy = std::max(1.f, by * 0.2f);
+                glBegin(GL_QUADS);
+                glVertex2f(bounds.x() - ix, bounds.y() - iy);
+                glVertex2f(bounds.x() + bounds.width() + ix, bounds.y() - iy);
+                glVertex2f(bounds.x() + bounds.width() + ix, bounds.y() + bounds.height() + iy);
+                glVertex2f(bounds.x() - ix, bounds.y() + bounds.height() + iy);
+                glEnd();
+                glEnable(GL_TEXTURE_2D);
+            }
+
             glColor4f(1.f, 1.f, 1.f, alpha);
             renderTexture(tex, cx, cy, cw, ch,
                           (float)bounds.x(),     (float)bounds.y(),
@@ -162,9 +196,16 @@ void VideoWidget::paintGL() {
     Transition::Context ctx;
     ctx.width   = width();
     ctx.height  = height();
+    ctx.t       = t;
     ctx.p       = p;
     ctx.drawOut = [&](float a) { inB ? drawSideA(a) : drawSideB(a); };
     ctx.drawIn  = [&](float a) { inB ? drawSideB(a) : drawSideA(a); };
+    // Raw deck textures, for transitions that composite full frames themselves
+    // with their own projection (the 3D transitions).
+    ctx.texA   = m_textureA;
+    ctx.texB   = m_textureB;
+    ctx.readyA = m_textureA && m_sourceA && m_sourceA->isReady();
+    ctx.readyB = m_textureB && m_sourceB && m_sourceB->isReady();
     Transition::forMode(m_transitionMode).paint(ctx);
 
     // HTML overlay composited on top (RGBA, transparent parts show the A/B video)

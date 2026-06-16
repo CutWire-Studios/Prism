@@ -46,6 +46,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QCloseEvent>
+#include <QStandardPaths>
 #include <algorithm>
 #include <numeric>
 
@@ -122,7 +124,8 @@ MainWindow::MainWindow(QWidget *parent)
                 "Dip to Black", "Dip to White",
                 "Additive Glow", "Cross Zoom",
                 "Split Door (H)", "Split Door (V)",
-                "Vortex Spin", "Split 4-Corner"
+                "Vortex Spin", "Split 4-Corner",
+                "3D Gallery Fly", "3D Cube", "3D Flip"
             });
             m_transitionCombo->setToolTip(
                 "Crossfade: alpha blend\n"
@@ -142,7 +145,10 @@ MainWindow::MainWindow(QWidget *parent)
                 "Split Door (H): horizontal split reveal\n"
                 "Split Door (V): vertical split reveal\n"
                 "Vortex Spin: spinning vortex wrap\n"
-                "Split 4-Corner: split into 4 quadrants sliding outwards"
+                "Split 4-Corner: split into 4 quadrants sliding outwards\n"
+                "3D Gallery Fly: cinematic 3D pan, zoom fly-past with soft warm light sweep\n"
+                "3D Cube: rotate a 3D perspective cube to reveal next deck\n"
+                "3D Flip: flip the screen 180 degrees in 3D perspective"
             );
             m_transitionCombo->setStyleSheet("font-size: 10px;");
 
@@ -220,11 +226,20 @@ MainWindow::MainWindow(QWidget *parent)
     connect(updateTimer, &QTimer::timeout, this, &MainWindow::onTimerUpdate);
     updateTimer->start(100);
 
+    const QString autosave = autosaveSessionPath();
+    if (QFile::exists(autosave))
+        loadSessionFromFile(autosave, false);
+
     qDebug() << "SwitchX initialized - Live Media Control Mode";
 }
 
 MainWindow::~MainWindow() {
     delete ui;
+}
+
+void MainWindow::closeEvent(QCloseEvent *event) {
+    saveSessionToFile(autosaveSessionPath());
+    QMainWindow::closeEvent(event);
 }
 
 void MainWindow::setupConnections() {
@@ -1567,9 +1582,10 @@ void MainWindow::onTransitionModeChanged(int index) {
         TM::SlideLeft, TM::SlideRight, TM::SlideUp, TM::SlideDown,
         TM::DipToBlack, TM::DipToWhite,
         TM::Additive, TM::CrossZoom, TM::SplitDoor, TM::SplitDoorVert,
-        TM::VortexSpin, TM::SplitQuadrants
+        TM::VortexSpin, TM::SplitQuadrants, TM::Gallery3D,
+        TM::Cube3D, TM::Flip3D
     };
-    if (index >= 0 && index < 18)
+    if (index >= 0 && index < 21)
         outputWindow->videoWidget()->setTransitionMode(modes[index]);
 }
 
@@ -1623,13 +1639,13 @@ void MainWindow::onCutTransitionClicked() {
 
 // ── Session save / load ───────────────────────────────────────────────────────
 
-void MainWindow::onSaveSessionClicked() {
-    QString path = QFileDialog::getSaveFileName(
-        this, "Save Session", QString(), "SwitchX Session (*.sxs);;All Files (*)");
-    if (path.isEmpty()) return;
-    if (!path.endsWith(".sxs", Qt::CaseInsensitive))
-        path += ".sxs";
+QString MainWindow::autosaveSessionPath() {
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    QDir().mkpath(dir);
+    return QDir(dir).filePath("session.sxs");
+}
 
+QJsonObject MainWindow::sessionToJson() const {
     QJsonObject root;
     root["version"]            = 1;
     root["crossfader"]         = ui->crossfaderSlider->value();
@@ -1638,7 +1654,6 @@ void MainWindow::onSaveSessionClicked() {
     root["activeNodeA"]        = (qint64)m_aClipNodeId;
     root["activeNodeB"]        = (qint64)m_bClipNodeId;
 
-    // Save hotkeys: nodeId → key code (int)
     QJsonArray hotkeys;
     for (auto it = m_nodeHotkeys.cbegin(); it != m_nodeHotkeys.cend(); ++it) {
         QJsonObject hk;
@@ -1647,41 +1662,43 @@ void MainWindow::onSaveSessionClicked() {
         hotkeys.append(hk);
     }
     root["hotkeys"] = hotkeys;
-
     root["graph"] = m_clipNodeEditor->saveState();
-
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly)) {
-        QMessageBox::warning(this, "Save Session",
-                             QString("Cannot write to file:\n%1").arg(path));
-        return;
-    }
-    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    return root;
 }
 
-void MainWindow::onLoadSessionClicked() {
-    QString path = QFileDialog::getOpenFileName(
-        this, "Load Session", QString(), "SwitchX Session (*.sxs);;All Files (*)");
-    if (path.isEmpty()) return;
+bool MainWindow::saveSessionToFile(const QString &path) const {
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly))
+        return false;
+    file.write(QJsonDocument(sessionToJson()).toJson(QJsonDocument::Indented));
+    return true;
+}
 
+bool MainWindow::loadSessionFromFile(const QString &path, bool showErrors) {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
-        QMessageBox::warning(this, "Load Session",
-                             QString("Cannot open file:\n%1").arg(path));
-        return;
+        if (showErrors) {
+            QMessageBox::warning(this, "Load Session",
+                                 QString("Cannot open file:\n%1").arg(path));
+        }
+        return false;
     }
     QJsonParseError err;
     const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &err);
     if (doc.isNull()) {
-        QMessageBox::warning(this, "Load Session",
-                             QString("Invalid session file:\n%1").arg(err.errorString()));
-        return;
+        if (showErrors) {
+            QMessageBox::warning(this, "Load Session",
+                                 QString("Invalid session file:\n%1").arg(err.errorString()));
+        }
+        return false;
     }
     const QJsonObject root = doc.object();
     if (root["version"].toInt() != 1) {
-        QMessageBox::warning(this, "Load Session",
-                             "Unsupported session version.");
-        return;
+        if (showErrors) {
+            QMessageBox::warning(this, "Load Session",
+                                 "Unsupported session version.");
+        }
+        return false;
     }
 
     // Tear down current state ──────────────────────────────────────────────────
@@ -1792,6 +1809,27 @@ void MainWindow::onLoadSessionClicked() {
     const NodeId savedB = (NodeId)root["activeNodeB"].toInteger();
     if (savedA) onNodeAButtonClicked(savedA);
     if (savedB) onNodeBButtonClicked(savedB);
+    return true;
+}
+
+void MainWindow::onSaveSessionClicked() {
+    QString path = QFileDialog::getSaveFileName(
+        this, "Save Session", QString(), "SwitchX Session (*.sxs);;All Files (*)");
+    if (path.isEmpty()) return;
+    if (!path.endsWith(".sxs", Qt::CaseInsensitive))
+        path += ".sxs";
+
+    if (!saveSessionToFile(path)) {
+        QMessageBox::warning(this, "Save Session",
+                             QString("Cannot write to file:\n%1").arg(path));
+    }
+}
+
+void MainWindow::onLoadSessionClicked() {
+    QString path = QFileDialog::getOpenFileName(
+        this, "Load Session", QString(), "SwitchX Session (*.sxs);;All Files (*)");
+    if (path.isEmpty()) return;
+    loadSessionFromFile(path);
 }
 
 // ── Card management (obsolete methods removed - now handled by ClipNodeEditor) ──

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QJsonObject>
 #include <QVector>
 #include <QMap>
 #include "ui/ClipNodeEditor.h"
@@ -30,6 +31,7 @@ protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
 
 private slots:
     void onLoadFolderClicked();
@@ -136,4 +138,10 @@ private:
     static QPixmap makeHtmlThumb(const QString &html, const QString &filePath, int w = 110, int h = 65);
     static QPixmap makeQmlThumb(const QString &code, int w = 110, int h = 65); // kept for ABI compat
     static QString formatTimeShort(double secs);
+
+    // ── Session persistence helpers ───────────────────────────────────────────
+    QJsonObject sessionToJson() const;
+    bool saveSessionToFile(const QString &path) const;
+    bool loadSessionFromFile(const QString &path, bool showErrors = true);
+    static QString autosaveSessionPath();
 };
