@@ -35,6 +35,19 @@ static const char *kFragmentHeader =
 static const char *kFragmentFooter =
     "\nvoid main() { gl_FragColor = transition(v_uv); }\n";
 
+// Cap the slideshow working resolution. Native camera images (e.g. 6720×4480)
+// offer no visual benefit on screen but make every transition frame do a huge
+// GPU→CPU readback + pixel conversion, which stalls the UI. Clamp the longest
+// side; all downstream buffers/textures/readbacks scale with this size.
+static constexpr int kMaxSlideDimension = 1920;
+
+static QSize cappedSlideSize(QSize s) {
+    if (s.isEmpty()) return s;
+    const int longest = qMax(s.width(), s.height());
+    if (longest <= kMaxSlideDimension) return s;
+    return s.scaled(kMaxSlideDimension, kMaxSlideDimension, Qt::KeepAspectRatio);
+}
+
 // ── Load helpers ──────────────────────────────────────────────────────────────
 
 SlideshowSource::~SlideshowSource() {
@@ -114,7 +127,7 @@ bool SlideshowSource::loadFiles(const QStringList &filePaths, int intervalMs) {
         if (!reader.canRead()) continue;
 
         if (m_frameSize.isEmpty()) {
-            m_frameSize = reader.size();
+            m_frameSize = cappedSlideSize(reader.size());
             m_currentSlide = loadSlideImage(path);
             if (m_currentSlide.isNull()) {
                 m_frameSize = {};
@@ -129,14 +142,16 @@ bool SlideshowSource::loadFiles(const QStringList &filePaths, int intervalMs) {
 }
 
 QImage SlideshowSource::loadSlideImage(const QString &path) const {
-    QImage img(path);
+    QImageReader reader(path);
+    // Decode straight to the capped size — JPEG/etc. decoders scale during
+    // decode, so we never allocate the full native-resolution image.
+    if (!m_frameSize.isEmpty())
+        reader.setScaledSize(m_frameSize);
+    QImage img = reader.read();
     if (img.isNull()) return {};
 
-    img = img.convertToFormat(QImage::Format_RGB888);
-    if (!m_frameSize.isEmpty() && img.size() != m_frameSize) {
-        img = img.scaled(m_frameSize, Qt::IgnoreAspectRatio,
-                         Qt::SmoothTransformation);
-    }
+    if (img.format() != QImage::Format_RGB888)
+        img = img.convertToFormat(QImage::Format_RGB888);
     return img;
 }
 
