@@ -24,6 +24,7 @@ struct SourceDescriptor {
         Window,      // window/tab capture — windowIndex into capturableWindows()
         Shader, // GLSL fragment shader — shaderCode field
         Html,   // HTML/CSS/JS overlay  — htmlContent field
+        Ndi,    // network NDI source   — path = NDI source name
     };
 
     Kind    kind    = Kind::VideoFile;
@@ -45,7 +46,8 @@ struct SourceDescriptor {
     bool isLiveSource() const {
         return kind == Kind::Camera || kind == Kind::Screen ||
                kind == Kind::Canvas || kind == Kind::Window ||
-               kind == Kind::Shader || kind == Kind::Html;
+               kind == Kind::Shader || kind == Kind::Html ||
+               kind == Kind::Ndi;
     }
     bool isFileSource() const {
         return kind == Kind::VideoFile || kind == Kind::Image || kind == Kind::Slideshow;

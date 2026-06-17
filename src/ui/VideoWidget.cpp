@@ -476,7 +476,8 @@ void VideoWidget::setSourceA(std::unique_ptr<MediaSource> source) {
                   t == MediaSource::Type::Window     ||
                   t == MediaSource::Type::Slideshow  ||
                   t == MediaSource::Type::Canvas     ||
-                  t == MediaSource::Type::Html);
+                  t == MediaSource::Type::Html       ||
+                  t == MediaSource::Type::Ndi);
     update();
 }
 
@@ -497,7 +498,8 @@ void VideoWidget::setSourceB(std::unique_ptr<MediaSource> source) {
                   t == MediaSource::Type::Window     ||
                   t == MediaSource::Type::Slideshow  ||
                   t == MediaSource::Type::Canvas     ||
-                  t == MediaSource::Type::Html);
+                  t == MediaSource::Type::Html       ||
+                  t == MediaSource::Type::Ndi);
     update();
 }
 

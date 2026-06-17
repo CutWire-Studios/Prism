@@ -7,6 +7,7 @@
 #include "core/CanvasSource.h"
 #include "core/ShaderSource.h"
 #include "core/HtmlSource.h"
+#include "core/NdiSource.h"
 #include <QMediaDevices>
 #include <QCameraDevice>
 
@@ -72,6 +73,12 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
         return std::make_unique<ShaderSource>(desc.shaderCode);
     case Kind::Html:
         return std::make_unique<HtmlSource>(desc.htmlContent, desc.path);
+    case Kind::Ndi: {
+        auto src = std::make_unique<NdiSource>();
+        if (!src->connectTo(desc.path)) return nullptr;
+        src->setName(desc.displayName.isEmpty() ? desc.path : desc.displayName);
+        return src;
+    }
     }
     return nullptr;
 }

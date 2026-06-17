@@ -13,6 +13,7 @@
 #include "core/ImageSource.h"
 #include "core/ShaderSource.h"
 #include "core/HtmlSource.h"
+#include "core/NdiSource.h"
 #include "ui/ShaderEditDialog.h"
 #include "ui/HtmlEditDialog.h"
 #include <QApplication>
@@ -66,6 +67,11 @@ MainWindow::MainWindow(QWidget *parent)
     ui->actionNdiOutput->setEnabled(m_outputHub->ndiAvailable());
     if (!m_outputHub->ndiAvailable()) {
         ui->actionNdiOutput->setToolTip(
+            tr("NDI SDK not found at build time. Install the NDI SDK and rebuild with -DNDI_ROOT=…"));
+    }
+    ui->actionAddNdi->setEnabled(NdiSource::isAvailable());
+    if (!NdiSource::isAvailable()) {
+        ui->actionAddNdi->setToolTip(
             tr("NDI SDK not found at build time. Install the NDI SDK and rebuild with -DNDI_ROOT=…"));
     }
 
@@ -182,6 +188,7 @@ void MainWindow::buildEmptyPlaceholder() {
     addMenu->addSeparator();
     addMenu->addAction(ui->actionAddShader);
     addMenu->addAction(ui->actionAddHtml);
+    addMenu->addAction(ui->actionAddNdi);
 
     phAddElementBtn->setMenu(addMenu);
     phBtns->addWidget(phAddElementBtn);
@@ -238,6 +245,7 @@ void MainWindow::setupConnections() {
     connect(ui->actionAddCanvas,    &QAction::triggered, this, &MainWindow::onAddElementCanvas);
     connect(ui->actionAddShader,    &QAction::triggered, this, &MainWindow::onAddElementShader);
     connect(ui->actionAddHtml,      &QAction::triggered, this, &MainWindow::onAddElementDynamicInterface);
+    connect(ui->actionAddNdi,       &QAction::triggered, this, &MainWindow::onAddElementNdi);
 
     // View menu
     connect(ui->actionShowOutput, &QAction::triggered, this, [this]() {
@@ -1006,4 +1014,33 @@ void MainWindow::onAddElementDynamicInterface() {
                                           : QFileInfo(filePath).fileName();
 
     addElementNode(desc, ThumbHelper::makeHtmlThumb(html, filePath));
+}
+
+void MainWindow::onAddElementNdi() {
+    if (!NdiSource::isAvailable()) {
+        QMessageBox::warning(this, tr("NDI Input"),
+            tr("NDI is not available. Install the NDI SDK and rebuild SwitchX with -DNDI_ROOT=…"));
+        return;
+    }
+
+    QStringList sources = NdiSource::discoverSources(2000);
+    if (sources.isEmpty()) {
+        QMessageBox::information(this, tr("NDI Input"),
+            tr("No NDI sources found on the network.\n\n"
+               "Make sure another app (SwitchX program output, OBS, phone NDI app) is sending NDI, "
+               "then try again."));
+        return;
+    }
+
+    bool ok = false;
+    const QString chosen = QInputDialog::getItem(this, tr("Select NDI Source"),
+                                                 tr("NDI source:"), sources, 0, false, &ok);
+    if (!ok || chosen.isEmpty()) return;
+
+    SourceDescriptor desc;
+    desc.kind        = SourceDescriptor::Kind::Ndi;
+    desc.path        = chosen;
+    desc.displayName = chosen;
+
+    addElementNode(desc, ThumbHelper::makeIconThumb(QStringLiteral("📡")));
 }

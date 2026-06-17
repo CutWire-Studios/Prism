@@ -56,6 +56,7 @@ private slots:
     void onAddElementCanvas();
     void onAddElementShader();
     void onAddElementDynamicInterface();
+    void onAddElementNdi();
 
     // ── Deck controls ─────────────────────────────────────────────────────────
     void onCrossfaderMoved(int value);

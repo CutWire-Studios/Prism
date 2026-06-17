@@ -727,6 +727,7 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <addaction name="separator"/>
     <addaction name="actionAddShader"/>
     <addaction name="actionAddHtml"/>
+    <addaction name="actionAddNdi"/>
    </widget>
    <widget class="QMenu" name="menuView">
     <property name="title">
@@ -842,6 +843,14 @@ Split 4-Corner: split into 4 quadrants sliding outwards
   <action name="actionAddHtml">
    <property name="text">
     <string>🌐  HTML Overlay…</string>
+   </property>
+  </action>
+  <action name="actionAddNdi">
+   <property name="text">
+    <string>📡  NDI Source…</string>
+   </property>
+   <property name="toolTip">
+    <string>Add a live NDI network source (OBS, phone, another SwitchX, etc.)</string>
    </property>
   </action>
   <action name="actionShowOutput">

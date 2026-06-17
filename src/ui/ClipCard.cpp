@@ -7,6 +7,9 @@
 #include "core/SlideshowSource.h"
 #include "core/ShaderSource.h"
 #include "core/HtmlSource.h"
+#include "core/NdiSource.h"
+#include <QMessageBox>
+#include <QPushButton>
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QFontMetrics>
@@ -549,6 +552,64 @@ void ClipCard::onEditClicked() {
                     m_sourceDesc.displayName = QFileInfo(filePath).fileName();
                 emit sourceDescriptorChanged(m_index, m_sourceDesc);
             }
+        }
+        break;
+    }
+
+    case Kind::Ndi: {
+        if (!NdiSource::isAvailable()) {
+            QMessageBox::warning(parent, tr("NDI Input"),
+                                 tr("NDI is not available in this build."));
+            break;
+        }
+
+        QStringList sources = NdiSource::discoverSources(2000);
+        if (sources.isEmpty()) {
+            QMessageBox::information(parent, tr("NDI Input"),
+                                     tr("No NDI sources found on the network."));
+            break;
+        }
+
+        QDialog dlg(parent);
+        dlg.setWindowTitle(tr("Select NDI Source"));
+        dlg.setMinimumWidth(420);
+
+        auto *combo = new QComboBox(&dlg);
+        int currentIdx = 0;
+        for (int i = 0; i < sources.size(); ++i) {
+            combo->addItem(sources[i]);
+            if (sources[i] == m_sourceDesc.path)
+                currentIdx = i;
+        }
+        combo->setCurrentIndex(qBound(0, currentIdx, sources.size() - 1));
+
+        auto *refreshBtn = new QPushButton(tr("Refresh"), &dlg);
+        connect(refreshBtn, &QPushButton::clicked, &dlg, [&]() {
+            const QString keep = combo->currentText();
+            sources = NdiSource::discoverSources(1500);
+            combo->clear();
+            combo->addItems(sources);
+            const int idx = sources.indexOf(keep);
+            combo->setCurrentIndex(idx >= 0 ? idx : 0);
+        });
+
+        auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+        connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+        auto *layout = new QVBoxLayout(&dlg);
+        layout->addWidget(new QLabel(tr("Choose NDI source:"), &dlg));
+        layout->addWidget(combo);
+        layout->addWidget(refreshBtn);
+        layout->addWidget(buttons);
+
+        if (dlg.exec() == QDialog::Accepted) {
+            m_sourceDesc.path        = combo->currentText();
+            m_sourceDesc.displayName = m_sourceDesc.path;
+            QFontMetrics fm(ui->titleLabel->font());
+            ui->titleLabel->setText(fm.elidedText(m_sourceDesc.displayName, Qt::ElideRight, 108));
+            ui->titleLabel->setToolTip(m_sourceDesc.displayName);
+            emit sourceDescriptorChanged(m_index, m_sourceDesc);
         }
         break;
     }

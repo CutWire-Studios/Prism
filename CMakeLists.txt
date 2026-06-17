@@ -50,6 +50,8 @@ set(SOURCES
     src/core/OverlayItem.cpp
     src/core/ShaderSource.cpp
     src/core/HtmlSource.cpp
+    src/core/NdiLibrary.cpp
+    src/core/NdiSource.cpp
     src/ui/MainWindow.cpp
     src/ui/VideoWidget.cpp
     src/ui/Transition.cpp
@@ -95,6 +97,8 @@ set(HEADERS
     include/core/OverlayItem.h
     include/core/ShaderSource.h
     include/core/HtmlSource.h
+    include/core/NdiLibrary.h
+    include/core/NdiSource.h
     include/ui/MainWindow.h
     include/ui/VideoWidget.h
     include/ui/Transition.h

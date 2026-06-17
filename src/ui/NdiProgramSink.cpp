@@ -1,5 +1,6 @@
 #include "ui/NdiProgramSink.h"
 #include "ui/VideoWidget.h"
+#include "core/NdiLibrary.h"
 
 #ifdef SWITCHX_HAVE_NDI
 #include <Processing.NDI.Lib.h>
@@ -25,11 +26,7 @@ QString NdiProgramSink::name() const {
 }
 
 bool NdiProgramSink::isAvailable() const {
-#ifdef SWITCHX_HAVE_NDI
-    return true;
-#else
-    return false;
-#endif
+    return NdiLibrary::instance().isAvailable();
 }
 
 bool NdiProgramSink::isActive() const {
@@ -43,7 +40,7 @@ bool NdiProgramSink::start(const QString &streamName) {
     Q_UNUSED(streamName);
     return false;
 #else
-    if (!NDIlib_initialize())
+    if (!NdiLibrary::instance().acquire())
         return false;
 
     m_ndiName = streamName.isEmpty()
@@ -58,7 +55,7 @@ bool NdiProgramSink::start(const QString &streamName) {
 
     m_impl->sender = NDIlib_send_create(&desc);
     if (!m_impl->sender) {
-        NDIlib_destroy();
+        NdiLibrary::instance().release();
         return false;
     }
 
@@ -80,7 +77,7 @@ void NdiProgramSink::stop() {
         m_impl->sender = nullptr;
     }
     if (m_active)
-        NDIlib_destroy();
+        NdiLibrary::instance().release();
 
     m_active = false;
     m_ndiName.clear();

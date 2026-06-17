@@ -4,6 +4,7 @@
 #include "ui/ThumbHelper.h"
 #include "core/ClipManager.h"
 #include "core/ThumbnailExtractor.h"
+#include "core/NdiSource.h"
 #include <QFile>
 #include <QDir>
 #include <QJsonDocument>
@@ -128,6 +129,7 @@ bool SessionManager::loadFromFile(const QString &path, bool showErrors) {
             break;
         case Kind::Shader: thumb = ThumbHelper::makeShaderThumb(desc.shaderCode);           break;
         case Kind::Html:   thumb = ThumbHelper::makeHtmlThumb(desc.htmlContent, desc.path); break;
+        case Kind::Ndi:    thumb = ThumbHelper::makeIconThumb(QStringLiteral("📡"));       break;
         }
         if (!thumb.isNull()) {
             if (desc.kind == Kind::VideoFile || desc.kind == Kind::Image)
