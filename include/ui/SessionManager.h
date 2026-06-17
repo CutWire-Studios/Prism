@@ -46,7 +46,8 @@ public:
     QJsonObject buildJson(int crossfader, int transitionMode,
                           double transitionDuration,
                           NodeId activeNodeA, NodeId activeNodeB,
-                          const QMap<NodeId, Qt::Key> &nodeHotkeys) const;
+                          const QMap<NodeId, Qt::Key> &nodeHotkeys,
+                          const QString &sessionFilePath = {}) const;
 
 private:
     ClipNodeEditor *m_editor;

@@ -818,8 +818,6 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <addaction name="actionShowOutput"/>
     <addaction name="actionShowPreview"/>
     <addaction name="separator"/>
-    <addaction name="actionEditHotkeys"/>
-    <addaction name="separator"/>
     <addaction name="actionNdiOutput"/>
     <addaction name="actionRecordProgram"/>
     <addaction name="actionDropMarker"/>
@@ -989,17 +987,6 @@ Split 4-Corner: split into 4 quadrants sliding outwards
    </property>
    <property name="enabled">
     <bool>false</bool>
-   </property>
-  </action>
-  <action name="actionEditHotkeys">
-   <property name="text">
-    <string>Edit Hotkeys…</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+Shift+K</string>
-   </property>
-   <property name="toolTip">
-    <string>Assign and manage keyboard triggers for deck clips</string>
    </property>
   </action>
   <action name="actionConnectObs">

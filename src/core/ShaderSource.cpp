@@ -1,4 +1,5 @@
 #include "core/ShaderSource.h"
+#include "core/AudioAnalyzer.h"
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
 #include <QOpenGLFramebufferObject>
@@ -7,6 +8,7 @@
 #include <QSurfaceFormat>
 #include <QVector2D>
 #include <QDebug>
+#include <algorithm>
 
 static const char *kVertexShader =
     "attribute vec2 position;\n"
@@ -28,7 +30,27 @@ void ShaderSource::setShaderCode(const QString &code) {
     m_compiled    = false;
 }
 
+void ShaderSource::setAudioSource(const QString &filePath) {
+    if (filePath.isEmpty()) {
+        m_analyzer.reset();
+        return;
+    }
+    if (!m_analyzer)
+        m_analyzer = std::make_unique<AudioAnalyzer>();
+    if (!m_analyzer->open(filePath))
+        m_analyzer.reset();
+}
+
 bool ShaderSource::nextFrame() {
+    const qint64 nowMs = m_timer.elapsed();
+    const double delta = (m_lastFrameMs > 0)
+        ? (nowMs - m_lastFrameMs) * 0.001
+        : 0.0;
+    m_lastFrameMs = nowMs;
+
+    if (m_analyzer && delta > 0.0)
+        m_analyzer->advance(delta);
+
     if (!m_glInitialized)
         return initGL();
 
@@ -93,6 +115,17 @@ bool ShaderSource::initGL() {
     f->glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
     f->glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+    f->glGenTextures(1, &m_spectrumTex);
+    f->glBindTexture(GL_TEXTURE_2D, m_spectrumTex);
+    f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    f->glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE,
+                    AudioAnalyzer::kBins, 1, 0,
+                    GL_LUMINANCE, GL_UNSIGNED_BYTE, nullptr);
+    f->glBindTexture(GL_TEXTURE_2D, 0);
+
     m_glInitialized = true;
 
     compileProgram();
@@ -111,6 +144,10 @@ bool ShaderSource::initGL() {
 void ShaderSource::destroyGL() {
     if (!m_glInitialized) return;
     m_context->makeCurrent(m_surface);
+    if (m_spectrumTex) {
+        m_context->functions()->glDeleteTextures(1, &m_spectrumTex);
+        m_spectrumTex = 0;
+    }
     if (m_vbo) {
         m_context->functions()->glDeleteBuffers(1, reinterpret_cast<GLuint *>(&m_vbo));
         m_vbo = 0;
@@ -161,6 +198,24 @@ void ShaderSource::renderToBuffer() {
                   static_cast<float>(m_size.height())));
     m_program->setUniformValue("u_time",
         static_cast<float>(m_timer.elapsed() * 0.001));
+
+    if (m_analyzer && m_analyzer->hasData()) {
+        const auto &spec = m_analyzer->spectrum();
+        QByteArray texData(spec.size(), 0);
+        for (int i = 0; i < spec.size(); ++i)
+            texData[i] = static_cast<char>(std::clamp(spec[i], 0.f, 1.f) * 255.f);
+
+        f->glActiveTexture(GL_TEXTURE0);
+        f->glBindTexture(GL_TEXTURE_2D, m_spectrumTex);
+        f->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                           spec.size(), 1,
+                           GL_LUMINANCE, GL_UNSIGNED_BYTE, texData.constData());
+        m_program->setUniformValue("u_spectrum", 0);
+        m_program->setUniformValue("u_audioLevel", m_analyzer->level());
+        m_program->setUniformValue("u_hasAudio", true);
+    } else {
+        m_program->setUniformValue("u_hasAudio", false);
+    }
 
     f->glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
     int posLoc = m_program->attributeLocation("position");

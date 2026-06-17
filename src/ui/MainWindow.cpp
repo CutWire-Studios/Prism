@@ -15,7 +15,6 @@
 #include "core/HtmlSource.h"
 #include "core/NdiSource.h"
 #include "ui/ObsWebSocketClient.h"
-#include "ui/HotkeyEditorDialog.h"
 #include "ui/ShaderEditDialog.h"
 #include "ui/HtmlEditDialog.h"
 #include <QApplication>
@@ -236,7 +235,8 @@ void MainWindow::closeEvent(QCloseEvent *event) {
             m_transitionCtrl->currentDurationSecs(),
             m_deckController->activeNodeA(),
             m_deckController->activeNodeB(),
-            m_hotkeyManager->nodeHotkeys());
+            m_hotkeyManager->nodeHotkeys(),
+            SessionManager::autosavePath());
         file.write(QJsonDocument(json).toJson(QJsonDocument::Indented));
     }
     QMainWindow::closeEvent(event);
@@ -342,7 +342,6 @@ void MainWindow::setupConnections() {
     auto *markerShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_M), this);
     connect(markerShortcut, &QShortcut::activated, ui->actionDropMarker, &QAction::trigger);
     connect(ui->actionConnectObs, &QAction::triggered, this, &MainWindow::onConnectObs);
-    connect(ui->actionEditHotkeys, &QAction::triggered, this, &MainWindow::onEditHotkeys);
     connect(ui->actionLinkClipObsScene, &QAction::triggered, this, &MainWindow::onLinkClipObsScene);
     connect(m_obsIntegration, &ObsIntegration::connectedChanged, this, [this](bool on) {
         m_obsScenesMenu->setEnabled(on);
@@ -372,6 +371,7 @@ void MainWindow::setupConnections() {
             m_deckController->applyAudioControllerToDeck(true,  m_deckController->activeNodeA());
         if (m_deckController->activeNodeB())
             m_deckController->applyAudioControllerToDeck(false, m_deckController->activeNodeB());
+        m_deckController->refreshShaderAudioForActiveDecks();
     });
     connect(m_clipNodeEditor, &ClipNodeEditor::audioControllerChanged, this, [this](NodeId clipId) {
         if (clipId == m_deckController->activeNodeA())
@@ -1087,7 +1087,8 @@ void MainWindow::onSaveSessionClicked() {
         m_transitionCtrl->currentDurationSecs(),
         m_deckController->activeNodeA(),
         m_deckController->activeNodeB(),
-        m_hotkeyManager->nodeHotkeys());
+        m_hotkeyManager->nodeHotkeys(),
+        path);
     file.write(QJsonDocument(json).toJson(QJsonDocument::Indented));
 }
 
@@ -1364,11 +1365,6 @@ void MainWindow::onAddElementNdi() {
 
 void MainWindow::onConnectObs() {
     m_obsIntegration->showConnectDialog(this);
-}
-
-void MainWindow::onEditHotkeys() {
-    HotkeyEditorDialog dlg(m_hotkeyManager, m_clipNodeEditor, this);
-    dlg.exec();
 }
 
 void MainWindow::onLinkClipObsScene() {

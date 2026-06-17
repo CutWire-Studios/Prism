@@ -4,6 +4,7 @@
 #include <QVector>
 #include <QMap>
 #include <QSet>
+#include <QDir>
 #include <QJsonObject>
 #include <QJsonArray>
 #include "core/SourceDescriptor.h"
@@ -58,6 +59,7 @@ public:
     QVector<NodeId> clipsForContextOrdered(NodeId contextId) const;
     bool contextCanvasSize(NodeId clipId, int &w, int &h) const;
     bool audioSettingsForClip(NodeId clipId, int &volume, bool &muted, bool &routedToMaster, AudioPlaybackMode &playbackMode, int &delayMs) const;
+    bool audioSourceForShader(NodeId shaderNodeId, QString &filePath) const;
 
     // ── Groups ───────────────────────────────────────────────────────────────
     void groupSelection();
@@ -73,7 +75,7 @@ public:
     void addMasterAudioOutputToGroup(NodeId groupId, QGraphicsView *view, bool atViewCenter = false);
 
     // ── Session persistence ──────────────────────────────────────────────────
-    QJsonObject saveState() const;
+    QJsonObject saveState(const QDir &sessionDir = {}) const;
     void restoreState(const QJsonObject &state);
 
 signals:

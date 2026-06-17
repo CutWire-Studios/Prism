@@ -63,7 +63,6 @@ private slots:
 
     void onConnectObs();
     void onLinkClipObsScene();
-    void onEditHotkeys();
     void rebuildObsScenesMenu(const QStringList &scenes);
 
     // ── Deck controls ─────────────────────────────────────────────────────────

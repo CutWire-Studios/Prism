@@ -36,6 +36,7 @@ public:
     void updateDeckAudio(bool deckA, NodeId clipId, const ClipNodeModel *node,
                          double currentTimeHint = -1.0, bool forceSeek = false);
     void applyAudioControllerToDeck(bool deckA, NodeId clipId);
+    void refreshShaderAudioForActiveDecks();
 
     // ── UI state ─────────────────────────────────────────────────────────────
     void updateDeckUI(bool deckA, const QString &name, bool hasTimeline,

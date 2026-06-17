@@ -4,11 +4,13 @@
 #include <QSize>
 #include <QByteArray>
 #include <QElapsedTimer>
+#include <memory>
 
 class QOffscreenSurface;
 class QOpenGLContext;
 class QOpenGLFramebufferObject;
 class QOpenGLShaderProgram;
+class AudioAnalyzer;
 
 class ShaderSource : public MediaSource {
 public:
@@ -20,6 +22,8 @@ public:
     QString shaderCode()  const { return m_shaderCode; }
     bool    isCompiled()  const { return m_compiled; }
     QString lastError()   const { return m_lastError; }
+
+    void setAudioSource(const QString &filePath);
 
     Type           type()      const override { return Type::Shader; }
     bool           isReady()   const override { return m_ready; }
@@ -47,6 +51,10 @@ private:
     unsigned int m_vbo = 0;
 
     QElapsedTimer m_timer;
+    qint64        m_lastFrameMs = 0;
+    std::unique_ptr<AudioAnalyzer> m_analyzer;
+    unsigned int  m_spectrumTex = 0;
+
     bool    m_glInitialized = false;
     bool    m_compiled      = false;
     bool    m_ready         = false;

@@ -76,6 +76,8 @@ public:
 
     bool   isPlayingA()      const { return m_playingA; }
     bool   isPlayingB()      const { return m_playingB; }
+    MediaSource *sourceA()   const { return m_sourceA.get(); }
+    MediaSource *sourceB()   const { return m_sourceB.get(); }
     double getCurrentTimeA() const;
     double getDurationA()    const;
     double getCurrentTimeB() const;

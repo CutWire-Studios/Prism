@@ -100,6 +100,28 @@ void DeckController::applyAudioControllerToDeck(bool deckA, NodeId clipId) {
     updateDeckAudio(deckA, clipId, node, t, true);
 }
 
+void DeckController::refreshShaderAudioForActiveDecks() {
+    auto refresh = [&](bool deckA, NodeId nodeId) {
+        if (!nodeId) return;
+        auto *node = m_editor->nodeAt(nodeId);
+        if (!node || node->sourceDescriptor().kind != SourceDescriptor::Kind::Shader)
+            return;
+
+        auto *out = m_outputWindow->videoWidget();
+        MediaSource *src = deckA ? out->sourceA() : out->sourceB();
+        if (!src || src->type() != MediaSource::Type::Shader) return;
+
+        QString audioPath;
+        if (m_editor->audioSourceForShader(nodeId, audioPath))
+            static_cast<ShaderSource *>(src)->setAudioSource(audioPath);
+        else
+            static_cast<ShaderSource *>(src)->setAudioSource(QString());
+    };
+
+    refresh(true,  m_aClipNodeId);
+    refresh(false, m_bClipNodeId);
+}
+
 // ── Deck assignment ───────────────────────────────────────────────────────────
 
 void DeckController::updateDeckUI(bool deckA, const QString &name, bool hasTimeline,
@@ -173,6 +195,11 @@ void DeckController::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool d
     default: {
         // All other source kinds: use SourceFactory.
         auto src = SourceFactory::create(desc);
+        if (desc.kind == Kind::Shader) {
+            QString audioPath;
+            if (m_editor->audioSourceForShader(nodeId, audioPath))
+                static_cast<ShaderSource *>(src.get())->setAudioSource(audioPath);
+        }
         applyTransform(deckA);
         if (deckA) {
             out->setSourceA(std::move(src));

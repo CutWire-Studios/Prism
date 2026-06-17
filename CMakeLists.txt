@@ -27,6 +27,17 @@ pkg_check_modules(GSTREAMER_APP REQUIRED gstreamer-app-1.0)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat avutil swscale swresample)
 
+include(FetchContent)
+FetchContent_Declare(kissfft
+    GIT_REPOSITORY https://github.com/mborgerding/kissfft.git
+    GIT_TAG        131.1.0)
+set(KISSFFT_DATATYPE float CACHE STRING "" FORCE)
+set(KISSFFT_STATIC   ON  CACHE BOOL "" FORCE)
+set(KISSFFT_TEST     OFF CACHE BOOL "" FORCE)
+set(KISSFFT_TOOLS    OFF CACHE BOOL "" FORCE)
+set(KISSFFT_OPENMP   OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(kissfft)
+
 # NDI (optional — program output to OBS etc.)
 option(SWITCHX_WITH_NDI "Enable NDI program output" ON)
 if(SWITCHX_WITH_NDI)
@@ -45,6 +56,7 @@ set(SOURCES
     src/core/VideoPlayer.cpp
     src/core/VideoFileSource.cpp
     src/core/AudioDecoder.cpp
+    src/core/AudioAnalyzer.cpp
     src/core/AudioPlayer.cpp
     src/core/ImageSource.cpp
     src/core/SlideshowSource.cpp
@@ -55,6 +67,7 @@ set(SOURCES
     src/core/ClipManager.cpp
     src/core/ThumbnailExtractor.cpp
     src/core/OverlayItem.cpp
+    src/core/AssetPathResolver.cpp
     src/core/ShaderSource.cpp
     src/core/HtmlSource.cpp
     src/core/NdiLibrary.cpp
@@ -83,7 +96,6 @@ set(SOURCES
     # Extracted helper / controller classes
     src/ui/ThumbHelper.cpp
     src/ui/HotkeyManager.cpp
-    src/ui/HotkeyEditorDialog.cpp
     src/ui/SessionManager.cpp
     src/ui/TransitionController.cpp
     src/ui/DeckController.cpp
@@ -96,6 +108,7 @@ set(HEADERS
     include/core/VideoPlayer.h
     include/core/VideoFileSource.h
     include/core/AudioDecoder.h
+    include/core/AudioAnalyzer.h
     include/core/AudioPlayer.h
     include/core/ImageSource.h
     include/core/SlideshowSource.h
@@ -106,6 +119,7 @@ set(HEADERS
     include/core/ClipManager.h
     include/core/ThumbnailExtractor.h
     include/core/OverlayItem.h
+    include/core/AssetPathResolver.h
     include/core/ShaderSource.h
     include/core/HtmlSource.h
     include/core/NdiLibrary.h
@@ -135,7 +149,6 @@ set(HEADERS
     # Extracted helper / controller headers
     include/ui/ThumbHelper.h
     include/ui/HotkeyManager.h
-    include/ui/HotkeyEditorDialog.h
     include/ui/SessionManager.h
     include/ui/TransitionController.h
     include/ui/DeckController.h
@@ -185,6 +198,7 @@ target_link_libraries(Prism PRIVATE
     ${FFMPEG_LIBRARIES}
     ${GSTREAMER_LIBRARIES}
     ${GSTREAMER_APP_LIBRARIES}
+    kissfft
 )
 
 if(SWITCHX_HAVE_NDI)
