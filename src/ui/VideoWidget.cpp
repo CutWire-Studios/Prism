@@ -1,6 +1,4 @@
 #include "ui/VideoWidget.h"
-#include "ui/FrameCaptureHelper.h"
-#include "core/ImageSource.h"
 #include "ui/Transition.h"
 #include "core/VideoFileSource.h"
 #include "core/ImageSource.h"
@@ -811,69 +809,18 @@ void VideoWidget::setOutputFrozen(bool frozen) {
     update();
 }
 
-QImage VideoWidget::captureProgramFrame() {
-    makeCurrent();
-    ensureProgramFbo();
-
-    m_compW = kProgramWidth;
-    m_compH = kProgramHeight;
-    glBindFramebuffer(GL_FRAMEBUFFER, m_programFbo);
-    glViewport(0, 0, m_compW, m_compH);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(0, m_compW, m_compH, 0, -1, 1);
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    renderCompositionGL();
-    cacheProgramFrameFromFbo();
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    m_compW = 0;
-    m_compH = 0;
-    doneCurrent();
-
-    return m_programFrameCache.copy();
-}
-
-void VideoWidget::holdLayerAsStill(bool deckA, int chainIndex, const QImage &frame) {
-    if (frame.isNull())
-        return;
-
-    auto still = std::make_unique<ImageSource>();
-    if (!still->setImage(frame, QStringLiteral("Frozen Frame")))
-        return;
-
-    makeCurrent();
-    if (chainIndex < 0) {
-        if (deckA) {
-            pauseA();
-            setSourceA(std::move(still));
-        } else {
-            pauseB();
-            setSourceB(std::move(still));
-        }
-    } else {
-        auto &chain   = deckA ? m_chainA : m_chainB;
-        auto &texList = deckA ? m_chainTexA : m_chainTexB;
-        if (chainIndex >= static_cast<int>(chain.size())) {
-            doneCurrent();
-            return;
-        }
-        chain[static_cast<size_t>(chainIndex)].playing = false;
-        chain[static_cast<size_t>(chainIndex)].source    = std::move(still);
-        if (chainIndex < static_cast<int>(texList.size()))
-            uploadSourceFrameGL(texList[static_cast<size_t>(chainIndex)],
-                                chain[static_cast<size_t>(chainIndex)].source.get());
-    }
-    doneCurrent();
-    update();
-}
-
 QImage VideoWidget::getFrameA() const {
-    return FrameCaptureHelper::frameFromSource(m_sourceA.get());
+    if (!m_sourceA || !m_sourceA->isReady()) return {};
+    QSize sz = m_sourceA->frameSize();
+    return QImage(m_sourceA->frameData(), sz.width(), sz.height(),
+                  sz.width() * 3, QImage::Format_RGB888).copy();
 }
 
 QImage VideoWidget::getFrameB() const {
-    return FrameCaptureHelper::frameFromSource(m_sourceB.get());
+    if (!m_sourceB || !m_sourceB->isReady()) return {};
+    QSize sz = m_sourceB->frameSize();
+    return QImage(m_sourceB->frameData(), sz.width(), sz.height(),
+                  sz.width() * 3, QImage::Format_RGB888).copy();
 }
 
 // ── GL helpers ────────────────────────────────────────────────────────────────

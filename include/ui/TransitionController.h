@@ -28,10 +28,6 @@ public:
     int    currentModeIndex()    const;
     double currentDurationSecs() const;
 
-    void setTransitionModeIndex(int index);
-    void setTransitionDuration(double secs);
-    QStringList transitionModeNames() const;
-
 public slots:
     void onTransitionModeChanged(int index);
     void onAutoTransitionClicked();

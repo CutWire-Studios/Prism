@@ -8,7 +8,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Qt
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets Gui Multimedia WebEngineWidgets DBus Network)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets Gui Multimedia WebEngineWidgets DBus)
 find_package(Qt6 QUIET COMPONENTS WebSockets)
 if(TARGET Qt6::WebSockets)
     set(SWITCHX_HAVE_OBS_WS TRUE)
@@ -28,15 +28,18 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat avutil swscale swresample)
 
 include(FetchContent)
-FetchContent_Declare(kissfft
-    GIT_REPOSITORY https://github.com/mborgerding/kissfft.git
-    GIT_TAG        131.1.0)
-set(KISSFFT_DATATYPE float CACHE STRING "" FORCE)
-set(KISSFFT_STATIC   ON  CACHE BOOL "" FORCE)
-set(KISSFFT_TEST     OFF CACHE BOOL "" FORCE)
-set(KISSFFT_TOOLS    OFF CACHE BOOL "" FORCE)
-set(KISSFFT_OPENMP   OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(kissfft)
+find_package(kissfft CONFIG QUIET COMPONENTS float STATIC)
+if(NOT kissfft_FOUND)
+    FetchContent_Declare(kissfft
+        GIT_REPOSITORY https://github.com/mborgerding/kissfft.git
+        GIT_TAG        131.1.0)
+    set(KISSFFT_DATATYPE float CACHE STRING "" FORCE)
+    set(KISSFFT_STATIC   ON  CACHE BOOL "" FORCE)
+    set(KISSFFT_TEST     OFF CACHE BOOL "" FORCE)
+    set(KISSFFT_TOOLS    OFF CACHE BOOL "" FORCE)
+    set(KISSFFT_OPENMP   OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(kissfft)
+endif()
 
 # NDI (optional — program output to OBS etc.)
 option(SWITCHX_WITH_NDI "Enable NDI program output" ON)
@@ -88,8 +91,6 @@ set(SOURCES
     src/ui/MirrorOutputWindow.cpp
     src/ui/OutputHub.cpp
     src/ui/NdiProgramSink.cpp
-    src/ui/VirtualCameraProgramSink.cpp
-    src/ui/FrameCaptureHelper.cpp
     src/ui/ObsWebSocketClient.cpp
     src/ui/ObsIntegration.cpp
     src/ui/ProgramRecorder.cpp
@@ -100,13 +101,9 @@ set(SOURCES
     src/ui/HotkeyManager.cpp
     src/ui/HotkeyEditorDialog.cpp
     src/ui/SessionManager.cpp
-    src/ui/SessionRecoveryDialog.cpp
     src/ui/TransitionController.cpp
     src/ui/DeckController.cpp
     src/ui/SourceFactory.cpp
-    src/ui/SourcePrompt.cpp
-    src/ui/RemoteControlServer.cpp
-    src/ui/RemoteServerDialog.cpp
 )
 
 set(HEADERS
@@ -147,8 +144,6 @@ set(HEADERS
     include/ui/MirrorOutputWindow.h
     include/ui/OutputHub.h
     include/ui/NdiProgramSink.h
-    include/ui/VirtualCameraProgramSink.h
-    include/ui/FrameCaptureHelper.h
     include/ui/ObsWebSocketClient.h
     include/ui/ObsIntegration.h
     include/ui/ProgramRecorder.h
@@ -160,13 +155,9 @@ set(HEADERS
     include/ui/HotkeyManager.h
     include/ui/HotkeyEditorDialog.h
     include/ui/SessionManager.h
-    include/ui/SessionRecoveryDialog.h
     include/ui/TransitionController.h
     include/ui/DeckController.h
     include/ui/SourceFactory.h
-    include/ui/SourcePrompt.h
-    include/ui/RemoteControlServer.h
-    include/ui/RemoteServerDialog.h
 )
 
 set(UI_FILES
@@ -208,12 +199,11 @@ target_link_libraries(Prism PRIVATE
     Qt6::Multimedia
     Qt6::WebEngineWidgets
     Qt6::DBus
-    Qt6::Network
     re2::re2
     ${FFMPEG_LIBRARIES}
     ${GSTREAMER_LIBRARIES}
     ${GSTREAMER_APP_LIBRARIES}
-    kissfft
+    kissfft::kissfft
 )
 
 if(SWITCHX_HAVE_NDI)
@@ -232,3 +222,5 @@ enable_testing()
 
 # Add test subdirectory
 add_subdirectory(tests)
+
+install(TARGETS Prism RUNTIME DESTINATION bin)

@@ -2,7 +2,7 @@
 #include "ui_MainWindow.h"
 #include "ui/VideoWidget.h"
 #include "ui/MirrorOutputWindow.h"
-#include "ui/SourcePrompt.h"
+#include "ui/ThumbHelper.h"
 #include "ui/SourceFactory.h"
 #include "core/ThumbnailExtractor.h"
 #include "core/VideoFileSource.h"
@@ -16,15 +16,15 @@
 #include "core/NdiSource.h"
 #include "ui/ObsWebSocketClient.h"
 #include "ui/HotkeyEditorDialog.h"
-#include "ui/SessionRecoveryDialog.h"
-#include "ui/RemoteControlServer.h"
-#include "ui/RemoteServerDialog.h"
-#include "ui/FrameCaptureHelper.h"
+#include "ui/ShaderEditDialog.h"
+#include "ui/HtmlEditDialog.h"
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
+#include <QEventLoop>
 #include <QShortcut>
 #include <QKeySequence>
+#include <glob.h>
 #include <QFileDialog>
 #include <QTimer>
 #include <QDebug>
@@ -37,6 +37,7 @@
 #include <QMenu>
 #include <QLineEdit>
 #include <QInputDialog>
+#include <QColorDialog>
 #include <QMessageBox>
 #include <QMediaDevices>
 #include <QCameraDevice>
@@ -44,10 +45,6 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
-#include <QCheckBox>
-#include <QComboBox>
-#include <QDialogButtonBox>
-#include <QDialog>
 #include <QStackedWidget>
 #include <QCloseEvent>
 #include <QStandardPaths>
@@ -89,21 +86,11 @@ MainWindow::MainWindow(QWidget *parent)
         ui->actionNdiOutput->setToolTip(
             tr("NDI SDK not found at build time. Install the NDI SDK and rebuild with -DNDI_ROOT=…"));
     }
-
-    ui->actionVirtualCameraOutput->setEnabled(m_outputHub->virtualCameraAvailable());
-    if (!m_outputHub->virtualCameraAvailable()) {
-        ui->actionVirtualCameraOutput->setToolTip(
-            tr("Virtual camera output is only available on Linux with v4l2loopback loaded "
-               "(sudo modprobe v4l2loopback)."));
-    } else {
-        const QString dev = m_outputHub->virtualCameraDevicePath();
-        ui->actionVirtualCameraOutput->setToolTip(
-            tr("Expose the program mix as a webcam via %1 (v4l2loopback). "
-               "Select as a camera source in OBS, Zoom, etc.")
-                .arg(dev.isEmpty() ? tr("a v4l2loopback device") : dev));
+    ui->actionAddNdi->setEnabled(NdiSource::isAvailable());
+    if (!NdiSource::isAvailable()) {
+        ui->actionAddNdi->setToolTip(
+            tr("NDI SDK not found at build time. Install the NDI SDK and rebuild with -DNDI_ROOT=…"));
     }
-
-    setupAddElementMenu(ui->menuAddElement);
 
     // ── Stacked widget (node editor vs empty placeholder) ─────────────────────
     m_stackWidget = new QStackedWidget(ui->gridWidget);
@@ -141,8 +128,6 @@ MainWindow::MainWindow(QWidget *parent)
         this);
     m_transitionCtrl->setupConnections();
 
-    m_remoteServer = new RemoteControlServer(this, m_transitionCtrl, ui->crossfaderSlider, this);
-
     setupConnections();
     applyTheme();
 
@@ -155,13 +140,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(updateTimer, &QTimer::timeout, this, &MainWindow::onTimerUpdate);
     updateTimer->start(100);
 
-    handleStartupRecovery();
-
-    m_autosaveTimer = new QTimer(this);
-    connect(m_autosaveTimer, &QTimer::timeout, this, &MainWindow::performAutosave);
-    m_autosaveTimer->start(SessionManager::kDefaultAutosaveIntervalMs);
-
-    SessionManager::markRunning();
+    const QString autosave = SessionManager::autosavePath();
+    if (QFile::exists(autosave))
+        loadFromFile(autosave, false);  // will call m_sessionManager->loadFromFile
 
     qDebug() << "SwitchX initialized - Live Media Control Mode";
 }
@@ -190,7 +171,7 @@ void MainWindow::buildEmptyPlaceholder() {
         "Camera, Screen Capture, or Canvas. Then connect ports to construct your media flow.</p>"
     );
 
-    // Build the "Add Element" popup button.
+    // Build the "Add Element" popup button using the QActions already defined in the .ui.
     auto *phBtnRow = new QWidget(m_emptyPlaceholder);
     auto *phBtns   = new QHBoxLayout(phBtnRow);
     phBtns->setContentsMargins(0, 0, 0, 0);
@@ -209,8 +190,23 @@ void MainWindow::buildEmptyPlaceholder() {
         "}"
     );
 
+    // Reuse the QActions already declared in the .ui file.
     QMenu *addMenu = new QMenu(phAddElementBtn);
-    setupAddElementMenu(addMenu);
+    addMenu->addAction(ui->actionAddVideoFile);
+    addMenu->addAction(ui->actionAddPhoto);
+    addMenu->addSeparator();
+    addMenu->addAction(ui->actionAddSlideshow);
+    addMenu->addSeparator();
+    addMenu->addAction(ui->actionAddCamera);
+    addMenu->addAction(ui->actionAddScreen);
+    addMenu->addAction(ui->actionAddWindow);
+    addMenu->addSeparator();
+    addMenu->addAction(ui->actionAddCanvas);
+    addMenu->addSeparator();
+    addMenu->addAction(ui->actionAddShader);
+    addMenu->addAction(ui->actionAddHtml);
+    addMenu->addAction(ui->actionAddNdi);
+
     phAddElementBtn->setMenu(addMenu);
     phBtns->addWidget(phAddElementBtn);
 
@@ -224,7 +220,6 @@ void MainWindow::buildEmptyPlaceholder() {
 MainWindow::~MainWindow() {
     m_outputHub->setProgramRecordingEnabled(false);
     m_outputHub->setNdiOutputEnabled(false);
-    m_outputHub->setVirtualCameraEnabled(false);
     m_obsIntegration->disconnectFromObs();
     m_deckController->stopDeckAudio(true);
     m_deckController->stopDeckAudio(false);
@@ -232,59 +227,20 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
-    performAutosave();
-    SessionManager::markCleanExit();
-    QMainWindow::closeEvent(event);
-}
-
-QJsonObject MainWindow::currentSessionJson() const {
-    return currentSessionJson(SessionManager::autosavePath());
-}
-
-QJsonObject MainWindow::currentSessionJson(const QString &sessionFilePath) const {
-    return m_sessionManager->buildJson(
-        ui->crossfaderSlider->value(),
-        m_transitionCtrl->currentModeIndex(),
-        m_transitionCtrl->currentDurationSecs(),
-        m_deckController->activeNodeA(),
-        m_deckController->activeNodeB(),
-        m_hotkeyManager->nodeHotkeys(),
-        sessionFilePath);
-}
-
-void MainWindow::performAutosave() {
-    if (!m_sessionManager)
-        return;
-    m_sessionManager->saveAutosave(currentSessionJson());
-}
-
-void MainWindow::handleStartupRecovery() {
-    const SessionManager::RecoveryInfo recovery = SessionManager::checkRecovery();
-    if (recovery.uncleanShutdown) {
-        SessionRecoveryDialog dlg(recovery.autosavePath, recovery.backupPaths, this);
-        if (dlg.exec() != QDialog::Accepted)
-            return;
-
-        switch (dlg.choice()) {
-        case SessionRecoveryDialog::Choice::RecoverAutosave:
-            if (QFile::exists(recovery.autosavePath))
-                loadFromFile(recovery.autosavePath, false);
-            break;
-        case SessionRecoveryDialog::Choice::RecoverBackup: {
-            const QString path = dlg.selectedBackupPath();
-            if (!path.isEmpty())
-                loadFromFile(path, false);
-            break;
-        }
-        case SessionRecoveryDialog::Choice::StartFresh:
-            break;
-        }
-        return;
+    // Build session JSON from current state and save.
+    QFile file(SessionManager::autosavePath());
+    if (file.open(QIODevice::WriteOnly)) {
+        auto json = m_sessionManager->buildJson(
+            ui->crossfaderSlider->value(),
+            m_transitionCtrl->currentModeIndex(),
+            m_transitionCtrl->currentDurationSecs(),
+            m_deckController->activeNodeA(),
+            m_deckController->activeNodeB(),
+            m_hotkeyManager->nodeHotkeys(),
+            SessionManager::autosavePath());
+        file.write(QJsonDocument(json).toJson(QJsonDocument::Indented));
     }
-
-    const QString autosave = SessionManager::autosavePath();
-    if (QFile::exists(autosave))
-        loadFromFile(autosave, false);
+    QMainWindow::closeEvent(event);
 }
 
 // ── Signal wiring ─────────────────────────────────────────────────────────────
@@ -293,11 +249,23 @@ void MainWindow::setupConnections() {
     // Menubar Media actions
     connect(ui->actionLoadFolder, &QAction::triggered, this, &MainWindow::onLoadFolderClicked);
     connect(ui->actionAddFolder,  &QAction::triggered, this, &MainWindow::onAddFolderClicked);
+    connect(ui->actionAddFiles,   &QAction::triggered, this, &MainWindow::onAddFilesClicked);
+    connect(ui->actionAddPhotos,  &QAction::triggered, this, &MainWindow::onAddPhotosClicked);
     connect(ui->actionClearAll,   &QAction::triggered, this, &MainWindow::onClearAllClicked);
     connect(ui->actionSaveSession,&QAction::triggered, this, &MainWindow::onSaveSessionClicked);
     connect(ui->actionLoadSession,&QAction::triggered, this, &MainWindow::onLoadSessionClicked);
 
-    connect(ui->actionFreezeFrameCapture, &QAction::triggered, this, &MainWindow::onFreezeFrameCapture);
+    // Add Element actions (shared between menubar and placeholder button)
+    connect(ui->actionAddVideoFile, &QAction::triggered, this, &MainWindow::onAddFilesClicked);
+    connect(ui->actionAddPhoto,     &QAction::triggered, this, &MainWindow::onAddPhotosClicked);
+    connect(ui->actionAddSlideshow, &QAction::triggered, this, &MainWindow::onAddElementSlideshow);
+    connect(ui->actionAddCamera,    &QAction::triggered, this, &MainWindow::onAddElementCamera);
+    connect(ui->actionAddScreen,    &QAction::triggered, this, &MainWindow::onAddElementScreen);
+    connect(ui->actionAddWindow,    &QAction::triggered, this, &MainWindow::onAddElementWindow);
+    connect(ui->actionAddCanvas,    &QAction::triggered, this, &MainWindow::onAddElementCanvas);
+    connect(ui->actionAddShader,    &QAction::triggered, this, &MainWindow::onAddElementShader);
+    connect(ui->actionAddHtml,      &QAction::triggered, this, &MainWindow::onAddElementDynamicInterface);
+    connect(ui->actionAddNdi,       &QAction::triggered, this, &MainWindow::onAddElementNdi);
 
     // View menu
     connect(ui->actionShowOutput, &QAction::triggered, this, [this]() {
@@ -337,28 +305,6 @@ void MainWindow::setupConnections() {
         ui->actionNdiOutput->blockSignals(true);
         ui->actionNdiOutput->setChecked(on);
         ui->actionNdiOutput->blockSignals(false);
-    });
-    connect(ui->actionVirtualCameraOutput, &QAction::toggled, this, [this](bool on) {
-        if (!m_outputHub->setVirtualCameraEnabled(on)) {
-            ui->actionVirtualCameraOutput->blockSignals(true);
-            ui->actionVirtualCameraOutput->setChecked(false);
-            ui->actionVirtualCameraOutput->blockSignals(false);
-            if (on) {
-                const QString dev = m_outputHub->virtualCameraDevicePath();
-                QMessageBox::warning(this, tr("Virtual Camera Output"),
-                    tr("Could not start virtual camera output on %1.\n\n"
-                       "Ensure v4l2loopback is loaded:\n"
-                       "  sudo modprobe v4l2loopback\n\n"
-                       "You may need to specify a device path in settings if the "
-                       "loopback device is not at the default location.")
-                        .arg(dev.isEmpty() ? tr("(unknown device)") : dev));
-            }
-        }
-    });
-    connect(m_outputHub, &OutputHub::virtualCameraEnabledChanged, this, [this](bool on) {
-        ui->actionVirtualCameraOutput->blockSignals(true);
-        ui->actionVirtualCameraOutput->setChecked(on);
-        ui->actionVirtualCameraOutput->blockSignals(false);
     });
     connect(ui->actionRecordProgram, &QAction::toggled, this, [this](bool on) {
         if (!m_outputHub->setProgramRecordingEnabled(on)) {
@@ -412,8 +358,6 @@ void MainWindow::setupConnections() {
         m_outputWindow->setWindowFlags(flags);
         m_outputWindow->show();
     });
-
-    connect(ui->actionStartRemoteControl, &QAction::triggered, this, &MainWindow::onStartRemoteControl);
 
     // ClipNodeEditor signals
     connect(m_clipNodeEditor, &ClipNodeEditor::deckAClipChanged,
@@ -558,6 +502,19 @@ void MainWindow::onAddFilesClicked() {
     appendClipsToEditor(added);
 }
 
+void MainWindow::onAddPhotosClicked() {
+    QStringList files = QFileDialog::getOpenFileNames(
+        this, "Add Photos", "",
+        "Images (*.png *.jpg *.jpeg *.bmp *.webp *.gif)");
+    if (files.isEmpty()) return;
+    const QStringList before = clipManager.getClips();
+    clipManager.addFiles(files);
+    QStringList added;
+    for (const QString &p : clipManager.getClips())
+        if (!before.contains(p)) added << p;
+    appendClipsToEditor(added);
+}
+
 void MainWindow::onClearAllClicked() {
     clipManager.clear();
     m_clipNodeEditor->clearAllNodes();
@@ -575,21 +532,6 @@ void MainWindow::onClearAllClicked() {
 void MainWindow::addElementNode(const SourceDescriptor &desc, const QPixmap &thumb) {
     m_clipNodeEditor->addSourceNode(desc, thumb);
     m_stackWidget->setCurrentWidget(m_clipNodeEditor);
-}
-
-void MainWindow::addSourceOfKind(SourceDescriptor::Kind kind) {
-    SourceDescriptor desc;
-    QPixmap thumb;
-    if (SourcePrompt::prompt(kind, this, desc, thumb))
-        addElementNode(desc, thumb);
-}
-
-void MainWindow::setupAddElementMenu(QMenu *menu) {
-    if (!menu) return;
-    SourcePrompt::buildMenu(menu,
-                            [this]() { onAddFilesClicked(); },
-                            [this](SourceDescriptor::Kind kind) { addSourceOfKind(kind); },
-                            NdiSource::isAvailable());
 }
 
 void MainWindow::appendClipsToEditor(const QStringList &clipPaths) {
@@ -1135,10 +1077,21 @@ void MainWindow::onSaveSessionClicked() {
     if (path.isEmpty()) return;
     if (!path.endsWith(".sxs", Qt::CaseInsensitive)) path += ".sxs";
 
-    if (!m_sessionManager->writeSessionFile(currentSessionJson(path), path)) {
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
         QMessageBox::warning(this, "Save Session",
                              QString("Cannot write to file:\n%1").arg(path));
+        return;
     }
+    auto json = m_sessionManager->buildJson(
+        ui->crossfaderSlider->value(),
+        m_transitionCtrl->currentModeIndex(),
+        m_transitionCtrl->currentDurationSecs(),
+        m_deckController->activeNodeA(),
+        m_deckController->activeNodeB(),
+        m_hotkeyManager->nodeHotkeys(),
+        path);
+    file.write(QJsonDocument(json).toJson(QJsonDocument::Indented));
 }
 
 void MainWindow::onLoadSessionClicked() {
@@ -1186,104 +1139,230 @@ void MainWindow::onSessionLoaded() {
     if (savedB) onNodeBButtonClicked(savedB);
 }
 
-void MainWindow::onFreezeFrameCapture() {
-    auto *out = m_outputWindow->videoWidget();
-    const QList<FrameCaptureHelper::LayerRef> layers =
-        FrameCaptureHelper::enumerateLayers(out, m_clipNodeEditor, m_deckController);
+// ── Add Element handlers ──────────────────────────────────────────────────────
 
-    if (layers.isEmpty()) {
-        QMessageBox::information(this, tr("Freeze Frame Capture"),
-                                 tr("No layers are available to capture."));
-        return;
+void MainWindow::onAddElementSlideshow() {
+    QString folder = QFileDialog::getExistingDirectory(this, "Select Image Folder for Slideshow");
+    if (folder.isEmpty()) return;
+
+    bool ok = false;
+    int interval = QInputDialog::getInt(this, "Slideshow Interval",
+                                        "Seconds per slide:", 3, 1, 60, 1, &ok);
+    if (!ok) return;
+
+    QDir dir(folder);
+    QStringList imgs = dir.entryList({"*.png","*.jpg","*.jpeg","*.bmp","*.webp"},
+                                     QDir::Files, QDir::Name);
+    QPixmap thumb;
+    if (!imgs.isEmpty())
+        thumb = ThumbnailExtractor::extract(dir.absoluteFilePath(imgs.first()), 110, 65);
+    if (thumb.isNull()) thumb = ThumbHelper::makeIconThumb("📁");
+
+    SourceDescriptor desc;
+    desc.kind                = SourceDescriptor::Kind::Slideshow;
+    desc.path                = folder;
+    desc.displayName         = QFileInfo(folder).fileName();
+    desc.slideshowIntervalMs = interval * 1000;
+    desc.slideshowEffect = 0;
+    desc.slideshowTransitionMs = 800;
+
+    addElementNode(desc, thumb);
+}
+
+void MainWindow::onAddElementCamera() {
+    auto qtDevices = QMediaDevices::videoInputs();
+    if (qtDevices.isEmpty()) {
+        QEventLoop loop;
+        QTimer::singleShot(1200, &loop, &QEventLoop::quit);
+        loop.exec();
+        qtDevices = QMediaDevices::videoInputs();
     }
 
-    QDialog dlg(this);
-    dlg.setWindowTitle(tr("Freeze Frame Capture"));
-    dlg.setMinimumWidth(460);
+    struct CamEntry { QString id, label; bool isDefault; };
+    QList<CamEntry> devices;
 
-    auto *layerCombo = new QComboBox(&dlg);
-    for (const auto &layer : layers)
-        layerCombo->addItem(layer.label);
-
-    auto *saveCheck = new QCheckBox(tr("Save PNG to Pictures/SwitchX/Captures"), &dlg);
-    saveCheck->setChecked(true);
-    auto *addCheck = new QCheckBox(tr("Add captured frame as a new image element"), &dlg);
-    addCheck->setChecked(false);
-    auto *holdCheck = new QCheckBox(tr("Hold selected layer as a still (freeze in place)"), &dlg);
-    holdCheck->setChecked(false);
-
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
-    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
-
-    auto *layout = new QVBoxLayout(&dlg);
-    layout->addWidget(new QLabel(tr("Capture current frame from:"), &dlg));
-    layout->addWidget(layerCombo);
-    layout->addWidget(saveCheck);
-    layout->addWidget(addCheck);
-    layout->addWidget(holdCheck);
-    layout->addWidget(buttons);
-
-    if (dlg.exec() != QDialog::Accepted)
-        return;
-
-    const int idx = layerCombo->currentIndex();
-    if (idx < 0 || idx >= layers.size())
-        return;
-
-    const FrameCaptureHelper::LayerRef layer = layers.at(idx);
-    const QImage frame = FrameCaptureHelper::captureLayer(out, layer);
-    if (frame.isNull()) {
-        QMessageBox::warning(this, tr("Freeze Frame Capture"),
-                             tr("Could not capture a frame from \"%1\".\n\n"
-                                "Make sure the layer is active and has video.")
-                                 .arg(layer.label));
-        return;
+    for (const auto &d : qtDevices) {
+        QString id    = QString::fromUtf8(d.id());
+        QString label = d.description().isEmpty() ? id
+                      : QString("%1  [%2]").arg(d.description(), id);
+        devices.append({id, label, false});
     }
 
-    QString savedPath;
-    if (saveCheck->isChecked() || addCheck->isChecked()) {
-        savedPath = FrameCaptureHelper::savePng(frame, layer.label);
-        if (savedPath.isEmpty()) {
-            QMessageBox::warning(this, tr("Freeze Frame Capture"),
-                                 tr("Captured the frame but could not save it to disk."));
-            if (!holdCheck->isChecked())
-                return;
+    {
+        glob_t g{};
+        if (::glob("/dev/video*", GLOB_NOSORT, nullptr, &g) == 0) {
+            for (size_t i = 0; i < g.gl_pathc; ++i) {
+                QString path = QString::fromLocal8Bit(g.gl_pathv[i]);
+                bool already = std::any_of(devices.begin(), devices.end(),
+                                           [&](const CamEntry &e){ return e.id == path; });
+                if (!already) devices.append({path, path, false});
+            }
+        }
+        ::globfree(&g);
+    }
+    devices.append({"", "Default Camera  (let the system choose)", true});
+
+    QStringList names;
+    for (const auto &e : devices) names << e.label;
+
+    bool ok = false;
+    QString chosen = QInputDialog::getItem(this, "Select Camera",
+                                           "Camera device:", names, 0, false, &ok);
+    if (!ok) return;
+
+    int idx = names.indexOf(chosen);
+    const CamEntry &entry = devices[idx];
+
+    SourceDescriptor desc;
+    desc.kind        = SourceDescriptor::Kind::Camera;
+    desc.path        = entry.id;
+    desc.displayName = entry.isDefault ? "Default Camera"
+                     : entry.label.section("  [", 0, 0).trimmed();
+    if (desc.displayName.isEmpty()) desc.displayName = entry.id.isEmpty() ? "Default Camera" : entry.id;
+    desc.cameraIndex = 0;
+    if (!entry.isDefault) {
+        for (int i = 0; i < qtDevices.size(); ++i) {
+            if (QString::fromUtf8(qtDevices[i].id()) == entry.id) {
+                desc.cameraIndex = i;
+                break;
+            }
         }
     }
 
-    bool held = false;
-    if (holdCheck->isChecked()) {
-        if (layer.kind == FrameCaptureHelper::LayerKind::Program) {
-            QMessageBox::information(this, tr("Freeze Frame Capture"),
-                                     tr("Program output cannot be held as a still layer. "
-                                        "Choose a deck or overlay layer, or use PAUSE to freeze the full output."));
-        } else {
-            const int chainIndex = (layer.kind == FrameCaptureHelper::LayerKind::DeckChain)
-                                 ? layer.chainIndex : -1;
-            out->holdLayerAsStill(layer.deckA, chainIndex, frame);
-            held = true;
-        }
+    addElementNode(desc, ThumbHelper::makeIconThumb("📷"));
+}
+
+void MainWindow::onAddElementScreen() {
+    SourceDescriptor desc;
+    desc.kind        = SourceDescriptor::Kind::Screen;
+    desc.displayName = "Screen Capture";
+    desc.screenIndex = 0;
+    addElementNode(desc, ThumbHelper::makeIconThumb("🖥"));
+}
+
+void MainWindow::onAddElementWindow() {
+    SourceDescriptor desc;
+    desc.kind        = SourceDescriptor::Kind::Window;
+    desc.displayName = "Window / Tab";
+    desc.windowIndex = 0;
+    addElementNode(desc, ThumbHelper::makeIconThumb("🪟"));
+}
+
+void MainWindow::onAddElementCanvas() {
+    struct CanvasPreset { const char *label; int width, height; };
+    const CanvasPreset presets[] = {
+        {"16:9  (1280x720)",  1280, 720},
+        {"4:3  (1024x768)",   1024, 768},
+        {"1:1  (1080x1080)", 1080, 1080},
+        {"9:16  (1080x1920)",1080, 1920},
+    };
+
+    QStringList options;
+    for (const auto &p : presets) options << QString::fromUtf8(p.label);
+    options << "Custom…";
+
+    bool ok = false;
+    const QString choice = QInputDialog::getItem(this, "Canvas",
+                                                  "Aspect ratio:", options, 0, false, &ok);
+    if (!ok || choice.isEmpty()) return;
+
+    int width = 1280, height = 720;
+    if (choice == "Custom…") {
+        width  = QInputDialog::getInt(this, "Canvas Width",  "Width:",  1280, 16, 16384, 1, &ok); if (!ok) return;
+        height = QInputDialog::getInt(this, "Canvas Height", "Height:", 720,  16, 16384, 1, &ok); if (!ok) return;
+    } else {
+        for (const auto &p : presets)
+            if (choice == QString::fromUtf8(p.label)) { width = p.width; height = p.height; break; }
     }
 
-    if (addCheck->isChecked() && !savedPath.isEmpty()) {
-        SourceDescriptor desc;
-        desc.kind        = SourceDescriptor::Kind::Image;
-        desc.path        = savedPath;
-        desc.displayName = tr("Capture %1").arg(QFileInfo(savedPath).completeBaseName());
-        addElementNode(desc, QPixmap::fromImage(
-            frame.scaled(110, 65, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
+    const int g = std::gcd(width, height);
+    const QString ratioText = QString("%1:%2").arg(width / g).arg(height / g);
+
+    const QStringList fillOptions = {"Checkered", "Transparent", "Color"};
+    const QString fillChoice = QInputDialog::getItem(this, "Canvas Fill",
+                                                      "Fill type:", fillOptions, 0, false, &ok);
+    if (!ok || fillChoice.isEmpty()) return;
+
+    SourceDescriptor desc;
+    desc.kind = SourceDescriptor::Kind::Canvas;
+    desc.canvasWidth = width; desc.canvasHeight = height;
+    desc.canvasFill  = SourceDescriptor::CanvasFill::Checkered;
+    desc.color       = Qt::white;
+    QString fillLabel = "Checkered";
+
+    if (fillChoice == "Transparent") {
+        desc.canvasFill = SourceDescriptor::CanvasFill::Transparent;
+        fillLabel = "Transparent";
+    } else if (fillChoice == "Color") {
+        QColor c = QColorDialog::getColor(Qt::white, this, "Pick Canvas Color");
+        if (!c.isValid()) return;
+        desc.canvasFill = SourceDescriptor::CanvasFill::Color;
+        desc.color = c;
+        fillLabel = c.name().toUpper();
     }
 
-    QString summary = tr("Captured \"%1\".").arg(layer.label);
-    if (!savedPath.isEmpty())
-        summary += QLatin1Char('\n') + tr("Saved: %1").arg(savedPath);
-    if (held)
-        summary += QLatin1Char('\n') + tr("Layer is now held as a still.");
-    if (addCheck->isChecked() && !savedPath.isEmpty())
-        summary += QLatin1Char('\n') + tr("Added as a new image element.");
+    desc.displayName = QString("Canvas %1 (%2)").arg(ratioText, fillLabel);
+    addElementNode(desc, ThumbHelper::makeCanvasThumb(ratioText, desc.canvasFill, desc.color));
+}
 
-    QMessageBox::information(this, tr("Freeze Frame Capture"), summary);
+void MainWindow::onAddElementShader() {
+    ShaderEditDialog dlg(QString(), this);
+    if (dlg.exec() != QDialog::Accepted) return;
+    QString code = dlg.resultCode().trimmed();
+    if (code.isEmpty()) return;
+
+    SourceDescriptor desc;
+    desc.kind        = SourceDescriptor::Kind::Shader;
+    desc.shaderCode  = code;
+    desc.displayName = "Shader";
+
+    addElementNode(desc, ThumbHelper::makeShaderThumb(code));
+}
+
+void MainWindow::onAddElementDynamicInterface() {
+    HtmlEditDialog dlg(QString(), this);
+    if (dlg.exec() != QDialog::Accepted) return;
+    QString filePath = dlg.resultFilePath();
+    QString html     = dlg.resultHtml().trimmed();
+    if (filePath.isEmpty() && html.isEmpty()) return;
+
+    SourceDescriptor desc;
+    desc.kind        = SourceDescriptor::Kind::Html;
+    desc.htmlContent = html;
+    desc.path        = filePath;
+    desc.displayName = filePath.isEmpty() ? "HTML Overlay"
+                                          : QFileInfo(filePath).fileName();
+
+    addElementNode(desc, ThumbHelper::makeHtmlThumb(html, filePath));
+}
+
+void MainWindow::onAddElementNdi() {
+    if (!NdiSource::isAvailable()) {
+        QMessageBox::warning(this, tr("NDI Input"),
+            tr("NDI is not available. Install the NDI SDK and rebuild SwitchX with -DNDI_ROOT=…"));
+        return;
+    }
+
+    QStringList sources = NdiSource::discoverSources(2000);
+    if (sources.isEmpty()) {
+        QMessageBox::information(this, tr("NDI Input"),
+            tr("No NDI sources found on the network.\n\n"
+               "Make sure another app (SwitchX program output, OBS, phone NDI app) is sending NDI, "
+               "then try again."));
+        return;
+    }
+
+    bool ok = false;
+    const QString chosen = QInputDialog::getItem(this, tr("Select NDI Source"),
+                                                 tr("NDI source:"), sources, 0, false, &ok);
+    if (!ok || chosen.isEmpty()) return;
+
+    SourceDescriptor desc;
+    desc.kind        = SourceDescriptor::Kind::Ndi;
+    desc.path        = chosen;
+    desc.displayName = chosen;
+
+    addElementNode(desc, ThumbHelper::makeIconThumb(QStringLiteral("📡")));
 }
 
 void MainWindow::onConnectObs() {
@@ -1347,49 +1426,4 @@ void MainWindow::rebuildObsScenesMenu(const QStringList &scenes) {
             m_obsIntegration->switchProgramScene(scene);
         });
     }
-}
-
-void MainWindow::onStartRemoteControl() {
-    if (!m_serverDialog) {
-        m_serverDialog = new RemoteServerDialog(m_remoteServer, this);
-        m_serverDialog->setAttribute(Qt::WA_DeleteOnClose);
-        connect(m_serverDialog, &QObject::destroyed, this, [this]() {
-            m_serverDialog = nullptr;
-        });
-    }
-    m_serverDialog->show();
-    m_serverDialog->raise();
-    m_serverDialog->activateWindow();
-}
-
-void MainWindow::selectNodeA(NodeId nodeId) {
-    onNodeAButtonClicked(nodeId);
-}
-
-void MainWindow::selectNodeB(NodeId nodeId) {
-    onNodeBButtonClicked(nodeId);
-}
-
-void MainWindow::togglePlayA() {
-    onADeckPlayClicked();
-}
-
-void MainWindow::togglePlayB() {
-    onBDeckPlayClicked();
-}
-
-bool MainWindow::isPlayingA() const {
-    return m_outputWindow && m_outputWindow->videoWidget() && m_outputWindow->videoWidget()->isPlayingA();
-}
-
-bool MainWindow::isPlayingB() const {
-    return m_outputWindow && m_outputWindow->videoWidget() && m_outputWindow->videoWidget()->isPlayingB();
-}
-
-NodeId MainWindow::activeNodeA() const {
-    return m_deckController ? m_deckController->activeNodeA() : 0;
-}
-
-NodeId MainWindow::activeNodeB() const {
-    return m_deckController ? m_deckController->activeNodeB() : 0;
 }

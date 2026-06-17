@@ -10,13 +10,6 @@ bool ImageSource::load(const QString &filePath) {
     return !m_image.isNull();
 }
 
-bool ImageSource::setImage(QImage image, const QString &displayName) {
-    if (image.isNull()) return false;
-    m_image = image.convertToFormat(QImage::Format_RGBA8888);
-    m_name  = displayName.isEmpty() ? QStringLiteral("Frozen Frame") : displayName;
-    return true;
-}
-
 bool ImageSource::isStaticImageFile(const QString &path) {
     const QString l = path.toLower();
     return l.endsWith(".png")  || l.endsWith(".jpg")  || l.endsWith(".jpeg") ||

@@ -54,3 +54,9 @@ Testing/
 Test.log
 
 repomix-output.xml
+
+# Flatpak
+flatpak/build-dir/
+flatpak/repo/
+flatpak/dist/
+flatpak/.flatpak-builder/
