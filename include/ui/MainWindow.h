@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QMenu>
 #include <QVector>
 #include <QMap>
 #include <memory>
@@ -52,7 +53,6 @@ private slots:
     void onLoadFolderClicked();
     void onAddFolderClicked();
     void onAddFilesClicked();
-    void onAddPhotosClicked();
     void onClearAllClicked();
 
     // ── Node editor signals ───────────────────────────────────────────────────
@@ -65,15 +65,6 @@ private slots:
     void onLoadSessionClicked();
     void onSessionLoaded();
 
-    // ── Add Element handlers ──────────────────────────────────────────────────
-    void onAddElementSlideshow();
-    void onAddElementCamera();
-    void onAddElementScreen();
-    void onAddElementWindow();
-    void onAddElementCanvas();
-    void onAddElementShader();
-    void onAddElementDynamicInterface();
-    void onAddElementNdi();
     void onFreezeFrameCapture();
 
     void onConnectObs();
@@ -130,7 +121,9 @@ private:
     QJsonObject currentSessionJson() const;
     QJsonObject currentSessionJson(const QString &sessionFilePath) const;
     void addElementNode(const SourceDescriptor &desc, const QPixmap &thumb);
+    void addSourceOfKind(SourceDescriptor::Kind kind);
     void appendClipsToEditor(const QStringList &clipPaths);
+    void setupAddElementMenu(QMenu *menu);
 
     void buildEmptyPlaceholder();
     void syncPanicButtons(QPushButton *activeBtn);

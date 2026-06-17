@@ -104,6 +104,7 @@ set(SOURCES
     src/ui/TransitionController.cpp
     src/ui/DeckController.cpp
     src/ui/SourceFactory.cpp
+    src/ui/SourcePrompt.cpp
     src/ui/RemoteControlServer.cpp
     src/ui/RemoteServerDialog.cpp
 )
@@ -163,6 +164,7 @@ set(HEADERS
     include/ui/TransitionController.h
     include/ui/DeckController.h
     include/ui/SourceFactory.h
+    include/ui/SourcePrompt.h
     include/ui/RemoteControlServer.h
     include/ui/RemoteServerDialog.h
 )

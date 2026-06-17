@@ -1,9 +1,12 @@
 #include "ui/GroupEditorDialog.h"
 #include "ui/ClipNodeEditor.h"
+#include "ui/SourcePrompt.h"
+#include "core/NdiSource.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QMenu>
 #include <QGraphicsView>
 
 GroupEditorDialog::GroupEditorDialog(NodeId groupId, ClipNodeEditor *editor, QWidget *parent)
@@ -22,10 +25,10 @@ GroupEditorDialog::GroupEditorDialog(NodeId groupId, ClipNodeEditor *editor, QWi
     layout->addWidget(title);
 
     auto *toolbar = new QHBoxLayout();
-    auto *addClipBtn = new QPushButton("Add Clip…", this);
+    auto *addElementBtn = new QPushButton("Add Element ▾", this);
     auto *addContextBtn = new QPushButton("Add Transform Context", this);
     auto *addAudioBtn = new QPushButton("Add Master Audio Output", this);
-    toolbar->addWidget(addClipBtn);
+    toolbar->addWidget(addElementBtn);
     toolbar->addWidget(addContextBtn);
     toolbar->addWidget(addAudioBtn);
     toolbar->addStretch();
@@ -36,9 +39,22 @@ GroupEditorDialog::GroupEditorDialog(NodeId groupId, ClipNodeEditor *editor, QWi
         layout->addWidget(m_view);
 
         auto *view = qobject_cast<QGraphicsView *>(m_view);
-        connect(addClipBtn, &QPushButton::clicked, this, [editor, groupId, view]() {
-            editor->addClipsFromFileDialog(groupId, view, true);
-        });
+        QMenu *addMenu = new QMenu(addElementBtn);
+        SourcePrompt::buildMenu(addMenu,
+            [editor, groupId, view]() {
+                editor->addClipsFromFileDialog(groupId, view, true);
+            },
+            [this, editor, groupId, view](SourceDescriptor::Kind kind) {
+                SourceDescriptor desc;
+                QPixmap thumb;
+                if (SourcePrompt::prompt(kind, this, desc, thumb)) {
+                    ClipNodeScene *sub = editor->subSceneForGroup(groupId);
+                    editor->addSourceNode(desc, thumb, sub, view, true);
+                }
+            },
+            NdiSource::isAvailable());
+        addElementBtn->setMenu(addMenu);
+
         connect(addContextBtn, &QPushButton::clicked, this, [editor, groupId, view]() {
             editor->addTransformContextToGroup(groupId, view, true);
         });

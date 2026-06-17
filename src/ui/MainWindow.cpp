@@ -2,7 +2,7 @@
 #include "ui_MainWindow.h"
 #include "ui/VideoWidget.h"
 #include "ui/MirrorOutputWindow.h"
-#include "ui/ThumbHelper.h"
+#include "ui/SourcePrompt.h"
 #include "ui/SourceFactory.h"
 #include "core/ThumbnailExtractor.h"
 #include "core/VideoFileSource.h"
@@ -17,18 +17,14 @@
 #include "ui/ObsWebSocketClient.h"
 #include "ui/HotkeyEditorDialog.h"
 #include "ui/SessionRecoveryDialog.h"
-#include "ui/ShaderEditDialog.h"
-#include "ui/HtmlEditDialog.h"
 #include "ui/RemoteControlServer.h"
 #include "ui/RemoteServerDialog.h"
 #include "ui/FrameCaptureHelper.h"
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
-#include <QEventLoop>
 #include <QShortcut>
 #include <QKeySequence>
-#include <glob.h>
 #include <QFileDialog>
 #include <QTimer>
 #include <QDebug>
@@ -41,7 +37,6 @@
 #include <QMenu>
 #include <QLineEdit>
 #include <QInputDialog>
-#include <QColorDialog>
 #include <QMessageBox>
 #include <QMediaDevices>
 #include <QCameraDevice>
@@ -108,11 +103,7 @@ MainWindow::MainWindow(QWidget *parent)
                 .arg(dev.isEmpty() ? tr("a v4l2loopback device") : dev));
     }
 
-    ui->actionAddNdi->setEnabled(NdiSource::isAvailable());
-    if (!NdiSource::isAvailable()) {
-        ui->actionAddNdi->setToolTip(
-            tr("NDI SDK not found at build time. Install the NDI SDK and rebuild with -DNDI_ROOT=…"));
-    }
+    setupAddElementMenu(ui->menuAddElement);
 
     // ── Stacked widget (node editor vs empty placeholder) ─────────────────────
     m_stackWidget = new QStackedWidget(ui->gridWidget);
@@ -199,7 +190,7 @@ void MainWindow::buildEmptyPlaceholder() {
         "Camera, Screen Capture, or Canvas. Then connect ports to construct your media flow.</p>"
     );
 
-    // Build the "Add Element" popup button using the QActions already defined in the .ui.
+    // Build the "Add Element" popup button.
     auto *phBtnRow = new QWidget(m_emptyPlaceholder);
     auto *phBtns   = new QHBoxLayout(phBtnRow);
     phBtns->setContentsMargins(0, 0, 0, 0);
@@ -218,23 +209,8 @@ void MainWindow::buildEmptyPlaceholder() {
         "}"
     );
 
-    // Reuse the QActions already declared in the .ui file.
     QMenu *addMenu = new QMenu(phAddElementBtn);
-    addMenu->addAction(ui->actionAddVideoFile);
-    addMenu->addAction(ui->actionAddPhoto);
-    addMenu->addSeparator();
-    addMenu->addAction(ui->actionAddSlideshow);
-    addMenu->addSeparator();
-    addMenu->addAction(ui->actionAddCamera);
-    addMenu->addAction(ui->actionAddScreen);
-    addMenu->addAction(ui->actionAddWindow);
-    addMenu->addSeparator();
-    addMenu->addAction(ui->actionAddCanvas);
-    addMenu->addSeparator();
-    addMenu->addAction(ui->actionAddShader);
-    addMenu->addAction(ui->actionAddHtml);
-    addMenu->addAction(ui->actionAddNdi);
-
+    setupAddElementMenu(addMenu);
     phAddElementBtn->setMenu(addMenu);
     phBtns->addWidget(phAddElementBtn);
 
@@ -317,23 +293,10 @@ void MainWindow::setupConnections() {
     // Menubar Media actions
     connect(ui->actionLoadFolder, &QAction::triggered, this, &MainWindow::onLoadFolderClicked);
     connect(ui->actionAddFolder,  &QAction::triggered, this, &MainWindow::onAddFolderClicked);
-    connect(ui->actionAddFiles,   &QAction::triggered, this, &MainWindow::onAddFilesClicked);
-    connect(ui->actionAddPhotos,  &QAction::triggered, this, &MainWindow::onAddPhotosClicked);
     connect(ui->actionClearAll,   &QAction::triggered, this, &MainWindow::onClearAllClicked);
     connect(ui->actionSaveSession,&QAction::triggered, this, &MainWindow::onSaveSessionClicked);
     connect(ui->actionLoadSession,&QAction::triggered, this, &MainWindow::onLoadSessionClicked);
 
-    // Add Element actions (shared between menubar and placeholder button)
-    connect(ui->actionAddVideoFile, &QAction::triggered, this, &MainWindow::onAddFilesClicked);
-    connect(ui->actionAddPhoto,     &QAction::triggered, this, &MainWindow::onAddPhotosClicked);
-    connect(ui->actionAddSlideshow, &QAction::triggered, this, &MainWindow::onAddElementSlideshow);
-    connect(ui->actionAddCamera,    &QAction::triggered, this, &MainWindow::onAddElementCamera);
-    connect(ui->actionAddScreen,    &QAction::triggered, this, &MainWindow::onAddElementScreen);
-    connect(ui->actionAddWindow,    &QAction::triggered, this, &MainWindow::onAddElementWindow);
-    connect(ui->actionAddCanvas,    &QAction::triggered, this, &MainWindow::onAddElementCanvas);
-    connect(ui->actionAddShader,    &QAction::triggered, this, &MainWindow::onAddElementShader);
-    connect(ui->actionAddHtml,      &QAction::triggered, this, &MainWindow::onAddElementDynamicInterface);
-    connect(ui->actionAddNdi,       &QAction::triggered, this, &MainWindow::onAddElementNdi);
     connect(ui->actionFreezeFrameCapture, &QAction::triggered, this, &MainWindow::onFreezeFrameCapture);
 
     // View menu
@@ -595,19 +558,6 @@ void MainWindow::onAddFilesClicked() {
     appendClipsToEditor(added);
 }
 
-void MainWindow::onAddPhotosClicked() {
-    QStringList files = QFileDialog::getOpenFileNames(
-        this, "Add Photos", "",
-        "Images (*.png *.jpg *.jpeg *.bmp *.webp *.gif)");
-    if (files.isEmpty()) return;
-    const QStringList before = clipManager.getClips();
-    clipManager.addFiles(files);
-    QStringList added;
-    for (const QString &p : clipManager.getClips())
-        if (!before.contains(p)) added << p;
-    appendClipsToEditor(added);
-}
-
 void MainWindow::onClearAllClicked() {
     clipManager.clear();
     m_clipNodeEditor->clearAllNodes();
@@ -625,6 +575,21 @@ void MainWindow::onClearAllClicked() {
 void MainWindow::addElementNode(const SourceDescriptor &desc, const QPixmap &thumb) {
     m_clipNodeEditor->addSourceNode(desc, thumb);
     m_stackWidget->setCurrentWidget(m_clipNodeEditor);
+}
+
+void MainWindow::addSourceOfKind(SourceDescriptor::Kind kind) {
+    SourceDescriptor desc;
+    QPixmap thumb;
+    if (SourcePrompt::prompt(kind, this, desc, thumb))
+        addElementNode(desc, thumb);
+}
+
+void MainWindow::setupAddElementMenu(QMenu *menu) {
+    if (!menu) return;
+    SourcePrompt::buildMenu(menu,
+                            [this]() { onAddFilesClicked(); },
+                            [this](SourceDescriptor::Kind kind) { addSourceOfKind(kind); },
+                            NdiSource::isAvailable());
 }
 
 void MainWindow::appendClipsToEditor(const QStringList &clipPaths) {
@@ -1219,232 +1184,6 @@ void MainWindow::onSessionLoaded() {
     const NodeId savedB = m_sessionManager->restoredActiveNodeB();
     if (savedA) onNodeAButtonClicked(savedA);
     if (savedB) onNodeBButtonClicked(savedB);
-}
-
-// ── Add Element handlers ──────────────────────────────────────────────────────
-
-void MainWindow::onAddElementSlideshow() {
-    QString folder = QFileDialog::getExistingDirectory(this, "Select Image Folder for Slideshow");
-    if (folder.isEmpty()) return;
-
-    bool ok = false;
-    int interval = QInputDialog::getInt(this, "Slideshow Interval",
-                                        "Seconds per slide:", 3, 1, 60, 1, &ok);
-    if (!ok) return;
-
-    QDir dir(folder);
-    QStringList imgs = dir.entryList({"*.png","*.jpg","*.jpeg","*.bmp","*.webp"},
-                                     QDir::Files, QDir::Name);
-    QPixmap thumb;
-    if (!imgs.isEmpty())
-        thumb = ThumbnailExtractor::extract(dir.absoluteFilePath(imgs.first()), 110, 65);
-    if (thumb.isNull()) thumb = ThumbHelper::makeIconThumb("📁");
-
-    SourceDescriptor desc;
-    desc.kind                = SourceDescriptor::Kind::Slideshow;
-    desc.path                = folder;
-    desc.displayName         = QFileInfo(folder).fileName();
-    desc.slideshowIntervalMs = interval * 1000;
-    desc.slideshowEffect = 0;
-    desc.slideshowTransitionMs = 800;
-
-    addElementNode(desc, thumb);
-}
-
-void MainWindow::onAddElementCamera() {
-    auto qtDevices = QMediaDevices::videoInputs();
-    if (qtDevices.isEmpty()) {
-        QEventLoop loop;
-        QTimer::singleShot(1200, &loop, &QEventLoop::quit);
-        loop.exec();
-        qtDevices = QMediaDevices::videoInputs();
-    }
-
-    struct CamEntry { QString id, label; bool isDefault; };
-    QList<CamEntry> devices;
-
-    for (const auto &d : qtDevices) {
-        QString id    = QString::fromUtf8(d.id());
-        QString label = d.description().isEmpty() ? id
-                      : QString("%1  [%2]").arg(d.description(), id);
-        devices.append({id, label, false});
-    }
-
-    {
-        glob_t g{};
-        if (::glob("/dev/video*", GLOB_NOSORT, nullptr, &g) == 0) {
-            for (size_t i = 0; i < g.gl_pathc; ++i) {
-                QString path = QString::fromLocal8Bit(g.gl_pathv[i]);
-                bool already = std::any_of(devices.begin(), devices.end(),
-                                           [&](const CamEntry &e){ return e.id == path; });
-                if (!already) devices.append({path, path, false});
-            }
-        }
-        ::globfree(&g);
-    }
-    devices.append({"", "Default Camera  (let the system choose)", true});
-
-    QStringList names;
-    for (const auto &e : devices) names << e.label;
-
-    bool ok = false;
-    QString chosen = QInputDialog::getItem(this, "Select Camera",
-                                           "Camera device:", names, 0, false, &ok);
-    if (!ok) return;
-
-    int idx = names.indexOf(chosen);
-    const CamEntry &entry = devices[idx];
-
-    SourceDescriptor desc;
-    desc.kind        = SourceDescriptor::Kind::Camera;
-    desc.path        = entry.id;
-    desc.displayName = entry.isDefault ? "Default Camera"
-                     : entry.label.section("  [", 0, 0).trimmed();
-    if (desc.displayName.isEmpty()) desc.displayName = entry.id.isEmpty() ? "Default Camera" : entry.id;
-    desc.cameraIndex = 0;
-    if (!entry.isDefault) {
-        for (int i = 0; i < qtDevices.size(); ++i) {
-            if (QString::fromUtf8(qtDevices[i].id()) == entry.id) {
-                desc.cameraIndex = i;
-                break;
-            }
-        }
-    }
-
-    addElementNode(desc, ThumbHelper::makeIconThumb("📷"));
-}
-
-void MainWindow::onAddElementScreen() {
-    SourceDescriptor desc;
-    desc.kind        = SourceDescriptor::Kind::Screen;
-    desc.displayName = "Screen Capture";
-    desc.screenIndex = 0;
-    addElementNode(desc, ThumbHelper::makeIconThumb("🖥"));
-}
-
-void MainWindow::onAddElementWindow() {
-    SourceDescriptor desc;
-    desc.kind        = SourceDescriptor::Kind::Window;
-    desc.displayName = "Window / Tab";
-    desc.windowIndex = 0;
-    addElementNode(desc, ThumbHelper::makeIconThumb("🪟"));
-}
-
-void MainWindow::onAddElementCanvas() {
-    struct CanvasPreset { const char *label; int width, height; };
-    const CanvasPreset presets[] = {
-        {"16:9  (1280x720)",  1280, 720},
-        {"4:3  (1024x768)",   1024, 768},
-        {"1:1  (1080x1080)", 1080, 1080},
-        {"9:16  (1080x1920)",1080, 1920},
-    };
-
-    QStringList options;
-    for (const auto &p : presets) options << QString::fromUtf8(p.label);
-    options << "Custom…";
-
-    bool ok = false;
-    const QString choice = QInputDialog::getItem(this, "Canvas",
-                                                  "Aspect ratio:", options, 0, false, &ok);
-    if (!ok || choice.isEmpty()) return;
-
-    int width = 1280, height = 720;
-    if (choice == "Custom…") {
-        width  = QInputDialog::getInt(this, "Canvas Width",  "Width:",  1280, 16, 16384, 1, &ok); if (!ok) return;
-        height = QInputDialog::getInt(this, "Canvas Height", "Height:", 720,  16, 16384, 1, &ok); if (!ok) return;
-    } else {
-        for (const auto &p : presets)
-            if (choice == QString::fromUtf8(p.label)) { width = p.width; height = p.height; break; }
-    }
-
-    const int g = std::gcd(width, height);
-    const QString ratioText = QString("%1:%2").arg(width / g).arg(height / g);
-
-    const QStringList fillOptions = {"Checkered", "Transparent", "Color"};
-    const QString fillChoice = QInputDialog::getItem(this, "Canvas Fill",
-                                                      "Fill type:", fillOptions, 0, false, &ok);
-    if (!ok || fillChoice.isEmpty()) return;
-
-    SourceDescriptor desc;
-    desc.kind = SourceDescriptor::Kind::Canvas;
-    desc.canvasWidth = width; desc.canvasHeight = height;
-    desc.canvasFill  = SourceDescriptor::CanvasFill::Checkered;
-    desc.color       = Qt::white;
-    QString fillLabel = "Checkered";
-
-    if (fillChoice == "Transparent") {
-        desc.canvasFill = SourceDescriptor::CanvasFill::Transparent;
-        fillLabel = "Transparent";
-    } else if (fillChoice == "Color") {
-        QColor c = QColorDialog::getColor(Qt::white, this, "Pick Canvas Color");
-        if (!c.isValid()) return;
-        desc.canvasFill = SourceDescriptor::CanvasFill::Color;
-        desc.color = c;
-        fillLabel = c.name().toUpper();
-    }
-
-    desc.displayName = QString("Canvas %1 (%2)").arg(ratioText, fillLabel);
-    addElementNode(desc, ThumbHelper::makeCanvasThumb(ratioText, desc.canvasFill, desc.color));
-}
-
-void MainWindow::onAddElementShader() {
-    ShaderEditDialog dlg(QString(), this);
-    if (dlg.exec() != QDialog::Accepted) return;
-    QString code = dlg.resultCode().trimmed();
-    if (code.isEmpty()) return;
-
-    SourceDescriptor desc;
-    desc.kind        = SourceDescriptor::Kind::Shader;
-    desc.shaderCode  = code;
-    desc.displayName = "Shader";
-
-    addElementNode(desc, ThumbHelper::makeShaderThumb(code));
-}
-
-void MainWindow::onAddElementDynamicInterface() {
-    HtmlEditDialog dlg(QString(), this);
-    if (dlg.exec() != QDialog::Accepted) return;
-    QString filePath = dlg.resultFilePath();
-    QString html     = dlg.resultHtml().trimmed();
-    if (filePath.isEmpty() && html.isEmpty()) return;
-
-    SourceDescriptor desc;
-    desc.kind        = SourceDescriptor::Kind::Html;
-    desc.htmlContent = html;
-    desc.path        = filePath;
-    desc.displayName = filePath.isEmpty() ? "HTML Overlay"
-                                          : QFileInfo(filePath).fileName();
-
-    addElementNode(desc, ThumbHelper::makeHtmlThumb(html, filePath));
-}
-
-void MainWindow::onAddElementNdi() {
-    if (!NdiSource::isAvailable()) {
-        QMessageBox::warning(this, tr("NDI Input"),
-            tr("NDI is not available. Install the NDI SDK and rebuild SwitchX with -DNDI_ROOT=…"));
-        return;
-    }
-
-    QStringList sources = NdiSource::discoverSources(2000);
-    if (sources.isEmpty()) {
-        QMessageBox::information(this, tr("NDI Input"),
-            tr("No NDI sources found on the network.\n\n"
-               "Make sure another app (SwitchX program output, OBS, phone NDI app) is sending NDI, "
-               "then try again."));
-        return;
-    }
-
-    bool ok = false;
-    const QString chosen = QInputDialog::getItem(this, tr("Select NDI Source"),
-                                                 tr("NDI source:"), sources, 0, false, &ok);
-    if (!ok || chosen.isEmpty()) return;
-
-    SourceDescriptor desc;
-    desc.kind        = SourceDescriptor::Kind::Ndi;
-    desc.path        = chosen;
-    desc.displayName = chosen;
-
-    addElementNode(desc, ThumbHelper::makeIconThumb(QStringLiteral("📡")));
 }
 
 void MainWindow::onFreezeFrameCapture() {

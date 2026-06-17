@@ -774,42 +774,20 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <property name="title">
      <string>Media</string>
     </property>
-    <!-- Folder actions -->
+    <addaction name="menuAddElement"/>
+    <addaction name="separator"/>
     <addaction name="actionLoadFolder"/>
     <addaction name="actionAddFolder"/>
     <addaction name="separator"/>
-    <!-- File actions -->
-    <addaction name="actionAddFiles"/>
-    <addaction name="actionAddPhotos"/>
-    <addaction name="separator"/>
-    <!-- Session -->
     <addaction name="actionSaveSession"/>
     <addaction name="actionLoadSession"/>
     <addaction name="separator"/>
-    <!-- Clear -->
     <addaction name="actionClearAll"/>
-    <addaction name="separator"/>
-    <!-- Add Element submenu -->
-    <addaction name="menuAddElement"/>
    </widget>
    <widget class="QMenu" name="menuAddElement">
     <property name="title">
      <string>Add Element</string>
     </property>
-    <addaction name="actionAddVideoFile"/>
-    <addaction name="actionAddPhoto"/>
-    <addaction name="separator"/>
-    <addaction name="actionAddSlideshow"/>
-    <addaction name="separator"/>
-    <addaction name="actionAddCamera"/>
-    <addaction name="actionAddScreen"/>
-    <addaction name="actionAddWindow"/>
-    <addaction name="separator"/>
-    <addaction name="actionAddCanvas"/>
-    <addaction name="separator"/>
-    <addaction name="actionAddShader"/>
-    <addaction name="actionAddHtml"/>
-    <addaction name="actionAddNdi"/>
    </widget>
    <widget class="QMenu" name="menuView">
     <property name="title">
@@ -857,22 +835,6 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <string>Append another folder's clips without replacing the current ones</string>
    </property>
   </action>
-  <action name="actionAddFiles">
-   <property name="text">
-    <string>Add Files…</string>
-   </property>
-   <property name="toolTip">
-    <string>Pick individual media files to add to the grid</string>
-   </property>
-  </action>
-  <action name="actionAddPhotos">
-   <property name="text">
-    <string>🖼  Add Photos…</string>
-   </property>
-   <property name="toolTip">
-    <string>Pick image files to add to the grid</string>
-   </property>
-  </action>
   <action name="actionSaveSession">
    <property name="text">
     <string>💾  Save Session…</string>
@@ -891,64 +853,10 @@ Split 4-Corner: split into 4 quadrants sliding outwards
   </action>
   <action name="actionClearAll">
    <property name="text">
-    <string>Clear All</string>
+    <string>🗑  Clear All</string>
    </property>
    <property name="toolTip">
     <string>Remove all clips from the grid</string>
-   </property>
-  </action>
-  <!-- Add Element actions (shared between menuAddElement and the placeholder button) -->
-  <action name="actionAddVideoFile">
-   <property name="text">
-    <string>🎬  Video File…</string>
-   </property>
-  </action>
-  <action name="actionAddPhoto">
-   <property name="text">
-    <string>🖼  Photo…</string>
-   </property>
-  </action>
-  <action name="actionAddSlideshow">
-   <property name="text">
-    <string>📁  Slideshow…</string>
-   </property>
-  </action>
-  <action name="actionAddCamera">
-   <property name="text">
-    <string>📷  Camera…</string>
-   </property>
-  </action>
-  <action name="actionAddScreen">
-   <property name="text">
-    <string>🖥  Screen Capture…</string>
-   </property>
-  </action>
-  <action name="actionAddWindow">
-   <property name="text">
-    <string>🪟  Window / Tab…</string>
-   </property>
-  </action>
-  <action name="actionAddCanvas">
-   <property name="text">
-    <string>⬜  Canvas…</string>
-   </property>
-  </action>
-  <action name="actionAddShader">
-   <property name="text">
-    <string>≋  Shader…</string>
-   </property>
-  </action>
-  <action name="actionAddHtml">
-   <property name="text">
-    <string>🌐  HTML Overlay…</string>
-   </property>
-  </action>
-  <action name="actionAddNdi">
-   <property name="text">
-    <string>📡  NDI Source…</string>
-   </property>
-   <property name="toolTip">
-    <string>Add a live NDI network source (OBS, phone, another SwitchX, etc.)</string>
    </property>
   </action>
   <action name="actionShowOutput">
