@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QMenu>
 #include <QVector>
 #include <QMap>
 #include <memory>
@@ -8,15 +9,19 @@
 #include "ui/OutputWindow.h"
 #include "ui/HotkeyManager.h"
 #include "ui/SessionManager.h"
+#include <QJsonObject>
 #include "ui/TransitionController.h"
 #include "ui/DeckController.h"
 #include "ui/OutputHub.h"
 #include "ui/ObsIntegration.h"
 #include "core/ClipManager.h"
+#include "core/ProjectPackager.h"
 #include "core/SourceDescriptor.h"
 #include "core/MediaSource.h"
 
 namespace Ui { class MainWindow; }
+class RemoteControlServer;
+class RemoteServerDialog;
 
 class QPushButton;
 
@@ -26,6 +31,17 @@ class MainWindow : public QMainWindow {
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+
+    // ── Remote API helpers ────────────────────────────────────────────────────
+    void selectNodeA(NodeId nodeId);
+    void selectNodeB(NodeId nodeId);
+    void togglePlayA();
+    void togglePlayB();
+    bool isPlayingA() const;
+    bool isPlayingB() const;
+    NodeId activeNodeA() const;
+    NodeId activeNodeB() const;
+    ClipNodeEditor* clipNodeEditor() const { return m_clipNodeEditor; }
 
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
@@ -38,7 +54,6 @@ private slots:
     void onLoadFolderClicked();
     void onAddFolderClicked();
     void onAddFilesClicked();
-    void onAddPhotosClicked();
     void onClearAllClicked();
 
     // ── Node editor signals ───────────────────────────────────────────────────
@@ -49,21 +64,16 @@ private slots:
     // ── Session persistence ───────────────────────────────────────────────────
     void onSaveSessionClicked();
     void onLoadSessionClicked();
+    void onExportProjectClicked();
+    void onImportProjectClicked();
     void onSessionLoaded();
 
-    // ── Add Element handlers ──────────────────────────────────────────────────
-    void onAddElementSlideshow();
-    void onAddElementCamera();
-    void onAddElementScreen();
-    void onAddElementWindow();
-    void onAddElementCanvas();
-    void onAddElementShader();
-    void onAddElementDynamicInterface();
-    void onAddElementNdi();
+    void onFreezeFrameCapture();
 
     void onConnectObs();
     void onLinkClipObsScene();
     void onEditHotkeys();
+    void onStartRemoteControl();
     void rebuildObsScenesMenu(const QStringList &scenes);
 
     // ── Deck controls ─────────────────────────────────────────────────────────
@@ -91,6 +101,7 @@ private:
 
     ClipManager clipManager;
     QTimer     *updateTimer = nullptr;
+    QTimer     *m_autosaveTimer = nullptr;
 
     // ── Extracted controllers ─────────────────────────────────────────────────
     HotkeyManager      *m_hotkeyManager      = nullptr;
@@ -99,15 +110,23 @@ private:
     DeckController     *m_deckController     = nullptr;
     OutputHub          *m_outputHub          = nullptr;
     ObsIntegration     *m_obsIntegration     = nullptr;
-    class QMenu        *m_obsScenesMenu      = nullptr;
+    QMenu              *m_obsScenesMenu      = nullptr;
+    RemoteControlServer *m_remoteServer      = nullptr;
+    RemoteServerDialog  *m_serverDialog      = nullptr;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     void setupConnections();
     void applyTheme();
 
     void loadFromFile(const QString &path, bool showErrors);
+    void handleStartupRecovery();
+    void performAutosave();
+    QJsonObject currentSessionJson() const;
+    QJsonObject currentSessionJson(const QString &sessionFilePath) const;
     void addElementNode(const SourceDescriptor &desc, const QPixmap &thumb);
+    void addSourceOfKind(SourceDescriptor::Kind kind);
     void appendClipsToEditor(const QStringList &clipPaths);
+    void setupAddElementMenu(QMenu *menu);
 
     void buildEmptyPlaceholder();
     void syncPanicButtons(QPushButton *activeBtn);

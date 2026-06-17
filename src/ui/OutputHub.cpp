@@ -8,6 +8,7 @@
 OutputHub::OutputHub(QObject *parent)
     : QObject(parent)
     , m_ndiSink(std::make_unique<NdiProgramSink>())
+    , m_virtualCameraSink(std::make_unique<VirtualCameraProgramSink>())
     , m_recorder(std::make_unique<ProgramRecorder>(this))
 {
     connect(m_recorder.get(), &ProgramRecorder::recordingChanged,
@@ -76,6 +77,40 @@ bool OutputHub::setNdiOutputEnabled(bool enabled, const QString &streamName) {
     return true;
 }
 
+bool OutputHub::virtualCameraAvailable() const {
+    return m_virtualCameraSink && m_virtualCameraSink->isAvailable();
+}
+
+QString OutputHub::virtualCameraDevicePath() const {
+    return m_virtualCameraSink ? m_virtualCameraSink->devicePath() : QString{};
+}
+
+bool OutputHub::setVirtualCameraEnabled(bool enabled, const QString &devicePath) {
+    if (!m_virtualCameraSink || !virtualCameraAvailable()) {
+        if (enabled)
+            return false;
+        enabled = false;
+    }
+
+    if (enabled == m_virtualCameraEnabled)
+        return true;
+
+    if (enabled) {
+        if (!devicePath.isEmpty())
+            m_virtualCameraSink->setDevicePath(devicePath);
+        if (!m_virtualCameraSink->start())
+            return false;
+        m_virtualCameraEnabled = true;
+    } else {
+        m_virtualCameraSink->stop();
+        m_virtualCameraEnabled = false;
+    }
+
+    syncFrameConsumers();
+    emit virtualCameraEnabledChanged(m_virtualCameraEnabled);
+    return true;
+}
+
 bool OutputHub::isProgramRecording() const {
     return m_recorder && m_recorder->isRecording();
 }
@@ -126,6 +161,9 @@ void OutputHub::onProgramFrameReady() {
     if (m_ndiEnabled && m_ndiSink && m_ndiSink->isActive() && !frame.isNull())
         m_ndiSink->submitFrame(frame);
 
+    if (m_virtualCameraEnabled && m_virtualCameraSink && m_virtualCameraSink->isActive() && !frame.isNull())
+        m_virtualCameraSink->submitFrame(frame);
+
     if (m_recorder && m_recorder->isRecording() && !frame.isNull())
         m_recorder->submitFrame(frame);
 }
@@ -146,6 +184,8 @@ int OutputHub::activeFrameConsumerCount() const {
         if (mirror) ++count;
     }
     if (m_ndiEnabled)
+        ++count;
+    if (m_virtualCameraEnabled)
         ++count;
     if (m_recorder && m_recorder->isRecording())
         ++count;

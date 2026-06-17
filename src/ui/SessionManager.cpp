@@ -15,6 +15,30 @@
 #include <QMessageBox>
 #include <QStandardPaths>
 #include <QKeySequence>
+#include <QDateTime>
+#include <QCoreApplication>
+#include <algorithm>
+
+#ifndef _WIN32
+#include <unistd.h>
+#include <signal.h>
+#endif
+
+namespace {
+
+bool isProcessAlive(qint64 pid)
+{
+#ifndef _WIN32
+    if (pid <= 0)
+        return false;
+    return kill(static_cast<pid_t>(pid), 0) == 0;
+#else
+    Q_UNUSED(pid);
+    return false;
+#endif
+}
+
+} // namespace
 
 SessionManager::SessionManager(ClipNodeEditor *editor,
                                VideoWidget    *videoWidget,
@@ -29,10 +53,113 @@ SessionManager::SessionManager(ClipNodeEditor *editor,
 {
 }
 
-QString SessionManager::autosavePath() {
+QString SessionManager::configDirectory() {
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
     QDir().mkpath(dir);
-    return QDir(dir).filePath("session.sxs");
+    return dir;
+}
+
+QString SessionManager::autosavePath() {
+    return QDir(configDirectory()).filePath(QStringLiteral("session.sxs"));
+}
+
+QString SessionManager::lockFilePath() {
+    return QDir(configDirectory()).filePath(QStringLiteral("session.lock"));
+}
+
+QString SessionManager::backupsDirectory() {
+    const QString dir = QDir(configDirectory()).filePath(QStringLiteral("backups"));
+    QDir().mkpath(dir);
+    return dir;
+}
+
+SessionManager::RecoveryInfo SessionManager::checkRecovery() {
+    RecoveryInfo info;
+    info.autosavePath = autosavePath();
+    info.backupPaths  = SessionManager::listBackupFiles();
+
+    const QString lockPath = lockFilePath();
+    if (!QFile::exists(lockPath))
+        return info;
+
+    QFile lockFile(lockPath);
+    if (lockFile.open(QIODevice::ReadOnly)) {
+        const QJsonObject lockObj = QJsonDocument::fromJson(lockFile.readAll()).object();
+        const qint64 pid = lockObj.value(QStringLiteral("pid")).toInteger();
+        if (isProcessAlive(pid))
+            return info;
+    }
+
+    info.uncleanShutdown = true;
+    return info;
+}
+
+void SessionManager::markRunning() {
+    QJsonObject lockObj;
+    lockObj.insert(QStringLiteral("pid"), static_cast<qint64>(QCoreApplication::applicationPid()));
+    lockObj.insert(QStringLiteral("startedAt"), QDateTime::currentDateTime().toString(Qt::ISODate));
+
+    QFile lockFile(lockFilePath());
+    if (lockFile.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        lockFile.write(QJsonDocument(lockObj).toJson(QJsonDocument::Compact));
+}
+
+void SessionManager::markCleanExit() {
+    QFile::remove(lockFilePath());
+}
+
+bool SessionManager::writeSessionFile(const QJsonObject &json, const QString &path) const {
+    const QString tempPath = path + QStringLiteral(".tmp");
+    QFile tempFile(tempPath);
+    if (!tempFile.open(QIODevice::WriteOnly))
+        return false;
+
+    tempFile.write(QJsonDocument(json).toJson(QJsonDocument::Indented));
+    tempFile.close();
+
+    if (QFile::exists(path) && !QFile::remove(path))
+        return false;
+
+    return QFile::rename(tempPath, path);
+}
+
+QStringList SessionManager::listBackupFiles() {
+    QDir dir(backupsDirectory());
+    QStringList files = dir.entryList({QStringLiteral("session-*.sxs")},
+                                      QDir::Files, QDir::Name);
+    std::sort(files.begin(), files.end(), std::greater<QString>());
+    QStringList paths;
+    paths.reserve(files.size());
+    for (const QString &name : files)
+        paths << dir.absoluteFilePath(name);
+    return paths;
+}
+
+void SessionManager::pruneBackups(int keepCount) {
+    if (keepCount < 0)
+        keepCount = 0;
+
+    const QStringList backups = listBackupFiles();
+    for (int i = keepCount; i < backups.size(); ++i)
+        QFile::remove(backups.at(i));
+}
+
+bool SessionManager::saveAutosave(const QJsonObject &json, int backupRetention) {
+    QJsonObject enriched = json;
+    enriched.insert(QStringLiteral("savedAt"),
+                    QDateTime::currentDateTime().toString(Qt::ISODate));
+
+    const QString primary = autosavePath();
+    if (!writeSessionFile(enriched, primary))
+        return false;
+
+    const QString stamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd_HH-mm-ss"));
+    const QString backupPath = QDir(backupsDirectory()).filePath(
+        QStringLiteral("session-%1.sxs").arg(stamp));
+    writeSessionFile(enriched, backupPath);
+
+    pruneBackups(backupRetention);
+    return true;
 }
 
 QJsonObject SessionManager::buildJson(int crossfader, int transitionMode,
@@ -64,15 +191,6 @@ QJsonObject SessionManager::buildJson(int crossfader, int transitionMode,
     root["hotkeys"] = hotkeys;
     root["graph"]   = m_editor->saveState(sessionDir);
     return root;
-}
-
-bool SessionManager::saveToFile(const QString &path) const {
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly))
-        return false;
-    // Note: caller must supply the JSON via buildJson()
-    // (this overload is called after the JSON has already been built)
-    return true;
 }
 
 bool SessionManager::loadFromFile(const QString &path, bool showErrors) {

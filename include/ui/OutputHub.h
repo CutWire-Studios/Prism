@@ -5,6 +5,7 @@
 #include <QPointer>
 #include <memory>
 #include "ui/NdiProgramSink.h"
+#include "ui/VirtualCameraProgramSink.h"
 #include "ui/ProgramRecorder.h"
 
 class VideoWidget;
@@ -33,6 +34,14 @@ public:
     /// Start or stop NDI program output. Returns false if NDI is unavailable or start failed.
     bool setNdiOutputEnabled(bool enabled, const QString &streamName = {});
 
+    // ── Virtual camera program output ─────────────────────────────────────────
+    bool virtualCameraAvailable() const;
+    bool virtualCameraEnabled() const { return m_virtualCameraEnabled; }
+    QString virtualCameraDevicePath() const;
+
+    /// Start or stop virtual camera output. Returns false if unavailable or start failed.
+    bool setVirtualCameraEnabled(bool enabled, const QString &devicePath = {});
+
     // ── Program recording ─────────────────────────────────────────────────────
     bool isProgramRecording() const;
     QString recordingOutputPath() const;
@@ -43,6 +52,7 @@ public:
 
 signals:
     void ndiOutputEnabledChanged(bool enabled);
+    void virtualCameraEnabledChanged(bool enabled);
     void programRecordingChanged(bool recording);
 
 private slots:
@@ -57,7 +67,9 @@ private:
     VideoWidget *m_source = nullptr;
     QList<QPointer<MirrorOutputWindow>> m_mirrors;
 
-    std::unique_ptr<NdiProgramSink>   m_ndiSink;
-    std::unique_ptr<ProgramRecorder>  m_recorder;
+    std::unique_ptr<NdiProgramSink>            m_ndiSink;
+    std::unique_ptr<VirtualCameraProgramSink>  m_virtualCameraSink;
+    std::unique_ptr<ProgramRecorder>           m_recorder;
     bool m_ndiEnabled = false;
+    bool m_virtualCameraEnabled = false;
 };

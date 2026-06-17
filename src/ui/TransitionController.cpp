@@ -102,3 +102,25 @@ void TransitionController::onCutTransitionClicked() {
     int targetVal  = (currentVal <= 50) ? 100 : 0;
     m_crossfaderSlider->setValue(targetVal);
 }
+
+void TransitionController::setTransitionModeIndex(int index) {
+    if (m_transitionCombo && index >= 0 && index < m_transitionCombo->count()) {
+        m_transitionCombo->setCurrentIndex(index);
+    }
+}
+
+void TransitionController::setTransitionDuration(double secs) {
+    if (m_durationSpin) {
+        m_durationSpin->setValue(secs);
+    }
+}
+
+QStringList TransitionController::transitionModeNames() const {
+    QStringList names;
+    if (m_transitionCombo) {
+        for (int i = 0; i < m_transitionCombo->count(); ++i) {
+            names.append(m_transitionCombo->itemText(i));
+        }
+    }
+    return names;
+}

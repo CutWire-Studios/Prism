@@ -13,6 +13,9 @@ public:
 
     bool load(const QString &filePath);
 
+    /// Adopt an in-memory image (e.g. freeze-frame capture).
+    bool setImage(QImage image, const QString &displayName = {});
+
     // Detects whether a file path points to a supported static image.
     static bool isStaticImageFile(const QString &path);
 

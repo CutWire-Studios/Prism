@@ -8,7 +8,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Qt
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets Gui Multimedia WebEngineWidgets DBus)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets Gui Multimedia WebEngineWidgets DBus Network)
 find_package(Qt6 QUIET COMPONENTS WebSockets)
 if(TARGET Qt6::WebSockets)
     set(SWITCHX_HAVE_OBS_WS TRUE)
@@ -22,6 +22,7 @@ find_package(re2 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
 pkg_check_modules(GSTREAMER_APP REQUIRED gstreamer-app-1.0)
+pkg_check_modules(LIBZIP REQUIRED libzip)
 
 # FFmpeg
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
@@ -71,6 +72,7 @@ set(SOURCES
     src/core/ThumbnailExtractor.cpp
     src/core/OverlayItem.cpp
     src/core/AssetPathResolver.cpp
+    src/core/ProjectPackager.cpp
     src/core/ShaderSource.cpp
     src/core/HtmlSource.cpp
     src/core/NdiLibrary.cpp
@@ -91,6 +93,8 @@ set(SOURCES
     src/ui/MirrorOutputWindow.cpp
     src/ui/OutputHub.cpp
     src/ui/NdiProgramSink.cpp
+    src/ui/VirtualCameraProgramSink.cpp
+    src/ui/FrameCaptureHelper.cpp
     src/ui/ObsWebSocketClient.cpp
     src/ui/ObsIntegration.cpp
     src/ui/ProgramRecorder.cpp
@@ -101,9 +105,13 @@ set(SOURCES
     src/ui/HotkeyManager.cpp
     src/ui/HotkeyEditorDialog.cpp
     src/ui/SessionManager.cpp
+    src/ui/SessionRecoveryDialog.cpp
     src/ui/TransitionController.cpp
     src/ui/DeckController.cpp
     src/ui/SourceFactory.cpp
+    src/ui/SourcePrompt.cpp
+    src/ui/RemoteControlServer.cpp
+    src/ui/RemoteServerDialog.cpp
 )
 
 set(HEADERS
@@ -124,6 +132,7 @@ set(HEADERS
     include/core/ThumbnailExtractor.h
     include/core/OverlayItem.h
     include/core/AssetPathResolver.h
+    include/core/ProjectPackager.h
     include/core/ShaderSource.h
     include/core/HtmlSource.h
     include/core/NdiLibrary.h
@@ -144,6 +153,8 @@ set(HEADERS
     include/ui/MirrorOutputWindow.h
     include/ui/OutputHub.h
     include/ui/NdiProgramSink.h
+    include/ui/VirtualCameraProgramSink.h
+    include/ui/FrameCaptureHelper.h
     include/ui/ObsWebSocketClient.h
     include/ui/ObsIntegration.h
     include/ui/ProgramRecorder.h
@@ -155,9 +166,13 @@ set(HEADERS
     include/ui/HotkeyManager.h
     include/ui/HotkeyEditorDialog.h
     include/ui/SessionManager.h
+    include/ui/SessionRecoveryDialog.h
     include/ui/TransitionController.h
     include/ui/DeckController.h
     include/ui/SourceFactory.h
+    include/ui/SourcePrompt.h
+    include/ui/RemoteControlServer.h
+    include/ui/RemoteServerDialog.h
 )
 
 set(UI_FILES
@@ -187,6 +202,7 @@ target_include_directories(Prism PRIVATE
     ${FFMPEG_INCLUDE_DIRS}
     ${GSTREAMER_INCLUDE_DIRS}
     ${GSTREAMER_APP_INCLUDE_DIRS}
+    ${LIBZIP_INCLUDE_DIRS}
 )
 
 # Link libraries
@@ -199,10 +215,12 @@ target_link_libraries(Prism PRIVATE
     Qt6::Multimedia
     Qt6::WebEngineWidgets
     Qt6::DBus
+    Qt6::Network
     re2::re2
     ${FFMPEG_LIBRARIES}
     ${GSTREAMER_LIBRARIES}
     ${GSTREAMER_APP_LIBRARIES}
+    ${LIBZIP_LIBRARIES}
     kissfft::kissfft
 )
 
