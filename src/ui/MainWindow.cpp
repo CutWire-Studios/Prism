@@ -63,6 +63,12 @@ MainWindow::MainWindow(QWidget *parent)
     m_outputHub = new OutputHub(this);
     m_outputHub->setProgramSource(m_outputWindow->videoWidget());
 
+    ui->actionNdiOutput->setEnabled(m_outputHub->ndiAvailable());
+    if (!m_outputHub->ndiAvailable()) {
+        ui->actionNdiOutput->setToolTip(
+            tr("NDI SDK not found at build time. Install the NDI SDK and rebuild with -DNDI_ROOT=…"));
+    }
+
     // ── Stacked widget (node editor vs empty placeholder) ─────────────────────
     m_stackWidget = new QStackedWidget(ui->gridWidget);
     ui->gridLayout->addWidget(m_stackWidget, 0, 0, 1, 1);
@@ -188,6 +194,7 @@ void MainWindow::buildEmptyPlaceholder() {
 }
 
 MainWindow::~MainWindow() {
+    m_outputHub->setNdiOutputEnabled(false);
     m_deckController->stopDeckAudio(true);
     m_deckController->stopDeckAudio(false);
     delete ui;
@@ -252,6 +259,24 @@ void MainWindow::setupConnections() {
             preview->raise();
             preview->activateWindow();
         }
+    });
+    connect(ui->actionNdiOutput, &QAction::toggled, this, [this](bool on) {
+        if (!m_outputHub->setNdiOutputEnabled(on)) {
+            ui->actionNdiOutput->blockSignals(true);
+            ui->actionNdiOutput->setChecked(false);
+            ui->actionNdiOutput->blockSignals(false);
+            if (on) {
+                QMessageBox::warning(this, tr("NDI Output"),
+                    m_outputHub->ndiAvailable()
+                        ? tr("Could not start NDI program output.")
+                        : tr("NDI is not available. Install the NDI SDK and rebuild SwitchX."));
+            }
+        }
+    });
+    connect(m_outputHub, &OutputHub::ndiOutputEnabledChanged, this, [this](bool on) {
+        ui->actionNdiOutput->blockSignals(true);
+        ui->actionNdiOutput->setChecked(on);
+        ui->actionNdiOutput->blockSignals(false);
     });
     connect(ui->actionStayOnTop, &QAction::toggled, this, [this](bool on) {
         Qt::WindowFlags flags = m_outputWindow->windowFlags();

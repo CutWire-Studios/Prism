@@ -310,6 +310,10 @@ void VideoWidget::removeProgramFrameConsumer() {
     m_programFrameConsumers = std::max(0, m_programFrameConsumers - 1);
 }
 
+void VideoWidget::setProgramFrameConsumerCount(int count) {
+    m_programFrameConsumers = std::max(0, count);
+}
+
 void VideoWidget::cacheProgramFrameFromFbo() {
     if (!m_programFbo) return;
 

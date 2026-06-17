@@ -734,6 +734,8 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     </property>
     <addaction name="actionShowOutput"/>
     <addaction name="actionShowPreview"/>
+    <addaction name="separator"/>
+    <addaction name="actionNdiOutput"/>
     <addaction name="actionStayOnTop"/>
    </widget>
    <addaction name="menuMedia"/>
@@ -856,6 +858,17 @@ Split 4-Corner: split into 4 quadrants sliding outwards
    </property>
    <property name="toolTip">
     <string>Show a second window mirroring the program mix (opens on second monitor when available)</string>
+   </property>
+  </action>
+  <action name="actionNdiOutput">
+   <property name="text">
+    <string>NDI Program Output</string>
+   </property>
+   <property name="toolTip">
+    <string>Send the program mix as an NDI source (SwitchX Program) for OBS, vMix, etc.</string>
+   </property>
+   <property name="checkable">
+    <bool>true</bool>
    </property>
   </action>
   <action name="actionStayOnTop">

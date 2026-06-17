@@ -20,6 +20,18 @@ pkg_check_modules(GSTREAMER_APP REQUIRED gstreamer-app-1.0)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat avutil swscale swresample)
 
+# NDI (optional — program output to OBS etc.)
+option(SWITCHX_WITH_NDI "Enable NDI program output" ON)
+if(SWITCHX_WITH_NDI)
+    find_package(NDI)
+    if(NDI_FOUND)
+        message(STATUS "NDI found: ${NDI_LIBRARIES}")
+        set(SWITCHX_HAVE_NDI TRUE)
+    else()
+        message(STATUS "NDI SDK not found — NDI output disabled (set NDI_ROOT or install NDI SDK)")
+    endif()
+endif()
+
 
 set(SOURCES
     src/main.cpp
@@ -53,6 +65,7 @@ set(SOURCES
     src/ui/ProgramMirrorWidget.cpp
     src/ui/MirrorOutputWindow.cpp
     src/ui/OutputHub.cpp
+    src/ui/NdiProgramSink.cpp
     src/ui/ShaderEditDialog.cpp
     src/ui/HtmlEditDialog.cpp
     # Extracted helper / controller classes
@@ -97,6 +110,8 @@ set(HEADERS
     include/ui/ProgramMirrorWidget.h
     include/ui/MirrorOutputWindow.h
     include/ui/OutputHub.h
+    include/ui/NdiProgramSink.h
+    include/ui/ProgramOutputSink.h
     include/ui/ShaderEditDialog.h
     include/ui/HtmlEditDialog.h
     # Extracted helper / controller headers
@@ -152,6 +167,12 @@ target_link_libraries(Prism PRIVATE
     ${GSTREAMER_LIBRARIES}
     ${GSTREAMER_APP_LIBRARIES}
 )
+
+if(SWITCHX_HAVE_NDI)
+    target_compile_definitions(Prism PRIVATE SWITCHX_HAVE_NDI)
+    target_include_directories(Prism PRIVATE ${NDI_INCLUDE_DIRS})
+    target_link_libraries(Prism PRIVATE ${NDI_LIBRARIES})
+endif()
 
 # Enable testing
 enable_testing()

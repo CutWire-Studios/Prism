@@ -122,6 +122,7 @@ public:
     /// Enable CPU readback of the program FBO for mirror outputs / recording.
     void addProgramFrameConsumer();
     void removeProgramFrameConsumer();
+    void setProgramFrameConsumerCount(int count);
     QImage programFrame() const { return m_programFrameCache; }
 
 signals:
