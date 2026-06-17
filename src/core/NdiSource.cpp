@@ -2,6 +2,7 @@
 #include "core/NdiLibrary.h"
 
 #ifdef SWITCHX_HAVE_NDI
+#include <cstddef>
 #include <Processing.NDI.Lib.h>
 #endif
 
