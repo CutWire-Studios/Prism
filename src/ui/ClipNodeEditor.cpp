@@ -46,8 +46,9 @@
 
 static constexpr qreal CARD_W        = 122.0;
 static constexpr qreal CARD_PROXY_H  = 175.0;
-static constexpr qreal PORT_R        = 7.0;
-static constexpr qreal HEADER_H      = 18.0;
+static constexpr qreal PORT_R        = 4.5;
+static constexpr qreal PORT_HIT_R    = 8.0;
+static constexpr qreal HEADER_H      = 16.0;
 static constexpr qreal PROXY_Y       = PORT_R + HEADER_H;
 static constexpr qreal IN_PORT_Y     = PORT_R;
 static constexpr qreal PORT_X        = CARD_W / 2.0;
@@ -118,18 +119,22 @@ public:
     NodeItemBase *nodeItem() const { return m_nodeItem; }
     QPointF sceneCenter() const { return mapToScene(QPointF(0, 0)); }
 
-    void setConnected(bool c) { m_connected = c; refreshAppearance(); }
+    void setConnected(bool c) { m_connected = c; update(); }
     bool isConnected() const  { return m_connected; }
 
 protected:
     void hoverEnterEvent(QGraphicsSceneHoverEvent *e) override {
-        refreshAppearance(true);
+        m_hovered = true;
+        update();
         QGraphicsEllipseItem::hoverEnterEvent(e);
     }
     void hoverLeaveEvent(QGraphicsSceneHoverEvent *e) override {
-        refreshAppearance(false);
+        m_hovered = false;
+        update();
         QGraphicsEllipseItem::hoverLeaveEvent(e);
     }
+    void paint(QPainter *p, const QStyleOptionGraphicsItem *opt, QWidget *w) override;
+    QPainterPath shape() const override;
     void mousePressEvent(QGraphicsSceneMouseEvent *e) override;
     void mouseMoveEvent(QGraphicsSceneMouseEvent *e) override;
     void mouseReleaseEvent(QGraphicsSceneMouseEvent *e) override;
@@ -138,14 +143,7 @@ private:
     PortKind m_kind;
     NodeItemBase *m_nodeItem;
     bool m_connected = false;
-
-    void refreshAppearance(bool hovered = false) {
-        QColor base = portKindColor(m_kind);
-        if (m_connected) base = base.lighter(115);
-        if (hovered)     base = base.lighter(145);
-        setPen(QPen(base.darker(160), 1.5));
-        setBrush(base);
-    }
+    bool m_hovered = false;
 };
 
 class ConnectionItem : public QGraphicsPathItem {
@@ -163,7 +161,7 @@ public:
         else if (kind == TransformToContext) color = QColor(0xd0, 0xb0, 0x70);
         else if (kind == AudioToController) color = QColor(0xe8, 0x80, 0x30);
         else color = QColor(0xf0, 0xc0, 0x50);
-        m_basePen = QPen(color, 2.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        m_basePen = QPen(color, 2.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
         setPen(m_basePen);
         updatePath();
     }
@@ -448,10 +446,10 @@ public:
         setZValue(0);
 
         m_audioInPort = new PortItem(PortKind::AudioIn, this);
-        m_audioInPort->setPos(SMALL_NODE_W - 10, SMALL_NODE_H / 2);
+        m_audioInPort->setPos(SMALL_NODE_W, SMALL_NODE_H / 2);
 
         m_audioOutPort = new PortItem(PortKind::AudioControllerOut, this);
-        m_audioOutPort->setPos(10, SMALL_NODE_H / 2);
+        m_audioOutPort->setPos(0, SMALL_NODE_H / 2);
     }
 
     std::function<void(NodeId)> onEditRequested;
@@ -558,7 +556,7 @@ public:
         setZValue(0);
 
         m_audioInPort = new PortItem(PortKind::MasterAudioIn, this);
-        m_audioInPort->setPos(SMALL_NODE_W - 10, SMALL_NODE_H / 2);
+        m_audioInPort->setPos(SMALL_NODE_W, SMALL_NODE_H / 2);
     }
 
     std::function<void(NodeId)> onDeleteRequested;
@@ -1101,7 +1099,42 @@ PortItem::PortItem(PortKind kind, NodeItemBase *parentNode)
     setParentItem(parentNode);
     setAcceptHoverEvents(true);
     setZValue(2);
-    refreshAppearance();
+    setPen(Qt::NoPen);
+    setBrush(Qt::NoBrush);
+}
+
+void PortItem::paint(QPainter *p, const QStyleOptionGraphicsItem *opt, QWidget *w) {
+    Q_UNUSED(opt);
+    Q_UNUSED(w);
+    p->setRenderHint(QPainter::Antialiasing);
+
+    QColor base = portKindColor(m_kind);
+    if (m_connected) base = base.lighter(108);
+    if (m_hovered)   base = base.lighter(125);
+
+    if (m_hovered || m_connected) {
+        QColor glow = base;
+        glow.setAlpha(m_hovered ? 70 : 45);
+        p->setPen(Qt::NoPen);
+        p->setBrush(glow);
+        p->drawEllipse(QPointF(0, 0), PORT_R + 2.5, PORT_R + 2.5);
+    }
+
+    p->setPen(QPen(QColor(12, 13, 15), 1.0));
+    p->setBrush(base);
+    p->drawEllipse(QPointF(0, 0), PORT_R, PORT_R);
+
+    QColor highlight = base.lighter(155);
+    highlight.setAlpha(160);
+    p->setPen(Qt::NoPen);
+    p->setBrush(highlight);
+    p->drawEllipse(QPointF(-PORT_R * 0.2, -PORT_R * 0.25), PORT_R * 0.35, PORT_R * 0.3);
+}
+
+QPainterPath PortItem::shape() const {
+    QPainterPath path;
+    path.addEllipse(QPointF(0, 0), PORT_HIT_R, PORT_HIT_R);
+    return path;
 }
 
 void PortItem::mousePressEvent(QGraphicsSceneMouseEvent *e) {

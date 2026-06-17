@@ -89,11 +89,29 @@ QMenu {
     background-color: #1A1A1A;
     color: #E0E0E0;
     border: 1px solid #333333;
+    border-radius: 6px;
+    padding: 4px;
+}
+
+QMenu::item {
+    padding: 6px 28px 6px 16px;
+    border-radius: 4px;
+    margin: 1px 2px;
 }
 
 QMenu::item:selected {
     background-color: #00BFFF;
     color: #0F0F0F;
+}
+
+QMenu::item:disabled {
+    color: #666666;
+}
+
+QMenu::separator {
+    height: 1px;
+    background: #333333;
+    margin: 4px 8px;
 }
 
 QMenuBar {
@@ -102,7 +120,79 @@ QMenuBar {
     border-bottom: 1px solid #333333;
 }
 
+QMenuBar::item {
+    padding: 6px 12px;
+    border-radius: 4px;
+    margin: 2px;
+}
+
 QMenuBar::item:selected {
+    background-color: #2A2A2A;
+    color: #00FFFF;
+}
+
+QMenuBar::item:pressed {
+    background-color: #00BFFF;
+    color: #0F0F0F;
+}
+
+QComboBox {
+    background-color: #1A1A1A;
+    color: #E0E0E0;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 4px 8px;
+    min-height: 22px;
+}
+
+QComboBox:hover {
+    border: 1px solid #00BFFF;
+    background-color: #222222;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 22px;
+    border-left: 1px solid #333333;
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+}
+
+QComboBox::drop-down:hover {
+    background-color: #2A2A2A;
+}
+
+QComboBox::down-arrow {
+    width: 0; height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #888888;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1A1A1A;
+    color: #E0E0E0;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 4px;
+    selection-background-color: #00BFFF;
+    selection-color: #0F0F0F;
+    outline: none;
+}
+
+QComboBox QAbstractItemView::item {
+    padding: 6px 12px;
+    min-height: 24px;
+    border-radius: 3px;
+}
+
+QComboBox QAbstractItemView::item:hover {
+    background-color: #2A2A2A;
+    color: #00FFFF;
+}
+
+QComboBox QAbstractItemView::item:selected {
     background-color: #00BFFF;
     color: #0F0F0F;
 }
