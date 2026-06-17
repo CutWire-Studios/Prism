@@ -136,7 +136,7 @@ void ObsWebSocketClient::sendIdentify(const QJsonObject &helloData, const QStrin
 {
     QJsonObject identify;
     identify.insert(QStringLiteral("rpcVersion"), helloData.value(QStringLiteral("rpcVersion")).toInt(1));
-    identify.insert(QStringLiteral("eventSubscriptions"), 1 << 4);
+    identify.insert(QStringLiteral("eventSubscriptions"), 1 << 2); // EventSubscription::Scenes
 
     if (helloData.contains(QStringLiteral("authentication"))) {
         const QJsonObject auth = helloData.value(QStringLiteral("authentication")).toObject();
