@@ -11,6 +11,9 @@
 #include <QPainter>
 #include <QFont>
 #include <QFileInfo>
+#include <QContextMenuEvent>
+#include <QMouseEvent>
+#include <QWindow>
 #include <algorithm>
 
 VideoWidget::VideoWidget(QWidget *parent)
@@ -1101,6 +1104,57 @@ void VideoWidget::updateFrame() {
         (m_playingOverlay && m_htmlOverlay && !m_htmlOverlay->isReady())) {
         update();
     }
+}
+
+// ── Frameless window chrome ───────────────────────────────────────────────────
+
+void VideoWidget::mousePressEvent(QMouseEvent *event) {
+    if (m_framelessWindowChrome && window() && !window()->isFullScreen()
+        && event->button() == Qt::LeftButton) {
+        if (auto *wh = window()->windowHandle(); wh && wh->startSystemMove()) {
+            event->accept();
+            return;
+        }
+        m_windowDragActive = true;
+        m_windowDragOffset = event->globalPosition().toPoint() - window()->frameGeometry().topLeft();
+        event->accept();
+        return;
+    }
+    QOpenGLWidget::mousePressEvent(event);
+}
+
+void VideoWidget::mouseMoveEvent(QMouseEvent *event) {
+    if (m_windowDragActive && window() && !window()->isFullScreen()
+        && (event->buttons() & Qt::LeftButton)) {
+        window()->move(event->globalPosition().toPoint() - m_windowDragOffset);
+        event->accept();
+        return;
+    }
+    QOpenGLWidget::mouseMoveEvent(event);
+}
+
+void VideoWidget::mouseReleaseEvent(QMouseEvent *event) {
+    if (m_framelessWindowChrome && event->button() == Qt::LeftButton)
+        m_windowDragActive = false;
+    QOpenGLWidget::mouseReleaseEvent(event);
+}
+
+void VideoWidget::mouseDoubleClickEvent(QMouseEvent *event) {
+    if (m_framelessWindowChrome && event->button() == Qt::LeftButton) {
+        emit framelessToggleFullscreenRequested();
+        event->accept();
+        return;
+    }
+    QOpenGLWidget::mouseDoubleClickEvent(event);
+}
+
+void VideoWidget::contextMenuEvent(QContextMenuEvent *event) {
+    if (m_framelessWindowChrome) {
+        emit framelessContextMenuRequested(event->globalPos());
+        event->accept();
+        return;
+    }
+    QOpenGLWidget::contextMenuEvent(event);
 }
 
 // ── Drag & drop ───────────────────────────────────────────────────────────────

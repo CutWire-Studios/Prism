@@ -147,6 +147,10 @@ public:
     /// Read back the current program compositor frame (1280×720 RGBA).
     QImage captureProgramFrame();
 
+    /// Enable drag-to-move, double-click, and context menu for frameless windows.
+    void setFramelessWindowChrome(bool enabled) { m_framelessWindowChrome = enabled; }
+    bool framelessWindowChrome() const { return m_framelessWindowChrome; }
+
     /// Replace a deck base source or overlay chain entry with a still image.
     void holdLayerAsStill(bool deckA, int chainIndex, const QImage &frame);
 
@@ -155,12 +159,19 @@ public:
 
 signals:
     void programFrameReady();
+    void framelessToggleFullscreenRequested();
+    void framelessContextMenuRequested(const QPoint &globalPos);
 
 protected:
     void initializeGL()           override;
     void resizeGL(int w, int h)   override;
     void paintGL()                override;
     void paintEvent(QPaintEvent *) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *) override;
     void dropEvent(QDropEvent *)   override;
 
@@ -280,4 +291,8 @@ private:
     QImage m_deckPreviewB;
     QRectF m_videoRectProgramA;
     QRectF m_videoRectProgramB;
+
+    bool   m_framelessWindowChrome = false;
+    bool   m_windowDragActive      = false;
+    QPoint m_windowDragOffset;
 };

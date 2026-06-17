@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QPoint>
 
 namespace Ui { class OutputWindow; }
 class VideoWidget;
@@ -18,8 +19,8 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
 
 private:
-    Ui::OutputWindow *ui;
+    void toggleFullscreen();
+    void showContextMenu(const QPoint &globalPos);
 
-private slots:
-    void onFullscreenClicked();
+    Ui::OutputWindow *ui;
 };

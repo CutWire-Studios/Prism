@@ -1,12 +1,20 @@
 #include "ui/OutputWindow.h"
 #include "ui_OutputWindow.h"
 #include "ui/VideoWidget.h"
+#include <QAction>
 #include <QKeyEvent>
+#include <QMenu>
 
 OutputWindow::OutputWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::OutputWindow) {
     ui->setupUi(this);
-    connect(ui->fullscreenBtn, &QPushButton::clicked, this, &OutputWindow::onFullscreenClicked);
+    setWindowFlags(windowFlags() | Qt::FramelessWindowHint);
+
+    ui->outputWidget->setFramelessWindowChrome(true);
+    connect(ui->outputWidget, &VideoWidget::framelessToggleFullscreenRequested,
+            this, [this]() { toggleFullscreen(); });
+    connect(ui->outputWidget, &VideoWidget::framelessContextMenuRequested,
+            this, [this](const QPoint &pos) { showContextMenu(pos); });
 }
 
 OutputWindow::~OutputWindow() {
@@ -17,20 +25,29 @@ VideoWidget *OutputWindow::videoWidget() const {
     return ui->outputWidget;
 }
 
-void OutputWindow::onFullscreenClicked() {
+void OutputWindow::toggleFullscreen() {
     if (isFullScreen()) {
         showNormal();
-        ui->fullscreenBtn->setText("🖵");
     } else {
         showFullScreen();
-        ui->fullscreenBtn->setText("🖦");
+    }
+}
+
+void OutputWindow::showContextMenu(const QPoint &globalPos) {
+    QMenu menu(this);
+    QAction *fullscreenAction = menu.addAction(
+        isFullScreen() ? tr("Exit Full Screen") : tr("Full Screen"));
+    fullscreenAction->setCheckable(true);
+    fullscreenAction->setChecked(isFullScreen());
+
+    if (menu.exec(globalPos) == fullscreenAction) {
+        toggleFullscreen();
     }
 }
 
 void OutputWindow::keyPressEvent(QKeyEvent *event) {
     if (event->key() == Qt::Key_Escape && isFullScreen()) {
         showNormal();
-        ui->fullscreenBtn->setText("🖵");
         event->accept();
         return;
     }
