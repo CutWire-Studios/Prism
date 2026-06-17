@@ -137,6 +137,15 @@ public:
     void setProgramFrameConsumerCount(int count);
     QImage programFrame() const { return m_programFrameCache; }
 
+    /// Read back the current program compositor frame (1280×720 RGBA).
+    QImage captureProgramFrame();
+
+    /// Replace a deck base source or overlay chain entry with a still image.
+    void holdLayerAsStill(bool deckA, int chainIndex, const QImage &frame);
+
+    const std::vector<NodeChainSource> &chainSourcesA() const { return m_chainA; }
+    const std::vector<NodeChainSource> &chainSourcesB() const { return m_chainB; }
+
 signals:
     void programFrameReady();
 

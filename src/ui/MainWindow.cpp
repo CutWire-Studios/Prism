@@ -21,6 +21,7 @@
 #include "ui/HtmlEditDialog.h"
 #include "ui/RemoteControlServer.h"
 #include "ui/RemoteServerDialog.h"
+#include "ui/FrameCaptureHelper.h"
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
@@ -48,6 +49,10 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDialogButtonBox>
+#include <QDialog>
 #include <QStackedWidget>
 #include <QCloseEvent>
 #include <QStandardPaths>
@@ -329,6 +334,7 @@ void MainWindow::setupConnections() {
     connect(ui->actionAddShader,    &QAction::triggered, this, &MainWindow::onAddElementShader);
     connect(ui->actionAddHtml,      &QAction::triggered, this, &MainWindow::onAddElementDynamicInterface);
     connect(ui->actionAddNdi,       &QAction::triggered, this, &MainWindow::onAddElementNdi);
+    connect(ui->actionFreezeFrameCapture, &QAction::triggered, this, &MainWindow::onFreezeFrameCapture);
 
     // View menu
     connect(ui->actionShowOutput, &QAction::triggered, this, [this]() {
@@ -1439,6 +1445,106 @@ void MainWindow::onAddElementNdi() {
     desc.displayName = chosen;
 
     addElementNode(desc, ThumbHelper::makeIconThumb(QStringLiteral("📡")));
+}
+
+void MainWindow::onFreezeFrameCapture() {
+    auto *out = m_outputWindow->videoWidget();
+    const QList<FrameCaptureHelper::LayerRef> layers =
+        FrameCaptureHelper::enumerateLayers(out, m_clipNodeEditor, m_deckController);
+
+    if (layers.isEmpty()) {
+        QMessageBox::information(this, tr("Freeze Frame Capture"),
+                                 tr("No layers are available to capture."));
+        return;
+    }
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Freeze Frame Capture"));
+    dlg.setMinimumWidth(460);
+
+    auto *layerCombo = new QComboBox(&dlg);
+    for (const auto &layer : layers)
+        layerCombo->addItem(layer.label);
+
+    auto *saveCheck = new QCheckBox(tr("Save PNG to Pictures/SwitchX/Captures"), &dlg);
+    saveCheck->setChecked(true);
+    auto *addCheck = new QCheckBox(tr("Add captured frame as a new image element"), &dlg);
+    addCheck->setChecked(false);
+    auto *holdCheck = new QCheckBox(tr("Hold selected layer as a still (freeze in place)"), &dlg);
+    holdCheck->setChecked(false);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    auto *layout = new QVBoxLayout(&dlg);
+    layout->addWidget(new QLabel(tr("Capture current frame from:"), &dlg));
+    layout->addWidget(layerCombo);
+    layout->addWidget(saveCheck);
+    layout->addWidget(addCheck);
+    layout->addWidget(holdCheck);
+    layout->addWidget(buttons);
+
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    const int idx = layerCombo->currentIndex();
+    if (idx < 0 || idx >= layers.size())
+        return;
+
+    const FrameCaptureHelper::LayerRef layer = layers.at(idx);
+    const QImage frame = FrameCaptureHelper::captureLayer(out, layer);
+    if (frame.isNull()) {
+        QMessageBox::warning(this, tr("Freeze Frame Capture"),
+                             tr("Could not capture a frame from \"%1\".\n\n"
+                                "Make sure the layer is active and has video.")
+                                 .arg(layer.label));
+        return;
+    }
+
+    QString savedPath;
+    if (saveCheck->isChecked() || addCheck->isChecked()) {
+        savedPath = FrameCaptureHelper::savePng(frame, layer.label);
+        if (savedPath.isEmpty()) {
+            QMessageBox::warning(this, tr("Freeze Frame Capture"),
+                                 tr("Captured the frame but could not save it to disk."));
+            if (!holdCheck->isChecked())
+                return;
+        }
+    }
+
+    bool held = false;
+    if (holdCheck->isChecked()) {
+        if (layer.kind == FrameCaptureHelper::LayerKind::Program) {
+            QMessageBox::information(this, tr("Freeze Frame Capture"),
+                                     tr("Program output cannot be held as a still layer. "
+                                        "Choose a deck or overlay layer, or use PAUSE to freeze the full output."));
+        } else {
+            const int chainIndex = (layer.kind == FrameCaptureHelper::LayerKind::DeckChain)
+                                 ? layer.chainIndex : -1;
+            out->holdLayerAsStill(layer.deckA, chainIndex, frame);
+            held = true;
+        }
+    }
+
+    if (addCheck->isChecked() && !savedPath.isEmpty()) {
+        SourceDescriptor desc;
+        desc.kind        = SourceDescriptor::Kind::Image;
+        desc.path        = savedPath;
+        desc.displayName = tr("Capture %1").arg(QFileInfo(savedPath).completeBaseName());
+        addElementNode(desc, QPixmap::fromImage(
+            frame.scaled(110, 65, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
+    }
+
+    QString summary = tr("Captured \"%1\".").arg(layer.label);
+    if (!savedPath.isEmpty())
+        summary += QLatin1Char('\n') + tr("Saved: %1").arg(savedPath);
+    if (held)
+        summary += QLatin1Char('\n') + tr("Layer is now held as a still.");
+    if (addCheck->isChecked() && !savedPath.isEmpty())
+        summary += QLatin1Char('\n') + tr("Added as a new image element.");
+
+    QMessageBox::information(this, tr("Freeze Frame Capture"), summary);
 }
 
 void MainWindow::onConnectObs() {

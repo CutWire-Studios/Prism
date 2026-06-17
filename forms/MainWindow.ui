@@ -822,6 +822,7 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <addaction name="separator"/>
     <addaction name="actionNdiOutput"/>
     <addaction name="actionVirtualCameraOutput"/>
+    <addaction name="actionFreezeFrameCapture"/>
     <addaction name="actionRecordProgram"/>
     <addaction name="actionDropMarker"/>
     <addaction name="separator"/>
@@ -986,6 +987,17 @@ Split 4-Corner: split into 4 quadrants sliding outwards
    </property>
    <property name="checkable">
     <bool>true</bool>
+   </property>
+  </action>
+  <action name="actionFreezeFrameCapture">
+   <property name="text">
+    <string>Freeze Frame Capture…</string>
+   </property>
+   <property name="toolTip">
+    <string>Capture the current frame from the program mix or any active deck layer</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+F</string>
    </property>
   </action>
   <action name="actionRecordProgram">

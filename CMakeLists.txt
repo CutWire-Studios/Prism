@@ -89,6 +89,7 @@ set(SOURCES
     src/ui/OutputHub.cpp
     src/ui/NdiProgramSink.cpp
     src/ui/VirtualCameraProgramSink.cpp
+    src/ui/FrameCaptureHelper.cpp
     src/ui/ObsWebSocketClient.cpp
     src/ui/ObsIntegration.cpp
     src/ui/ProgramRecorder.cpp
@@ -146,6 +147,7 @@ set(HEADERS
     include/ui/OutputHub.h
     include/ui/NdiProgramSink.h
     include/ui/VirtualCameraProgramSink.h
+    include/ui/FrameCaptureHelper.h
     include/ui/ObsWebSocketClient.h
     include/ui/ObsIntegration.h
     include/ui/ProgramRecorder.h

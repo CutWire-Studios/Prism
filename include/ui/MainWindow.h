@@ -74,6 +74,7 @@ private slots:
     void onAddElementShader();
     void onAddElementDynamicInterface();
     void onAddElementNdi();
+    void onFreezeFrameCapture();
 
     void onConnectObs();
     void onLinkClipObsScene();
