@@ -1,5 +1,4 @@
 #include "ui/ClipNodeEditor.h"
-#include "core/AssetPathResolver.h"
 #include "ui/TransformEditorDialog.h"
 #include "ui/GroupEditorDialog.h"
 #include "ui_ContextNodeDialog.h"
@@ -149,8 +148,8 @@ private:
 
 class ConnectionItem : public QGraphicsPathItem {
 public:
-    enum EdgeKind { Chain = 0, TransformToContext = 1, AudioToController = 2,
-                    ControllerToMaster = 3, LegacyClipToTransform = 4 };
+    enum EdgeKind { Chain, TransformToContext, AudioToController, ControllerToMaster,
+                    LegacyClipToTransform = 1 };
 
     ConnectionItem(PortItem *from, PortItem *to, EdgeKind kind)
         : QGraphicsPathItem(nullptr), m_from(from), m_to(to), m_kind(kind)
@@ -2126,11 +2125,10 @@ void ClipNodeEditor::ungroup(NodeId groupId) {
 
 // ── Session persistence ───────────────────────────────────────────────────────
 
-static QJsonObject descriptorToJson(const SourceDescriptor &d, const QDir &sessionDir) {
+static QJsonObject descriptorToJson(const SourceDescriptor &d) {
     QJsonObject o;
     o["kind"]               = (int)d.kind;
-    o["path"]               = sessionDir.isAbsolute()
-        ? AssetPathResolver::storePath(d.path, sessionDir) : d.path;
+    o["path"]               = d.path;
     o["displayName"]        = d.displayName;
     o["color"]              = d.color.name(QColor::HexArgb);
     o["cameraIndex"]        = d.cameraIndex;
@@ -2169,7 +2167,7 @@ static SourceDescriptor descriptorFromJson(const QJsonObject &o) {
     return d;
 }
 
-QJsonObject ClipNodeEditor::saveState(const QDir &sessionDir) const {
+QJsonObject ClipNodeEditor::saveState() const {
     QJsonObject root;
     root["nextId"] = (qint64)m_nextId;
 
@@ -2192,20 +2190,8 @@ QJsonObject ClipNodeEditor::saveState(const QDir &sessionDir) const {
             nodeObj["transformH"] = (double)ci->h();
         }
 
-        nodeObj["source"]   = descriptorToJson(model->sourceDescriptor(), sessionDir);
-        QJsonObject settingsObj = model->settings().toJson();
-        if (sessionDir.isAbsolute()) {
-            QJsonArray overlays = settingsObj["overlays"].toArray();
-            for (int i = 0; i < overlays.size(); ++i) {
-                QJsonObject ov = overlays.at(i).toObject();
-                if (ov["type"].toString() == QLatin1String("image")) {
-                    ov["content"] = AssetPathResolver::storePath(ov["content"].toString(), sessionDir);
-                    overlays[i] = ov;
-                }
-            }
-            settingsObj["overlays"] = overlays;
-        }
-        nodeObj["settings"] = settingsObj;
+        nodeObj["source"]   = descriptorToJson(model->sourceDescriptor());
+        nodeObj["settings"] = model->settings().toJson();
         nodeObj["repeat"]   = model->isRepeat();
         clipNodes.append(nodeObj);
     }
@@ -2417,11 +2403,7 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         wireDeleteCallback(mn, [this](NodeId nid) { deleteNodeById(nid); });
     }
 
-    struct DeferredSceneConnections {
-        ClipNodeScene *scene = nullptr;
-        QJsonArray connections;
-    };
-    QVector<DeferredSceneConnections> deferredGroupConnections;
+    restoreConnections(m_scene, state["connections"].toArray());
 
     const QJsonArray groups = state["groups"].toArray();
     for (const auto &val : groups) {
@@ -2468,7 +2450,7 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
                 model->setCardMode(ClipCard::CardMode::GroupMember);
         }
 
-        deferredGroupConnections.append({ subScene, obj["connections"].toArray() });
+        restoreConnections(subScene, obj["connections"].toArray());
 
         NodeId delegate = delegateId;
         if (delegate == 0 || !members.contains(delegate) || !nodeAt(delegate))
@@ -2477,13 +2459,7 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
             setGroupDelegate(group->nodeId(), delegate);
     }
 
-    restoreConnections(m_scene, state["connections"].toArray());
-    for (const auto &deferred : deferredGroupConnections)
-        restoreConnections(deferred.scene, deferred.connections);
-
     updateGroupDeckHighlights();
-    emit clipChainChanged();
-    emit audioGraphChanged();
 
     const qint64 savedNext = state["nextId"].toInteger(0);
     if (savedNext > (qint64)m_nextId)

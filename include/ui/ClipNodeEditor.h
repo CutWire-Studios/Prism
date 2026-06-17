@@ -4,7 +4,6 @@
 #include <QVector>
 #include <QMap>
 #include <QSet>
-#include <QDir>
 #include <QJsonObject>
 #include <QJsonArray>
 #include "core/SourceDescriptor.h"
@@ -74,7 +73,7 @@ public:
     void addMasterAudioOutputToGroup(NodeId groupId, QGraphicsView *view, bool atViewCenter = false);
 
     // ── Session persistence ──────────────────────────────────────────────────
-    QJsonObject saveState(const QDir &sessionDir = {}) const;
+    QJsonObject saveState() const;
     void restoreState(const QJsonObject &state);
 
 signals:

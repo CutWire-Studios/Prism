@@ -55,7 +55,6 @@ set(SOURCES
     src/core/ClipManager.cpp
     src/core/ThumbnailExtractor.cpp
     src/core/OverlayItem.cpp
-    src/core/AssetPathResolver.cpp
     src/core/ShaderSource.cpp
     src/core/HtmlSource.cpp
     src/core/NdiLibrary.cpp
@@ -84,6 +83,7 @@ set(SOURCES
     # Extracted helper / controller classes
     src/ui/ThumbHelper.cpp
     src/ui/HotkeyManager.cpp
+    src/ui/HotkeyEditorDialog.cpp
     src/ui/SessionManager.cpp
     src/ui/TransitionController.cpp
     src/ui/DeckController.cpp
@@ -106,7 +106,6 @@ set(HEADERS
     include/core/ClipManager.h
     include/core/ThumbnailExtractor.h
     include/core/OverlayItem.h
-    include/core/AssetPathResolver.h
     include/core/ShaderSource.h
     include/core/HtmlSource.h
     include/core/NdiLibrary.h
@@ -136,6 +135,7 @@ set(HEADERS
     # Extracted helper / controller headers
     include/ui/ThumbHelper.h
     include/ui/HotkeyManager.h
+    include/ui/HotkeyEditorDialog.h
     include/ui/SessionManager.h
     include/ui/TransitionController.h
     include/ui/DeckController.h
