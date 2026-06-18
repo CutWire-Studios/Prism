@@ -1,7 +1,13 @@
 #include "ui/RemoteControlServer.h"
+#include "core/FirewallUtils.h"
 #include "ui/MainWindow.h"
 #include "ui/ClipNodeEditor.h"
 #include "ui/ClipNodeModel.h"
+#include "core/WebRtcPairing.h"
+#include "core/WebRtcCamPage.h"
+#ifdef SWITCHX_HAVE_WEBRTC
+#include "core/WebRtcManager.h"
+#endif
 #include <QTcpSocket>
 #include <QUrl>
 #include <QUrlQuery>
@@ -38,6 +44,7 @@ void RemoteControlServer::stopServer() {
         close();
     }
     m_isRunning = false;
+    FirewallUtils::releasePorts({kPort});
 }
 
 void RemoteControlServer::incomingConnection(qintptr socketDescriptor) {
@@ -70,6 +77,21 @@ void RemoteControlServer::onReadyRead() {
     if (method == "GET") {
         if (path == "/") {
             sendHtmlResponse(socket);
+        } else if (path.startsWith("/cam")) {
+            QUrl url(QStringLiteral("http://local") + path);
+            QUrlQuery query(url.query());
+            QString token;
+            quint16 sigPort = 0;
+            if (!WebRtcPairing::decodeQuery(query, token, sigPort)) {
+                sendTextResponse(socket,
+                    QStringLiteral("Missing or invalid pairing data (?d=<base64> or ?s=<token>)"), 400);
+            } else {
+#ifdef SWITCHX_HAVE_WEBRTC
+                if (sigPort == 0)
+                    sigPort = WebRtcManager::instance().signalingPort();
+#endif
+                sendCamHtmlResponse(socket, token, sigPort);
+            }
         } else if (path == "/api/status") {
             QJsonObject statusObj;
             
@@ -193,6 +215,15 @@ void RemoteControlServer::onDisconnected() {
 
 void RemoteControlServer::sendHtmlResponse(QTcpSocket *socket) {
     QByteArray body = getWebPageHtml().toUtf8();
+    QByteArray response = "HTTP/1.1 200 OK\r\n"
+                          "Content-Type: text/html; charset=utf-8\r\n"
+                          "Content-Length: " + QByteArray::number(body.size()) + "\r\n"
+                          "Connection: close\r\n\r\n" + body;
+    socket->write(response);
+}
+
+void RemoteControlServer::sendCamHtmlResponse(QTcpSocket *socket, const QString &token, quint16 sigPort) {
+    QByteArray body = WebRtcCamPage::html(token, sigPort).toUtf8();
     QByteArray response = "HTTP/1.1 200 OK\r\n"
                           "Content-Type: text/html; charset=utf-8\r\n"
                           "Content-Length: " + QByteArray::number(body.size()) + "\r\n"

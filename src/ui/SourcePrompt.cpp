@@ -4,6 +4,14 @@
 #include "ui/HtmlEditDialog.h"
 #include "core/ThumbnailExtractor.h"
 #include "core/NdiSource.h"
+#ifdef SWITCHX_HAVE_WEBRTC
+#include "core/WebRtcManager.h"
+#include "core/WebRtcSource.h"
+#include "core/WebRtcPairing.h"
+#include "core/NetworkUtils.h"
+#include "core/FirewallUtils.h"
+#include "ui/QrCodeHelper.h"
+#endif
 
 #include <QMenu>
 #include <QAction>
@@ -18,6 +26,12 @@
 #include <QTimer>
 #include <QMediaDevices>
 #include <QCameraDevice>
+#include <QDialog>
+#include <QLabel>
+#include <QVBoxLayout>
+#include <QDialogButtonBox>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 #include <glob.h>
 #include <algorithm>
@@ -245,6 +259,119 @@ bool promptNdi(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     return true;
 }
 
+#ifdef SWITCHX_HAVE_WEBRTC
+bool promptWebRtc(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
+    if (!WebRtcSource::isAvailable()) {
+        QMessageBox::warning(parent, QObject::tr("Phone Camera (WebRTC)"),
+            QObject::tr("WebRTC is not available in this build.\n"
+                        "Rebuild with -DSWITCHX_WITH_WEBRTC=ON and install qt6-websockets."));
+        return false;
+    }
+
+    const QList<NetworkUtils::Ipv4Interface> ifaces = NetworkUtils::listIpv4Interfaces();
+    if (ifaces.isEmpty()) {
+        QMessageBox::warning(parent, QObject::tr("Phone Camera (WebRTC)"),
+            QObject::tr("No active network interface with an IPv4 address was found."));
+        return false;
+    }
+
+    const QString bindAddress = NetworkUtils::promptInterface(
+        parent, ifaces, NetworkUtils::defaultInterfaceIndex(ifaces));
+    if (bindAddress.isEmpty())
+        return false;
+
+    const QList<quint16> ports = {
+        WebRtcPairing::kDefaultSigPort,
+        WebRtcPairing::kDefaultHttpPort
+    };
+    const FirewallUtils::Status fw = FirewallUtils::detect();
+    if (fw.active) {
+        QString fwErr;
+        if (!FirewallUtils::ensurePortsOpen(parent, ports, fwErr,
+                QObject::tr("phone pairing"))) {
+            const auto cont = QMessageBox::warning(
+                parent,
+                QObject::tr("Firewall"),
+                QObject::tr("Could not open firewall port(s).\n%1\n\n"
+                              "Continue anyway? Your phone may not be able to connect.")
+                    .arg(fwErr.isEmpty() ? QObject::tr("Permission denied or cancelled.")
+                                         : fwErr),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No);
+            if (cont != QMessageBox::Yes)
+                return false;
+        }
+    }
+
+    const WebRtcPairingInfo info = WebRtcManager::instance().createSession(bindAddress);
+    if (info.token.isEmpty()) {
+        QMessageBox::warning(parent, QObject::tr("Phone Camera (WebRTC)"),
+            QObject::tr("Could not start the WebRTC servers on %1.\n"
+                        "Check that ports %2 (signaling) and %3 (browser) are free.")
+                .arg(bindAddress)
+                .arg(WebRtcPairing::kDefaultSigPort)
+                .arg(WebRtcPairing::kDefaultHttpPort));
+        return false;
+    }
+
+    QJsonObject qrObj = WebRtcPairing::makePayload(
+        info.host, info.sigPort, info.token, WebRtcManager::instance().httpPort());
+    const QString qrPayload = WebRtcPairing::toQrUrl(qrObj);
+
+    QDialog dlg(parent);
+    dlg.setWindowTitle(QObject::tr("Phone Camera (WebRTC)"));
+    dlg.setMinimumWidth(360);
+
+    auto *qrLabel = new QLabel(&dlg);
+    qrLabel->setAlignment(Qt::AlignCenter);
+    qrLabel->setPixmap(QrCodeHelper::toPixmap(qrPayload, 5));
+
+    auto *statusLabel = new QLabel(QObject::tr("Waiting for phone…"), &dlg);
+    statusLabel->setAlignment(Qt::AlignCenter);
+
+    auto *hintLabel = new QLabel(
+        QObject::tr("Scan with your phone camera to open the browser streamer, or scan with the SwitchX app to pair natively."), &dlg);
+    hintLabel->setWordWrap(true);
+    hintLabel->setAlignment(Qt::AlignCenter);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+
+    QObject::connect(&WebRtcManager::instance(), &WebRtcManager::peerConnected, &dlg,
+        [info, statusLabel](const QString &token) {
+            if (token != info.token) return;
+            statusLabel->setText(QObject::tr("Connected"));
+        });
+    QObject::connect(&WebRtcManager::instance(), &WebRtcManager::peerDisconnected, &dlg,
+        [info, statusLabel](const QString &token) {
+            if (token != info.token) return;
+            statusLabel->setText(QObject::tr("Waiting for phone…"));
+        });
+
+    if (WebRtcManager::instance().isPeerConnected(info.token))
+        statusLabel->setText(QObject::tr("Connected"));
+
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    auto *layout = new QVBoxLayout(&dlg);
+    layout->addWidget(qrLabel);
+    layout->addWidget(statusLabel);
+    layout->addWidget(hintLabel);
+    layout->addWidget(buttons);
+
+    if (dlg.exec() != QDialog::Accepted) {
+        WebRtcManager::instance().destroySession(info.token);
+        return false;
+    }
+
+    desc.kind        = SourceDescriptor::Kind::WebRtc;
+    desc.path        = info.token;
+    desc.displayName = QObject::tr("Phone Camera");
+    thumb = QrCodeHelper::toPixmap(qrPayload, 4);
+    return true;
+}
+#endif
+
 } // namespace
 
 bool prompt(SourceDescriptor::Kind kind, QWidget *parent,
@@ -267,6 +394,15 @@ bool prompt(SourceDescriptor::Kind kind, QWidget *parent,
         return promptHtml(parent, outDesc, outThumb);
     case SourceDescriptor::Kind::Ndi:
         return promptNdi(parent, outDesc, outThumb);
+    case SourceDescriptor::Kind::WebRtc:
+#ifdef SWITCHX_HAVE_WEBRTC
+        return promptWebRtc(parent, outDesc, outThumb);
+#else
+        Q_UNUSED(parent);
+        Q_UNUSED(outDesc);
+        Q_UNUSED(outThumb);
+        return false;
+#endif
     default:
         return false;
     }
@@ -275,7 +411,8 @@ bool prompt(SourceDescriptor::Kind kind, QWidget *parent,
 void buildMenu(QMenu *menu,
                std::function<void()> onFile,
                std::function<void(SourceDescriptor::Kind)> onKind,
-               bool ndiAvailable)
+               bool ndiAvailable,
+               bool webrtcAvailable)
 {
     if (!menu) return;
 
@@ -302,6 +439,13 @@ void buildMenu(QMenu *menu,
     if (!ndiAvailable) {
         ndiAction->setToolTip(QObject::tr(
             "NDI SDK not found at build time. Install the NDI SDK and rebuild with -DNDI_ROOT=…"));
+    }
+    QAction *webrtcAction = menu->addAction(QStringLiteral("📱  Phone Camera (WebRTC)…"),
+                    [onKind]() { onKind(SourceDescriptor::Kind::WebRtc); });
+    webrtcAction->setEnabled(webrtcAvailable);
+    if (!webrtcAvailable) {
+        webrtcAction->setToolTip(QObject::tr(
+            "WebRTC not enabled at build time. Rebuild with -DSWITCHX_WITH_WEBRTC=ON."));
     }
 }
 

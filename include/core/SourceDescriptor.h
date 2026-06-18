@@ -25,6 +25,7 @@ struct SourceDescriptor {
         Shader, // GLSL fragment shader — shaderCode field
         Html,   // HTML/CSS/JS overlay  — htmlContent field
         Ndi,    // network NDI source   — path = NDI source name
+        WebRtc, // phone camera (WebRTC) — path = session token
     };
 
     Kind    kind    = Kind::VideoFile;
@@ -48,7 +49,7 @@ struct SourceDescriptor {
         return kind == Kind::Camera || kind == Kind::Screen ||
                kind == Kind::Canvas || kind == Kind::Window ||
                kind == Kind::Shader || kind == Kind::Html ||
-               kind == Kind::Ndi;
+               kind == Kind::Ndi || kind == Kind::WebRtc;
     }
     bool isFileSource() const {
         return kind == Kind::VideoFile || kind == Kind::Image || kind == Kind::Slideshow;

@@ -8,6 +8,10 @@
 #include "core/ShaderSource.h"
 #include "core/HtmlSource.h"
 #include "core/NdiSource.h"
+#ifdef SWITCHX_HAVE_WEBRTC
+#include "core/WebRtcSource.h"
+#endif
+#include <QObject>
 #include <QMediaDevices>
 #include <QCameraDevice>
 
@@ -78,6 +82,15 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
         if (!src->connectTo(desc.path)) return nullptr;
         src->setName(desc.displayName.isEmpty() ? desc.path : desc.displayName);
         return src;
+    }
+    case Kind::WebRtc: {
+#ifdef SWITCHX_HAVE_WEBRTC
+        auto src = std::make_unique<WebRtcSource>(desc.path);
+        src->setName(desc.displayName.isEmpty() ? QObject::tr("Phone Camera") : desc.displayName);
+        return src;
+#else
+        return nullptr;
+#endif
     }
     }
     return nullptr;

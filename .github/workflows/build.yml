@@ -46,7 +46,8 @@ jobs:
         run: |
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
-            -DSWITCHX_WITH_NDI=OFF
+            -DSWITCHX_WITH_NDI=OFF \
+            -DSWITCHX_WITH_WEBRTC=OFF
 
       - name: Build
         run: cmake --build build --parallel

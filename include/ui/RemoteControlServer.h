@@ -12,6 +12,8 @@ class MainWindow;
 class RemoteControlServer : public QTcpServer {
     Q_OBJECT
 public:
+    static constexpr quint16 kPort = 38470;
+
     explicit RemoteControlServer(MainWindow *mainWindow, TransitionController *transitionCtrl, QSlider *faderSlider, QObject *parent = nullptr);
     ~RemoteControlServer() override;
 
@@ -31,6 +33,7 @@ private slots:
 
 private:
     void sendHtmlResponse(QTcpSocket *socket);
+    void sendCamHtmlResponse(QTcpSocket *socket, const QString &token, quint16 sigPort);
     void sendJsonResponse(QTcpSocket *socket, const QByteArray &json);
     void sendTextResponse(QTcpSocket *socket, const QString &text, int statusCode);
     QString getWebPageHtml() const;
@@ -40,5 +43,5 @@ private:
     QPointer<QSlider> m_faderSlider;
     bool m_isRunning = false;
     QHostAddress m_serverAddress;
-    quint16 m_serverPort = 8080;
+    quint16 m_serverPort = kPort;
 };

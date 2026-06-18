@@ -272,6 +272,7 @@ bool SessionManager::loadFromFile(const QString &path, bool showErrors) {
         case Kind::Shader: thumb = ThumbHelper::makeShaderThumb(desc.shaderCode);           break;
         case Kind::Html:   thumb = ThumbHelper::makeHtmlThumb(desc.htmlContent, desc.path); break;
         case Kind::Ndi:    thumb = ThumbHelper::makeIconThumb(QStringLiteral("📡"));       break;
+        case Kind::WebRtc: thumb = ThumbHelper::makeIconThumb(QStringLiteral("📱"));       break;
         }
         if (!thumb.isNull()) {
             if (desc.kind == Kind::VideoFile || desc.kind == Kind::Image)

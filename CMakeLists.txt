@@ -54,6 +54,22 @@ if(SWITCHX_WITH_NDI)
     endif()
 endif()
 
+# WebRTC phone camera (optional — libdatachannel + Qt WebSockets)
+option(SWITCHX_WITH_WEBRTC "Enable WebRTC phone camera source" ON)
+if(SWITCHX_WITH_WEBRTC)
+    find_package(Qt6 REQUIRED COMPONENTS WebSockets)
+    set(NO_EXAMPLES ON CACHE BOOL "" FORCE)
+    set(NO_TESTS ON CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(libdatachannel
+        GIT_REPOSITORY https://github.com/paullouisageneau/libdatachannel.git
+        GIT_TAG        v0.22.6)
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+    FetchContent_MakeAvailable(libdatachannel)
+    message(STATUS "WebRTC phone camera source enabled (libdatachannel)")
+    set(SWITCHX_HAVE_WEBRTC TRUE)
+endif()
+
 
 set(SOURCES
     src/main.cpp
@@ -77,6 +93,12 @@ set(SOURCES
     src/core/HtmlSource.cpp
     src/core/NdiLibrary.cpp
     src/core/NdiSource.cpp
+    src/core/NetworkUtils.cpp
+    src/core/WebRtcPairing.cpp
+    src/core/WebRtcCamPage.cpp
+    src/core/FirewallUtils.cpp
+    src/core/WebRtcManager.cpp
+    src/core/WebRtcSource.cpp
     src/ui/MainWindow.cpp
     src/ui/VideoWidget.cpp
     src/ui/Transition.cpp
@@ -114,6 +136,8 @@ set(SOURCES
     src/ui/SourcePrompt.cpp
     src/ui/RemoteControlServer.cpp
     src/ui/RemoteServerDialog.cpp
+    src/ui/QrCodeHelper.cpp
+    third_party/qrcodegen/qrcodegen.cpp
 )
 
 set(HEADERS
@@ -139,6 +163,12 @@ set(HEADERS
     include/core/HtmlSource.h
     include/core/NdiLibrary.h
     include/core/NdiSource.h
+    include/core/NetworkUtils.h
+    include/core/WebRtcPairing.h
+    include/core/WebRtcCamPage.h
+    include/core/FirewallUtils.h
+    include/core/WebRtcManager.h
+    include/core/WebRtcSource.h
     include/ui/MainWindow.h
     include/ui/VideoWidget.h
     include/ui/Transition.h
@@ -177,6 +207,7 @@ set(HEADERS
     include/ui/SourcePrompt.h
     include/ui/RemoteControlServer.h
     include/ui/RemoteServerDialog.h
+    include/ui/QrCodeHelper.h
 )
 
 set(UI_FILES
@@ -203,6 +234,7 @@ set_target_properties(Prism PROPERTIES
 # Include directories
 target_include_directories(Prism PRIVATE
     include
+    third_party/qrcodegen
     ${FFMPEG_INCLUDE_DIRS}
     ${GSTREAMER_INCLUDE_DIRS}
     ${GSTREAMER_APP_INCLUDE_DIRS}
@@ -237,6 +269,11 @@ endif()
 if(SWITCHX_HAVE_OBS_WS)
     target_compile_definitions(Prism PRIVATE SWITCHX_HAVE_OBS_WS)
     target_link_libraries(Prism PRIVATE Qt6::WebSockets)
+endif()
+
+if(SWITCHX_HAVE_WEBRTC)
+    target_compile_definitions(Prism PRIVATE SWITCHX_HAVE_WEBRTC)
+    target_link_libraries(Prism PRIVATE LibDataChannel::LibDataChannelStatic Qt6::WebSockets)
 endif()
 
 # Enable testing

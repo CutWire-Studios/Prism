@@ -14,6 +14,9 @@
 #include "core/ShaderSource.h"
 #include "core/HtmlSource.h"
 #include "core/NdiSource.h"
+#ifdef SWITCHX_HAVE_WEBRTC
+#include "core/WebRtcSource.h"
+#endif
 #include "ui/ObsWebSocketClient.h"
 #include "ui/HotkeyEditorDialog.h"
 #include "ui/SessionRecoveryDialog.h"
@@ -713,7 +716,12 @@ void MainWindow::setupAddElementMenu(QMenu *menu) {
     SourcePrompt::buildMenu(menu,
                             [this]() { onAddFilesClicked(); },
                             [this](SourceDescriptor::Kind kind) { addSourceOfKind(kind); },
-                            NdiSource::isAvailable());
+                            NdiSource::isAvailable(),
+#ifdef SWITCHX_HAVE_WEBRTC
+                            WebRtcSource::isAvailable());
+#else
+                            false);
+#endif
 }
 
 void MainWindow::appendClipsToEditor(const QStringList &clipPaths) {

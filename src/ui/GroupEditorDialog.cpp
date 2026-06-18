@@ -2,6 +2,9 @@
 #include "ui/ClipNodeEditor.h"
 #include "ui/SourcePrompt.h"
 #include "core/NdiSource.h"
+#ifdef SWITCHX_HAVE_WEBRTC
+#include "core/WebRtcSource.h"
+#endif
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -52,7 +55,12 @@ GroupEditorDialog::GroupEditorDialog(NodeId groupId, ClipNodeEditor *editor, QWi
                     editor->addSourceNode(desc, thumb, sub, view, true);
                 }
             },
-            NdiSource::isAvailable());
+            NdiSource::isAvailable(),
+#ifdef SWITCHX_HAVE_WEBRTC
+            WebRtcSource::isAvailable());
+#else
+            false);
+#endif
         addElementBtn->setMenu(addMenu);
 
         connect(addContextBtn, &QPushButton::clicked, this, [editor, groupId, view]() {
