@@ -31,10 +31,6 @@ bool runCommand(const QString &program, const QStringList &args, QString &errorO
     return true;
 }
 
-bool runPrivileged(const QStringList &args, QString &errorOut) {
-    return runCommand(QStringLiteral("pkexec"), args, errorOut);
-}
-
 bool ufwActive() {
     QString err;
     QProcess proc;
@@ -55,39 +51,36 @@ bool firewalldActive() {
            == QStringLiteral("running");
 }
 
-bool openPort(Backend backend, quint16 port, QString &errorOut) {
+QString getOpenPortCmd(Backend backend, quint16 port) {
     const QString portSpec = QStringLiteral("%1/tcp").arg(port);
-    switch (backend) {
-    case Backend::Ufw:
-        return runPrivileged(
-            {QStringLiteral("ufw"), QStringLiteral("allow"), portSpec,
-             QStringLiteral("comment"), QStringLiteral("SwitchX (temp)")},
-            errorOut);
-    case Backend::Firewalld:
-        // 2-hour temporary hole; refreshed on each pairing request.
-        return runPrivileged(
-            {QStringLiteral("firewall-cmd"), QStringLiteral("--add-port"), portSpec,
-             QStringLiteral("--timeout=7200")},
-            errorOut);
-    default:
-        return true;
+    if (backend == Backend::Ufw) {
+        return QStringLiteral("ufw allow %1 comment 'SwitchX (temp)'").arg(portSpec);
     }
+    if (backend == Backend::Firewalld) {
+        // 2-hour temporary hole; refreshed on each pairing request.
+        return QStringLiteral("firewall-cmd --add-port=%1 --timeout=7200").arg(portSpec);
+    }
+    return QString();
 }
 
-bool closePort(Backend backend, quint16 port, QString &errorOut) {
+QString getClosePortCmd(Backend backend, quint16 port) {
     const QString portSpec = QStringLiteral("%1/tcp").arg(port);
-    switch (backend) {
-    case Backend::Ufw:
-        return runPrivileged(
-            {QStringLiteral("ufw"), QStringLiteral("delete"), QStringLiteral("allow"), portSpec},
-            errorOut);
-    case Backend::Firewalld:
-        return runPrivileged(
-            {QStringLiteral("firewall-cmd"), QStringLiteral("--remove-port"), portSpec},
-            errorOut);
-    default:
-        return true;
+    if (backend == Backend::Ufw) {
+        return QStringLiteral("ufw delete allow %1").arg(portSpec);
     }
+    if (backend == Backend::Firewalld) {
+        return QStringLiteral("firewall-cmd --remove-port=%1").arg(portSpec);
+    }
+    return QString();
+}
+
+bool runPrivilegedBatch(const QStringList &commands, QString &errorOut) {
+    if (commands.isEmpty())
+        return true;
+    const QString batchScript = commands.join(QStringLiteral(" && "));
+    return runCommand(QStringLiteral("pkexec"),
+                      {QStringLiteral("sh"), QStringLiteral("-c"), batchScript},
+                      errorOut);
 }
 
 } // namespace
@@ -138,13 +131,26 @@ bool ensurePortsOpen(QWidget *parent, const QList<quint16> &tcpPorts, QString &e
     if (answer != QMessageBox::Yes)
         return false;
 
+    QStringList commands;
+    QList<quint16> portsToOpen;
     for (quint16 port : tcpPorts) {
         if (g_openedPorts.contains(port))
             continue;
-        if (!openPort(status.backend, port, errorOut))
-            return false;
-        g_openedPorts.insert(port);
+        const QString cmd = getOpenPortCmd(status.backend, port);
+        if (!cmd.isEmpty()) {
+            commands << cmd;
+            portsToOpen << port;
+        }
     }
+
+    if (commands.isEmpty())
+        return true;
+
+    if (!runPrivilegedBatch(commands, errorOut))
+        return false;
+
+    for (quint16 port : portsToOpen)
+        g_openedPorts.insert(port);
     return true;
 }
 
@@ -152,13 +158,25 @@ void releasePorts(const QList<quint16> &tcpPorts) {
     if (g_backend == Backend::None)
         return;
 
-    QString err;
+    QStringList commands;
+    QList<quint16> portsToClose;
     for (quint16 port : tcpPorts) {
         if (!g_openedPorts.contains(port))
             continue;
-        closePort(g_backend, port, err);
-        g_openedPorts.remove(port);
+        const QString cmd = getClosePortCmd(g_backend, port);
+        if (!cmd.isEmpty()) {
+            commands << cmd;
+            portsToClose << port;
+        }
     }
+
+    if (!commands.isEmpty()) {
+        QString err;
+        runPrivilegedBatch(commands, err);
+    }
+
+    for (quint16 port : portsToClose)
+        g_openedPorts.remove(port);
     if (g_openedPorts.isEmpty())
         g_backend = Backend::None;
 }
@@ -167,10 +185,18 @@ void releaseOpenedPorts() {
     if (g_openedPorts.isEmpty() || g_backend == Backend::None)
         return;
 
-    QString err;
-    QSet<quint16> ports = g_openedPorts;
-    for (quint16 port : ports)
-        closePort(g_backend, port, err);
+    QStringList commands;
+    for (quint16 port : g_openedPorts) {
+        const QString cmd = getClosePortCmd(g_backend, port);
+        if (!cmd.isEmpty())
+            commands << cmd;
+    }
+
+    if (!commands.isEmpty()) {
+        QString err;
+        runPrivilegedBatch(commands, err);
+    }
+
     g_openedPorts.clear();
     g_backend = Backend::None;
 }
