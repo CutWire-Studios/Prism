@@ -144,6 +144,10 @@ public:
     void removeDeckPreviewConsumer();
     void setDeckPreviewConsumerCount(int count);
 
+    /// Full-resolution deck iso frames (1280×720, with overlays) for recording.
+    void setDeckFrameConsumerCount(int count);
+    QImage deckProgramFrame(bool deckA) const;
+
     /// Read back the current program compositor frame (1280×720 RGBA).
     QImage captureProgramFrame();
 
@@ -273,8 +277,10 @@ private:
     void blitProgramToScreen();
     void cacheProgramFrameFromFbo();
     void cacheDeckPreviewFromFbo(bool deckA);
+    void cacheDeckFrameFromFbo(bool deckA);
     QRectF scaleRectToWidget(const QRectF &programRect) const;
     QImage deckPreviewWithOverlays(bool deckA) const;
+    QImage deckProgramFrameWithOverlays(bool deckA) const;
 
     GLuint m_programFbo      = 0;
     GLuint m_programColorTex = 0;
@@ -286,9 +292,12 @@ private:
     int    m_compH           = 0;
     int    m_programFrameConsumers = 0;
     int    m_deckPreviewConsumers  = 0;
+    int    m_deckFrameConsumers    = 0;
     QImage m_programFrameCache;
     QImage m_deckPreviewA;
     QImage m_deckPreviewB;
+    QImage m_deckFrameCacheA;
+    QImage m_deckFrameCacheB;
     QRectF m_videoRectProgramA;
     QRectF m_videoRectProgramB;
 

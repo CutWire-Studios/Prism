@@ -20,6 +20,7 @@
 #include "ui/RemoteControlServer.h"
 #include "ui/RemoteServerDialog.h"
 #include "ui/FrameCaptureHelper.h"
+#include "ui/RecordingSettingsDialog.h"
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
@@ -51,7 +52,8 @@
 #include <QStackedWidget>
 #include <QCloseEvent>
 #include <QSplitter>
-#include <QStandardPaths>
+#include <QStatusBar>
+#include <QFont>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -65,11 +67,15 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     setAcceptDrops(true);
+    m_baseWindowTitle = windowTitle();
+
+    m_recordingOptions = RecordingSettingsDialog::loadSavedOptions();
 
     m_outputWindow = new OutputWindow(this);
     m_outputWindow->show();
 
     setupPreviewSplitters();
+    setupRecordingStatusBar();
 
     m_outputHub = new OutputHub(this);
     m_outputHub->setProgramSource(m_outputWindow->videoWidget());
@@ -226,7 +232,7 @@ void MainWindow::buildEmptyPlaceholder() {
 }
 
 MainWindow::~MainWindow() {
-    m_outputHub->setProgramRecordingEnabled(false);
+    m_outputHub->stopRecording();
     m_outputHub->setNdiOutputEnabled(false);
     m_outputHub->setVirtualCameraEnabled(false);
     m_obsIntegration->disconnectFromObs();
@@ -488,33 +494,31 @@ void MainWindow::setupConnections() {
         ui->actionVirtualCameraOutput->setChecked(on);
         ui->actionVirtualCameraOutput->blockSignals(false);
     });
-    connect(ui->actionRecordProgram, &QAction::toggled, this, [this](bool on) {
-        if (!m_outputHub->setProgramRecordingEnabled(on)) {
-            ui->actionRecordProgram->blockSignals(true);
-            ui->actionRecordProgram->setChecked(false);
-            ui->actionRecordProgram->blockSignals(false);
-            if (on) {
-                QMessageBox::warning(this, tr("Recording"),
-                                     tr("Could not start program recording."));
-            }
-        }
+    connect(ui->actionRecordProgram, &QAction::triggered, this, [this]() {
+        onToggleRecording(!m_outputHub->isRecording());
     });
-    connect(m_outputHub, &OutputHub::programRecordingChanged, this, [this](bool on) {
+    connect(ui->actionRecordingSettings, &QAction::triggered, this, &MainWindow::onRecordingSettings);
+    connect(m_outputHub, &OutputHub::recordingChanged, this, [this](bool on) {
         ui->actionRecordProgram->blockSignals(true);
         ui->actionRecordProgram->setChecked(on);
         ui->actionRecordProgram->blockSignals(false);
         ui->actionDropMarker->setEnabled(on);
+        updateRecordingUi();
         if (!on) {
-            const QString video = m_outputHub->recordingOutputPath();
-            if (!video.isEmpty()) {
+            const QStringList videos = m_outputHub->recordingOutputPaths();
+            if (!videos.isEmpty()) {
                 QMessageBox::information(this, tr("Recording Saved"),
-                    tr("Video:\n%1\n\nMarkers:\n%2")
-                        .arg(video, m_outputHub->recordingMarkersPath()));
+                    tr("Video files:\n%1\n\nMarkers:\n%2")
+                        .arg(videos.join(QStringLiteral("\n")),
+                             m_outputHub->recordingMarkersPath()));
             }
         }
     });
+    connect(m_outputHub, &OutputHub::recordingProgress, this, [this](qint64 ms) {
+        updateRecordingUi(ms);
+    });
     connect(ui->actionDropMarker, &QAction::triggered, this, [this]() {
-        if (!m_outputHub->isProgramRecording()) return;
+        if (!m_outputHub->isRecording()) return;
         bool ok = false;
         const QString label = QInputDialog::getText(
             this, tr("Drop Marker"), tr("Marker label:"),
@@ -754,8 +758,9 @@ void MainWindow::onNodeAButtonClicked(NodeId nodeId) {
     out->setNodeChainA(SourceFactory::buildChain(
         m_clipNodeEditor->getClipChain(nodeId), m_clipNodeEditor, canvasW, canvasH));
     m_obsIntegration->onClipTriggered(node->sourceDescriptor());
-    if (m_outputHub->isProgramRecording())
+    if (m_outputHub->isRecording())
         m_outputHub->addRecordingMarker(tr("Deck A: %1").arg(node->sourceName()));
+    m_outputHub->setActiveDeckNodes(m_deckController->activeNodeA(), m_deckController->activeNodeB());
 }
 
 void MainWindow::onNodeBButtonClicked(NodeId nodeId) {
@@ -783,8 +788,9 @@ void MainWindow::onNodeBButtonClicked(NodeId nodeId) {
     out->setNodeChainB(SourceFactory::buildChain(
         m_clipNodeEditor->getClipChain(nodeId), m_clipNodeEditor, canvasW, canvasH));
     m_obsIntegration->onClipTriggered(node->sourceDescriptor());
-    if (m_outputHub->isProgramRecording())
+    if (m_outputHub->isRecording())
         m_outputHub->addRecordingMarker(tr("Deck B: %1").arg(node->sourceName()));
+    m_outputHub->setActiveDeckNodes(m_deckController->activeNodeA(), m_deckController->activeNodeB());
 }
 
 void MainWindow::onNodeRemoveRequested(NodeId nodeId) {
@@ -942,6 +948,10 @@ void MainWindow::onTimerUpdate() {
     ui->bDeckPlayBtn->setText(out->isPlayingB() ? "⏸" : "▶");
 
     refreshPreviewPixmaps();
+
+    m_outputHub->setActiveDeckNodes(m_deckController->activeNodeA(), m_deckController->activeNodeB());
+    if (m_outputHub->isRecording())
+        updateRecordingUi(m_outputHub->recordingDurationMs());
 }
 
 // ── Drag & drop ───────────────────────────────────────────────────────────────
@@ -1578,4 +1588,145 @@ NodeId MainWindow::activeNodeA() const {
 
 NodeId MainWindow::activeNodeB() const {
     return m_deckController ? m_deckController->activeNodeB() : 0;
+}
+
+void MainWindow::setupRecordingStatusBar() {
+    auto *bar = statusBar();
+    bar->setSizeGripEnabled(false);
+
+    m_recStatusLabel = new QLabel(tr("● REC"), this);
+    QFont recFont = m_recStatusLabel->font();
+    recFont.setBold(true);
+    m_recStatusLabel->setFont(recFont);
+    m_recStatusLabel->setStyleSheet(QStringLiteral("color: #e04545;"));
+    m_recStatusLabel->hide();
+
+    m_recTimeLabel = new QLabel(this);
+    m_recTimeLabel->hide();
+
+    m_recTracksLabel = new QLabel(this);
+    m_recTracksLabel->hide();
+
+    m_recPathLabel = new QLabel(this);
+    m_recPathLabel->setStyleSheet(QStringLiteral("color: #888;"));
+    m_recPathLabel->hide();
+
+    bar->addPermanentWidget(m_recStatusLabel);
+    bar->addPermanentWidget(m_recTimeLabel);
+    bar->addPermanentWidget(m_recTracksLabel, 1);
+    bar->addPermanentWidget(m_recPathLabel);
+}
+
+static QString formatRecordingElapsed(qint64 ms) {
+    const qint64 totalSecs = ms / 1000;
+    const int hours   = static_cast<int>(totalSecs / 3600);
+    const int minutes = static_cast<int>((totalSecs % 3600) / 60);
+    const int seconds = static_cast<int>(totalSecs % 60);
+    return QStringLiteral("%1:%2:%3")
+        .arg(hours,   2, 10, QChar('0'))
+        .arg(minutes, 2, 10, QChar('0'))
+        .arg(seconds, 2, 10, QChar('0'));
+}
+
+void MainWindow::updateRecordingUi(qint64 elapsedMs) {
+    const bool recording = m_outputHub && m_outputHub->isRecording();
+    if (m_recStatusLabel) m_recStatusLabel->setVisible(recording);
+    if (m_recTimeLabel)   m_recTimeLabel->setVisible(recording);
+    if (m_recTracksLabel) m_recTracksLabel->setVisible(recording);
+    if (m_recPathLabel)   m_recPathLabel->setVisible(recording);
+
+    if (!recording) {
+        setWindowTitle(m_baseWindowTitle);
+        ui->actionRecordProgram->setText(tr("Record"));
+        if (m_outputWindow)
+            m_outputWindow->setRecordingActive(false);
+        return;
+    }
+
+    if (elapsedMs < 0)
+        elapsedMs = m_outputHub->recordingDurationMs();
+
+    const QString elapsed = formatRecordingElapsed(elapsedMs);
+    const QString tracks  = m_outputHub->activeRecordingTrackLabels().join(QStringLiteral(" · "));
+    const QString stem    = m_outputHub->recordingOutputStem();
+
+    if (m_recTimeLabel)
+        m_recTimeLabel->setText(elapsed);
+    if (m_recTracksLabel)
+        m_recTracksLabel->setText(tracks);
+    if (m_recPathLabel)
+        m_recPathLabel->setText(stem);
+
+    setWindowTitle(m_baseWindowTitle + QStringLiteral("  [REC %1]").arg(elapsed));
+    ui->actionRecordProgram->setText(tr("● Stop Recording"));
+    if (m_outputWindow)
+        m_outputWindow->setRecordingActive(true);
+}
+
+RecordingOptions MainWindow::resolvedRecordingOptions(const RecordingOptions &opts) const {
+    RecordingOptions out = opts;
+    out.recordSources.clear();
+
+    for (const RecordingSourceTarget &target : opts.recordSources) {
+        if (target.nodeId != 0) {
+            out.recordSources.append(target);
+            continue;
+        }
+        if (!m_clipNodeEditor)
+            continue;
+        for (ClipNodeModel *node : m_clipNodeEditor->allNodes()) {
+            if (!node || !node->hasSource())
+                continue;
+            if (node->sourceName() == target.label) {
+                out.recordSources.append({node->nodeId(), target.label});
+                break;
+            }
+        }
+    }
+    return out;
+}
+
+void MainWindow::onRecordingSettings() {
+    RecordingSettingsDialog dlg(m_clipNodeEditor, this);
+    dlg.setOptions(m_recordingOptions);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    m_recordingOptions = dlg.options();
+    RecordingSettingsDialog::saveOptions(m_recordingOptions);
+}
+
+void MainWindow::onToggleRecording(bool on) {
+    if (on) {
+        if (m_outputHub->isRecording())
+            return;
+
+        if (!m_recordingOptions.hasAnyTarget()) {
+            onRecordingSettings();
+            if (!m_recordingOptions.hasAnyTarget())
+                return;
+        }
+
+        m_outputHub->setActiveDeckNodes(m_deckController->activeNodeA(), m_deckController->activeNodeB());
+        const RecordingOptions opts = resolvedRecordingOptions(m_recordingOptions);
+        if (!opts.hasAnyTarget()) {
+            QMessageBox::warning(this, tr("Recording"),
+                                 tr("No valid recording targets are available."));
+            return;
+        }
+        if (!m_outputHub->startRecording(opts)) {
+            ui->actionRecordProgram->blockSignals(true);
+            ui->actionRecordProgram->setChecked(false);
+            ui->actionRecordProgram->blockSignals(false);
+            QMessageBox::warning(this, tr("Recording"),
+                                 tr("Could not start recording. Check the output folder and try again."));
+            return;
+        }
+        RecordingSettingsDialog::saveOptions(m_recordingOptions);
+        updateRecordingUi(0);
+        return;
+    }
+
+    if (m_outputHub->isRecording())
+        m_outputHub->stopRecording();
 }

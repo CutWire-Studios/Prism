@@ -13,6 +13,8 @@ public:
     explicit OutputWindow(QWidget *parent = nullptr);
     ~OutputWindow();
 
+    void setRecordingActive(bool active);
+
     VideoWidget *videoWidget() const;
 
 protected:

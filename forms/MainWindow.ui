@@ -809,6 +809,7 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <addaction name="actionNdiOutput"/>
     <addaction name="actionVirtualCameraOutput"/>
     <addaction name="actionFreezeFrameCapture"/>
+    <addaction name="actionRecordingSettings"/>
     <addaction name="actionRecordProgram"/>
     <addaction name="actionDropMarker"/>
     <addaction name="separator"/>
@@ -932,12 +933,20 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <string>Ctrl+Shift+F</string>
    </property>
   </action>
-  <action name="actionRecordProgram">
+  <action name="actionRecordingSettings">
    <property name="text">
-    <string>Record Program Output</string>
+    <string>Recording Settings…</string>
    </property>
    <property name="toolTip">
-    <string>Record the final program mix to ~/Videos/SwitchX/ (H.264 MKV + markers file)</string>
+    <string>Choose program, deck iso, and live source recording targets</string>
+   </property>
+  </action>
+  <action name="actionRecordProgram">
+   <property name="text">
+    <string>Record</string>
+   </property>
+   <property name="toolTip">
+    <string>Start or stop recording using the configured targets (~/Videos/SwitchX/)</string>
    </property>
    <property name="checkable">
     <bool>true</bool>

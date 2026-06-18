@@ -28,30 +28,46 @@ ProgramRecorder::~ProgramRecorder() {
     stopRecording();
 }
 
-QString ProgramRecorder::defaultOutputPath() {
+QString ProgramRecorder::defaultOutputDir() {
     QString dir = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
     if (dir.isEmpty())
         dir = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
     dir = QDir(dir).filePath(QStringLiteral("SwitchX"));
     QDir().mkpath(dir);
+    return dir;
+}
+
+QString ProgramRecorder::makeOutputPath(const QString &dir, const QString &stem, const QString &suffix) {
+    const QString base = suffix.isEmpty() ? stem : stem + QLatin1Char('_') + suffix;
+    return QDir(dir).filePath(base + QStringLiteral(".mkv"));
+}
+
+QString ProgramRecorder::defaultOutputPath() {
+    const QString dir = defaultOutputDir();
     const QString stamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd_HH-mm-ss"));
-    return QDir(dir).filePath(stamp + QStringLiteral(".mkv"));
+    return makeOutputPath(dir, stamp, QStringLiteral("program"));
 }
 
 qint64 ProgramRecorder::recordingDurationMs() const {
+    if (m_lastDurationMs > 0)
+        return m_lastDurationMs;
     return m_recording ? m_timer.elapsed() : 0;
 }
 
-bool ProgramRecorder::startRecording(const QString &outputPath) {
+bool ProgramRecorder::startRecording(const QString &outputPath, const QString &trackLabel,
+                                     bool writeMarkersOnStop) {
     if (m_recording)
         stopRecording();
 
     m_outputPath  = outputPath.isEmpty() ? defaultOutputPath() : outputPath;
+    m_trackLabel  = trackLabel;
+    m_writeMarkersOnStop = writeMarkersOnStop;
     m_markersPath = m_outputPath;
     m_markersPath.replace(QRegularExpression(QStringLiteral("\\.[^.]+$")),
                           QStringLiteral(".markers.json"));
     m_markers.clear();
     m_frameIndex = 0;
+    m_lastDurationMs = 0;
 
     const QByteArray pathUtf8 = m_outputPath.toUtf8();
 
@@ -149,7 +165,10 @@ void ProgramRecorder::stopRecording() {
     if (m_fmtCtx) {
         av_write_trailer(m_fmtCtx);
     }
-    writeMarkersFile();
+    if (m_writeMarkersOnStop)
+        writeMarkersFile();
+
+    m_lastDurationMs = m_timer.elapsed();
     cleanup();
 
     m_recording = false;
@@ -221,7 +240,9 @@ void ProgramRecorder::writeMarkersFile() const {
 
     QJsonObject root;
     root.insert(QStringLiteral("video"), m_outputPath);
-    root.insert(QStringLiteral("durationMs"), m_timer.elapsed());
+    if (!m_trackLabel.isEmpty())
+        root.insert(QStringLiteral("track"), m_trackLabel);
+    root.insert(QStringLiteral("durationMs"), m_lastDurationMs > 0 ? m_lastDurationMs : m_timer.elapsed());
     root.insert(QStringLiteral("frameRate"), kFps);
     root.insert(QStringLiteral("markers"), markersArr);
 

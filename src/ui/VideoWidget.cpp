@@ -102,6 +102,10 @@ void VideoWidget::paintGL() {
         cacheDeckPreviewFromFbo(true);
         cacheDeckPreviewFromFbo(false);
     }
+    if (m_deckFrameConsumers > 0) {
+        cacheDeckFrameFromFbo(true);
+        cacheDeckFrameFromFbo(false);
+    }
 
     glBindFramebuffer(GL_FRAMEBUFFER, m_programFbo);
     glViewport(0, 0, m_compW, m_compH);
@@ -390,6 +394,23 @@ void VideoWidget::removeDeckPreviewConsumer() {
 
 void VideoWidget::setDeckPreviewConsumerCount(int count) {
     m_deckPreviewConsumers = std::max(0, count);
+}
+
+void VideoWidget::setDeckFrameConsumerCount(int count) {
+    m_deckFrameConsumers = std::max(0, count);
+}
+
+void VideoWidget::cacheDeckFrameFromFbo(bool deckA) {
+    const GLuint fbo = deckA ? m_deckFboA : m_deckFboB;
+    if (!fbo) return;
+
+    QImage &cache = deckA ? m_deckFrameCacheA : m_deckFrameCacheB;
+    cache = QImage(kProgramWidth, kProgramHeight, QImage::Format_RGBA8888);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glReadPixels(0, 0, kProgramWidth, kProgramHeight,
+                 GL_RGBA, GL_UNSIGNED_BYTE, cache.bits());
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    cache = cache.flipped(Qt::Vertical);
 }
 
 void VideoWidget::cacheProgramFrameFromFbo() {
@@ -981,6 +1002,29 @@ QImage VideoWidget::deckPreviewWithOverlays(bool deckA) const {
                  programRect.width() * sx, programRect.height() * sy);
     const_cast<VideoWidget *>(this)->renderOverlays(p, overlays, vr, 1.f);
     return frame;
+}
+
+QImage VideoWidget::deckProgramFrameWithOverlays(bool deckA) const {
+    const QImage &base = deckA ? m_deckFrameCacheA : m_deckFrameCacheB;
+    if (base.isNull()) return {};
+
+    const QList<OverlayItem> &overlays = deckA ? m_overlaysA : m_overlaysB;
+    if (overlays.isEmpty()) return base;
+
+    QImage frame = base.copy();
+    QPainter p(&frame);
+    p.setRenderHint(QPainter::Antialiasing);
+
+    const QRectF &programRect = deckA ? m_videoRectProgramA : m_videoRectProgramB;
+    const QRectF vr = programRect.isEmpty()
+        ? QRectF(0, 0, kProgramWidth, kProgramHeight)
+        : programRect;
+    const_cast<VideoWidget *>(this)->renderOverlays(p, overlays, vr, 1.f);
+    return frame;
+}
+
+QImage VideoWidget::deckProgramFrame(bool deckA) const {
+    return deckProgramFrameWithOverlays(deckA);
 }
 
 QImage VideoWidget::getFrameA() const {

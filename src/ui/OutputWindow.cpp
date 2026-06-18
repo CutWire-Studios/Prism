@@ -21,6 +21,12 @@ OutputWindow::~OutputWindow() {
     delete ui;
 }
 
+void OutputWindow::setRecordingActive(bool active) {
+    ui->outputWidget->setStyleSheet(active
+        ? QStringLiteral("background-color: #000; border: 3px solid #e04545;")
+        : QStringLiteral("background-color: #000;"));
+}
+
 VideoWidget *OutputWindow::videoWidget() const {
     return ui->outputWidget;
 }

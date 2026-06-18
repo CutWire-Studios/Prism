@@ -98,6 +98,7 @@ set(SOURCES
     src/ui/ObsWebSocketClient.cpp
     src/ui/ObsIntegration.cpp
     src/ui/ProgramRecorder.cpp
+    src/ui/RecordingSettingsDialog.cpp
     src/ui/ShaderEditDialog.cpp
     src/ui/HtmlEditDialog.cpp
     # Extracted helper / controller classes
@@ -158,6 +159,8 @@ set(HEADERS
     include/ui/ObsWebSocketClient.h
     include/ui/ObsIntegration.h
     include/ui/ProgramRecorder.h
+    include/ui/RecordingOptions.h
+    include/ui/RecordingSettingsDialog.h
     include/ui/ProgramOutputSink.h
     include/ui/ShaderEditDialog.h
     include/ui/HtmlEditDialog.h
