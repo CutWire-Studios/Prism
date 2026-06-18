@@ -2,16 +2,21 @@
 #include "core/NetworkUtils.h"
 #include "core/WebRtcPairing.h"
 #include "core/WebRtcCamPage.h"
+#include "core/WebRtcTlsStore.h"
+#include "core/WebRtcH264Sdp.h"
+#include "core/SwitchXH264RtpDepacketizer.h"
 #include "core/FirewallUtils.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLoggingCategory>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QPointer>
 #include <QRandomGenerator>
-#include <QTcpServer>
-#include <QTcpSocket>
+#include <QTimer>
+#include <QSslServer>
+#include <QSslSocket>
 #include <QUrl>
 #include <QUrlQuery>
 #include <QWebSocket>
@@ -23,6 +28,7 @@
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/mem.h>
 #include <libswscale/swscale.h>
 }
 
@@ -52,6 +58,75 @@ public:
     H264Decoder(const H264Decoder &) = delete;
     H264Decoder &operator=(const H264Decoder &) = delete;
 
+    bool hasExtradata() const { return !m_avcExtradata.isEmpty(); }
+
+    bool tryConfigureFromAnnexB(const uint8_t *data, int size) {
+        if (hasExtradata() || !data || size < 5)
+            return false;
+
+        QByteArray sps;
+        QByteArray pps;
+
+        auto appendNal = [](QByteArray &dest, const uint8_t *nal, int nalSize) {
+            if (nalSize <= 0)
+                return;
+            if (!dest.isEmpty())
+                return;
+            dest = QByteArray(reinterpret_cast<const char *>(nal), nalSize);
+        };
+
+        for (int i = 0; i + 4 < size;) {
+            int startCode = 0;
+            if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1) {
+                startCode = 3;
+            } else if (i + 4 < size && data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 0
+                       && data[i + 3] == 1) {
+                startCode = 4;
+            } else {
+                ++i;
+                continue;
+            }
+
+            const int nalStart = i + startCode;
+            if (nalStart >= size)
+                break;
+
+            int next = size;
+            for (int j = nalStart + 1; j + 3 < size; ++j) {
+                if (data[j] == 0 && data[j + 1] == 0
+                    && (data[j + 2] == 1 || (j + 3 < size && data[j + 2] == 0 && data[j + 3] == 1))) {
+                    next = j;
+                    break;
+                }
+            }
+
+            const int nalSize = next - nalStart;
+            const uint8_t nalType = data[nalStart] & 0x1F;
+            if (nalType == 7)
+                appendNal(sps, data + nalStart, nalSize);
+            else if (nalType == 8)
+                appendNal(pps, data + nalStart, nalSize);
+
+            i = next;
+        }
+
+        if (sps.isEmpty() || pps.isEmpty())
+            return false;
+
+        const QByteArray avc = WebRtcH264Sdp::buildAvcExtradata(sps, pps);
+        if (avc.isEmpty())
+            return false;
+
+        qInfo() << "WebRTC: configured H.264 decoder from in-band SPS/PPS";
+        return setAvcExtradata(avc);
+    }
+
+    bool setAvcExtradata(const QByteArray &avcExtradata) {
+        m_avcExtradata = avcExtradata;
+        reset();
+        return !avcExtradata.isEmpty() && ensureOpen();
+    }
+
     bool ensureOpen() {
         if (m_ctx) return true;
         const AVCodec *codec = avcodec_find_decoder(AV_CODEC_ID_H264);
@@ -61,36 +136,79 @@ public:
         if (!m_ctx) return false;
         m_ctx->flags |= AV_CODEC_FLAG_LOW_DELAY;
         m_ctx->thread_count = 1;
+        m_ctx->has_b_frames = 0;
+
+        if (!m_avcExtradata.isEmpty()) {
+            m_ctx->extradata_size = m_avcExtradata.size();
+            m_ctx->extradata = static_cast<uint8_t *>(
+                av_malloc(static_cast<size_t>(m_ctx->extradata_size) + AV_INPUT_BUFFER_PADDING_SIZE));
+            if (!m_ctx->extradata) {
+                reset();
+                return false;
+            }
+            memcpy(m_ctx->extradata, m_avcExtradata.constData(),
+                   static_cast<size_t>(m_ctx->extradata_size));
+            memset(m_ctx->extradata + m_ctx->extradata_size, 0, AV_INPUT_BUFFER_PADDING_SIZE);
+        }
 
         if (avcodec_open2(m_ctx, codec, nullptr) < 0) {
             reset();
             return false;
         }
 
-        m_frame = av_frame_alloc();
-        m_pkt   = av_packet_alloc();
-        return m_frame && m_pkt;
+        m_parser = av_parser_init(AV_CODEC_ID_H264);
+        m_frame  = av_frame_alloc();
+        m_pkt    = av_packet_alloc();
+        return m_parser && m_frame && m_pkt;
     }
 
     QImage decode(const uint8_t *data, int size) {
-        if (!ensureOpen() || !data || size <= 0) return {};
-
-        av_packet_unref(m_pkt);
-        if (av_new_packet(m_pkt, size) < 0) return {};
-        memcpy(m_pkt->data, data, static_cast<size_t>(size));
-
-        if (avcodec_send_packet(m_ctx, m_pkt) < 0)
-            return {};
+        if (!data || size <= 0) return {};
+        tryConfigureFromAnnexB(data, size);
+        if (!ensureOpen()) return {};
 
         QImage out;
-        while (avcodec_receive_frame(m_ctx, m_frame) == 0) {
-            out = frameToRgb(m_frame);
-            if (!out.isNull()) break;
+        const uint8_t *cursor   = data;
+        int            remaining = size;
+
+        while (remaining > 0) {
+            uint8_t *parsed     = nullptr;
+            int      parsedSize = 0;
+            const int consumed = av_parser_parse2(
+                m_parser, m_ctx, &parsed, &parsedSize, cursor, remaining,
+                AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
+            if (consumed < 0)
+                break;
+
+            cursor += consumed;
+            remaining -= consumed;
+
+            if (parsedSize <= 0)
+                continue;
+
+            av_packet_unref(m_pkt);
+            if (av_new_packet(m_pkt, parsedSize) < 0)
+                continue;
+            memcpy(m_pkt->data, parsed, static_cast<size_t>(parsedSize));
+
+            if (avcodec_send_packet(m_ctx, m_pkt) < 0)
+                continue;
+
+            while (avcodec_receive_frame(m_ctx, m_frame) == 0) {
+                out = frameToRgb(m_frame);
+                if (!out.isNull())
+                    return out;
+            }
         }
+
         return out;
     }
 
     void reset() {
+        if (m_parser) {
+            av_parser_close(m_parser);
+            m_parser = nullptr;
+        }
         if (m_sws) {
             sws_freeContext(m_sws);
             m_sws = nullptr;
@@ -131,12 +249,14 @@ private:
         return img;
     }
 
-    AVCodecContext *m_ctx   = nullptr;
-    AVFrame        *m_frame = nullptr;
-    AVPacket       *m_pkt   = nullptr;
+    AVCodecContext       *m_ctx    = nullptr;
+    AVCodecParserContext *m_parser = nullptr;
+    AVFrame              *m_frame  = nullptr;
+    AVPacket             *m_pkt    = nullptr;
     SwsContext     *m_sws   = nullptr;
     int             m_swsW  = 0;
     int             m_swsH  = 0;
+    QByteArray      m_avcExtradata;
 };
 
 struct FrameBuffer {
@@ -150,12 +270,15 @@ struct Session {
     QPointer<QWebSocket> socket;
     std::shared_ptr<rtc::PeerConnection> pc;
     std::shared_ptr<rtc::Track> videoTrack;
-    std::shared_ptr<rtc::H264RtpDepacketizer> depacketizer;
+    std::shared_ptr<SwitchXH264RtpDepacketizer> depacketizer;
     std::shared_ptr<rtc::RtcpReceivingSession> rtcpSession;
     H264Decoder decoder;
     FrameBuffer frames;
     bool peerConnected = false;
     int  viewerCount   = 0;
+    bool keyframeBootstrapDone = false;
+    bool loggedFirstRtpFrame   = false;
+    bool loggedDecodeFailure   = false;
 };
 #endif // SWITCHX_HAVE_WEBRTC
 
@@ -171,10 +294,14 @@ public:
     }
 
     ~Impl() {
-        if (m_httpServer) {
-            m_httpServer->close();
-            delete m_httpServer;
-            m_httpServer = nullptr;
+        if (m_httpsServer) {
+            m_httpsServer->close();
+            delete m_httpsServer;
+            m_httpsServer = nullptr;
+        }
+        if (m_wssBridge) {
+            delete m_wssBridge;
+            m_wssBridge = nullptr;
         }
         if (m_server) {
             m_server->close();
@@ -212,53 +339,98 @@ public:
         return true;
     }
 
-    bool ensureHttpServer(const QHostAddress &bindAddress, quint16 preferredPort, quint16 &boundPort) {
-        if (m_httpServer && m_httpServer->isListening() && m_bindAddress == bindAddress.toString()) {
-            boundPort = m_httpServer->serverPort();
+    bool ensureHttpsServer(const QHostAddress &bindAddress, quint16 preferredPort, quint16 &boundPort) {
+        if (m_httpsServer && m_httpsServer->isListening() && m_bindAddress == bindAddress.toString()) {
+            boundPort = static_cast<quint16>(m_httpsServer->serverPort());
             return true;
         }
 
-        if (m_httpServer) {
-            m_httpServer->close();
-            delete m_httpServer;
-            m_httpServer = nullptr;
+        QString tlsError;
+        if (!WebRtcTlsStore::ensureCertificate(bindAddress.toString(), &tlsError)) {
+            qWarning() << "WebRTC TLS:" << tlsError;
+            return false;
         }
 
-        m_httpServer = new QTcpServer();
-        if (!m_httpServer->listen(bindAddress, preferredPort)) {
-            delete m_httpServer;
-            m_httpServer = nullptr;
+        if (m_httpsServer) {
+            m_httpsServer->close();
+            delete m_httpsServer;
+            m_httpsServer = nullptr;
+        }
+        if (m_wssBridge) {
+            delete m_wssBridge;
+            m_wssBridge = nullptr;
+        }
+
+        m_wssBridge = new QWebSocketServer(QStringLiteral("SwitchX-WebRTC-WSS"),
+                                           QWebSocketServer::SecureMode, m_owner);
+        m_wssBridge->setSslConfiguration(WebRtcTlsStore::sslConfiguration());
+        QObject::connect(m_wssBridge, &QWebSocketServer::newConnection, m_owner, [this]() {
+            onNewConnection();
+        });
+
+        m_httpsServer = new QSslServer(m_owner);
+        m_httpsServer->setSslConfiguration(WebRtcTlsStore::sslConfiguration());
+        if (!m_httpsServer->listen(bindAddress, preferredPort)) {
+            delete m_httpsServer;
+            m_httpsServer = nullptr;
+            delete m_wssBridge;
+            m_wssBridge = nullptr;
             return false;
         }
 
         m_bindAddress = bindAddress.toString();
-        boundPort = static_cast<quint16>(m_httpServer->serverPort());
-        QObject::connect(m_httpServer, &QTcpServer::newConnection, m_owner, [this]() {
-            onHttpConnection();
-        });
+        boundPort = static_cast<quint16>(m_httpsServer->serverPort());
+        QObject::connect(m_httpsServer, &QSslServer::startedEncryptionHandshake, m_owner,
+                         [this](QSslSocket *socket) {
+                             if (!socket)
+                                 return;
+                             onTlsConnection(socket);
+                         });
         return true;
     }
 
-    void onHttpConnection() {
-        while (QTcpSocket *socket = m_httpServer->nextPendingConnection()) {
-            QObject::connect(socket, &QTcpSocket::readyRead, m_owner, [this, socket]() {
-                handleHttpRequest(socket);
-            });
-            QObject::connect(socket, &QTcpSocket::disconnected, socket, &QTcpSocket::deleteLater);
-        }
+    void onTlsConnection(QSslSocket *socket) {
+        if (!socket) return;
+        QObject::connect(socket, &QSslSocket::disconnected, socket, &QSslSocket::deleteLater);
+        QObject::connect(socket, &QSslSocket::readyRead, m_owner, [this, socket]() {
+            if (!socket)
+                return;
+            handleTlsRequest(socket);
+        });
     }
 
-    void handleHttpRequest(QTcpSocket *socket) {
-        const QByteArray requestData = socket->readAll();
-        const QString request = QString::fromUtf8(requestData);
-        const QStringList lines = request.split(QStringLiteral("\r\n"));
-        if (lines.isEmpty()) return;
+    void handleTlsRequest(QSslSocket *socket) {
+        if (socket->property("switchxHandled").toBool())
+            return;
+
+        const QByteArray buffered = socket->peek(qMax<qint64>(socket->bytesAvailable(), 4096));
+        const int headerEnd = buffered.indexOf("\r\n\r\n");
+        if (headerEnd < 0)
+            return;
+
+        const QByteArray headers = buffered.left(headerEnd);
+        const QString headerText = QString::fromUtf8(headers);
+        const QStringList lines = headerText.split(QStringLiteral("\r\n"));
+        if (lines.isEmpty())
+            return;
 
         const QStringList parts = lines.first().split(QLatin1Char(' '));
-        if (parts.size() < 2) return;
+        if (parts.size() < 2)
+            return;
 
         const QString method = parts[0];
         const QString path   = parts[1];
+
+        const bool wantsWebSocket = headerText.contains(QStringLiteral("Upgrade:"), Qt::CaseInsensitive)
+            && headerText.contains(QStringLiteral("websocket"), Qt::CaseInsensitive);
+        if (wantsWebSocket && path.startsWith(QStringLiteral("/ws"))) {
+            socket->setProperty("switchxHandled", true);
+            if (m_wssBridge)
+                m_wssBridge->handleConnection(socket);
+            return;
+        }
+
+        socket->setProperty("switchxHandled", true);
 
         if (method != QStringLiteral("GET")) {
             sendHttpText(socket, QStringLiteral("405 Method Not Allowed"), 405);
@@ -270,7 +442,7 @@ public:
             return;
         }
 
-        QUrl url(QStringLiteral("http://local") + path);
+        QUrl url(QStringLiteral("https://local") + path);
         QUrlQuery query(url.query());
         QString token;
         quint16 sigPort = 0;
@@ -278,10 +450,9 @@ public:
             sendHttpText(socket, QStringLiteral("Missing or invalid pairing data"), 400);
             return;
         }
-        if (sigPort == 0 && m_server)
-            sigPort = m_server->serverPort();
+        Q_UNUSED(sigPort);
 
-        const QByteArray body = WebRtcCamPage::html(token, sigPort).toUtf8();
+        const QByteArray body = WebRtcCamPage::html(token, 0).toUtf8();
         const QByteArray response =
             "HTTP/1.1 200 OK\r\n"
             "Content-Type: text/html; charset=utf-8\r\n"
@@ -291,7 +462,7 @@ public:
         socket->disconnectFromHost();
     }
 
-    static void sendHttpText(QTcpSocket *socket, const QString &text, int statusCode) {
+    static void sendHttpText(QSslSocket *socket, const QString &text, int statusCode) {
         const QByteArray body = text.toUtf8();
         const QByteArray response = QByteArray("HTTP/1.1 ") + QByteArray::number(statusCode) + "\r\n"
             "Content-Type: text/plain\r\n"
@@ -301,7 +472,8 @@ public:
         socket->disconnectFromHost();
     }
 
-    WebRtcPairingInfo createSession(const QString &bindAddress, quint16 sigPort, quint16 httpPort) {
+    WebRtcPairingInfo createSession(const QString &bindAddress, quint16 sigPort, quint16 httpPort,
+                                    const QString &existingToken = {}) {
         WebRtcPairingInfo info;
         if (bindAddress.isEmpty())
             return info;
@@ -311,11 +483,22 @@ public:
         quint16 boundHttp = 0;
         if (!ensureSigServer(bindHost, sigPort, boundSig))
             return info;
-        if (!ensureHttpServer(bindHost, httpPort, boundHttp))
+        if (!ensureHttpsServer(bindHost, httpPort, boundHttp))
             return info;
 
+        if (!existingToken.isEmpty()) {
+            QMutexLocker lock(&m_mutex);
+            auto it = m_sessions.find(existingToken);
+            if (it != m_sessions.end()) {
+                info.host    = bindAddress;
+                info.sigPort = boundSig;
+                info.token   = existingToken;
+                return info;
+            }
+        }
+
         auto session = std::make_shared<Session>();
-        session->token = makeToken();
+        session->token = existingToken.isEmpty() ? makeToken() : existingToken;
         {
             QMutexLocker lock(&m_mutex);
             m_sessions.emplace(session->token, session);
@@ -325,6 +508,16 @@ public:
         info.sigPort = boundSig;
         info.token   = session->token;
         return info;
+    }
+
+    QString bindAddress() const {
+        QMutexLocker lock(&m_mutex);
+        return m_bindAddress;
+    }
+
+    bool hasSession(const QString &token) const {
+        QMutexLocker lock(&m_mutex);
+        return m_sessions.find(token) != m_sessions.end();
     }
 
     void destroySession(const QString &token) {
@@ -380,8 +573,11 @@ public:
     }
 
     void onNewConnection() {
-        if (!m_server) return;
-        QWebSocket *socket = m_server->nextPendingConnection();
+        QWebSocket *socket = nullptr;
+        if (m_server && m_server->hasPendingConnections())
+            socket = m_server->nextPendingConnection();
+        else if (m_wssBridge && m_wssBridge->hasPendingConnections())
+            socket = m_wssBridge->nextPendingConnection();
         if (!socket) return;
 
         QObject::connect(socket, &QWebSocket::textMessageReceived, m_owner, [this, socket](const QString &msg) {
@@ -473,9 +669,32 @@ private:
         if (session->pc)
             session->pc->close();
 
+        session->videoTrack = nullptr;
+        session->peerConnected = false;
+        session->keyframeBootstrapDone = false;
+        session->loggedFirstRtpFrame = false;
+        session->loggedDecodeFailure = false;
+        {
+            std::lock_guard<std::mutex> lock(session->frames.mutex);
+            session->frames.image = {};
+            session->frames.seq = 0;
+        }
+
         try {
             rtc::Configuration config;
             config.disableAutoNegotiation = true;
+
+            QByteArray sps;
+            QByteArray pps;
+            if (WebRtcH264Sdp::parseSpropParameterSets(sdp, &sps, &pps)) {
+                const QByteArray avc = WebRtcH264Sdp::buildAvcExtradata(sps, pps);
+                if (!avc.isEmpty() && session->decoder.setAvcExtradata(avc))
+                    qInfo() << "WebRTC: configured H.264 decoder from SDP parameter sets";
+                else
+                    qWarning() << "WebRTC: could not configure H.264 decoder from SDP parameter sets";
+            } else {
+                qInfo() << "WebRTC: offer SDP missing sprop-parameter-sets; waiting for in-band SPS/PPS";
+            }
 
             session->pc = std::make_shared<rtc::PeerConnection>(config);
             const QString token = session->token;
@@ -483,6 +702,7 @@ private:
             session->pc->onStateChange([this, session, token](rtc::PeerConnection::State state) {
                 if (state == rtc::PeerConnection::State::Connected) {
                     session->peerConnected = true;
+                    bootstrapKeyframes(session);
                     QMetaObject::invokeMethod(m_owner, [this, token]() {
                         emit m_owner->peerConnected(token);
                     }, Qt::QueuedConnection);
@@ -528,21 +748,58 @@ private:
         }
     }
 
+    void bootstrapKeyframes(const std::shared_ptr<Session> &session) {
+        if (!session || session->keyframeBootstrapDone)
+            return;
+        if (!session->videoTrack || !session->peerConnected)
+            return;
+
+        session->keyframeBootstrapDone = true;
+        try {
+            session->videoTrack->requestKeyframe();
+            qInfo() << "WebRTC: requested keyframe";
+        } catch (const std::exception &e) {
+            qWarning() << "WebRTC requestKeyframe:" << e.what();
+        }
+
+        QTimer::singleShot(2000, m_owner, [session]() {
+            if (!session || session->frames.seq != 0 || !session->videoTrack)
+                return;
+            try {
+                session->videoTrack->requestKeyframe();
+                qInfo() << "WebRTC: retrying keyframe request (no decoded frame yet)";
+            } catch (const std::exception &e) {
+                qWarning() << "WebRTC requestKeyframe retry:" << e.what();
+            }
+        });
+    }
+
     void setupVideoTrack(const std::shared_ptr<Session> &session, std::shared_ptr<rtc::Track> track) {
         if (!track || track->description().type() != "video")
             return;
 
         session->videoTrack = track;
-        session->depacketizer = std::make_shared<rtc::H264RtpDepacketizer>();
+        session->depacketizer = std::make_shared<SwitchXH264RtpDepacketizer>();
         session->rtcpSession  = std::make_shared<rtc::RtcpReceivingSession>();
         session->depacketizer->addToChain(session->rtcpSession);
         track->setMediaHandler(session->depacketizer);
+        bootstrapKeyframes(session);
 
         track->onFrame([session](rtc::binary data, rtc::FrameInfo /*info*/) {
             if (data.empty()) return;
+            if (!session->loggedFirstRtpFrame) {
+                session->loggedFirstRtpFrame = true;
+                qInfo() << "WebRTC: first RTP frame received (" << data.size() << " bytes)";
+            }
             QImage img = session->decoder.decode(reinterpret_cast<const uint8_t *>(data.data()),
                                                  static_cast<int>(data.size()));
-            if (img.isNull()) return;
+            if (img.isNull()) {
+                if (!session->loggedDecodeFailure) {
+                    session->loggedDecodeFailure = true;
+                    qWarning() << "WebRTC: first decode attempt produced no image";
+                }
+                return;
+            }
             {
                 std::lock_guard<std::mutex> lock(session->frames.mutex);
                 session->frames.image = std::move(img);
@@ -553,7 +810,8 @@ private:
 
     WebRtcManager *m_owner = nullptr;
     QWebSocketServer *m_server = nullptr;
-    QTcpServer       *m_httpServer = nullptr;
+    QSslServer       *m_httpsServer = nullptr;
+    QWebSocketServer *m_wssBridge = nullptr;
     QString           m_bindAddress;
     mutable QMutex m_mutex;
     std::unordered_map<QString, std::shared_ptr<Session>> m_sessions;
@@ -596,14 +854,35 @@ bool WebRtcManager::isAvailable() {
 }
 
 WebRtcPairingInfo WebRtcManager::createSession(const QString &bindAddress) {
+    return ensureSession(bindAddress);
+}
+
+WebRtcPairingInfo WebRtcManager::ensureSession(const QString &bindAddress, const QString &token) {
     WebRtcPairingInfo info;
 #ifdef SWITCHX_HAVE_WEBRTC
     if (!m_impl) return info;
-    info = m_impl->createSession(bindAddress, m_sigPort, m_httpPort);
+    info = m_impl->createSession(bindAddress, m_sigPort, m_httpPort, token);
 #else
     Q_UNUSED(bindAddress);
+    Q_UNUSED(token);
 #endif
     return info;
+}
+
+QString WebRtcManager::bindAddress() const {
+#ifdef SWITCHX_HAVE_WEBRTC
+    if (m_impl) return m_impl->bindAddress();
+#endif
+    return {};
+}
+
+bool WebRtcManager::hasSession(const QString &token) const {
+#ifdef SWITCHX_HAVE_WEBRTC
+    return m_impl && m_impl->hasSession(token);
+#else
+    Q_UNUSED(token);
+    return false;
+#endif
 }
 
 void WebRtcManager::destroySession(const QString &token) {

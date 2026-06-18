@@ -8,6 +8,9 @@
 #include "core/ShaderSource.h"
 #include "core/HtmlSource.h"
 #include "core/NdiSource.h"
+#ifdef SWITCHX_HAVE_WEBRTC
+#include "ui/SourcePrompt.h"
+#endif
 #include <QMessageBox>
 #include <QPushButton>
 #include <QCoreApplication>
@@ -623,6 +626,13 @@ void ClipCard::onEditClicked() {
             ui->titleLabel->setToolTip(m_sourceDesc.displayName);
             emit sourceDescriptorChanged(m_index, m_sourceDesc);
         }
+        break;
+    }
+
+    case Kind::WebRtc: {
+#ifdef SWITCHX_HAVE_WEBRTC
+        SourcePrompt::reconnectWebRtc(parent, m_sourceDesc.path);
+#endif
         break;
     }
 

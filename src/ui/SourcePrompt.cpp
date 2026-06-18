@@ -260,60 +260,7 @@ bool promptNdi(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
 }
 
 #ifdef SWITCHX_HAVE_WEBRTC
-bool promptWebRtc(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
-    if (!WebRtcSource::isAvailable()) {
-        QMessageBox::warning(parent, QObject::tr("Phone Camera (WebRTC)"),
-            QObject::tr("WebRTC is not available in this build.\n"
-                        "Rebuild with -DSWITCHX_WITH_WEBRTC=ON and install qt6-websockets."));
-        return false;
-    }
-
-    const QList<NetworkUtils::Ipv4Interface> ifaces = NetworkUtils::listIpv4Interfaces();
-    if (ifaces.isEmpty()) {
-        QMessageBox::warning(parent, QObject::tr("Phone Camera (WebRTC)"),
-            QObject::tr("No active network interface with an IPv4 address was found."));
-        return false;
-    }
-
-    const QString bindAddress = NetworkUtils::promptInterface(
-        parent, ifaces, NetworkUtils::defaultInterfaceIndex(ifaces));
-    if (bindAddress.isEmpty())
-        return false;
-
-    const QList<quint16> ports = {
-        WebRtcPairing::kDefaultSigPort,
-        WebRtcPairing::kDefaultHttpPort
-    };
-    const FirewallUtils::Status fw = FirewallUtils::detect();
-    if (fw.active) {
-        QString fwErr;
-        if (!FirewallUtils::ensurePortsOpen(parent, ports, fwErr,
-                QObject::tr("phone pairing"))) {
-            const auto cont = QMessageBox::warning(
-                parent,
-                QObject::tr("Firewall"),
-                QObject::tr("Could not open firewall port(s).\n%1\n\n"
-                              "Continue anyway? Your phone may not be able to connect.")
-                    .arg(fwErr.isEmpty() ? QObject::tr("Permission denied or cancelled.")
-                                         : fwErr),
-                QMessageBox::Yes | QMessageBox::No,
-                QMessageBox::No);
-            if (cont != QMessageBox::Yes)
-                return false;
-        }
-    }
-
-    const WebRtcPairingInfo info = WebRtcManager::instance().createSession(bindAddress);
-    if (info.token.isEmpty()) {
-        QMessageBox::warning(parent, QObject::tr("Phone Camera (WebRTC)"),
-            QObject::tr("Could not start the WebRTC servers on %1.\n"
-                        "Check that ports %2 (signaling) and %3 (browser) are free.")
-                .arg(bindAddress)
-                .arg(WebRtcPairing::kDefaultSigPort)
-                .arg(WebRtcPairing::kDefaultHttpPort));
-        return false;
-    }
-
+bool showWebRtcConnectionDialog(QWidget *parent, const WebRtcPairingInfo &info, bool destroyOnCancel) {
     QJsonObject qrObj = WebRtcPairing::makePayload(
         info.host, info.sigPort, info.token, WebRtcManager::instance().httpPort());
     const QString qrPayload = WebRtcPairing::toQrUrl(qrObj);
@@ -330,7 +277,8 @@ bool promptWebRtc(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     statusLabel->setAlignment(Qt::AlignCenter);
 
     auto *hintLabel = new QLabel(
-        QObject::tr("Scan with your phone camera to open the browser streamer, or scan with the SwitchX app to pair natively."), &dlg);
+        QObject::tr("Scan with your phone camera to open the browser streamer, or scan with the SwitchX app to pair natively.\n"
+                    "Your phone may warn about the self-signed certificate — accept it to enable the camera."), &dlg);
     hintLabel->setWordWrap(true);
     hintLabel->setAlignment(Qt::AlignCenter);
 
@@ -360,9 +308,82 @@ bool promptWebRtc(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     layout->addWidget(buttons);
 
     if (dlg.exec() != QDialog::Accepted) {
-        WebRtcManager::instance().destroySession(info.token);
+        if (destroyOnCancel)
+            WebRtcManager::instance().destroySession(info.token);
         return false;
     }
+    return true;
+}
+
+bool ensureWebRtcFirewall(QWidget *parent) {
+    const QList<quint16> ports = {
+        WebRtcPairing::kDefaultSigPort,
+        WebRtcPairing::kDefaultHttpPort
+    };
+    const FirewallUtils::Status fw = FirewallUtils::detect();
+    if (!fw.active)
+        return true;
+
+    QString fwErr;
+    if (FirewallUtils::ensurePortsOpen(parent, ports, fwErr, QObject::tr("phone pairing")))
+        return true;
+
+    const auto cont = QMessageBox::warning(
+        parent,
+        QObject::tr("Firewall"),
+        QObject::tr("Could not open firewall port(s).\n%1\n\n"
+                      "Continue anyway? Your phone may not be able to connect.")
+            .arg(fwErr.isEmpty() ? QObject::tr("Permission denied or cancelled.")
+                                 : fwErr),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+    return cont == QMessageBox::Yes;
+}
+
+QString promptWebRtcBindAddress(QWidget *parent) {
+    const QList<NetworkUtils::Ipv4Interface> ifaces = NetworkUtils::listIpv4Interfaces();
+    if (ifaces.isEmpty()) {
+        QMessageBox::warning(parent, QObject::tr("Phone Camera (WebRTC)"),
+            QObject::tr("No active network interface with an IPv4 address was found."));
+        return {};
+    }
+
+    return NetworkUtils::promptInterface(
+        parent, ifaces, NetworkUtils::defaultInterfaceIndex(ifaces));
+}
+
+bool promptWebRtc(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
+    if (!WebRtcSource::isAvailable()) {
+        QMessageBox::warning(parent, QObject::tr("Phone Camera (WebRTC)"),
+            QObject::tr("WebRTC is not available in this build.\n"
+                        "Rebuild with -DSWITCHX_WITH_WEBRTC=ON and install qt6-websockets."));
+        return false;
+    }
+
+    const QString bindAddress = promptWebRtcBindAddress(parent);
+    if (bindAddress.isEmpty())
+        return false;
+
+    if (!ensureWebRtcFirewall(parent))
+        return false;
+
+    const WebRtcPairingInfo info = WebRtcManager::instance().createSession(bindAddress);
+    if (info.token.isEmpty()) {
+        QMessageBox::warning(parent, QObject::tr("Phone Camera (WebRTC)"),
+            QObject::tr("Could not start the WebRTC servers on %1.\n"
+                        "Check that ports %2 (signaling) and %3 (browser) are free.")
+                .arg(bindAddress)
+                .arg(WebRtcPairing::kDefaultSigPort)
+                .arg(WebRtcPairing::kDefaultHttpPort));
+        return false;
+    }
+
+    QJsonObject qrObj = WebRtcPairing::makePayload(
+        info.host, info.sigPort, info.token, WebRtcManager::instance().httpPort());
+    const QString qrPayload = WebRtcPairing::toQrUrl(qrObj);
+
+    if (!showWebRtcConnectionDialog(parent, info, true))
+        return false;
 
     desc.kind        = SourceDescriptor::Kind::WebRtc;
     desc.path        = info.token;
@@ -370,9 +391,50 @@ bool promptWebRtc(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     thumb = QrCodeHelper::toPixmap(qrPayload, 4);
     return true;
 }
+
+bool reconnectWebRtcDialog(QWidget *parent, const QString &sessionToken) {
+    if (sessionToken.isEmpty())
+        return false;
+
+    if (!WebRtcSource::isAvailable()) {
+        QMessageBox::warning(parent, QObject::tr("Phone Camera (WebRTC)"),
+            QObject::tr("WebRTC is not available in this build.\n"
+                        "Rebuild with -DSWITCHX_WITH_WEBRTC=ON and install qt6-websockets."));
+        return false;
+    }
+
+    QString bindAddress = WebRtcManager::instance().bindAddress();
+    if (!WebRtcManager::instance().hasSession(sessionToken) || bindAddress.isEmpty()) {
+        bindAddress = promptWebRtcBindAddress(parent);
+        if (bindAddress.isEmpty())
+            return false;
+    }
+
+    if (!ensureWebRtcFirewall(parent))
+        return false;
+
+    const WebRtcPairingInfo info = WebRtcManager::instance().ensureSession(bindAddress, sessionToken);
+    if (info.token.isEmpty()) {
+        QMessageBox::warning(parent, QObject::tr("Phone Camera (WebRTC)"),
+            QObject::tr("Could not start the WebRTC servers on %1.\n"
+                        "Check that ports %2 (signaling) and %3 (browser) are free.")
+                .arg(bindAddress)
+                .arg(WebRtcPairing::kDefaultSigPort)
+                .arg(WebRtcPairing::kDefaultHttpPort));
+        return false;
+    }
+
+    return showWebRtcConnectionDialog(parent, info, false);
+}
 #endif
 
 } // namespace
+
+#ifdef SWITCHX_HAVE_WEBRTC
+bool reconnectWebRtc(QWidget *parent, const QString &sessionToken) {
+    return reconnectWebRtcDialog(parent, sessionToken);
+}
+#endif
 
 bool prompt(SourceDescriptor::Kind kind, QWidget *parent,
             SourceDescriptor &outDesc, QPixmap &outThumb)

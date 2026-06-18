@@ -36,8 +36,12 @@ QString html(const QString &token, quint16 sigPort) {
         function setStatus(text) { statusEl.textContent = text; }
 
         function wsUrl() {
-            const host = location.hostname || '127.0.0.1';
-            return `ws://${host}:${SIG_PORT}/`;
+            const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+            if (SIG_PORT > 0) {
+                const host = location.hostname || '127.0.0.1';
+                return `${scheme}://${host}:${SIG_PORT}/`;
+            }
+            return `${scheme}://${location.host}/ws`;
         }
 
         function send(msg) {
@@ -49,7 +53,15 @@ QString html(const QString &token, quint16 sigPort) {
             startBtn.disabled = true;
             setStatus('Requesting camera…');
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1280, max: 1280 },
+                        height: { ideal: 720, max: 720 },
+                        frameRate: { ideal: 30, max: 30 }
+                    },
+                    audio: false
+                });
                 preview.srcObject = stream;
             } catch (err) {
                 setStatus('Camera access denied: ' + err);
@@ -62,7 +74,15 @@ QString html(const QString &token, quint16 sigPort) {
             ws.onopen = async () => {
                 send({ type: 'hello', token: TOKEN });
                 pc = new RTCPeerConnection({ iceServers: [] });
-                preview.srcObject.getTracks().forEach(t => pc.addTrack(t, preview.srcObject));
+                const videoTrack = preview.srcObject.getVideoTracks()[0];
+                const tr = pc.addTransceiver(videoTrack, { direction: 'sendonly' });
+                try {
+                    if (tr.setCodecPreferences && window.RTCRtpSender && RTCRtpSender.getCapabilities) {
+                        const caps = RTCRtpSender.getCapabilities('video');
+                        const h264 = caps.codecs.filter(c => /h264/i.test(c.mimeType));
+                        if (h264.length) tr.setCodecPreferences(h264);
+                    }
+                } catch (e) { /* older browsers: fall back to default negotiation */ }
                 pc.onicecandidate = (ev) => {
                     if (ev.candidate) {
                         send({

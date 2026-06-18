@@ -63,9 +63,10 @@ if(SWITCHX_WITH_WEBRTC)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(libdatachannel
         GIT_REPOSITORY https://github.com/paullouisageneau/libdatachannel.git
-        GIT_TAG        v0.22.6)
+        GIT_TAG        v0.24.5)
     set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
     FetchContent_MakeAvailable(libdatachannel)
+    find_package(OpenSSL REQUIRED)
     message(STATUS "WebRTC phone camera source enabled (libdatachannel)")
     set(SWITCHX_HAVE_WEBRTC TRUE)
 endif()
@@ -96,6 +97,9 @@ set(SOURCES
     src/core/NetworkUtils.cpp
     src/core/WebRtcPairing.cpp
     src/core/WebRtcCamPage.cpp
+    src/core/WebRtcTlsStore.cpp
+    src/core/WebRtcH264Sdp.cpp
+    src/core/SwitchXH264RtpDepacketizer.cpp
     src/core/FirewallUtils.cpp
     src/core/WebRtcManager.cpp
     src/core/WebRtcSource.cpp
@@ -166,6 +170,9 @@ set(HEADERS
     include/core/NetworkUtils.h
     include/core/WebRtcPairing.h
     include/core/WebRtcCamPage.h
+    include/core/WebRtcTlsStore.h
+    include/core/WebRtcH264Sdp.h
+    include/core/SwitchXH264RtpDepacketizer.h
     include/core/FirewallUtils.h
     include/core/WebRtcManager.h
     include/core/WebRtcSource.h
@@ -273,7 +280,7 @@ endif()
 
 if(SWITCHX_HAVE_WEBRTC)
     target_compile_definitions(Prism PRIVATE SWITCHX_HAVE_WEBRTC)
-    target_link_libraries(Prism PRIVATE LibDataChannel::LibDataChannelStatic Qt6::WebSockets)
+    target_link_libraries(Prism PRIVATE LibDataChannel::LibDataChannelStatic Qt6::WebSockets OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
 # Enable testing

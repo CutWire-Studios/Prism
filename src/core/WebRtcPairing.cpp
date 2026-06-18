@@ -21,7 +21,7 @@ QString toQrUrl(const QJsonObject &payload) {
     const QByteArray json = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     const QString b64 = QString::fromUtf8(
         json.toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals));
-    return QStringLiteral("http://%1:%2/cam?d=%3").arg(host).arg(http).arg(b64);
+    return QStringLiteral("https://%1:%2/cam?d=%3").arg(host).arg(http).arg(b64);
 }
 
 bool decodeQuery(const QUrlQuery &query, QString &token, quint16 &sigPort) {

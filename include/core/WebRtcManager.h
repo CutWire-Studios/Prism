@@ -23,6 +23,12 @@ public:
     /// Lazily starts servers on bindAddress and returns pairing details for a new session.
     WebRtcPairingInfo createSession(const QString &bindAddress);
 
+    /// Starts servers if needed and returns pairing details for an existing or new session token.
+    WebRtcPairingInfo ensureSession(const QString &bindAddress, const QString &token = {});
+
+    QString bindAddress() const;
+    bool hasSession(const QString &token) const;
+
     quint16 httpPort() const { return m_httpPort; }
     void destroySession(const QString &token);
 

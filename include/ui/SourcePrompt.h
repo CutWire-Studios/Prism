@@ -15,6 +15,11 @@ namespace SourcePrompt {
 bool prompt(SourceDescriptor::Kind kind, QWidget *parent,
             SourceDescriptor &outDesc, QPixmap &outThumb);
 
+#ifdef SWITCHX_HAVE_WEBRTC
+/// Reopens the phone pairing dialog for an existing WebRTC session (reconnect after drop).
+bool reconnectWebRtc(QWidget *parent, const QString &sessionToken);
+#endif
+
 // Populates menu with the canonical Add Element list (icon + label per entry).
 // onFile fires for the media-file picker entry; onKind fires for each
 // single-descriptor kind.
