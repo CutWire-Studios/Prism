@@ -88,7 +88,7 @@ std::pair<float,float> VideoWidget::computeDeckAlphas() const {
     return {1.f - t, t};
 }
 
-void VideoWidget::paintGL() {
+void VideoWidget::composeProgramFrame() {
     ensureProgramFbo();
     ensureDeckFbos();
 
@@ -121,9 +121,11 @@ void VideoWidget::paintGL() {
 
     m_compW = 0;
     m_compH = 0;
+}
 
+void VideoWidget::paintGL() {
+    composeProgramFrame();
     blitProgramToScreen();
-    emit programFrameReady();
 }
 
 void VideoWidget::renderDeckToFbo(bool deckA) {
@@ -419,7 +421,6 @@ void VideoWidget::cacheProgramFrameFromFbo() {
     m_programFrameCache = QImage(kProgramWidth, kProgramHeight, QImage::Format_RGBA8888);
     glReadPixels(0, 0, kProgramWidth, kProgramHeight,
                  GL_RGBA, GL_UNSIGNED_BYTE, m_programFrameCache.bits());
-    m_programFrameCache = m_programFrameCache.flipped(Qt::Vertical);
 }
 
 void VideoWidget::cacheDeckPreviewFromFbo(bool deckA) {
@@ -924,28 +925,20 @@ void VideoWidget::setOutputFrozen(bool frozen) {
 
 QImage VideoWidget::captureProgramFrame() {
     makeCurrent();
-    ensureProgramFbo();
-    ensureDeckFbos();
-
-    m_compW = kProgramWidth;
-    m_compH = kProgramHeight;
-    renderDeckToFbo(true);
-    renderDeckToFbo(false);
-    glBindFramebuffer(GL_FRAMEBUFFER, m_programFbo);
-    glViewport(0, 0, m_compW, m_compH);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(0, m_compW, m_compH, 0, -1, 1);
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    renderCompositionGL();
-    cacheProgramFrameFromFbo();
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    m_compW = 0;
-    m_compH = 0;
+    composeProgramFrame();
     doneCurrent();
-
     return m_programFrameCache.copy();
+}
+
+void VideoWidget::captureOutputFrameNow() {
+    if (m_programFrameConsumers <= 0 && m_deckFrameConsumers <= 0)
+        return;
+    if (!isValid())
+        return;
+    makeCurrent();
+    composeProgramFrame();
+    doneCurrent();
+    emit programFrameReady();
 }
 
 void VideoWidget::holdLayerAsStill(bool deckA, int chainIndex, const QImage &frame) {
@@ -1110,11 +1103,13 @@ bool VideoWidget::advanceSource(MediaSource *source, bool &playing, bool repeat,
 }
 
 void VideoWidget::updateFrame() {
-    if (m_outputFrozen) return;
+    const bool needsCapture = m_programFrameConsumers > 0 || m_deckFrameConsumers > 0;
+    if (m_outputFrozen && !needsCapture) return;
 
     const bool hasChainA = !m_chainA.empty();
     const bool hasChainB = !m_chainB.empty();
-    if (!m_playingA && !m_playingB && !m_playingOverlay && !hasChainA && !hasChainB) return;
+    if (!m_playingA && !m_playingB && !m_playingOverlay && !hasChainA && !hasChainB && !needsCapture)
+        return;
 
     bool decodedA = false, decodedB = false, decodedOverlay = false;
 
@@ -1138,14 +1133,26 @@ void VideoWidget::updateFrame() {
         if (decodedB)       uploadSourceFrameGL(m_textureB,       m_sourceB.get());
         if (decodedOverlay) uploadSourceFrameGL(m_textureOverlay, m_htmlOverlay.get());
         doneCurrent();
-        update();
     }
 
-    // For live sources that are not yet ready (e.g. camera still starting),
-    // keep triggering repaints so the first frame appears as soon as it arrives.
-    if ((m_playingA       && m_sourceA    && !m_sourceA->isReady())    ||
+    // Drive mirror / NDI / recording from the frame timer so capture works even
+    // when the output window is occluded and paintGL is not invoked (Wayland).
+    if (needsCapture) {
+        if (isValid()) {
+            makeCurrent();
+            composeProgramFrame();
+            doneCurrent();
+            emit programFrameReady();
+        }
+    }
+
+    const bool waitingForLiveSource =
+        (m_playingA       && m_sourceA    && !m_sourceA->isReady())    ||
         (m_playingB       && m_sourceB    && !m_sourceB->isReady())    ||
-        (m_playingOverlay && m_htmlOverlay && !m_htmlOverlay->isReady())) {
+        (m_playingOverlay && m_htmlOverlay && !m_htmlOverlay->isReady());
+
+    if (decodedA || decodedB || decodedOverlay || chainADecoded || chainBDecoded
+        || needsCapture || waitingForLiveSource) {
         update();
     }
 }

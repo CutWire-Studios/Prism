@@ -4,7 +4,30 @@
 #include <QVideoSink>
 #include <QVideoFrame>
 #include <QMediaDevices>
+#include <QApplication>
+#include <QMessageBox>
 #include <QDebug>
+
+namespace {
+
+QString friendlyCameraError(QCamera::Error err, const QString &msg) {
+    Q_UNUSED(err);
+    if (msg.contains(QStringLiteral("general stream error"), Qt::CaseInsensitive)
+        || msg.contains(QStringLiteral("GStreamer"), Qt::CaseInsensitive)) {
+        return QObject::tr(
+            "The camera could not start.\n\n"
+            "Common causes:\n"
+            "• Another app is using the camera (OBS, browser, Zoom, etc.)\n"
+            "• The selected device path is wrong — try \"Default Camera\"\n"
+            "• The camera driver needs a moment after unplug/replug\n\n"
+            "Technical detail: %1").arg(msg);
+    }
+    return msg.isEmpty()
+        ? QObject::tr("The camera could not start.")
+        : msg;
+}
+
+}
 
 CameraSource::CameraSource() = default;
 
@@ -43,11 +66,19 @@ bool CameraSource::start(const QCameraDevice &device) {
             Qt::QueuedConnection);
 
     connect(m_camera, &QCamera::errorOccurred, this, [this](QCamera::Error err, const QString &msg) {
+        m_lastError = friendlyCameraError(err, msg);
+        m_failed = true;
         qWarning() << "CameraSource error:" << err << msg;
+        if (QWidget *w = QApplication::activeWindow()) {
+            QMessageBox::warning(w, tr("Camera Error"), m_lastError);
+        }
+        stop();
     });
 
+    m_failed = false;
+    m_lastError.clear();
     m_camera->start();
-    qDebug() << "CameraSource: started (GStreamer)" << m_name;
+    qDebug() << "CameraSource: started" << m_name;
     return true;  // starting is async — success is confirmed when frames arrive
 }
 
@@ -78,6 +109,7 @@ void CameraSource::stop() {
     delete m_camera;  m_camera  = nullptr;
     m_frame = {};
     m_dirty = false;
+    m_failed = false;
 }
 
 void CameraSource::onVideoFrameChanged(const QVideoFrame &frame) {

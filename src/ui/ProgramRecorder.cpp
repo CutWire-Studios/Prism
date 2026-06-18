@@ -101,6 +101,7 @@ bool ProgramRecorder::startRecording(const QString &outputPath, const QString &t
     AVDictionary *opts = nullptr;
     av_dict_set(&opts, "preset", "ultrafast", 0);
     av_dict_set(&opts, "tune", "zerolatency", 0);
+    av_dict_set(&opts, "profile", "baseline", 0);
     if (avcodec_open2(m_codecCtx, codec, &opts) < 0) {
         av_dict_free(&opts);
         emit errorOccurred(tr("Could not open H.264 encoder."));
@@ -116,6 +117,8 @@ bool ProgramRecorder::startRecording(const QString &outputPath, const QString &t
         return false;
     }
     m_stream->time_base = m_codecCtx->time_base;
+    m_stream->avg_frame_rate = AVRational{kFps, 1};
+    m_stream->r_frame_rate   = AVRational{kFps, 1};
     avcodec_parameters_from_context(m_stream->codecpar, m_codecCtx);
 
     if (!(m_fmtCtx->oformat->flags & AVFMT_NOFILE)) {
@@ -161,11 +164,15 @@ bool ProgramRecorder::startRecording(const QString &outputPath, const QString &t
 void ProgramRecorder::stopRecording() {
     if (!m_recording) return;
 
+    const int64_t framesWritten = m_frameIndex;
+    const QString videoPath = m_outputPath;
+    const QString markersPath = m_markersPath;
+
     flushEncoder();
-    if (m_fmtCtx) {
+    if (m_fmtCtx && framesWritten > 0) {
         av_write_trailer(m_fmtCtx);
     }
-    if (m_writeMarkersOnStop)
+    if (m_writeMarkersOnStop && framesWritten > 0)
         writeMarkersFile();
 
     m_lastDurationMs = m_timer.elapsed();
@@ -173,6 +180,14 @@ void ProgramRecorder::stopRecording() {
 
     m_recording = false;
     emit recordingChanged(false);
+
+    if (framesWritten == 0) {
+        QFile::remove(videoPath);
+        QFile::remove(markersPath);
+        emit errorOccurred(tr(
+            "Recording captured no video frames, so the file was discarded.\n\n"
+            "Load media on a deck or start a live source, then try again."));
+    }
 }
 
 bool ProgramRecorder::flushEncoder() {

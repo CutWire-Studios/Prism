@@ -809,8 +809,7 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <addaction name="actionNdiOutput"/>
     <addaction name="actionVirtualCameraOutput"/>
     <addaction name="actionFreezeFrameCapture"/>
-    <addaction name="actionRecordingSettings"/>
-    <addaction name="actionRecordProgram"/>
+    <addaction name="actionRecordingPanel"/>
     <addaction name="actionDropMarker"/>
     <addaction name="separator"/>
     <addaction name="actionConnectObs"/>
@@ -933,23 +932,12 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <string>Ctrl+Shift+F</string>
    </property>
   </action>
-  <action name="actionRecordingSettings">
+  <action name="actionRecordingPanel">
    <property name="text">
-    <string>Recording Settings…</string>
+    <string>Recording Panel…</string>
    </property>
    <property name="toolTip">
-    <string>Choose program, deck iso, and live source recording targets</string>
-   </property>
-  </action>
-  <action name="actionRecordProgram">
-   <property name="text">
-    <string>Record</string>
-   </property>
-   <property name="toolTip">
-    <string>Start or stop recording using the configured targets (~/Videos/SwitchX/)</string>
-   </property>
-   <property name="checkable">
-    <bool>true</bool>
+    <string>Open the recording panel to start and stop each stream independently</string>
    </property>
   </action>
   <action name="actionDropMarker">

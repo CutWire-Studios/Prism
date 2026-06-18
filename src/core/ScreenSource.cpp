@@ -6,6 +6,8 @@
 #include <QDBusUnixFileDescriptor>
 #include <QDBusArgument>
 #include <QRandomGenerator>
+#include <QApplication>
+#include <QMessageBox>
 #include <QDebug>
 
 #include <unistd.h>
@@ -233,6 +235,10 @@ void ScreenSource::buildGstPipeline(int fd, uint32_t nodeId) {
     m_appsink = gst_bin_get_by_name(GST_BIN(m_pipeline), "sink");
     g_signal_connect(m_appsink, "new-sample", G_CALLBACK(onNewSample), this);
 
+    GstBus *bus = gst_element_get_bus(m_pipeline);
+    gst_bus_add_watch(bus, onBusMessage, this);
+    gst_object_unref(bus);
+
     gst_element_set_state(m_pipeline, GST_STATE_PLAYING);
     m_state = State::Capturing;
     m_name  = "Portal Screen";
@@ -268,4 +274,48 @@ GstFlowReturn ScreenSource::onNewSample(GstAppSink *sink, gpointer userData) {
 
     gst_sample_unref(sample);
     return GST_FLOW_OK;
+}
+
+gboolean ScreenSource::onBusMessage(GstBus *bus, GstMessage *msg, gpointer userData) {
+    Q_UNUSED(bus);
+    auto *self = static_cast<ScreenSource *>(userData);
+
+    switch (GST_MESSAGE_TYPE(msg)) {
+    case GST_MESSAGE_ERROR: {
+        GError *err = nullptr;
+        gchar *debug = nullptr;
+        gst_message_parse_error(msg, &err, &debug);
+        const QString detail = QStringLiteral("%1 (%2)")
+            .arg(QString::fromUtf8(err ? err->message : "unknown"),
+                 QString::fromUtf8(debug ? debug : ""));
+        if (err) g_error_free(err);
+        g_free(debug);
+        QMetaObject::invokeMethod(self, [self, detail]() {
+            self->handlePipelineError(detail);
+        }, Qt::QueuedConnection);
+        break;
+    }
+    case GST_MESSAGE_EOS:
+        QMetaObject::invokeMethod(self, [self]() {
+            self->handlePipelineError(ScreenSource::tr("Screen capture stream ended."));
+        }, Qt::QueuedConnection);
+        break;
+    default:
+        break;
+    }
+    return TRUE;
+}
+
+void ScreenSource::handlePipelineError(const QString &detail) {
+    qWarning() << "ScreenSource: pipeline error:" << detail;
+    if (m_state == State::Capturing || m_state == State::Starting) {
+        if (QWidget *w = QApplication::activeWindow()) {
+            QMessageBox::warning(w, tr("Screen Capture Error"),
+                tr("Screen capture failed.\n\n"
+                   "Try selecting the source again in the portal picker, "
+                   "or check that PipeWire and xdg-desktop-portal are running.\n\n"
+                   "Technical detail: %1").arg(detail));
+        }
+    }
+    stop();
 }

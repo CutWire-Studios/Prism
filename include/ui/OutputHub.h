@@ -20,6 +20,13 @@ class OutputHub : public QObject {
     Q_OBJECT
 
 public:
+    enum class TrackKind {
+        Program,
+        DeckA,
+        DeckB,
+        Source
+    };
+
     explicit OutputHub(QObject *parent = nullptr);
     ~OutputHub() override;
 
@@ -27,6 +34,9 @@ public:
     VideoWidget *programSource() const { return m_source; }
 
     void setActiveDeckNodes(NodeId deckA, NodeId deckB);
+
+    QString outputDir() const { return m_outputDir; }
+    void setOutputDir(const QString &dir);
 
     /// Opens a mirror window showing the current program mix.
     MirrorOutputWindow *addMirrorOutput(const QString &title = {});
@@ -38,7 +48,6 @@ public:
     bool ndiOutputEnabled() const { return m_ndiEnabled; }
     QString ndiStreamName() const;
 
-    /// Start or stop NDI program output. Returns false if NDI is unavailable or start failed.
     bool setNdiOutputEnabled(bool enabled, const QString &streamName = {});
 
     // ── Virtual camera program output ─────────────────────────────────────────
@@ -46,29 +55,35 @@ public:
     bool virtualCameraEnabled() const { return m_virtualCameraEnabled; }
     QString virtualCameraDevicePath() const;
 
-    /// Start or stop virtual camera output. Returns false if unavailable or start failed.
     bool setVirtualCameraEnabled(bool enabled, const QString &devicePath = {});
 
-    // ── Multi-track recording ─────────────────────────────────────────────────
+    // ── Independent per-stream recording ──────────────────────────────────────
     bool isRecording() const;
     bool isProgramRecording() const;
-    RecordingOptions recordingOptions() const { return m_recordingOptions; }
-    QString recordingOutputStem() const { return m_recordingStem; }
-    QStringList activeRecordingTrackLabels() const;
-    QStringList recordingOutputPaths() const;
-    QString recordingMarkersPath() const;
-    qint64 recordingDurationMs() const;
+    bool isTrackRecording(TrackKind kind, NodeId sourceNodeId = 0) const;
 
-    bool startRecording(const RecordingOptions &opts);
-    void stopRecording();
-    bool setProgramRecordingEnabled(bool enabled, const QString &outputPath = {});
+    bool startProgramRecording();
+    void stopProgramRecording();
+    bool startDeckARecording();
+    void stopDeckARecording();
+    bool startDeckBRecording();
+    void stopDeckBRecording();
+    bool startSourceRecording(NodeId nodeId, const QString &label);
+    void stopSourceRecording(NodeId nodeId);
+
+    void stopAllRecording();
     void addRecordingMarker(const QString &label);
+
+    QStringList activeRecordingTrackLabels() const;
+    qint64 longestActiveRecordingMs() const;
+    qint64 trackRecordingDurationMs(TrackKind kind, NodeId sourceNodeId = 0) const;
 
 signals:
     void ndiOutputEnabledChanged(bool enabled);
     void virtualCameraEnabledChanged(bool enabled);
-    void recordingChanged(bool recording);
+    void recordingStateChanged();
     void recordingProgress(qint64 elapsedMs);
+    void recordingError(const QString &message);
 
 private slots:
     void onProgramFrameReady();
@@ -76,12 +91,15 @@ private slots:
     void onRecordingProgressTick();
 
 private:
-    void writeCombinedMarkersFile() const;
     static QString sanitizeFileStem(const QString &name);
+    QString makeTrackOutputPath(const QString &suffix) const;
     void syncFrameConsumers();
     int  activeFrameConsumerCount() const;
     bool needsDeckFrameReadback() const;
+    void ensureProgressTimer();
+    void maybeStopProgressTimer();
     void placeOnSecondaryScreen(QWidget *window);
+    ProgramRecorder *recorderFor(TrackKind kind, NodeId sourceNodeId = 0) const;
 
     VideoWidget *m_source = nullptr;
     QList<QPointer<MirrorOutputWindow>> m_mirrors;
@@ -93,13 +111,10 @@ private:
     std::unique_ptr<ProgramRecorder>           m_deckBRecorder;
     std::unordered_map<NodeId, std::unique_ptr<ProgramRecorder>> m_sourceRecorders;
 
-    RecordingOptions m_recordingOptions;
-    QString          m_recordingStem;
-    QString          m_combinedMarkersPath;
-    QStringList      m_lastRecordingPaths;
-    NodeId           m_activeDeckA = 0;
-    NodeId           m_activeDeckB = 0;
-    QTimer          *m_progressTimer = nullptr;
+    QString  m_outputDir;
+    NodeId   m_activeDeckA = 0;
+    NodeId   m_activeDeckB = 0;
+    QTimer  *m_progressTimer = nullptr;
 
     bool m_ndiEnabled = false;
     bool m_virtualCameraEnabled = false;

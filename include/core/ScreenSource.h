@@ -44,7 +44,9 @@ private slots:
 
 private:
     void buildGstPipeline(int fd, uint32_t nodeId);
+    void handlePipelineError(const QString &detail);
     static GstFlowReturn onNewSample(GstAppSink *sink, gpointer userData);
+    static gboolean onBusMessage(GstBus *bus, GstMessage *msg, gpointer userData);
 
     enum class State { Idle, CreatingSession, SelectingSources, Starting, Capturing };
     State       m_state       = State::Idle;

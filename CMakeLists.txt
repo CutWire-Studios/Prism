@@ -98,6 +98,7 @@ set(SOURCES
     src/ui/ObsWebSocketClient.cpp
     src/ui/ObsIntegration.cpp
     src/ui/ProgramRecorder.cpp
+    src/ui/RecordingOptions.cpp
     src/ui/RecordingSettingsDialog.cpp
     src/ui/ShaderEditDialog.cpp
     src/ui/HtmlEditDialog.cpp

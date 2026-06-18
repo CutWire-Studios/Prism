@@ -151,6 +151,9 @@ public:
     /// Read back the current program compositor frame (1280×720 RGBA).
     QImage captureProgramFrame();
 
+    /// Compose and emit programFrameReady when mirror/NDI/recording consumers are active.
+    void captureOutputFrameNow();
+
     /// Enable drag-to-move, double-click, and context menu for frameless windows.
     void setFramelessWindowChrome(bool enabled) { m_framelessWindowChrome = enabled; }
     bool framelessWindowChrome() const { return m_framelessWindowChrome; }
@@ -183,6 +186,9 @@ private slots:
     void updateFrame();
 
 private:
+    /// Render program/deck FBOs and optional CPU readback (mirror, NDI, recording).
+    void composeProgramFrame();
+
     std::unique_ptr<MediaSource> m_sourceA;
     std::unique_ptr<MediaSource> m_sourceB;
     std::unique_ptr<MediaSource> m_htmlOverlay;

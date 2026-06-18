@@ -36,6 +36,7 @@ public:
     QString trackLabel() const { return m_trackLabel; }
     qint64 recordingDurationMs() const;
     const QVector<Marker> &markers() const { return m_markers; }
+    int capturedFrameCount() const { return static_cast<int>(m_frameIndex); }
     bool startRecording(const QString &outputPath, const QString &trackLabel = {},
                         bool writeMarkersOnStop = true);
     void stopRecording();

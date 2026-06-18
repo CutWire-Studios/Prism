@@ -6,12 +6,7 @@
 #include <QScreen>
 #include <QDateTime>
 #include <QDir>
-#include <QFile>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QRegularExpression>
-#include <QFileInfo>
 
 OutputHub::OutputHub(QObject *parent)
     : QObject(parent)
@@ -20,14 +15,27 @@ OutputHub::OutputHub(QObject *parent)
     , m_programRecorder(std::make_unique<ProgramRecorder>(this))
     , m_deckARecorder(std::make_unique<ProgramRecorder>(this))
     , m_deckBRecorder(std::make_unique<ProgramRecorder>(this))
-    , m_progressTimer(new QTimer(this))
+    , m_outputDir(ProgramRecorder::defaultOutputDir())
+    ,     m_progressTimer(new QTimer(this))
 {
     m_progressTimer->setInterval(1000);
     connect(m_progressTimer, &QTimer::timeout, this, &OutputHub::onRecordingProgressTick);
+
+    auto connectRecorder = [this](ProgramRecorder *rec) {
+        if (!rec) return;
+        connect(rec, &ProgramRecorder::errorOccurred, this, &OutputHub::recordingError);
+    };
+    connectRecorder(m_programRecorder.get());
+    connectRecorder(m_deckARecorder.get());
+    connectRecorder(m_deckBRecorder.get());
 }
 
 OutputHub::~OutputHub() {
-    stopRecording();
+    stopAllRecording();
+}
+
+void OutputHub::setOutputDir(const QString &dir) {
+    m_outputDir = dir.isEmpty() ? ProgramRecorder::defaultOutputDir() : dir;
 }
 
 void OutputHub::setProgramSource(VideoWidget *source) {
@@ -131,6 +139,19 @@ bool OutputHub::setVirtualCameraEnabled(bool enabled, const QString &devicePath)
     return true;
 }
 
+ProgramRecorder *OutputHub::recorderFor(TrackKind kind, NodeId sourceNodeId) const {
+    switch (kind) {
+    case TrackKind::Program: return m_programRecorder.get();
+    case TrackKind::DeckA:   return m_deckARecorder.get();
+    case TrackKind::DeckB:   return m_deckBRecorder.get();
+    case TrackKind::Source: {
+        const auto it = m_sourceRecorders.find(sourceNodeId);
+        return it != m_sourceRecorders.end() ? it->second.get() : nullptr;
+    }
+    }
+    return nullptr;
+}
+
 bool OutputHub::isRecording() const {
     if (m_programRecorder && m_programRecorder->isRecording()) return true;
     if (m_deckARecorder && m_deckARecorder->isRecording()) return true;
@@ -145,18 +166,28 @@ bool OutputHub::isProgramRecording() const {
     return m_programRecorder && m_programRecorder->isRecording();
 }
 
-qint64 OutputHub::recordingDurationMs() const {
-    if (m_programRecorder && m_programRecorder->isRecording())
-        return m_programRecorder->recordingDurationMs();
-    if (m_deckARecorder && m_deckARecorder->isRecording())
-        return m_deckARecorder->recordingDurationMs();
-    if (m_deckBRecorder && m_deckBRecorder->isRecording())
-        return m_deckBRecorder->recordingDurationMs();
-    for (const auto &entry : m_sourceRecorders) {
-        if (entry.second && entry.second->isRecording())
-            return entry.second->recordingDurationMs();
-    }
-    return 0;
+bool OutputHub::isTrackRecording(TrackKind kind, NodeId sourceNodeId) const {
+    const ProgramRecorder *rec = recorderFor(kind, sourceNodeId);
+    return rec && rec->isRecording();
+}
+
+qint64 OutputHub::trackRecordingDurationMs(TrackKind kind, NodeId sourceNodeId) const {
+    const ProgramRecorder *rec = recorderFor(kind, sourceNodeId);
+    return rec ? rec->recordingDurationMs() : 0;
+}
+
+qint64 OutputHub::longestActiveRecordingMs() const {
+    qint64 maxMs = 0;
+    auto consider = [&](const ProgramRecorder *rec) {
+        if (rec && rec->isRecording())
+            maxMs = qMax(maxMs, rec->recordingDurationMs());
+    };
+    consider(m_programRecorder.get());
+    consider(m_deckARecorder.get());
+    consider(m_deckBRecorder.get());
+    for (const auto &entry : m_sourceRecorders)
+        consider(entry.second.get());
+    return maxMs;
 }
 
 QStringList OutputHub::activeRecordingTrackLabels() const {
@@ -174,27 +205,6 @@ QStringList OutputHub::activeRecordingTrackLabels() const {
     return labels;
 }
 
-QStringList OutputHub::recordingOutputPaths() const {
-    if (!m_lastRecordingPaths.isEmpty())
-        return m_lastRecordingPaths;
-
-    QStringList paths;
-    auto appendIfRecording = [&](const ProgramRecorder *rec) {
-        if (rec && rec->isRecording() && !rec->outputPath().isEmpty())
-            paths << rec->outputPath();
-    };
-    appendIfRecording(m_programRecorder.get());
-    appendIfRecording(m_deckARecorder.get());
-    appendIfRecording(m_deckBRecorder.get());
-    for (const auto &entry : m_sourceRecorders)
-        appendIfRecording(entry.second.get());
-    return paths;
-}
-
-QString OutputHub::recordingMarkersPath() const {
-    return m_combinedMarkersPath;
-}
-
 QString OutputHub::sanitizeFileStem(const QString &name) {
     QString stem = name.trimmed();
     if (stem.isEmpty())
@@ -204,131 +214,124 @@ QString OutputHub::sanitizeFileStem(const QString &name) {
     return stem.left(48);
 }
 
-bool OutputHub::startRecording(const RecordingOptions &opts) {
-    if (!m_source || !opts.hasAnyTarget())
+QString OutputHub::makeTrackOutputPath(const QString &suffix) const {
+    QDir().mkpath(m_outputDir);
+    const QString stamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd_HH-mm-ss"));
+    return ProgramRecorder::makeOutputPath(m_outputDir, stamp, suffix);
+}
+
+bool OutputHub::startProgramRecording() {
+    if (!m_source || m_programRecorder->isRecording()) return m_programRecorder->isRecording();
+    const QString path = makeTrackOutputPath(QStringLiteral("program"));
+    if (!m_programRecorder->startRecording(path, tr("Program"), true))
         return false;
+    m_programRecorder->addMarker(tr("Recording started"));
+    syncFrameConsumers();
+    if (m_source)
+        m_source->captureOutputFrameNow();
+    ensureProgressTimer();
+    emit recordingStateChanged();
+    return true;
+}
 
-    if (isRecording())
-        stopRecording();
+void OutputHub::stopProgramRecording() {
+    if (!m_programRecorder->isRecording()) return;
+    m_programRecorder->stopRecording();
+    syncFrameConsumers();
+    maybeStopProgressTimer();
+    emit recordingStateChanged();
+}
 
-    m_recordingOptions = opts;
-    const QString dir = opts.outputDir.isEmpty()
-        ? ProgramRecorder::defaultOutputDir()
-        : opts.outputDir;
-    QDir().mkpath(dir);
+bool OutputHub::startDeckARecording() {
+    if (!m_source || m_deckARecorder->isRecording()) return m_deckARecorder->isRecording();
+    const QString path = makeTrackOutputPath(QStringLiteral("deckA"));
+    if (!m_deckARecorder->startRecording(path, tr("Deck A"), true))
+        return false;
+    m_deckARecorder->addMarker(tr("Recording started"));
+    syncFrameConsumers();
+    if (m_source)
+        m_source->captureOutputFrameNow();
+    ensureProgressTimer();
+    emit recordingStateChanged();
+    return true;
+}
 
-    m_recordingStem = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd_HH-mm-ss"));
-    m_combinedMarkersPath = QDir(dir).filePath(m_recordingStem + QStringLiteral(".markers.json"));
-    m_lastRecordingPaths.clear();
+void OutputHub::stopDeckARecording() {
+    if (!m_deckARecorder->isRecording()) return;
+    m_deckARecorder->stopRecording();
+    syncFrameConsumers();
+    maybeStopProgressTimer();
+    emit recordingStateChanged();
+}
 
-    auto startTrack = [&](ProgramRecorder *rec, const QString &suffix, const QString &label) -> bool {
-        if (!rec) return false;
-        const QString path = ProgramRecorder::makeOutputPath(dir, m_recordingStem, suffix);
-        if (!rec->startRecording(path, label, false))
-            return false;
-        rec->addMarker(tr("Recording started"));
+bool OutputHub::startDeckBRecording() {
+    if (!m_source || m_deckBRecorder->isRecording()) return m_deckBRecorder->isRecording();
+    const QString path = makeTrackOutputPath(QStringLiteral("deckB"));
+    if (!m_deckBRecorder->startRecording(path, tr("Deck B"), true))
+        return false;
+    m_deckBRecorder->addMarker(tr("Recording started"));
+    syncFrameConsumers();
+    if (m_source)
+        m_source->captureOutputFrameNow();
+    ensureProgressTimer();
+    emit recordingStateChanged();
+    return true;
+}
+
+void OutputHub::stopDeckBRecording() {
+    if (!m_deckBRecorder->isRecording()) return;
+    m_deckBRecorder->stopRecording();
+    syncFrameConsumers();
+    maybeStopProgressTimer();
+    emit recordingStateChanged();
+}
+
+bool OutputHub::startSourceRecording(NodeId nodeId, const QString &label) {
+    if (!m_source || nodeId == 0) return false;
+    if (isTrackRecording(TrackKind::Source, nodeId))
         return true;
-    };
 
-    if (opts.recordProgram) {
-        if (!startTrack(m_programRecorder.get(), QStringLiteral("program"), tr("Program")))
-            goto fail;
-    }
-
-    if (opts.recordDeckA) {
-        if (!startTrack(m_deckARecorder.get(), QStringLiteral("deckA"), tr("Deck A")))
-            goto fail;
-    }
-
-    if (opts.recordDeckB) {
-        if (!startTrack(m_deckBRecorder.get(), QStringLiteral("deckB"), tr("Deck B")))
-            goto fail;
-    }
-
-    for (const RecordingSourceTarget &target : opts.recordSources) {
-        auto rec = std::make_unique<ProgramRecorder>(this);
-        const QString suffix = sanitizeFileStem(target.label);
-        if (!startTrack(rec.get(), suffix, target.label.isEmpty() ? suffix : target.label)) {
-            m_sourceRecorders.clear();
-            goto fail;
-        }
-        m_sourceRecorders[target.nodeId] = std::move(rec);
-    }
-
+    auto rec = std::make_unique<ProgramRecorder>(this);
+    const QString suffix = sanitizeFileStem(label);
+    const QString path = makeTrackOutputPath(suffix);
+    const QString trackLabel = label.isEmpty() ? suffix : label;
+    if (!rec->startRecording(path, trackLabel, true))
+        return false;
+    rec->addMarker(tr("Recording started"));
+    m_sourceRecorders[nodeId] = std::move(rec);
     syncFrameConsumers();
-    m_progressTimer->start();
-    emit recordingChanged(true);
-    emit recordingProgress(recordingDurationMs());
+    if (m_source)
+        m_source->captureOutputFrameNow();
+    ensureProgressTimer();
+    emit recordingStateChanged();
     return true;
+}
 
-fail:
+void OutputHub::stopSourceRecording(NodeId nodeId) {
+    const auto it = m_sourceRecorders.find(nodeId);
+    if (it == m_sourceRecorders.end() || !it->second->isRecording())
+        return;
+    it->second->stopRecording();
+    m_sourceRecorders.erase(it);
+    syncFrameConsumers();
+    maybeStopProgressTimer();
+    emit recordingStateChanged();
+}
+
+void OutputHub::stopAllRecording() {
     if (m_programRecorder && m_programRecorder->isRecording())
         m_programRecorder->stopRecording();
     if (m_deckARecorder && m_deckARecorder->isRecording())
         m_deckARecorder->stopRecording();
     if (m_deckBRecorder && m_deckBRecorder->isRecording())
         m_deckBRecorder->stopRecording();
-    for (auto &entry : m_sourceRecorders) {
-        if (entry.second && entry.second->isRecording())
-            entry.second->stopRecording();
+    for (auto it = m_sourceRecorders.begin(); it != m_sourceRecorders.end(); ) {
+        if (it->second && it->second->isRecording())
+            it->second->stopRecording();
+        it = m_sourceRecorders.erase(it);
     }
-    m_sourceRecorders.clear();
-    m_recordingOptions = {};
-    m_recordingStem.clear();
-    m_combinedMarkersPath.clear();
+    maybeStopProgressTimer();
     syncFrameConsumers();
-    return false;
-}
-
-void OutputHub::stopRecording() {
-    if (!isRecording()) return;
-
-    m_progressTimer->stop();
-
-    m_lastRecordingPaths.clear();
-    auto collectPath = [&](const ProgramRecorder *rec) {
-        if (rec && !rec->outputPath().isEmpty())
-            m_lastRecordingPaths << rec->outputPath();
-    };
-    collectPath(m_programRecorder.get());
-    collectPath(m_deckARecorder.get());
-    collectPath(m_deckBRecorder.get());
-    for (const auto &entry : m_sourceRecorders)
-        collectPath(entry.second.get());
-
-    if (m_programRecorder && m_programRecorder->isRecording())
-        m_programRecorder->stopRecording();
-    if (m_deckARecorder && m_deckARecorder->isRecording())
-        m_deckARecorder->stopRecording();
-    if (m_deckBRecorder && m_deckBRecorder->isRecording())
-        m_deckBRecorder->stopRecording();
-    for (auto &entry : m_sourceRecorders) {
-        if (entry.second && entry.second->isRecording())
-            entry.second->stopRecording();
-    }
-
-    writeCombinedMarkersFile();
-    m_sourceRecorders.clear();
-    m_recordingOptions = {};
-    syncFrameConsumers();
-    emit recordingChanged(false);
-}
-
-bool OutputHub::setProgramRecordingEnabled(bool enabled, const QString &outputPath) {
-    if (enabled) {
-        if (isRecording()) return true;
-        RecordingOptions opts;
-        opts.recordProgram = true;
-        if (!outputPath.isEmpty()) {
-            QFileInfo fi(outputPath);
-            opts.outputDir = fi.absolutePath();
-        }
-        return startRecording(opts);
-    }
-
-    if (isRecording())
-        stopRecording();
-    return true;
 }
 
 void OutputHub::addRecordingMarker(const QString &label) {
@@ -345,47 +348,17 @@ void OutputHub::addRecordingMarker(const QString &label) {
         mark(entry.second.get());
 }
 
-void OutputHub::writeCombinedMarkersFile() const {
-    if (m_combinedMarkersPath.isEmpty()) return;
-
-    QJsonArray tracksArr;
-    auto appendTrack = [&](const ProgramRecorder *rec) {
-        if (!rec || rec->outputPath().isEmpty()) return;
-        QJsonArray markersArr;
-        for (const ProgramRecorder::Marker &m : rec->markers()) {
-            QJsonObject o;
-            o.insert(QStringLiteral("timeMs"), m.timeMs);
-            o.insert(QStringLiteral("label"), m.label);
-            markersArr.append(o);
-        }
-        QJsonObject trackObj;
-        trackObj.insert(QStringLiteral("track"), rec->trackLabel());
-        trackObj.insert(QStringLiteral("video"), rec->outputPath());
-        trackObj.insert(QStringLiteral("durationMs"), rec->recordingDurationMs());
-        trackObj.insert(QStringLiteral("markers"), markersArr);
-        tracksArr.append(trackObj);
-    };
-
-    appendTrack(m_programRecorder.get());
-    appendTrack(m_deckARecorder.get());
-    appendTrack(m_deckBRecorder.get());
-    for (const auto &entry : m_sourceRecorders)
-        appendTrack(entry.second.get());
-
-    QJsonObject root;
-    root.insert(QStringLiteral("sessionStem"), m_recordingStem);
-    qint64 maxDuration = 0;
-    for (const QJsonValue &v : tracksArr) {
-        const QJsonObject o = v.toObject();
-        maxDuration = qMax(maxDuration, static_cast<qint64>(o.value(QStringLiteral("durationMs")).toDouble()));
+void OutputHub::ensureProgressTimer() {
+    if (!m_progressTimer->isActive()) {
+        m_progressTimer->start();
+        emit recordingProgress(longestActiveRecordingMs());
     }
-    root.insert(QStringLiteral("durationMs"), maxDuration);
-    root.insert(QStringLiteral("frameRate"), 30);
-    root.insert(QStringLiteral("tracks"), tracksArr);
+}
 
-    QFile file(m_combinedMarkersPath);
-    if (file.open(QIODevice::WriteOnly))
-        file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+void OutputHub::maybeStopProgressTimer() {
+    if (!isRecording())
+        m_progressTimer->stop();
+    emit recordingProgress(longestActiveRecordingMs());
 }
 
 void OutputHub::onProgramFrameReady() {
@@ -442,7 +415,7 @@ void OutputHub::onRecordingProgressTick() {
         m_progressTimer->stop();
         return;
     }
-    emit recordingProgress(recordingDurationMs());
+    emit recordingProgress(longestActiveRecordingMs());
 }
 
 void OutputHub::syncFrameConsumers() {

@@ -14,7 +14,6 @@
 #include "ui/DeckController.h"
 #include "ui/OutputHub.h"
 #include "ui/ObsIntegration.h"
-#include "ui/RecordingOptions.h"
 #include "core/ClipManager.h"
 #include "core/ProjectPackager.h"
 #include "core/SourceDescriptor.h"
@@ -23,6 +22,7 @@
 namespace Ui { class MainWindow; }
 class RemoteControlServer;
 class RemoteServerDialog;
+class RecordingSettingsDialog;
 
 class QPushButton;
 
@@ -114,8 +114,8 @@ private:
     QMenu              *m_obsScenesMenu      = nullptr;
     RemoteControlServer *m_remoteServer      = nullptr;
     RemoteServerDialog  *m_serverDialog      = nullptr;
+    RecordingSettingsDialog *m_recordingPanel = nullptr;
 
-    RecordingOptions m_recordingOptions;
     QLabel          *m_recStatusLabel  = nullptr;
     QLabel          *m_recTimeLabel    = nullptr;
     QLabel          *m_recTracksLabel  = nullptr;
@@ -140,9 +140,8 @@ private:
     void setupAddElementMenu(QMenu *menu);
     void setupRecordingStatusBar();
     void updateRecordingUi(qint64 elapsedMs = -1);
-    RecordingOptions resolvedRecordingOptions(const RecordingOptions &opts) const;
-    void onRecordingSettings();
-    void onToggleRecording(bool on);
+    void onRecordingPanel();
+    void showRecordingPanel();
 
     void buildEmptyPlaceholder();
     void syncPanicButtons(QPushButton *activeBtn);

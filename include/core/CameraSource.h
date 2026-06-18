@@ -10,7 +10,7 @@ class QMediaCaptureSession;
 class QVideoSink;
 class QVideoFrame;
 
-// Camera capture via Qt Multimedia (GStreamer backend on Linux).
+// Camera capture via Qt Multimedia (FFmpeg or GStreamer backend depending on Qt build).
 // Works with standard UVC cameras (USB) and Intel IPU6 / MIPI cameras
 // that are not accessible via raw V4L2 paths.
 class CameraSource : public QObject, public MediaSource {
@@ -33,7 +33,9 @@ public:
     bool isCapturing() const { return m_camera != nullptr; }
 
     Type    type()        const override { return Type::Camera; }
-    bool    isReady()     const override { return !m_frame.isNull(); }
+    bool    isReady()     const override { return !m_failed && !m_frame.isNull(); }
+    bool    hasFailed()   const { return m_failed; }
+    QString lastError()   const { return m_lastError; }
     QSize   frameSize()   const override { return m_frame.size(); }
     const uint8_t *frameData() const override {
         return reinterpret_cast<const uint8_t *>(m_frame.constBits());
@@ -51,5 +53,7 @@ private:
 
     QImage  m_frame;   // Format_RGB888, updated on main thread
     bool    m_dirty  = false;
+    bool    m_failed = false;
+    QString m_lastError;
     QString m_name;
 };

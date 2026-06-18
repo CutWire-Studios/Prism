@@ -1,35 +1,52 @@
 #pragma once
 
 #include <QDialog>
+#include <QVector>
 #include "ui/RecordingOptions.h"
+#include "ui/OutputHub.h"
+#include "ui/ClipNodeModel.h"
 
 class ClipNodeEditor;
-class QCheckBox;
-class QLineEdit;
 class QVBoxLayout;
+class QLineEdit;
+class QTimer;
+class QLabel;
+class QPushButton;
 
+/// Modeless panel for starting/stopping each recording stream independently.
 class RecordingSettingsDialog : public QDialog {
     Q_OBJECT
 
 public:
-    explicit RecordingSettingsDialog(ClipNodeEditor *editor, QWidget *parent = nullptr);
+    explicit RecordingSettingsDialog(OutputHub *hub, ClipNodeEditor *editor, QWidget *parent = nullptr);
 
-    RecordingOptions options() const;
-    void setOptions(const RecordingOptions &opts);
+    void syncFromHub();
 
     static RecordingOptions loadSavedOptions();
-    static void saveOptions(const RecordingOptions &opts);
+    static void saveOutputDir(const QString &dir);
+
+private slots:
+    void refreshTrackUi();
+    void browseOutputDir();
+    void onOutputDirEdited();
+    void onTrackToggled(bool on);
 
 private:
-    void rebuildSourceList();
-    void browseOutputDir();
+    struct StreamRow {
+        QLabel     *timeLabel  = nullptr;
+        QPushButton *toggleBtn = nullptr;
+        OutputHub::TrackKind kind = OutputHub::TrackKind::Program;
+        NodeId      nodeId = 0;
+        QString     label;
+    };
 
-    ClipNodeEditor *m_editor = nullptr;
-    QCheckBox      *m_programCheck = nullptr;
-    QCheckBox      *m_deckACheck   = nullptr;
-    QCheckBox      *m_deckBCheck   = nullptr;
-    QLineEdit      *m_outputDirEdit = nullptr;
-    QVBoxLayout    *m_sourceListLayout = nullptr;
-    QVector<QCheckBox *> m_sourceChecks;
-    QVector<NodeId>      m_sourceNodeIds;
+    void rebuildStreamRows();
+    StreamRow *rowForSender();
+
+    OutputHub       *m_hub = nullptr;
+    ClipNodeEditor  *m_editor = nullptr;
+    QLineEdit       *m_outputDirEdit = nullptr;
+    QVBoxLayout     *m_streamListLayout = nullptr;
+    QTimer          *m_uiTimer = nullptr;
+    QVector<StreamRow> m_rows;
 };
