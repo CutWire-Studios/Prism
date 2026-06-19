@@ -7,6 +7,8 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
+
 # Qt
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets Gui Multimedia WebEngineWidgets DBus Network)
 find_package(Qt6 QUIET COMPONENTS WebSockets)
@@ -25,7 +27,6 @@ pkg_check_modules(GSTREAMER_APP REQUIRED gstreamer-app-1.0)
 pkg_check_modules(LIBZIP REQUIRED libzip)
 
 # FFmpeg
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat avutil swscale swresample)
 
 include(FetchContent)
