@@ -23,10 +23,13 @@ private slots:
         int totalSamples = 0;
         while (!dec.atEnd()) {
             QByteArray chunk;
-            if (!dec.decodeNextChunk(chunk))
+            if (!dec.decodeNextChunk(chunk)) {
                 break;
-            QVERIFY((chunk.size() % (static_cast<int>(sizeof(float)) * AudioDecoder::kOutputChannels)) == 0);
-            totalSamples += chunk.size() / (static_cast<int>(sizeof(float)) * AudioDecoder::kOutputChannels);
+            }
+            const qsizetype frameBytes = static_cast<qsizetype>(sizeof(float))
+                                         * AudioDecoder::kOutputChannels;
+            QVERIFY((chunk.size() % frameBytes) == 0);
+            totalSamples += static_cast<int>(chunk.size() / frameBytes);
         }
         QVERIFY(totalSamples > 0);
 
@@ -50,8 +53,9 @@ private slots:
         AudioAnalyzer analyzer;
         QVERIFY(analyzer.open(path));
 
-        for (int i = 0; i < 400; ++i)
+        for (int i = 0; i < 400; ++i) {
             analyzer.advance(0.02);
+        }
 
         QVERIFY(analyzer.hasData());
         QVERIFY(analyzer.level() >= 0.f && analyzer.level() <= 1.f);

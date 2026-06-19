@@ -12,6 +12,8 @@ public:
 
     AudioAnalyzer();
     ~AudioAnalyzer();
+    AudioAnalyzer(const AudioAnalyzer &) = delete;
+    AudioAnalyzer &operator=(const AudioAnalyzer &) = delete;
 
     bool open(const QString &filePath, double startTime = 0.0);
     void close();

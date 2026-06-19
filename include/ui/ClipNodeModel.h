@@ -42,9 +42,17 @@ public:
     bool hasSource() const { return m_card->hasSource(); }
     bool isLiveSource() const { return m_card->isLiveSource(); }
     QString sourceName() const { return m_card->displayName(); }
-    void setDisplayName(const QString &name) { if (m_card) m_card->setDisplayName(name); }
+    void setDisplayName(const QString &name) {
+        if (m_card) {
+            m_card->setDisplayName(name);
+        }
+    }
     const SourceDescriptor &sourceDescriptor() const { return m_card->sourceDescriptor(); }
-    void setObsSceneName(const QString &sceneName) { if (m_card) m_card->setObsSceneName(sceneName); }
+    void setObsSceneName(const QString &sceneName) {
+        if (m_card) {
+            m_card->setObsSceneName(sceneName);
+        }
+    }
 
     bool isRepeat() const { return m_card->isRepeat(); }
     void applySettings(const ClipSettings &s) { m_card->applySettings(s); }

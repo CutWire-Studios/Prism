@@ -19,7 +19,7 @@ NdiProgramSink::NdiProgramSink()
 }
 
 NdiProgramSink::~NdiProgramSink() {
-    stop();
+    stopInternal();
 }
 
 QString NdiProgramSink::name() const {
@@ -66,6 +66,10 @@ bool NdiProgramSink::start(const QString &streamName) {
 }
 
 void NdiProgramSink::stop() {
+    stopInternal();
+}
+
+void NdiProgramSink::stopInternal() {
 #ifndef SWITCHX_HAVE_NDI
     m_active = false;
     m_ndiName.clear();

@@ -28,9 +28,11 @@ jobs:
       - name: cppcheck
         run: |
           cppcheck --std=c++20 \
+            --library=qt \
             --enable=warning,performance,portability \
             --suppress=missingIncludeSystem \
             --suppress=unmatchedSuppression \
+            --suppress=returnByReference \
             --inline-suppr \
             --error-exitcode=1 \
             -I include \

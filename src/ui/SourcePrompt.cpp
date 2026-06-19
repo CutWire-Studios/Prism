@@ -75,7 +75,7 @@ bool promptCamera(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
         qtDevices = QMediaDevices::videoInputs();
     }
 
-    struct CamEntry { QString id, label; bool isDefault; };
+    struct CamEntry { QString id, label; bool isDefault = false; };
     QList<CamEntry> devices;
 
     for (const auto &d : qtDevices) {

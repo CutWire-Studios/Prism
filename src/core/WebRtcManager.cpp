@@ -287,6 +287,9 @@ struct Session {
 #ifdef SWITCHX_HAVE_WEBRTC
 class WebRtcManager::Impl {
 public:
+    Impl(const Impl &) = delete;
+    Impl &operator=(const Impl &) = delete;
+
     explicit Impl(WebRtcManager *owner)
         : m_owner(owner)
     {
@@ -393,8 +396,6 @@ public:
         if (!socket) return;
         QObject::connect(socket, &QSslSocket::disconnected, socket, &QSslSocket::deleteLater);
         QObject::connect(socket, &QSslSocket::readyRead, m_owner, [this, socket]() {
-            if (!socket)
-                return;
             handleTlsRequest(socket);
         });
     }

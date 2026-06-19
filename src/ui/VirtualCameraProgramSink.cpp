@@ -112,12 +112,12 @@ struct VirtualCameraProgramSink::Impl {
 
 VirtualCameraProgramSink::VirtualCameraProgramSink()
     : m_impl(std::make_unique<Impl>())
+    , m_devicePath(defaultDevicePath())
 {
-    m_devicePath = defaultDevicePath();
 }
 
 VirtualCameraProgramSink::~VirtualCameraProgramSink() {
-    stop();
+    stopInternal();
 }
 
 QString VirtualCameraProgramSink::name() const {
@@ -188,7 +188,7 @@ QString VirtualCameraProgramSink::defaultDevicePath() {
 
     const QStringList devices = availableLoopbackDevices();
     if (!devices.isEmpty())
-        return devices.first();
+        return devices.first(); // cppcheck-suppress containerOutOfBounds
 
     return QStringLiteral("/dev/video42");
 }
@@ -255,6 +255,10 @@ bool VirtualCameraProgramSink::start(const QString &streamName) {
 }
 
 void VirtualCameraProgramSink::stop() {
+    stopInternal();
+}
+
+void VirtualCameraProgramSink::stopInternal() {
 #ifndef __linux__
     m_active = false;
     m_yuyvBuffer.clear();

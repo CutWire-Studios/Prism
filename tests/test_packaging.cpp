@@ -207,10 +207,11 @@ private slots:
 
         const QString local = NetworkUtils::localIpv4();
         QVERIFY(QHostAddress(local).protocol() == QAbstractSocket::IPv4Protocol);
-        if (ifaces.isEmpty())
+        if (ifaces.isEmpty()) {
             QCOMPARE(local, QStringLiteral("127.0.0.1"));
-        else
+        } else {
             QCOMPARE(local, ifaces.first().address);
+        }
     }
 
     void networkUtils_defaultInterfaceIndexLive() {

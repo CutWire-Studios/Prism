@@ -6,7 +6,7 @@
 #include <QRectF>
 
 struct ClipItem {
-    int clipId;
+    int clipId = 0;
     QPixmap thumbnail;
     QRectF rect;    // normalized [0,1]
     bool selected = false;
@@ -37,8 +37,8 @@ protected:
 private:
     struct Handle {
         enum Type { Move, ResizeNW, ResizeNE, ResizeSW, ResizeSE };
-        Type type;
-        int itemIndex;
+        Type type = Move;
+        int itemIndex = 0;
         QRectF bounds;
     };
 

@@ -27,8 +27,9 @@ private slots:
     }
 
     void startStopCycle() {
-        if (QMediaDevices::videoInputs().isEmpty())
+        if (QMediaDevices::videoInputs().isEmpty()) {
             QSKIP("No video inputs available in this environment");
+        }
 
         CameraSource cam;
         QVERIFY(cam.start({}));
@@ -44,8 +45,9 @@ private slots:
     void destructShortlyAfterStart() {
         // Queued frame delivery after delete is UB and cannot be reproduced in-process;
         // this locks teardown ordering: stop() in ~CameraSource() before member destruction.
-        if (QMediaDevices::videoInputs().isEmpty())
+        if (QMediaDevices::videoInputs().isEmpty()) {
             QSKIP("No video inputs available in this environment");
+        }
 
         {
             CameraSource cam;

@@ -31,8 +31,9 @@ private slots:
     }
 
     void clearDeckA_stopsCamera() {
-        if (QMediaDevices::videoInputs().isEmpty())
+        if (QMediaDevices::videoInputs().isEmpty()) {
             QSKIP("No video inputs available in this environment");
+        }
 
         VideoWidget widget(&m_parent);
         auto cam = std::make_unique<CameraSource>();
@@ -54,8 +55,9 @@ private slots:
     }
 
     void destructWithCameraBeforeGlInit() {
-        if (QMediaDevices::videoInputs().isEmpty())
+        if (QMediaDevices::videoInputs().isEmpty()) {
             QSKIP("No video inputs available in this environment");
+        }
 
         auto widget = std::make_unique<VideoWidget>(&m_parent);
         auto cam = std::make_unique<CameraSource>();

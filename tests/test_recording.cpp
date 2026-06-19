@@ -51,8 +51,9 @@ private slots:
 
         const QImage frame = TestSupport::makeSolidImage(VideoWidget::kProgramWidth,
                                                          VideoWidget::kProgramHeight);
-        for (int i = 0; i < 10; ++i)
+        for (int i = 0; i < 10; ++i) {
             recorder.submitFrame(frame);
+        }
 
         recorder.stopRecording();
         QVERIFY(!recorder.isRecording());
@@ -210,8 +211,9 @@ private slots:
         QVERIFY(fake.programConsumerCount() > 0);
 
         QMetaObject::invokeMethod(&hub, "onProgramFrameReady", Qt::DirectConnection);
-        for (int i = 0; i < 5; ++i)
+        for (int i = 0; i < 5; ++i) {
             QMetaObject::invokeMethod(&hub, "onProgramFrameReady", Qt::DirectConnection);
+        }
 
         hub.stopProgramRecording();
         QVERIFY(!hub.isProgramRecording());

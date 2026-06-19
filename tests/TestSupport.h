@@ -27,8 +27,9 @@ inline bool writeSineWav(const QString &path, double frequencyHz = 440.0,
     const int dataBytes   = sampleCount * channels * static_cast<int>(sizeof(qint16));
 
     QFile file(path);
-    if (!file.open(QIODevice::WriteOnly))
+    if (!file.open(QIODevice::WriteOnly)) {
         return false;
+    }
 
     auto writeU32 = [&](quint32 v) { file.write(reinterpret_cast<const char *>(&v), 4); };
     auto writeU16 = [&](quint16 v) { file.write(reinterpret_cast<const char *>(&v), 2); };
@@ -41,7 +42,8 @@ inline bool writeSineWav(const QString &path, double frequencyHz = 440.0,
     writeU16(1); // PCM
     writeU16(static_cast<quint16>(channels));
     writeU32(static_cast<quint32>(sampleRate));
-    writeU32(static_cast<quint32>(sampleRate * channels * sizeof(qint16)));
+    writeU32(static_cast<quint32>(static_cast<quint32>(sampleRate) * static_cast<quint32>(channels)
+                                 * static_cast<quint32>(sizeof(qint16))));
     writeU16(static_cast<quint16>(channels * sizeof(qint16)));
     writeU16(16);
     writeU32(0x61746164u); // "data"
@@ -51,8 +53,9 @@ inline bool writeSineWav(const QString &path, double frequencyHz = 440.0,
         const double t = static_cast<double>(i) / sampleRate;
         const double sample = qSin(2.0 * M_PI * frequencyHz * t);
         const qint16 pcm = static_cast<qint16>(sample * 30000.0);
-        for (int ch = 0; ch < channels; ++ch)
+        for (int ch = 0; ch < channels; ++ch) {
             file.write(reinterpret_cast<const char *>(&pcm), sizeof(pcm));
+        }
     }
 
     return true;
@@ -62,13 +65,15 @@ inline QString encodeSampleMkv(const QString &dirPath, int frameCount = 30,
                                const QColor &color = Qt::blue) {
     ProgramRecorder recorder;
     const QString path = QDir(dirPath).filePath(QStringLiteral("sample.mkv"));
-    if (!recorder.startRecording(path, QStringLiteral("test"), false))
+    if (!recorder.startRecording(path, QStringLiteral("test"), false)) {
         return {};
+    }
 
     const QImage frame = makeSolidImage(VideoWidget::kProgramWidth,
                                         VideoWidget::kProgramHeight, color);
-    for (int i = 0; i < frameCount; ++i)
+    for (int i = 0; i < frameCount; ++i) {
         recorder.submitFrame(frame);
+    }
     recorder.stopRecording();
     return path;
 }
@@ -78,13 +83,15 @@ inline bool writePng(const QString &dirPath, const QString &name, const QColor &
 }
 
 inline bool createZip(const QString &zipPath, const QMap<QString, QByteArray> &entries) {
-    if (QFile::exists(zipPath) && !QFile::remove(zipPath))
+    if (QFile::exists(zipPath) && !QFile::remove(zipPath)) {
         return false;
+    }
 
     const QByteArray pathUtf8 = zipPath.toUtf8();
     zip_t *archive = zip_open(pathUtf8.constData(), ZIP_CREATE | ZIP_TRUNCATE, nullptr);
-    if (!archive)
+    if (!archive) {
         return false;
+    }
 
     for (auto it = entries.cbegin(); it != entries.cend(); ++it) {
         const QByteArray nameUtf8 = it.key().toUtf8();

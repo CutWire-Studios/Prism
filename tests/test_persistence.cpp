@@ -23,8 +23,9 @@ QByteArray makeManifestJson(const QJsonObject &extra = {}) {
     manifest.insert(QStringLiteral("formatVersion"), ProjectPackager::kFormatVersion);
     manifest.insert(QStringLiteral("sessionFile"), QString::fromUtf8(ProjectPackager::kSessionName));
     manifest.insert(QStringLiteral("files"), QJsonArray{});
-    for (auto it = extra.begin(); it != extra.end(); ++it)
+    for (auto it = extra.begin(); it != extra.end(); ++it) {
         manifest.insert(it.key(), it.value());
+    }
     return QJsonDocument(manifest).toJson(QJsonDocument::Compact);
 }
 
@@ -112,8 +113,9 @@ private slots:
 
         auto runImport = [&](const QMap<QString, QByteArray> &entries) -> ProjectPackager::ImportResult {
             const QString extract = extractBase + QString::number(caseIndex++);
-            if (!TestSupport::createZip(zipPath, entries))
+            if (!TestSupport::createZip(zipPath, entries)) {
                 return {};
+            }
             return ProjectPackager::importPackage(zipPath, extract, true);
         };
 
@@ -253,8 +255,9 @@ private slots:
 
     void sessionManager_recoveryAndBackups() {
         SessionManager::markCleanExit();
-        if (QFile::exists(SessionManager::lockFilePath()))
+        if (QFile::exists(SessionManager::lockFilePath())) {
             QFile::remove(SessionManager::lockFilePath());
+        }
 
         SessionManager::markRunning();
         auto running = SessionManager::checkRecovery();

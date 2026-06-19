@@ -62,8 +62,9 @@ private slots:
         QVERIFY(src.duration() > 0.0);
 
         int frames = 0;
-        while (src.nextFrame())
+        while (src.nextFrame()) {
             ++frames;
+        }
         QVERIFY(frames > 0);
         QVERIFY(src.frameData() != nullptr);
 
