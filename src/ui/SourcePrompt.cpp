@@ -2,6 +2,8 @@
 #include "ui/ThumbHelper.h"
 #include "ui/ShaderEditDialog.h"
 #include "ui/HtmlEditDialog.h"
+#include "ui/TextEditDialog.h"
+#include "ui/ThumbHelper.h"
 #include "core/ThumbnailExtractor.h"
 #include "core/NdiSource.h"
 #ifdef SWITCHX_HAVE_WEBRTC
@@ -30,6 +32,10 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QDialogButtonBox>
+#include <QComboBox>
+#include <QFormLayout>
+#include <QSpinBox>
+#include <QLineEdit>
 #include <QJsonDocument>
 #include <QJsonObject>
 
@@ -228,6 +234,19 @@ bool promptHtml(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     desc.displayName = filePath.isEmpty() ? "HTML Overlay"
                                           : QFileInfo(filePath).fileName();
     thumb = ThumbHelper::makeHtmlThumb(html, filePath);
+    return true;
+}
+
+bool promptText(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
+    TextEditDialog dlg({}, parent);
+    if (dlg.exec() != QDialog::Accepted)
+        return false;
+
+    desc = dlg.resultDescriptor();
+    if (desc.textTemplate.trimmed().isEmpty())
+        return false;
+
+    thumb = ThumbHelper::makeTextThumb(desc.textTemplate, desc.color);
     return true;
 }
 
@@ -454,6 +473,8 @@ bool prompt(SourceDescriptor::Kind kind, QWidget *parent,
         return promptShader(parent, outDesc, outThumb);
     case SourceDescriptor::Kind::Html:
         return promptHtml(parent, outDesc, outThumb);
+    case SourceDescriptor::Kind::Text:
+        return promptText(parent, outDesc, outThumb);
     case SourceDescriptor::Kind::Ndi:
         return promptNdi(parent, outDesc, outThumb);
     case SourceDescriptor::Kind::WebRtc:
@@ -495,6 +516,8 @@ void buildMenu(QMenu *menu,
                     [onKind]() { onKind(SourceDescriptor::Kind::Shader); });
     menu->addAction(QStringLiteral("🌐  HTML Overlay…"),
                     [onKind]() { onKind(SourceDescriptor::Kind::Html); });
+    menu->addAction(QStringLiteral("T  Text…"),
+                    [onKind]() { onKind(SourceDescriptor::Kind::Text); });
     QAction *ndiAction = menu->addAction(QStringLiteral("📡  NDI Source…"),
                     [onKind]() { onKind(SourceDescriptor::Kind::Ndi); });
     ndiAction->setEnabled(ndiAvailable);

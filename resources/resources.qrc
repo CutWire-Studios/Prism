@@ -16,6 +16,10 @@
         <file>html/countdown_timer.html</file>
         <file>html/cricket_score_bar.html</file>
         <file>html/cricket_score_table.html</file>
+        <file>scripts/clock.lua</file>
+        <file>scripts/counter.lua</file>
+        <file>scripts/greeting.lua</file>
+        <file>scripts/bitcoin_price.lua</file>
         <file>shaders/slideshow/cube.glsl</file>
         <file>shaders/slideshow/flip.glsl</file>
         <file>shaders/slideshow/pagecurl.glsl</file>

@@ -74,3 +74,19 @@ QPixmap ThumbHelper::makeHtmlThumb(const QString &html, const QString &filePath,
         return makeIconThumb("🌐", w, h);
     return grab.scaled(w, h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 }
+
+QPixmap ThumbHelper::makeTextThumb(const QString &textTemplate, const QColor &color, int w, int h) {
+    QPixmap pix(w, h);
+    pix.fill(QColor("#1c1d1f"));
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(color);
+    QFont f;
+    f.setPixelSize(11);
+    p.setFont(f);
+    const QString label = textTemplate.isEmpty() ? QStringLiteral("Text") : textTemplate;
+    p.drawText(pix.rect().adjusted(6, 4, -6, -4),
+               Qt::AlignCenter | Qt::TextWordWrap,
+               label.length() > 40 ? label.left(37) + QStringLiteral("…") : label);
+    return pix;
+}

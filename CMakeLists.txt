@@ -43,6 +43,27 @@ if(NOT kissfft_FOUND)
     FetchContent_MakeAvailable(kissfft)
 endif()
 
+# Lua + sol2 (optional — Script node; Text source works without Lua)
+option(SWITCHX_WITH_LUA "Enable Lua script nodes" ON)
+if(SWITCHX_WITH_LUA)
+    pkg_check_modules(LUA REQUIRED lua54)
+
+    FetchContent_Declare(sol2
+        GIT_REPOSITORY https://github.com/ThePhD/sol2.git
+        GIT_TAG        v3.5.0)
+    FetchContent_MakeAvailable(sol2)
+
+    add_library(switchx_sol2 INTERFACE)
+    target_include_directories(switchx_sol2 INTERFACE
+        ${sol2_SOURCE_DIR}/include
+        ${LUA_INCLUDE_DIRS})
+    target_link_libraries(switchx_sol2 INTERFACE ${LUA_LIBRARIES})
+    set(SWITCHX_HAVE_LUA TRUE)
+    message(STATUS "Lua scripting enabled (sol2 + system Lua 5.4)")
+else()
+    message(STATUS "Lua scripting disabled")
+endif()
+
 # NDI (optional — program output to OBS etc.)
 option(SWITCHX_WITH_NDI "Enable NDI program output" ON)
 if(SWITCHX_WITH_NDI)
@@ -92,6 +113,8 @@ set(SOURCES
     src/core/ProjectPackager.cpp
     src/core/ShaderSource.cpp
     src/core/HtmlSource.cpp
+    src/core/TextSource.cpp
+    src/core/ScriptRuntime.cpp
     src/core/NdiLibrary.cpp
     src/core/NdiSource.cpp
     src/core/NetworkUtils.cpp
@@ -128,6 +151,8 @@ set(SOURCES
     src/ui/RecordingSettingsDialog.cpp
     src/ui/ShaderEditDialog.cpp
     src/ui/HtmlEditDialog.cpp
+    src/ui/ScriptEditDialog.cpp
+    src/ui/TextEditDialog.cpp
     # Extracted helper / controller classes
     src/ui/ThumbHelper.cpp
     src/ui/HotkeyManager.cpp
@@ -167,6 +192,9 @@ set(HEADERS
     include/core/ProjectPackager.h
     include/core/ShaderSource.h
     include/core/HtmlSource.h
+    include/core/TextSource.h
+    include/core/ScriptOutput.h
+    include/core/ScriptRuntime.h
     include/core/NdiLibrary.h
     include/core/NdiSource.h
     include/core/NetworkUtils.h
@@ -205,6 +233,8 @@ set(HEADERS
     include/ui/ProgramOutputSink.h
     include/ui/ShaderEditDialog.h
     include/ui/HtmlEditDialog.h
+    include/ui/ScriptEditDialog.h
+    include/ui/TextEditDialog.h
     # Extracted helper / controller headers
     include/ui/ThumbHelper.h
     include/ui/HotkeyManager.h
@@ -229,6 +259,8 @@ set(UI_FILES
     forms/OutputWindow.ui
     forms/ShaderEditDialog.ui
     forms/HtmlEditDialog.ui
+    forms/ScriptEditDialog.ui
+    forms/TextEditDialog.ui
     # New dialog UI files extracted from inline widget construction
     forms/TransformNodeDialog.ui
     forms/ContextNodeDialog.ui
@@ -268,6 +300,11 @@ target_link_libraries(switchx_core PUBLIC
     ${LIBZIP_LIBRARIES}
     kissfft::kissfft
 )
+
+if(SWITCHX_HAVE_LUA)
+    target_compile_definitions(switchx_core PUBLIC SWITCHX_HAVE_LUA)
+    target_link_libraries(switchx_core PUBLIC switchx_sol2)
+endif()
 
 if(SWITCHX_HAVE_NDI)
     target_compile_definitions(switchx_core PUBLIC SWITCHX_HAVE_NDI)

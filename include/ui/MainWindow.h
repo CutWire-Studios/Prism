@@ -128,6 +128,7 @@ private:
     void setupPreviewSplitters();
     void setupDeckPreviewSplitter(bool deckA);
     void refreshPreviewPixmaps();
+    void rebuildActiveDeckChains();
     void applyTheme();
 
     void loadFromFile(const QString &path, bool showErrors);

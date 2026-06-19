@@ -13,6 +13,10 @@ int main(int argc, char *argv[]) {
     // can be drawn directly without a GPU→CPU→GPU readback.
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 
+    // Resources are compiled into switchx_core (static lib); register them here so
+    // :/… paths (shaders, HTML presets, Lua examples, etc.) resolve at runtime.
+    Q_INIT_RESOURCE(resources);
+
     QApplication app(argc, argv);
     app.setOrganizationName("SwitchX");
     app.setApplicationName("SwitchX");

@@ -588,6 +588,8 @@ void MainWindow::setupConnections() {
         if (m_deckController->activeNodeB())
             m_deckController->applyAudioControllerToDeck(false, m_deckController->activeNodeB());
         m_deckController->refreshShaderAudioForActiveDecks();
+        m_deckController->refreshTextDataForActiveDecks();
+        rebuildActiveDeckChains();
     });
     connect(m_clipNodeEditor, &ClipNodeEditor::audioControllerChanged, this, [this](NodeId clipId) {
         if (clipId == m_deckController->activeNodeA())
@@ -816,6 +818,24 @@ void MainWindow::onNodeBButtonClicked(NodeId nodeId) {
     if (m_outputHub->isRecording())
         m_outputHub->addRecordingMarker(tr("Deck B: %1").arg(node->sourceName()));
     m_outputHub->setActiveDeckNodes(m_deckController->activeNodeA(), m_deckController->activeNodeB());
+}
+
+void MainWindow::rebuildActiveDeckChains() {
+    auto *out = m_outputWindow->videoWidget();
+
+    if (NodeId id = m_deckController->activeNodeA()) {
+        int canvasW = 0, canvasH = 0;
+        m_clipNodeEditor->contextCanvasSize(id, canvasW, canvasH);
+        out->setNodeChainA(SourceFactory::buildChain(
+            m_clipNodeEditor->getClipChain(id), m_clipNodeEditor, canvasW, canvasH));
+    }
+
+    if (NodeId id = m_deckController->activeNodeB()) {
+        int canvasW = 0, canvasH = 0;
+        m_clipNodeEditor->contextCanvasSize(id, canvasW, canvasH);
+        out->setNodeChainB(SourceFactory::buildChain(
+            m_clipNodeEditor->getClipChain(id), m_clipNodeEditor, canvasW, canvasH));
+    }
 }
 
 void MainWindow::onNodeRemoveRequested(NodeId nodeId) {

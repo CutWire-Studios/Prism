@@ -8,6 +8,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include "core/SourceDescriptor.h"
+#include "core/ScriptOutput.h"
 #include "ui/ClipNodeModel.h"
 
 class ClipNodeScene;
@@ -60,6 +61,9 @@ public:
     bool contextCanvasSize(NodeId clipId, int &w, int &h) const;
     bool audioSettingsForClip(NodeId clipId, int &volume, bool &muted, bool &routedToMaster, AudioPlaybackMode &playbackMode, int &delayMs) const;
     bool audioSourceForShader(NodeId shaderNodeId, QString &filePath) const;
+    std::shared_ptr<ScriptOutput> scriptOutputForDataNode(NodeId dataNodeId) const;
+
+    void addScriptNodeToGroup(NodeId groupId, QGraphicsView *view, bool atViewCenter = false);
 
     // ── Groups ───────────────────────────────────────────────────────────────
     void groupSelection();
@@ -94,9 +98,11 @@ private slots:
     void onCanvasContextMenu();
     void onAddTransformContext();
     void onAddMasterAudioOutput();
+    void onAddScriptNode();
     void onEditContextNode(NodeId nodeId);
     void onOpenTransformEditor(NodeId contextId);
     void onEditAudioNode(NodeId nodeId);
+    void onEditScriptNode(NodeId nodeId);
 
 private:
     void connectNodeSignals(ClipNodeModel *model, NodeId id);
@@ -123,6 +129,7 @@ private:
     QPointF scenePosForView(QGraphicsView *view, const QPoint &globalPos) const;
     void addTransformContextTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
     void addMasterAudioOutputTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
+    void addScriptNodeTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
 
     ClipNodeScene *m_scene  = nullptr;
     QGraphicsView *m_view   = nullptr;
@@ -131,6 +138,7 @@ private:
     QMap<NodeId, NodeItemBase *> m_itemMap;
     QMap<NodeId, void *> m_contextNodes;
     QMap<NodeId, void *> m_audioNodes;
+    QMap<NodeId, void *> m_scriptNodes;
     QMap<NodeId, void *> m_masterAudioNodes;
     QMap<NodeId, GroupNodeItem *> m_groupNodes;
     NodeId m_activeClipA = 0;

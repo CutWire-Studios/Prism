@@ -26,6 +26,7 @@ struct SourceDescriptor {
         Html,   // HTML/CSS/JS overlay  — htmlContent field
         Ndi,    // network NDI source   — path = NDI source name
         WebRtc, // phone camera (WebRTC) — path = session token
+        Text,   // CPU-rendered text overlay — textTemplate field
     };
 
     Kind    kind    = Kind::VideoFile;
@@ -44,12 +45,19 @@ struct SourceDescriptor {
     QString shaderCode;                 // Shader kind
     QString htmlContent;                // Html kind (inline HTML or file path)
     QString obsSceneName;               // OBS program scene to switch when clip is triggered
+    QString textTemplate;               // Text kind — may contain {parameter} placeholders
+    QString fontFamily    = QStringLiteral("Sans Serif");
+    int     fontSize      = 48;
+    int     textAlign     = 0x0084;     // Qt::AlignCenter (avoid Qt include in header)
+    bool    textBgTransparent = true;
+    QColor  textBgColor   = Qt::black;
 
     bool isLiveSource() const {
         return kind == Kind::Camera || kind == Kind::Screen ||
                kind == Kind::Canvas || kind == Kind::Window ||
                kind == Kind::Shader || kind == Kind::Html ||
-               kind == Kind::Ndi || kind == Kind::WebRtc;
+               kind == Kind::Ndi || kind == Kind::WebRtc ||
+               kind == Kind::Text;
     }
     bool isFileSource() const {
         return kind == Kind::VideoFile || kind == Kind::Image || kind == Kind::Slideshow;

@@ -6,6 +6,7 @@
 #include "core/CanvasSource.h"
 #include "core/ShaderSource.h"
 #include "core/HtmlSource.h"
+#include "core/TextSource.h"
 #include "core/AudioPlayer.h"
 #include <QSlider>
 #include <QPushButton>
@@ -127,6 +128,27 @@ void DeckController::refreshShaderAudioForActiveDecks() {
     refresh(false, m_bClipNodeId);
 }
 
+void DeckController::refreshTextDataForActiveDecks() {
+    auto refresh = [&](bool deckA, NodeId nodeId) {
+        if (!nodeId) return;
+        auto *node = m_editor->nodeAt(nodeId);
+        if (!node || node->sourceDescriptor().kind != SourceDescriptor::Kind::Text)
+            return;
+
+        auto *out = m_outputWindow->videoWidget();
+        MediaSource *src = deckA ? out->sourceA() : out->sourceB();
+        if (!src || src->type() != MediaSource::Type::Text) return;
+
+        if (auto data = m_editor->scriptOutputForDataNode(nodeId))
+            static_cast<TextSource *>(src)->setDataSource(data);
+        else
+            static_cast<TextSource *>(src)->setDataSource(nullptr);
+    };
+
+    refresh(true,  m_aClipNodeId);
+    refresh(false, m_bClipNodeId);
+}
+
 // ── Deck assignment ───────────────────────────────────────────────────────────
 
 void DeckController::updateDeckUI(bool deckA, const QString &name, bool hasTimeline,
@@ -204,6 +226,10 @@ void DeckController::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool d
             QString audioPath;
             if (m_editor->audioSourceForShader(nodeId, audioPath))
                 static_cast<ShaderSource *>(src.get())->setAudioSource(audioPath);
+        }
+        if (desc.kind == Kind::Text) {
+            if (auto data = m_editor->scriptOutputForDataNode(nodeId))
+                static_cast<TextSource *>(src.get())->setDataSource(data);
         }
         applyTransform(deckA);
         if (deckA) {

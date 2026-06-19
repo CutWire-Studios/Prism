@@ -23,4 +23,8 @@ public:
 
     static QPixmap makeHtmlThumb(const QString &html, const QString &filePath,
                                  int w = 110, int h = 65);
+
+    static QPixmap makeTextThumb(const QString &textTemplate,
+                                 const QColor &color = Qt::white,
+                                 int w = 110, int h = 65);
 };

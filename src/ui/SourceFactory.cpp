@@ -7,6 +7,7 @@
 #include "core/CanvasSource.h"
 #include "core/ShaderSource.h"
 #include "core/HtmlSource.h"
+#include "core/TextSource.h"
 #include "core/NdiSource.h"
 #ifdef SWITCHX_HAVE_WEBRTC
 #include "core/WebRtcSource.h"
@@ -77,6 +78,17 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
         return std::make_unique<ShaderSource>(desc.shaderCode);
     case Kind::Html:
         return std::make_unique<HtmlSource>(desc.htmlContent, desc.path);
+    case Kind::Text: {
+        QFont font(desc.fontFamily, desc.fontSize);
+        return std::make_unique<TextSource>(
+            desc.textTemplate,
+            font,
+            desc.color,
+            static_cast<Qt::Alignment>(desc.textAlign),
+            QSize(desc.canvasWidth, desc.canvasHeight),
+            desc.textBgTransparent,
+            desc.textBgColor);
+    }
     case Kind::Ndi: {
         auto src = std::make_unique<NdiSource>();
         if (!src->connectTo(desc.path)) return nullptr;
@@ -120,6 +132,13 @@ VideoWidget::NodeChainSource SourceFactory::makeChainEntry(ClipNodeModel *node,
         }
         entry.playing = true;
         entry.source  = std::move(src);
+
+        if (desc.kind == Kind::Text && editor) {
+            if (auto data = editor->scriptOutputForDataNode(node->nodeId())) {
+                if (auto *textSrc = dynamic_cast<TextSource *>(entry.source.get()))
+                    textSrc->setDataSource(data);
+            }
+        }
     }
     return entry;
 }

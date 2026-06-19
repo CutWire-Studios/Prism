@@ -3,6 +3,8 @@
 #include "ui/ClipEditDialog.h"
 #include "ui/ShaderEditDialog.h"
 #include "ui/HtmlEditDialog.h"
+#include "ui/TextEditDialog.h"
+#include "ui/ThumbHelper.h"
 #include "core/ImageSource.h"
 #include "core/SlideshowSource.h"
 #include "core/ShaderSource.h"
@@ -621,6 +623,23 @@ void ClipCard::onEditClicked() {
         if (dlg.exec() == QDialog::Accepted) {
             m_sourceDesc.path        = combo->currentText();
             m_sourceDesc.displayName = m_sourceDesc.path;
+            QFontMetrics fm(ui->titleLabel->font());
+            ui->titleLabel->setText(fm.elidedText(m_sourceDesc.displayName, Qt::ElideRight, 108));
+            ui->titleLabel->setToolTip(m_sourceDesc.displayName);
+            emit sourceDescriptorChanged(m_index, m_sourceDesc);
+        }
+        break;
+    }
+
+    case Kind::Text: {
+        TextEditDialog dlg(m_sourceDesc, parent);
+        if (dlg.exec() == QDialog::Accepted) {
+            const SourceDescriptor updated = dlg.resultDescriptor();
+            if (updated.textTemplate.trimmed().isEmpty())
+                break;
+            m_sourceDesc = updated;
+            ui->thumbnailBtn->setIcon(QIcon(ThumbHelper::makeTextThumb(
+                m_sourceDesc.textTemplate, m_sourceDesc.color)));
             QFontMetrics fm(ui->titleLabel->font());
             ui->titleLabel->setText(fm.elidedText(m_sourceDesc.displayName, Qt::ElideRight, 108));
             ui->titleLabel->setToolTip(m_sourceDesc.displayName);
