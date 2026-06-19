@@ -107,7 +107,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DFETCHCONTENT_BASE_DIR="${FETCHCONTENT_BASE_DIR}" \
             -DSWITCHX_WITH_NDI=OFF \
-            -DSWITCHX_WITH_WEBRTC=ON
+            -DSWITCHX_WITH_WEBRTC=OFF
 
       - name: Build
         run: |
