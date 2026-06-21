@@ -1,5 +1,5 @@
-#include "ui/ThumbHelper.h"
-#include "core/SourceDescriptor.h"
+#include "ui/common/ThumbHelper.h"
+#include "core/sources/SourceDescriptor.h"
 
 #include <QtTest>
 #include <QApplication>

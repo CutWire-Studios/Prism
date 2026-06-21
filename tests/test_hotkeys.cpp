@@ -1,6 +1,6 @@
-#include "ui/HotkeyManager.h"
-#include "ui/ClipNodeEditor.h"
-#include "core/SourceDescriptor.h"
+#include "ui/hotkeys/HotkeyManager.h"
+#include "ui/nodes/ClipNodeEditor.h"
+#include "core/sources/SourceDescriptor.h"
 
 #include <QtTest>
 #include <QApplication>

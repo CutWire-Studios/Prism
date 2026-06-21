@@ -1,4 +1,4 @@
-#include "ui/MainWindowUtils.h"
+#include "ui/mainwindow/MainWindowUtils.h"
 
 #include <QtTest>
 

@@ -1,11 +1,11 @@
 #include "TestSupport.h"
-#include "core/AssetPathResolver.h"
-#include "core/ProjectPackager.h"
-#include "core/NetworkUtils.h"
-#include "core/SourceDescriptor.h"
-#include "core/OverlayItem.h"
-#include "ui/ClipCard.h"
-#include "ui/ClipNodeModel.h"
+#include "core/project/AssetPathResolver.h"
+#include "core/project/ProjectPackager.h"
+#include "core/webrtc/NetworkUtils.h"
+#include "core/sources/SourceDescriptor.h"
+#include "core/project/OverlayItem.h"
+#include "ui/nodes/ClipCard.h"
+#include "ui/nodes/ClipNodeModel.h"
 
 #include <QtTest>
 #include <QTemporaryDir>

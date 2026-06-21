@@ -107,12 +107,12 @@
   <customwidget>
    <class>HtmlPreviewWidget</class>
    <extends>QWidget</extends>
-   <header>ui/HtmlPreviewWidget.h</header>
+   <header>ui/canvas/HtmlPreviewWidget.h</header>
   </customwidget>
   <customwidget>
    <class>HtmlWorkspaceCanvasWidget</class>
    <extends>QWidget</extends>
-   <header>ui/HtmlWorkspaceCanvasWidget.h</header>
+   <header>ui/canvas/HtmlWorkspaceCanvasWidget.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

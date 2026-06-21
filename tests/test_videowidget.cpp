@@ -1,6 +1,6 @@
-#include "core/CameraSource.h"
-#include "core/CanvasSource.h"
-#include "ui/VideoWidget.h"
+#include "core/sources/CameraSource.h"
+#include "core/sources/CanvasSource.h"
+#include "ui/canvas/VideoWidget.h"
 
 #include <QtTest>
 #include <QApplication>

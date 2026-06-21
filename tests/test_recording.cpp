@@ -1,8 +1,8 @@
 #include "TestSupport.h"
-#include "ui/ProgramRecorder.h"
-#include "ui/OutputHub.h"
-#include "ui/ProgramFrameSource.h"
-#include "ui/VideoWidget.h"
+#include "ui/recording/ProgramRecorder.h"
+#include "ui/output/OutputHub.h"
+#include "ui/output/ProgramFrameSource.h"
+#include "ui/canvas/VideoWidget.h"
 
 #include <QtTest>
 #include <QSignalSpy>

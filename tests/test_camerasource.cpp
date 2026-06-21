@@ -1,4 +1,4 @@
-#include "core/CameraSource.h"
+#include "core/sources/CameraSource.h"
 
 #include <QtTest>
 #include <QApplication>

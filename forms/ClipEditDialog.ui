@@ -284,13 +284,13 @@
   <customwidget>
    <class>VideoWidget</class>
    <extends>QOpenGLWidget</extends>
-   <header>ui/VideoWidget.h</header>
+   <header>ui/canvas/VideoWidget.h</header>
    <container>0</container>
   </customwidget>
   <customwidget>
    <class>CropSelectorWidget</class>
    <extends>QWidget</extends>
-   <header>ui/CropSelectorWidget.h</header>
+   <header>ui/canvas/CropSelectorWidget.h</header>
    <container>0</container>
   </customwidget>
  </customwidgets>

@@ -1,6 +1,6 @@
 #include "TestSupport.h"
-#include "core/AudioDecoder.h"
-#include "core/AudioAnalyzer.h"
+#include "core/media/AudioDecoder.h"
+#include "core/media/AudioAnalyzer.h"
 
 #include <QtTest>
 #include <QTemporaryDir>

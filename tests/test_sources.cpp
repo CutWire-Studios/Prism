@@ -1,10 +1,10 @@
 #include "TestSupport.h"
-#include "core/ImageSource.h"
-#include "core/CanvasSource.h"
-#include "core/VideoFileSource.h"
-#include "core/SourceDescriptor.h"
-#include "ui/SourceFactory.h"
-#include "ui/VideoWidget.h"
+#include "core/sources/ImageSource.h"
+#include "core/sources/CanvasSource.h"
+#include "core/sources/VideoFileSource.h"
+#include "core/sources/SourceDescriptor.h"
+#include "ui/mainwindow/SourceFactory.h"
+#include "ui/canvas/VideoWidget.h"
 
 #include <QtTest>
 #include <QTemporaryDir>

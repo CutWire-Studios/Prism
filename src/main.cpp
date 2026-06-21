@@ -1,7 +1,7 @@
 #include <QApplication>
 #include <QByteArray>
-#include "ui/MainWindow.h"
-#include "ui/MaterialSymbols.h"
+#include "ui/mainwindow/MainWindow.h"
+#include "ui/common/MaterialSymbols.h"
 
 int main(int argc, char *argv[]) {
     // WebEngine / Chromium uses the Gallium GPU stack on this system which

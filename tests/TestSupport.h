@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ui/ProgramRecorder.h"
-#include "ui/VideoWidget.h"
+#include "ui/recording/ProgramRecorder.h"
+#include "ui/canvas/VideoWidget.h"
 
 #include <QDir>
 #include <QFile>
