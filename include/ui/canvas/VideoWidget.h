@@ -241,7 +241,12 @@ private:
     // Overlays
     QList<OverlayItem>       m_overlaysA;
     QList<OverlayItem>       m_overlaysB;
-    QHash<QString, QPixmap>  m_overlayPixCache;
+    QHash<QString, QPixmap>  m_overlayPixCache;       // original images, keyed by path
+    QHash<QString, QPixmap>  m_overlayScaledCache;    // scaled to draw size, keyed by path@WxH
+
+    // Tracks each source texture's allocated size so uploadSourceFrameGL can
+    // detect resize without a per-frame glGet (which forces a GPU sync stall).
+    QHash<GLuint, QSize>     m_texSizes;
 
     // Node chain sources (upstream overlays)
     std::vector<NodeChainSource> m_chainA;

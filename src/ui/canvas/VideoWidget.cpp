@@ -123,13 +123,24 @@ void VideoWidget::composeProgramFrame() {
     renderDeckToFbo(true);
     renderDeckToFbo(false);
 
-    if (m_deckPreviewConsumers > 0) {
-        cacheDeckPreviewFromFbo(true);
-        cacheDeckPreviewFromFbo(false);
-    }
-    if (m_deckFrameConsumers > 0) {
+    const bool wantDeckFrame   = m_deckFrameConsumers > 0;
+    const bool wantDeckPreview = m_deckPreviewConsumers > 0;
+    if (wantDeckFrame) {
         cacheDeckFrameFromFbo(true);
         cacheDeckFrameFromFbo(false);
+    }
+    if (wantDeckPreview) {
+        if (wantDeckFrame) {
+            // Full-res deck frames were just read back; derive the previews from
+            // them instead of a second glReadPixels per deck.
+            m_deckPreviewA = m_deckFrameCacheA.scaled(kDeckPreviewWidth, kDeckPreviewHeight,
+                                                      Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            m_deckPreviewB = m_deckFrameCacheB.scaled(kDeckPreviewWidth, kDeckPreviewHeight,
+                                                      Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        } else {
+            cacheDeckPreviewFromFbo(true);
+            cacheDeckPreviewFromFbo(false);
+        }
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, m_programFbo);
@@ -580,13 +591,24 @@ void VideoWidget::renderOverlays(QPainter &p, const QList<OverlayItem> &overlays
             p.setPen(ov.color);
             p.drawText(r, Qt::AlignCenter | Qt::TextWordWrap, ov.content);
         } else {
-            if (!m_overlayPixCache.contains(ov.content))
-                m_overlayPixCache.insert(ov.content, QPixmap(ov.content));
-            const QPixmap &pm = m_overlayPixCache[ov.content];
-            if (!pm.isNull())
-                p.drawPixmap(r.toRect(),
-                    pm.scaled(r.size().toSize(),
-                              Qt::KeepAspectRatio, Qt::SmoothTransformation));
+            const QSize targetSize = r.size().toSize();
+            if (!targetSize.isEmpty()) {
+                const QString key = ov.content + QLatin1Char('@')
+                                  + QString::number(targetSize.width()) + QLatin1Char('x')
+                                  + QString::number(targetSize.height());
+                auto it = m_overlayScaledCache.constFind(key);
+                if (it == m_overlayScaledCache.constEnd()) {
+                    if (!m_overlayPixCache.contains(ov.content))
+                        m_overlayPixCache.insert(ov.content, QPixmap(ov.content));
+                    const QPixmap &orig = m_overlayPixCache[ov.content];
+                    QPixmap scaled = orig.isNull()
+                        ? QPixmap()
+                        : orig.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                    it = m_overlayScaledCache.insert(key, scaled);
+                }
+                if (!it.value().isNull())
+                    p.drawPixmap(r.toRect(), it.value());
+            }
         }
     }
     p.setOpacity(1.0);
@@ -806,12 +828,14 @@ void VideoWidget::setCanvasSizeB(int width, int height) {
 void VideoWidget::setOverlaysA(const QList<OverlayItem> &overlays) {
     m_overlaysA = overlays;
     m_overlayPixCache.clear();
+    m_overlayScaledCache.clear();
     update();
 }
 
 void VideoWidget::setOverlaysB(const QList<OverlayItem> &overlays) {
     m_overlaysB = overlays;
     m_overlayPixCache.clear();
+    m_overlayScaledCache.clear();
     update();
 }
 
@@ -819,7 +843,7 @@ void VideoWidget::setOverlaysB(const QList<OverlayItem> &overlays) {
 
 void VideoWidget::clearChainTextures(std::vector<GLuint> &texList) {
     for (GLuint t : texList)
-        if (t) glDeleteTextures(1, &t);
+        if (t) { glDeleteTextures(1, &t); m_texSizes.remove(t); }
     texList.clear();
 }
 
@@ -1084,7 +1108,7 @@ QImage VideoWidget::getFrameB() const {
 // ── GL helpers ────────────────────────────────────────────────────────────────
 
 void VideoWidget::setupTextureGL(GLuint &tex, QSize sz, bool alpha) {
-    if (tex) { glDeleteTextures(1, &tex); tex = 0; }
+    if (tex) { glDeleteTextures(1, &tex); m_texSizes.remove(tex); tex = 0; }
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -1095,6 +1119,7 @@ void VideoWidget::setupTextureGL(GLuint &tex, QSize sz, bool alpha) {
     glTexImage2D(GL_TEXTURE_2D, 0, fmt, sz.width(), sz.height(),
                  0, fmt, GL_UNSIGNED_BYTE, nullptr);
     glBindTexture(GL_TEXTURE_2D, 0);
+    m_texSizes.insert(tex, sz);
 }
 
 void VideoWidget::uploadSourceFrameGL(GLuint &tex, MediaSource *source) {
@@ -1107,20 +1132,12 @@ void VideoWidget::uploadSourceFrameGL(GLuint &tex, MediaSource *source) {
     const bool alpha = source->hasAlpha();
     const GLenum fmt = alpha ? GL_RGBA : GL_RGB;
 
-    // Check whether the existing texture matches the incoming frame size.
-    // This handles async sources (Camera, Screen) whose first frame size
-    // may differ from the (0,0) placeholder used at construction time.
-    if (tex) {
-        GLint texW = 0, texH = 0;
-        glBindTexture(GL_TEXTURE_2D, tex);
-        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH,  &texW);
-        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texH);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        if (texW != sz.width() || texH != sz.height())
-            setupTextureGL(tex, sz, alpha);
-    } else {
+    // Recreate the texture only when the frame size changes. The size is tracked
+    // in m_texSizes to avoid a per-frame glGetTexLevelParameteriv, which forces a
+    // GPU→CPU sync stall. Handles async sources (Camera, Screen) whose first
+    // frame size may differ from the (0,0) placeholder at construction time.
+    if (!tex || m_texSizes.value(tex) != sz)
         setupTextureGL(tex, sz, alpha);
-    }
 
     glBindTexture(GL_TEXTURE_2D, tex);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sz.width(), sz.height(),

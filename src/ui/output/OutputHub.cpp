@@ -7,6 +7,8 @@
 #include <QDateTime>
 #include <QDir>
 #include <QRegularExpression>
+#include <QThread>
+#include <utility>
 
 OutputHub::OutputHub(QObject *parent)
     : QObject(parent)
@@ -28,10 +30,80 @@ OutputHub::OutputHub(QObject *parent)
     connectRecorder(m_programRecorder.get());
     connectRecorder(m_deckARecorder.get());
     connectRecorder(m_deckBRecorder.get());
+
+    m_dispatchThread = QThread::create([this] { dispatchLoop(); });
+    m_dispatchThread->setObjectName(QStringLiteral("OutputDispatch"));
+    m_dispatchThread->start();
 }
 
 OutputHub::~OutputHub() {
+    {
+        QMutexLocker lk(&m_mailboxMutex);
+        m_dispatchStop = true;
+        m_mailboxCv.wakeAll();
+    }
+    if (m_dispatchThread) {
+        m_dispatchThread->wait();
+        delete m_dispatchThread;
+        m_dispatchThread = nullptr;
+    }
     stopAllRecording();
+}
+
+void OutputHub::dispatchLoop() {
+    for (;;) {
+        QImage program, deckA, deckB;
+        {
+            QMutexLocker lk(&m_mailboxMutex);
+            while (!m_frameDirty && !m_dispatchStop)
+                m_mailboxCv.wait(&m_mailboxMutex);
+            if (m_dispatchStop)
+                return;
+            program = std::move(m_pendingProgram);
+            deckA   = std::move(m_pendingDeckA);
+            deckB   = std::move(m_pendingDeckB);
+            m_pendingProgram = QImage();
+            m_pendingDeckA   = QImage();
+            m_pendingDeckB   = QImage();
+            m_frameDirty = false;
+        }
+        QMutexLocker sink(&m_sinkMutex);
+        distributeFrames(program, deckA, deckB);
+    }
+}
+
+void OutputHub::distributeFrames(const QImage &programFrame,
+                                 const QImage &deckAFrame,
+                                 const QImage &deckBFrame) {
+    if (m_ndiEnabled && m_ndiSink && m_ndiSink->isActive() && !programFrame.isNull())
+        m_ndiSink->submitFrame(programFrame);
+
+    if (m_virtualCameraEnabled && m_virtualCameraSink && m_virtualCameraSink->isActive()
+        && !programFrame.isNull())
+        m_virtualCameraSink->submitFrame(programFrame);
+
+    if (m_programRecorder && m_programRecorder->isRecording() && !programFrame.isNull())
+        m_programRecorder->submitFrame(programFrame);
+
+    if (m_deckARecorder && m_deckARecorder->isRecording() && !deckAFrame.isNull())
+        m_deckARecorder->submitFrame(deckAFrame);
+
+    if (m_deckBRecorder && m_deckBRecorder->isRecording() && !deckBFrame.isNull())
+        m_deckBRecorder->submitFrame(deckBFrame);
+
+    for (const auto &entry : m_sourceRecorders) {
+        const NodeId nodeId = entry.first;
+        ProgramRecorder *rec = entry.second.get();
+        if (!rec || !rec->isRecording()) continue;
+
+        const bool onA = nodeId != 0 && nodeId == m_activeDeckA;
+        const bool onB = nodeId != 0 && nodeId == m_activeDeckB;
+        if (!onA && !onB) continue;
+
+        const QImage &srcFrame = onA ? deckAFrame : deckBFrame;
+        if (!srcFrame.isNull())
+            rec->submitFrame(srcFrame);
+    }
 }
 
 void OutputHub::setOutputDir(const QString &dir) {
@@ -60,6 +132,7 @@ VideoWidget *OutputHub::programSource() const {
 }
 
 void OutputHub::setActiveDeckNodes(NodeId deckA, NodeId deckB) {
+    QMutexLocker locker(&m_sinkMutex);
     m_activeDeckA = deckA;
     m_activeDeckB = deckB;
 }
@@ -91,6 +164,7 @@ QString OutputHub::ndiStreamName() const {
 }
 
 bool OutputHub::setNdiOutputEnabled(bool enabled, const QString &streamName) {
+    QMutexLocker locker(&m_sinkMutex);
     if (!m_ndiSink || !ndiAvailable()) {
         if (enabled)
             return false;
@@ -123,6 +197,7 @@ QString OutputHub::virtualCameraDevicePath() const {
 }
 
 bool OutputHub::setVirtualCameraEnabled(bool enabled, const QString &devicePath) {
+    QMutexLocker locker(&m_sinkMutex);
     if (!m_virtualCameraSink || !virtualCameraAvailable()) {
         if (enabled)
             return false;
@@ -230,6 +305,7 @@ QString OutputHub::makeTrackOutputPath(const QString &suffix) const {
 }
 
 bool OutputHub::startProgramRecording() {
+    QMutexLocker locker(&m_sinkMutex);
     if (!m_frameSource || m_programRecorder->isRecording()) return m_programRecorder->isRecording();
     const QString path = makeTrackOutputPath(QStringLiteral("program"));
     if (!m_programRecorder->startRecording(path, tr("Program"), true))
@@ -244,6 +320,7 @@ bool OutputHub::startProgramRecording() {
 }
 
 void OutputHub::stopProgramRecording() {
+    QMutexLocker locker(&m_sinkMutex);
     if (!m_programRecorder->isRecording()) return;
     m_programRecorder->stopRecording();
     syncFrameConsumers();
@@ -252,6 +329,7 @@ void OutputHub::stopProgramRecording() {
 }
 
 bool OutputHub::startDeckARecording() {
+    QMutexLocker locker(&m_sinkMutex);
     if (!m_frameSource || m_deckARecorder->isRecording()) return m_deckARecorder->isRecording();
     const QString path = makeTrackOutputPath(QStringLiteral("deckA"));
     if (!m_deckARecorder->startRecording(path, tr("Deck A"), true))
@@ -266,6 +344,7 @@ bool OutputHub::startDeckARecording() {
 }
 
 void OutputHub::stopDeckARecording() {
+    QMutexLocker locker(&m_sinkMutex);
     if (!m_deckARecorder->isRecording()) return;
     m_deckARecorder->stopRecording();
     syncFrameConsumers();
@@ -274,6 +353,7 @@ void OutputHub::stopDeckARecording() {
 }
 
 bool OutputHub::startDeckBRecording() {
+    QMutexLocker locker(&m_sinkMutex);
     if (!m_frameSource || m_deckBRecorder->isRecording()) return m_deckBRecorder->isRecording();
     const QString path = makeTrackOutputPath(QStringLiteral("deckB"));
     if (!m_deckBRecorder->startRecording(path, tr("Deck B"), true))
@@ -288,6 +368,7 @@ bool OutputHub::startDeckBRecording() {
 }
 
 void OutputHub::stopDeckBRecording() {
+    QMutexLocker locker(&m_sinkMutex);
     if (!m_deckBRecorder->isRecording()) return;
     m_deckBRecorder->stopRecording();
     syncFrameConsumers();
@@ -296,6 +377,7 @@ void OutputHub::stopDeckBRecording() {
 }
 
 bool OutputHub::startSourceRecording(NodeId nodeId, const QString &label) {
+    QMutexLocker locker(&m_sinkMutex);
     if (!m_frameSource || nodeId == 0) return false;
     if (isTrackRecording(TrackKind::Source, nodeId))
         return true;
@@ -317,6 +399,7 @@ bool OutputHub::startSourceRecording(NodeId nodeId, const QString &label) {
 }
 
 void OutputHub::stopSourceRecording(NodeId nodeId) {
+    QMutexLocker locker(&m_sinkMutex);
     const auto it = m_sourceRecorders.find(nodeId);
     if (it == m_sourceRecorders.end() || !it->second->isRecording())
         return;
@@ -328,6 +411,7 @@ void OutputHub::stopSourceRecording(NodeId nodeId) {
 }
 
 void OutputHub::stopAllRecording() {
+    QMutexLocker locker(&m_sinkMutex);
     if (m_programRecorder && m_programRecorder->isRecording())
         m_programRecorder->stopRecording();
     if (m_deckARecorder && m_deckARecorder->isRecording())
@@ -344,6 +428,7 @@ void OutputHub::stopAllRecording() {
 }
 
 void OutputHub::addRecordingMarker(const QString &label) {
+    QMutexLocker locker(&m_sinkMutex);
     if (!isRecording() || label.isEmpty()) return;
 
     auto mark = [&](ProgramRecorder *rec) {
@@ -373,10 +458,14 @@ void OutputHub::maybeStopProgressTimer() {
 void OutputHub::onProgramFrameReady() {
     if (!m_frameSource) return;
 
+    // GL readback happens here on the GUI thread (it must own the GL context).
     const QImage programFrame = m_frameSource->programFrame();
-    const QImage deckAFrame   = needsDeckFrameReadback() ? m_frameSource->deckProgramFrame(true)  : QImage();
-    const QImage deckBFrame   = needsDeckFrameReadback() ? m_frameSource->deckProgramFrame(false) : QImage();
+    const bool needDeck = m_needDeckReadback.load(std::memory_order_relaxed);
+    const QImage deckAFrame = needDeck ? m_frameSource->deckProgramFrame(true)  : QImage();
+    const QImage deckBFrame = needDeck ? m_frameSource->deckProgramFrame(false) : QImage();
 
+    // Mirror windows are QWidgets — update them on the GUI thread. setFrame() just
+    // stores the (implicitly-shared) image and schedules a repaint, so it's cheap.
     if (!programFrame.isNull()) {
         for (const auto &mirror : m_mirrors) {
             if (mirror)
@@ -384,34 +473,14 @@ void OutputHub::onProgramFrameReady() {
         }
     }
 
-    if (m_ndiEnabled && m_ndiSink && m_ndiSink->isActive() && !programFrame.isNull())
-        m_ndiSink->submitFrame(programFrame);
-
-    if (m_virtualCameraEnabled && m_virtualCameraSink && m_virtualCameraSink->isActive() && !programFrame.isNull())
-        m_virtualCameraSink->submitFrame(programFrame);
-
-    if (m_programRecorder && m_programRecorder->isRecording() && !programFrame.isNull())
-        m_programRecorder->submitFrame(programFrame);
-
-    if (m_deckARecorder && m_deckARecorder->isRecording() && !deckAFrame.isNull())
-        m_deckARecorder->submitFrame(deckAFrame);
-
-    if (m_deckBRecorder && m_deckBRecorder->isRecording() && !deckBFrame.isNull())
-        m_deckBRecorder->submitFrame(deckBFrame);
-
-    for (const auto &entry : m_sourceRecorders) {
-        const NodeId nodeId = entry.first;
-        ProgramRecorder *rec = entry.second.get();
-        if (!rec || !rec->isRecording()) continue;
-
-        const bool onA = nodeId != 0 && nodeId == m_activeDeckA;
-        const bool onB = nodeId != 0 && nodeId == m_activeDeckB;
-        if (!onA && !onB) continue;
-
-        const QImage &srcFrame = onA ? deckAFrame : deckBFrame;
-        if (!srcFrame.isNull())
-            rec->submitFrame(srcFrame);
-    }
+    // Hand the heavy sinks (NDI / virtual camera / recorders) to the dispatch
+    // thread. Keep only the most recent frame set (drop-old) to stay realtime.
+    QMutexLocker lk(&m_mailboxMutex);
+    m_pendingProgram = programFrame;
+    m_pendingDeckA   = deckAFrame;
+    m_pendingDeckB   = deckBFrame;
+    m_frameDirty = true;
+    m_mailboxCv.wakeOne();
 }
 
 void OutputHub::onMirrorDestroyed(QObject *obj) {
@@ -428,9 +497,12 @@ void OutputHub::onRecordingProgressTick() {
 }
 
 void OutputHub::syncFrameConsumers() {
+    QMutexLocker locker(&m_sinkMutex);
+    const bool needDeck = needsDeckFrameReadback();
+    m_needDeckReadback.store(needDeck, std::memory_order_relaxed);
     if (!m_frameSource) return;
     m_frameSource->setProgramFrameConsumerCount(activeFrameConsumerCount());
-    m_frameSource->setDeckFrameConsumerCount(needsDeckFrameReadback() ? 1 : 0);
+    m_frameSource->setDeckFrameConsumerCount(needDeck ? 1 : 0);
 }
 
 int OutputHub::activeFrameConsumerCount() const {

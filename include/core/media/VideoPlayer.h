@@ -44,6 +44,10 @@ private:
     AVFrame *frameRGB = nullptr;
     uint8_t *buffer = nullptr;
 
+    // Reused across decodeFrame() calls to avoid per-frame alloc/free churn.
+    AVPacket *packet = nullptr;
+    AVFrame  *decodedFrame = nullptr;
+
     int videoStreamIndex = -1;
     int64_t frameCount = 0;
 };

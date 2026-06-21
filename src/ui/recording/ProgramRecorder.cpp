@@ -67,6 +67,7 @@ bool ProgramRecorder::startRecording(const QString &outputPath, const QString &t
                           QStringLiteral(".markers.json"));
     m_markers.clear();
     m_frameIndex = 0;
+    m_lastPts = -1;
     m_lastDurationMs = 0;
 
     const QByteArray pathUtf8 = m_outputPath.toUtf8();
@@ -227,7 +228,16 @@ void ProgramRecorder::submitFrame(const QImage &frame) {
     sws_scale(m_swsCtx, srcSlice, srcStride, 0, kHeight,
               m_yuvFrame->data, m_yuvFrame->linesize);
 
-    m_yuvFrame->pts = m_frameIndex++;
+    // Timestamp by wall clock rather than a frame counter: under load the
+    // dispatch thread coalesces (drops) frames, so a plain counter would make
+    // playback run fast. Wall-clock PTS keeps real-time duration; clamp to stay
+    // strictly monotonic when two frames land in the same tick.
+    int64_t pts = m_timer.elapsed() * kFps / 1000;
+    if (pts <= m_lastPts)
+        pts = m_lastPts + 1;
+    m_lastPts = pts;
+    m_yuvFrame->pts = pts;
+    ++m_frameIndex;
     if (avcodec_send_frame(m_codecCtx, m_yuvFrame) < 0)
         return;
 

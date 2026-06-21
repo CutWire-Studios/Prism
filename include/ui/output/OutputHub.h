@@ -4,7 +4,12 @@
 #include <QList>
 #include <QPointer>
 #include <QTimer>
+#include <QImage>
+#include <QMutex>
+#include <QRecursiveMutex>
+#include <QWaitCondition>
 #include <unordered_map>
+#include <atomic>
 #include <memory>
 #include "ui/output/NdiProgramSink.h"
 #include "ui/output/VirtualCameraProgramSink.h"
@@ -15,6 +20,7 @@
 
 class VideoWidget;
 class MirrorOutputWindow;
+class QThread;
 
 /// Routes the program compositor feed to mirror windows and external sinks (NDI, …).
 class OutputHub : public QObject {
@@ -98,6 +104,12 @@ private:
     void syncFrameConsumers();
     int  activeFrameConsumerCount() const;
     bool needsDeckFrameReadback() const;
+
+    // Background frame dispatch: keeps encode/convert/blocking-IO off the GUI
+    // thread. onProgramFrameReady() (GUI) does the GL readback and hands the
+    // frames to m_dispatchThread, which fans them out to the heavy sinks.
+    void dispatchLoop();
+    void distributeFrames(const QImage &program, const QImage &deckA, const QImage &deckB);
     void ensureProgressTimer();
     void maybeStopProgressTimer();
     void placeOnSecondaryScreen(QWidget *window);
@@ -121,4 +133,17 @@ private:
 
     bool m_ndiEnabled = false;
     bool m_virtualCameraEnabled = false;
+
+    // ── Background dispatch ───────────────────────────────────────────────────
+    QThread        *m_dispatchThread = nullptr;
+    QMutex          m_mailboxMutex;          // guards the pending-frame mailbox
+    QWaitCondition  m_mailboxCv;
+    QImage          m_pendingProgram, m_pendingDeckA, m_pendingDeckB;
+    bool            m_frameDirty   = false;
+    bool            m_dispatchStop = false;
+    // Serialises all sink/recorder access between the dispatch thread and the
+    // GUI thread (start/stop). Recursive so public helpers can be reused.
+    QRecursiveMutex m_sinkMutex;
+    // Lock-free fast path read by onProgramFrameReady() on the GUI thread.
+    std::atomic<bool> m_needDeckReadback{false};
 };

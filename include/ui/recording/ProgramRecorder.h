@@ -73,6 +73,7 @@ private:
     AVFrame         *m_yuvFrame   = nullptr;
     AVPacket        *m_packet     = nullptr;
     int64_t          m_frameIndex = 0;
+    int64_t          m_lastPts    = -1;   // wall-clock PTS guard (monotonic)
 
     static constexpr int kWidth  = 1280;
     static constexpr int kHeight = 720;

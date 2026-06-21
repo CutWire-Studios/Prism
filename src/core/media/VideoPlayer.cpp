@@ -86,11 +86,22 @@ bool VideoPlayer::open(const QString &filePath) {
                                 codecContext->width, codecContext->height, AV_PIX_FMT_RGB24,
                                 SWS_BILINEAR, nullptr, nullptr, nullptr);
 
+    packet       = av_packet_alloc();
+    decodedFrame = av_frame_alloc();
+
     qDebug() << "Video opened:" << filePath << "(" << codecContext->width << "x" << codecContext->height << ")";
     return true;
 }
 
 void VideoPlayer::close() {
+    if (packet) {
+        av_packet_free(&packet);
+        packet = nullptr;
+    }
+    if (decodedFrame) {
+        av_frame_free(&decodedFrame);
+        decodedFrame = nullptr;
+    }
     if (swsContext) {
         sws_freeContext(swsContext);
         swsContext = nullptr;
@@ -145,46 +156,37 @@ double VideoPlayer::getCurrentTime() const {
 }
 
 bool VideoPlayer::decodeFrame() {
-    if (!formatContext || videoStreamIndex < 0) {
+    if (!formatContext || videoStreamIndex < 0 || !packet || !decodedFrame) {
         return false;
     }
 
-    // av_packet_alloc() zero-initialises the packet so av_packet_unref() is safe
-    // to call on every exit path.  A plain "AVPacket packet;" leaves the struct
-    // uninitialized; av_packet_unref() would then try to free a garbage buf pointer
-    // which corrupts glibc's malloc arena (free(): invalid size).
-    AVPacket *packet = av_packet_alloc();
-    AVFrame  *frame  = av_frame_alloc();
-
+    // packet/decodedFrame are allocated once in open() and reused here; we only
+    // unref (not free) them so their buffers can be recycled across frames.
     while (av_read_frame(formatContext, packet) >= 0) {
-        if (packet->stream_index == videoStreamIndex) {
-            int ret = avcodec_send_packet(codecContext, packet);
-            if (ret < 0) {
-                av_packet_unref(packet);
-                av_packet_free(&packet);
-                av_frame_free(&frame);
-                return false;
-            }
-
-            ret = avcodec_receive_frame(codecContext, frame);
-            if (ret == 0) {
-                if (frame->color_range == AVCOL_RANGE_UNSPECIFIED)
-                    frame->color_range = AVCOL_RANGE_MPEG;
-
-                sws_scale(swsContext, frame->data, frame->linesize, 0, codecContext->height,
-                          frameRGB->data, frameRGB->linesize);
-                frameCount++;
-                av_packet_unref(packet);
-                av_packet_free(&packet);
-                av_frame_free(&frame);
-                return true;
-            }
+        if (packet->stream_index != videoStreamIndex) {
+            av_packet_unref(packet);
+            continue;
         }
+
+        int ret = avcodec_send_packet(codecContext, packet);
         av_packet_unref(packet);
+        if (ret < 0)
+            return false;
+
+        ret = avcodec_receive_frame(codecContext, decodedFrame);
+        if (ret == 0) {
+            if (decodedFrame->color_range == AVCOL_RANGE_UNSPECIFIED)
+                decodedFrame->color_range = AVCOL_RANGE_MPEG;
+
+            sws_scale(swsContext, decodedFrame->data, decodedFrame->linesize, 0,
+                      codecContext->height, frameRGB->data, frameRGB->linesize);
+            frameCount++;
+            av_frame_unref(decodedFrame);
+            return true;
+        }
+        // AVERROR(EAGAIN): decoder needs more packets — keep reading.
     }
 
-    av_packet_free(&packet);
-    av_frame_free(&frame);
     return false;
 }
 
