@@ -100,7 +100,7 @@ void DeckController::updateDeckAudio(bool deckA, NodeId clipId, const ClipNodeMo
     else             player->pause();
 }
 
-void DeckController::applyAudioControllerToDeck(bool deckA, NodeId clipId) {
+void DeckController::applyAudioControllerToDeck(bool deckA, NodeId clipId, bool forceSeek) {
     auto *node = m_editor->nodeAt(clipId);
     if (!node || node->sourceDescriptor().kind != SourceDescriptor::Kind::VideoFile) {
         stopDeckAudio(deckA);
@@ -108,7 +108,7 @@ void DeckController::applyAudioControllerToDeck(bool deckA, NodeId clipId) {
     }
     auto *out = m_outputWindow->videoWidget();
     const double t = deckA ? out->getCurrentTimeA() : out->getCurrentTimeB();
-    updateDeckAudio(deckA, clipId, node, t, true);
+    updateDeckAudio(deckA, clipId, node, t, forceSeek);
 }
 
 void DeckController::refreshShaderAudioForActiveDecks() {

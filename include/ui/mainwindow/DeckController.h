@@ -36,7 +36,7 @@ public:
     void releaseAllDeckAudio();
     void updateDeckAudio(bool deckA, NodeId clipId, const ClipNodeModel *node,
                          double currentTimeHint = -1.0, bool forceSeek = false);
-    void applyAudioControllerToDeck(bool deckA, NodeId clipId);
+    void applyAudioControllerToDeck(bool deckA, NodeId clipId, bool forceSeek = true);
     void refreshShaderAudioForActiveDecks();
     void refreshTextDataForActiveDecks();
 

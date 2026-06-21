@@ -872,10 +872,12 @@ void MainWindow::onNodeRemoveRequested(NodeId nodeId) {
 
 void MainWindow::onCrossfaderMoved(int value) {
     m_outputWindow->videoWidget()->setCrossfade(value / 100.f);
+    // Crossfading only adjusts deck volumes — do NOT re-seek the audio, or each
+    // slider step would flush the decoder and produce a stutter/zipper artifact.
     if (m_deckController->activeNodeA())
-        m_deckController->applyAudioControllerToDeck(true,  m_deckController->activeNodeA());
+        m_deckController->applyAudioControllerToDeck(true,  m_deckController->activeNodeA(), false);
     if (m_deckController->activeNodeB())
-        m_deckController->applyAudioControllerToDeck(false, m_deckController->activeNodeB());
+        m_deckController->applyAudioControllerToDeck(false, m_deckController->activeNodeB(), false);
 }
 
 void MainWindow::onADeckPlayClicked() {
