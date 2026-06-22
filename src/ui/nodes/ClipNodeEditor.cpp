@@ -700,7 +700,6 @@ public:
         m_thread = new QThread();
         m_runtime = new ScriptRuntime(m_output);
         m_runtime->moveToThread(m_thread);
-        QObject::connect(m_thread, &QThread::finished, m_runtime, &QObject::deleteLater);
         m_thread->start();
 
         if (!m_code.isEmpty()) {
@@ -712,16 +711,18 @@ public:
     }
 
     ~ScriptNodeItem() override {
-        if (m_runtime) {
+        if (m_runtime && m_thread && m_thread->isRunning()) {
             QMetaObject::invokeMethod(m_runtime, "shutdown", Qt::BlockingQueuedConnection);
+            m_thread->quit();
+            m_thread->wait();
+        }
+        if (m_runtime) {
+            m_runtime->moveToThread(QThread::currentThread());
+            delete m_runtime;
             m_runtime = nullptr;
         }
-        if (m_thread) {
-            m_thread->quit();
-            m_thread->wait(3000);
-            delete m_thread;
-            m_thread = nullptr;
-        }
+        delete m_thread;
+        m_thread = nullptr;
     }
 
     std::function<void(NodeId)> onEditRequested;

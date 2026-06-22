@@ -3,6 +3,7 @@
 #include "core/scripting/ScriptOutput.h"
 #include <QObject>
 #include <QString>
+#include <atomic>
 #include <memory>
 
 enum class ScriptTriggerMode {
@@ -13,6 +14,7 @@ enum class ScriptTriggerMode {
 
 class QTimer;
 class QNetworkAccessManager;
+class QNetworkReply;
 
 /// Runs a user Lua script (via sol2) on a trigger — periodically, once at start,
 /// or manually — and publishes the values it sets into a shared ScriptOutput
@@ -57,6 +59,8 @@ private:
     QString m_lastLog;
     QTimer *m_timer = nullptr;
     QNetworkAccessManager *m_network = nullptr;
+    QNetworkReply *m_activeReply = nullptr;
+    std::atomic<bool> m_shuttingDown{false};
 
 #ifdef SWITCHX_HAVE_LUA
     struct LuaState;

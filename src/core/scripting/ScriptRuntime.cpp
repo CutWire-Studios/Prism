@@ -118,25 +118,34 @@ void ScriptRuntime::setTrigger(ScriptTriggerMode mode, int intervalMs) {
 }
 
 void ScriptRuntime::applySettings(const QString &code, int triggerMode, int intervalMs) {
+    if (m_shuttingDown.load(std::memory_order_acquire))
+        return;
     m_script = code;
     setTrigger(static_cast<ScriptTriggerMode>(triggerMode), intervalMs);
 }
 
 void ScriptRuntime::runNow() {
+    if (m_shuttingDown.load(std::memory_order_acquire))
+        return;
     executeScript();
 }
 
 void ScriptRuntime::shutdown() {
+    m_shuttingDown.store(true, std::memory_order_release);
     if (m_timer)
         m_timer->stop();
+    if (m_activeReply)
+        m_activeReply->abort();
 }
 
 void ScriptRuntime::onPeriodicTimeout() {
+    if (m_shuttingDown.load(std::memory_order_acquire))
+        return;
     executeScript();
 }
 
 void ScriptRuntime::writeOutput(const QString &json, const QString &log) {
-    if (!m_output)
+    if (m_shuttingDown.load(std::memory_order_acquire) || !m_output)
         return;
 
     {
@@ -161,6 +170,9 @@ void ScriptRuntime::setupEngine() {
 
     sol::table http = lua.create_named_table("http");
     http["get"] = [this](const std::string &urlStr, sol::optional<int> timeoutMs) -> std::string {
+        if (m_shuttingDown.load(std::memory_order_acquire))
+            return {};
+
         const QUrl url(QString::fromUtf8(urlStr.c_str()));
         if (!url.isValid())
             return {};
@@ -168,6 +180,7 @@ void ScriptRuntime::setupEngine() {
         QNetworkRequest req(url);
         req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("SwitchX/1.0"));
         QNetworkReply *reply = m_network->get(req);
+        m_activeReply = reply;
 
         QEventLoop loop;
         QTimer timer;
@@ -177,6 +190,13 @@ void ScriptRuntime::setupEngine() {
         QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
         timer.start(ms);
         loop.exec();
+
+        m_activeReply = nullptr;
+
+        if (m_shuttingDown.load(std::memory_order_acquire)) {
+            reply->deleteLater();
+            return {};
+        }
 
         if (!reply->isFinished()) {
             reply->abort();
@@ -200,10 +220,15 @@ void ScriptRuntime::teardownEngine() {}
 
 void ScriptRuntime::executeScript() {
 #ifndef SWITCHX_HAVE_LUA
+    if (m_shuttingDown.load(std::memory_order_acquire))
+        return;
     m_lastError = QStringLiteral("Lua support was disabled at build time.");
     emit executionFinished(false);
     return;
 #else
+    if (m_shuttingDown.load(std::memory_order_acquire))
+        return;
+
     if (!m_lua) {
         m_lastError = QStringLiteral("Lua engine not initialized.");
         emit executionFinished(false);
@@ -223,11 +248,16 @@ void ScriptRuntime::executeScript() {
         sol::script_pass_on_error);
 
     if (!result.valid()) {
+        if (m_shuttingDown.load(std::memory_order_acquire))
+            return;
         sol::error err = result;
         m_lastError = QString::fromUtf8(err.what());
         emit executionFinished(false);
         return;
     }
+
+    if (m_shuttingDown.load(std::memory_order_acquire))
+        return;
 
     sol::object ret = result;
     if (!ret.valid() || ret.get_type() == sol::type::lua_nil) {
