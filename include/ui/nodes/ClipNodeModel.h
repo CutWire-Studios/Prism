@@ -18,6 +18,7 @@ public:
     explicit ClipNodeModel(QObject *parent = nullptr);
 
     void setCard(ClipCard *card);
+    void clearCard();
 
     // Auto-assigned slot identifier (set by ClipNodeEditor on creation).
     void    setNodeId(NodeId id) { m_nodeId = id; }

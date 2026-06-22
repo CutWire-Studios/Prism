@@ -23,3 +23,10 @@ void ClipNodeModel::setCard(ClipCard *card) {
     connect(m_card, &ClipCard::sourceDescriptorChanged, this,
             [this](int, const SourceDescriptor &desc) { emit sourceDescriptorChanged(desc); });
 }
+
+void ClipNodeModel::clearCard() {
+    if (!m_card)
+        return;
+    disconnect(m_card, nullptr, this, nullptr);
+    m_card = nullptr;
+}

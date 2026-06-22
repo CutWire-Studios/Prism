@@ -1,5 +1,7 @@
 #include <QApplication>
 #include <QByteArray>
+#include <QTimer>
+#include <QtGlobal>
 #include "ui/mainwindow/MainWindow.h"
 #include "ui/common/MaterialSymbols.h"
 
@@ -34,6 +36,11 @@ int main(int argc, char *argv[]) {
 
     MainWindow window;
     window.show();
+
+    if (qEnvironmentVariableIsSet("SWITCHX_AUTO_QUIT_MS")) {
+        const int ms = qEnvironmentVariableIntValue("SWITCHX_AUTO_QUIT_MS");
+        QTimer::singleShot(qMax(ms, 1), &window, &QWidget::close);
+    }
 
     return app.exec();
 }

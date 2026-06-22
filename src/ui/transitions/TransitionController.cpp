@@ -23,6 +23,23 @@ TransitionController::TransitionController(VideoWidget    *videoWidget,
 {
 }
 
+TransitionController::~TransitionController() {
+    shutdown();
+}
+
+void TransitionController::shutdown() {
+    if (m_animation) {
+        m_animation->stop();
+        delete m_animation;
+        m_animation = nullptr;
+    }
+    m_transitionCombo = nullptr;
+    m_durationSpin = nullptr;
+    m_autoBtn = nullptr;
+    m_cutBtn = nullptr;
+    m_crossfaderSlider = nullptr;
+}
+
 void TransitionController::setupConnections() {
     connect(m_transitionCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &TransitionController::onTransitionModeChanged);
@@ -63,6 +80,9 @@ void TransitionController::onTransitionModeChanged(int index) {
 }
 
 void TransitionController::onAutoTransitionClicked() {
+    if (!m_crossfaderSlider)
+        return;
+
     if (m_animation) {
         m_animation->stop();
         delete m_animation;
@@ -92,6 +112,9 @@ void TransitionController::onAutoTransitionClicked() {
 }
 
 void TransitionController::onCutTransitionClicked() {
+    if (!m_crossfaderSlider)
+        return;
+
     if (m_animation) {
         m_animation->stop();
         delete m_animation;

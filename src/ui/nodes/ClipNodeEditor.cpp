@@ -711,14 +711,15 @@ public:
     }
 
     ~ScriptNodeItem() override {
-        if (m_runtime && m_thread && m_thread->isRunning()) {
-            QMetaObject::invokeMethod(m_runtime, "shutdown", Qt::BlockingQueuedConnection);
-            m_thread->quit();
-            m_thread->wait();
-        }
-        if (m_runtime) {
-            m_runtime->moveToThread(QThread::currentThread());
-            delete m_runtime;
+        if (m_runtime && m_thread) {
+            if (m_thread->isRunning()) {
+                QMetaObject::invokeMethod(m_runtime, "shutdown", Qt::BlockingQueuedConnection);
+                QMetaObject::invokeMethod(m_runtime, "deleteLater", Qt::BlockingQueuedConnection);
+                m_thread->quit();
+                m_thread->wait();
+            } else {
+                delete m_runtime;
+            }
             m_runtime = nullptr;
         }
         delete m_thread;
@@ -1861,7 +1862,12 @@ ClipNodeEditor::ClipNodeEditor(QWidget *parent)
     m_view->setContextMenuPolicy(Qt::CustomContextMenu);
 }
 
-ClipNodeEditor::~ClipNodeEditor() = default;
+ClipNodeEditor::~ClipNodeEditor() {
+    blockSignals(true);
+    if (m_view)
+        m_view->setScene(nullptr);
+    clearAllNodes();
+}
 
 QGraphicsView *ClipNodeEditor::graphicsViewFrom(QWidget *widget) {
     if (auto *canvas = dynamic_cast<ClipNodeCanvasWidget *>(widget))
@@ -2072,9 +2078,10 @@ void ClipNodeEditor::deleteNodeById(NodeId nodeId) {
                 }
             }
         }
-        removeSceneItem(clipItem);
 
         disconnectNodeSignals(model);
+        model->clearCard();
+        removeSceneItem(clipItem);
         delete model;
 
         emit nodeRemoved(nodeId);

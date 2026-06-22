@@ -32,6 +32,11 @@ public:
     void setTransitionDuration(double secs);
     QStringList transitionModeNames() const;
 
+    /// Stop any running fader animation and drop UI pointers before they are destroyed.
+    void shutdown();
+
+    ~TransitionController() override;
+
 public slots:
     void onTransitionModeChanged(int index);
     void onAutoTransitionClicked();

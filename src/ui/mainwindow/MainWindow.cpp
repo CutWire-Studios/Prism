@@ -271,7 +271,17 @@ MainWindow::~MainWindow() {
         m_outputHub->setNdiOutputEnabled(false);
         m_outputHub->setVirtualCameraEnabled(false);
     }
+    if (m_clipNodeEditor) {
+        m_clipNodeEditor->blockSignals(true);
+        disconnect(m_clipNodeEditor, nullptr, nullptr, nullptr);
+    }
     delete ui;
+    ui = nullptr;
+    m_clipNodeEditor = nullptr;
+    m_stackWidget = nullptr;
+    m_assetLibrary = nullptr;
+    m_editorSplitter = nullptr;
+    m_emptyPlaceholder = nullptr;
 }
 
 void MainWindow::shutdownLivePipeline() {
@@ -287,17 +297,26 @@ void MainWindow::shutdownLivePipeline() {
     if (m_remoteServer)
         m_remoteServer->stopServer();
 
+    if (m_transitionCtrl)
+        m_transitionCtrl->shutdown();
+
+    if (m_deckController) {
+        m_deckController->setActiveNodeA(0);
+        m_deckController->setActiveNodeB(0);
+        m_deckController->releaseAllDeckAudio();
+    }
+
     if (m_outputHub) {
         disconnect(m_outputHub, nullptr, this, nullptr);
         m_outputHub->stopAllRecording();
+        m_outputHub->setProgramSource(nullptr);
     }
 
-    if (m_deckController)
-        m_deckController->releaseAllDeckAudio();
-
     if (m_outputWindow) {
-        if (VideoWidget *vw = m_outputWindow->videoWidget())
+        if (VideoWidget *vw = m_outputWindow->videoWidget()) {
+            vw->removeDeckPreviewConsumer();
             vw->shutdownPlayback();
+        }
     }
 
     if (m_obsIntegration)
@@ -306,6 +325,8 @@ void MainWindow::shutdownLivePipeline() {
 
 void MainWindow::closeEvent(QCloseEvent *event) {
     shutdownLivePipeline();
+    if (m_outputWindow)
+        m_outputWindow->close();
     performAutosave();
     SessionManager::markCleanExit();
     QMainWindow::closeEvent(event);
