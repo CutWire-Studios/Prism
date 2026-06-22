@@ -107,7 +107,7 @@ private slots:
     void onAddScriptNode();
     void onEditContextNode(NodeId nodeId);
     void onOpenTransformEditor(NodeId contextId);
-    void onEditAudioNode(NodeId nodeId);
+    void onEditClipAudio(NodeId clipId);
     void onEditScriptNode(NodeId nodeId);
 
 private:
@@ -131,7 +131,8 @@ private:
     bool isGroupMember(NodeId nodeId) const;
 
     class PortItem *findPort(NodeId nodeId, int portKindInt) const;
-    void restoreConnections(ClipNodeScene *scene, const QJsonArray &conns);
+    void restoreConnections(ClipNodeScene *scene, const QJsonArray &conns,
+                            const QMap<NodeId, NodeId> &legacyClipForAudioNode = {});
     QPointF scenePosForView(QGraphicsView *view, const QPoint &globalPos) const;
     void addTransformContextTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
     void addMasterAudioOutputTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
@@ -143,7 +144,6 @@ private:
     QMap<NodeId, ClipNodeModel *> m_nodeMap;
     QMap<NodeId, NodeItemBase *> m_itemMap;
     QMap<NodeId, void *> m_contextNodes;
-    QMap<NodeId, void *> m_audioNodes;
     QMap<NodeId, void *> m_scriptNodes;
     QMap<NodeId, void *> m_masterAudioNodes;
     QMap<NodeId, GroupNodeItem *> m_groupNodes;

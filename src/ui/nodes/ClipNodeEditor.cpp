@@ -78,6 +78,7 @@ static constexpr qreal NODE_W        = CARD_W;
 
 static constexpr qreal SMALL_NODE_W = 100.0;
 static constexpr qreal SMALL_NODE_H = 110.0;
+static constexpr qreal AUDIO_STRIP_H = 54.0;
 
 static const QColor kSelectionAccent(0x4a, 0x9e, 0xff);
 
@@ -85,7 +86,6 @@ class PortItem;
 class NodeItemBase;
 class ClipNodeItem;
 class TransformContextNodeItem;
-class AudioControllerNodeItem;
 class ScriptNodeItem;
 class MasterAudioOutputNodeItem;
 class GroupNodeItem;
@@ -129,10 +129,8 @@ bool portsCompatible(PortKind a, PortKind b) {
         (a == PortKind::ChainIn && b == PortKind::ChainOut)) return true;
     if ((a == PortKind::TransformContext && b == PortKind::ContextHub) ||
         (a == PortKind::ContextHub && b == PortKind::TransformContext)) return true;
-    if ((a == PortKind::AudioOut && b == PortKind::AudioIn) ||
-        (a == PortKind::AudioIn && b == PortKind::AudioOut)) return true;
-    if ((a == PortKind::AudioOut && b == PortKind::ShaderAudioIn) ||
-        (a == PortKind::ShaderAudioIn && b == PortKind::AudioOut)) return true;
+    if ((a == PortKind::AudioControllerOut && b == PortKind::ShaderAudioIn) ||
+        (a == PortKind::ShaderAudioIn && b == PortKind::AudioControllerOut)) return true;
     if ((a == PortKind::AudioControllerOut && b == PortKind::MasterAudioIn) ||
         (a == PortKind::MasterAudioIn && b == PortKind::AudioControllerOut)) return true;
     if ((a == PortKind::ScriptOut && b == PortKind::DataIn) ||
@@ -142,7 +140,7 @@ bool portsCompatible(PortKind a, PortKind b) {
 
 bool isSingleConnection(PortKind kind) {
     if (kind == PortKind::ContextHub) return false;
-    if (kind == PortKind::AudioOut) return false;
+    if (kind == PortKind::AudioControllerOut) return false;
     return true;
 }
 
@@ -259,8 +257,11 @@ public:
 class ClipNodeItem : public NodeItemBase {
 public:
     ClipNodeItem(ClipNodeModel *model, NodeId id, bool hasAudio = false,
-                 bool hasShaderAudioIn = false, bool hasDataIn = false)
+                 bool hasShaderAudioIn = false, bool hasDataIn = false,
+                 int volume = 100, bool muted = false,
+                 AudioPlaybackMode playbackMode = AudioPlaybackMode::Always, int delayMs = 0)
         : m_model(model), m_nodeId(id), m_hasAudio(hasAudio)
+        , m_volume(volume), m_muted(muted), m_playbackMode(playbackMode), m_delayMs(delayMs)
     {
         setFlags(ItemIsMovable | ItemSendsGeometryChanges | ItemIsSelectable);
         setZValue(0);
@@ -280,7 +281,7 @@ public:
         m_contextPort = new PortItem(PortKind::TransformContext, this);
 
         if (hasAudio) {
-            m_audioPort = new PortItem(PortKind::AudioOut, this);
+            m_audioPort = new PortItem(PortKind::AudioControllerOut, this);
         }
         if (hasShaderAudioIn) {
             m_shaderAudioInPort = new PortItem(PortKind::ShaderAudioIn, this);
@@ -293,6 +294,7 @@ public:
 
     std::function<void(NodeId)> onDeleteRequested;
     std::function<void(NodeId)> onRenameRequested;
+    std::function<void(NodeId)> onEditAudioRequested;
 
     NodeId nodeId() const override { return m_nodeId; }
     ClipNodeModel *model() const { return m_model; }
@@ -303,6 +305,16 @@ public:
     PortItem *shaderAudioInPort() const { return m_shaderAudioInPort; }
     PortItem *dataInPort() const { return m_dataInPort; }
     bool hasAudio() const { return m_hasAudio; }
+
+    int  volume() const { return m_volume; }
+    bool muted()  const { return m_muted; }
+    AudioPlaybackMode playbackMode() const { return m_playbackMode; }
+    int  delayMs() const { return m_delayMs; }
+
+    void setVolume(int v) { m_volume = v; update(); }
+    void setMuted(bool m) { m_muted = m; update(); }
+    void setPlaybackMode(AudioPlaybackMode mode) { m_playbackMode = mode; update(); }
+    void setDelayMs(int ms) { m_delayMs = ms; update(); }
 
     float x() const { return m_x; }
     float y() const { return m_y; }
@@ -319,11 +331,20 @@ public:
         return m_proxy->widget() ? m_proxy->widget()->height() : CARD_PROXY_H;
     }
 
-    qreal nodeHeight() const { return PROXY_Y + bodyHeight() + PORT_R + PORT_R; }
+    qreal audioStripHeight() const { return m_hasAudio ? AUDIO_STRIP_H : 0.0; }
+
+    qreal nodeHeight() const {
+        return PROXY_Y + bodyHeight() + audioStripHeight() + PORT_R + PORT_R;
+    }
 
     QRectF boundingRect() const override { return QRectF(0, 0, NODE_W, nodeHeight()); }
 
     void updateLayout();
+
+    QRectF getAudioEditButtonRect() const {
+        const qreal stripTop = PROXY_Y + bodyHeight();
+        return QRectF(4, stripTop + AUDIO_STRIP_H - 22, NODE_W - 8, 18);
+    }
 
     void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
         p->setRenderHint(QPainter::Antialiasing);
@@ -352,6 +373,37 @@ public:
                         .arg((int)(m_x * 100)).arg((int)(m_y * 100))
                         .arg((int)(m_w * 100)).arg((int)(m_h * 100)));
 
+        if (m_hasAudio) {
+            const qreal stripTop = PROXY_Y + bodyHeight();
+            const QRectF stripRect(2, stripTop, NODE_W - 4, AUDIO_STRIP_H - 2);
+            p->setPen(QPen(QColor(62, 55, 45), 1));
+            p->setBrush(QColor(34, 28, 22));
+            p->drawRoundedRect(stripRect, 3, 3);
+
+            p->setPen(QColor(230, 140, 60));
+            p->setFont(QFont("Monospace", 7));
+            QString modeStr;
+            switch (m_playbackMode) {
+            case AudioPlaybackMode::DeckAOnly: modeStr = "Deck A"; break;
+            case AudioPlaybackMode::DeckBOnly: modeStr = "Deck B"; break;
+            case AudioPlaybackMode::Always:    modeStr = "Always"; break;
+            }
+            const QString label = QString("Audio  Vol:%1%  %2\n%3  Delay:%4ms")
+                .arg(m_volume)
+                .arg(m_muted ? "Muted" : "Playing")
+                .arg(modeStr)
+                .arg(m_delayMs);
+            p->drawText(QRectF(6, stripTop + 3, NODE_W - 12, AUDIO_STRIP_H - 26),
+                        Qt::AlignCenter, label);
+
+            const QRectF buttonRect = getAudioEditButtonRect();
+            p->setPen(QPen(QColor(230, 140, 60), 1));
+            p->setBrush(QColor(90, 45, 10));
+            p->drawRoundedRect(buttonRect, 3, 3);
+            p->setPen(QColor(255, 185, 120));
+            p->drawText(buttonRect, Qt::AlignCenter, "Edit Audio");
+        }
+
         if (isSelected()) {
             p->setPen(QPen(kSelectionAccent, 2));
             p->setBrush(Qt::NoBrush);
@@ -361,6 +413,11 @@ public:
 
     void contextMenuEvent(QGraphicsSceneContextMenuEvent *e) override {
         QMenu menu;
+        if (m_hasAudio) {
+            menu.addAction("Edit Audio", [this]() {
+                if (onEditAudioRequested) onEditAudioRequested(m_nodeId);
+            });
+        }
         if (m_model && m_model->isGroupMember()) {
             menu.addAction("Rename", [this]() {
                 if (onRenameRequested) onRenameRequested(m_nodeId);
@@ -373,6 +430,24 @@ public:
         e->accept();
     }
 
+    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *e) override {
+        if (m_hasAudio && getAudioEditButtonRect().contains(e->pos())) {
+            if (onEditAudioRequested) onEditAudioRequested(m_nodeId);
+            e->accept();
+            return;
+        }
+        QGraphicsItem::mouseDoubleClickEvent(e);
+    }
+
+    void mousePressEvent(QGraphicsSceneMouseEvent *e) override {
+        if (m_hasAudio && getAudioEditButtonRect().contains(e->pos())) {
+            if (onEditAudioRequested) onEditAudioRequested(m_nodeId);
+            e->accept();
+            return;
+        }
+        QGraphicsItem::mousePressEvent(e);
+    }
+
 protected:
     QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
 
@@ -380,6 +455,10 @@ private:
     ClipNodeModel *m_model;
     NodeId m_nodeId;
     bool m_hasAudio;
+    int  m_volume;
+    bool m_muted;
+    AudioPlaybackMode m_playbackMode;
+    int  m_delayMs;
     float m_x = 0.f, m_y = 0.f, m_w = 1.f, m_h = 1.f;
     QGraphicsProxyWidget *m_proxy;
     PortItem *m_chainInPort;
@@ -484,116 +563,6 @@ private:
     NodeId m_nodeId;
     int m_canvasW, m_canvasH;
     PortItem *m_hubPort;
-};
-
-class AudioControllerNodeItem : public NodeItemBase {
-public:
-    AudioControllerNodeItem(NodeId id, int volume = 100, bool muted = false, AudioPlaybackMode playbackMode = AudioPlaybackMode::Always, int delayMs = 0)
-        : m_nodeId(id), m_volume(volume), m_muted(muted), m_playbackMode(playbackMode), m_delayMs(delayMs)
-    {
-        setFlags(ItemIsMovable | ItemSendsGeometryChanges | ItemIsSelectable);
-        setZValue(0);
-
-        m_audioInPort = new PortItem(PortKind::AudioIn, this);
-        m_audioInPort->setPos(SMALL_NODE_W, SMALL_NODE_H / 2);
-
-        m_audioOutPort = new PortItem(PortKind::AudioControllerOut, this);
-        m_audioOutPort->setPos(0, SMALL_NODE_H / 2);
-    }
-
-    std::function<void(NodeId)> onEditRequested;
-    std::function<void(NodeId)> onDeleteRequested;
-
-    NodeId nodeId() const override { return m_nodeId; }
-    PortItem *audioInPort() const { return m_audioInPort; }
-    PortItem *audioOutPort() const { return m_audioOutPort; }
-
-    int  volume() const { return m_volume; }
-    bool muted()  const { return m_muted; }
-    AudioPlaybackMode playbackMode() const { return m_playbackMode; }
-    int  delayMs() const { return m_delayMs; }
-
-    void setVolume(int v) { m_volume = v; update(); }
-    void setMuted(bool m) { m_muted = m; update(); }
-    void setPlaybackMode(AudioPlaybackMode mode) { m_playbackMode = mode; update(); }
-    void setDelayMs(int ms) { m_delayMs = ms; update(); }
-
-    QRectF boundingRect() const override { return QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H); }
-
-    void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
-        p->setRenderHint(QPainter::Antialiasing);
-        p->setPen(QPen(QColor(62, 55, 45), 1));
-        p->setBrush(QColor(34, 28, 22));
-        p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H), 4, 4);
-
-        p->setPen(QColor(230, 140, 60));
-        p->setFont(QFont("Monospace", 8));
-        QString modeStr;
-        switch (m_playbackMode) {
-        case AudioPlaybackMode::DeckAOnly: modeStr = "Deck A"; break;
-        case AudioPlaybackMode::DeckBOnly: modeStr = "Deck B"; break;
-        case AudioPlaybackMode::Always:    modeStr = "Always"; break;
-        }
-        QString label = QString("Audio\nVol: %1%\n%2\n[%3]\nDelay: %4ms")
-            .arg(m_volume)
-            .arg(m_muted ? "Muted" : "Playing")
-            .arg(modeStr)
-            .arg(m_delayMs);
-        p->drawText(QRectF(4, 4, SMALL_NODE_W - 8, 68), Qt::AlignCenter, label);
-
-        QRectF buttonRect(4, 78, SMALL_NODE_W - 8, 24);
-        p->setPen(QPen(QColor(230, 140, 60), 1));
-        p->setBrush(QColor(90, 45, 10));
-        p->drawRoundedRect(buttonRect, 3, 3);
-        p->setPen(QColor(255, 185, 120));
-        p->setFont(QFont("Monospace", 7));
-        p->drawText(buttonRect, Qt::AlignCenter, "Edit");
-
-        if (isSelected()) {
-            p->setPen(QPen(kSelectionAccent, 2));
-            p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H).adjusted(1, 1, -1, -1), 4, 4);
-        }
-    }
-
-    QRectF getEditButtonRect() const {
-        return QRectF(4, 78, SMALL_NODE_W - 8, 24);
-    }
-
-    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *e) override {
-        if (onEditRequested) onEditRequested(m_nodeId);
-        e->accept();
-    }
-
-    void mousePressEvent(QGraphicsSceneMouseEvent *e) override {
-        if (getEditButtonRect().contains(e->pos())) {
-            if (onEditRequested) onEditRequested(m_nodeId);
-            e->accept();
-            return;
-        }
-        QGraphicsItem::mousePressEvent(e);
-    }
-
-    void contextMenuEvent(QGraphicsSceneContextMenuEvent *e) override {
-        QMenu menu;
-        menu.addAction("Delete", [this]() {
-            if (onDeleteRequested) onDeleteRequested(m_nodeId);
-        });
-        menu.exec(e->screenPos());
-        e->accept();
-    }
-
-protected:
-    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
-
-private:
-    NodeId m_nodeId;
-    int  m_volume;
-    bool m_muted;
-    AudioPlaybackMode m_playbackMode;
-    int  m_delayMs;
-    PortItem *m_audioInPort;
-    PortItem *m_audioOutPort;
 };
 
 class MasterAudioOutputNodeItem : public NodeItemBase {
@@ -1101,15 +1070,11 @@ public:
             outPort = (src->kind() == PortKind::ChainOut) ? src : dst;
             inPort  = (src->kind() == PortKind::ChainIn)  ? src : dst;
             kind = ConnectionItem::Chain;
-        } else if ((src->kind() == PortKind::AudioOut && dst->kind() == PortKind::ShaderAudioIn) ||
-                   (src->kind() == PortKind::ShaderAudioIn && dst->kind() == PortKind::AudioOut)) {
-            outPort = (src->kind() == PortKind::AudioOut) ? src : dst;
+        } else if ((src->kind() == PortKind::AudioControllerOut && dst->kind() == PortKind::ShaderAudioIn) ||
+                   (src->kind() == PortKind::ShaderAudioIn && dst->kind() == PortKind::AudioControllerOut)) {
+            outPort = (src->kind() == PortKind::AudioControllerOut) ? src : dst;
             inPort  = (src->kind() == PortKind::ShaderAudioIn) ? src : dst;
             kind = ConnectionItem::ClipToShaderAudio;
-        } else if (src->kind() == PortKind::AudioOut || src->kind() == PortKind::AudioIn) {
-            outPort = (src->kind() == PortKind::AudioOut) ? src : dst;
-            inPort  = (src->kind() == PortKind::AudioIn)  ? src : dst;
-            kind = ConnectionItem::AudioToController;
         } else if (src->kind() == PortKind::AudioControllerOut || src->kind() == PortKind::MasterAudioIn) {
             outPort = (src->kind() == PortKind::AudioControllerOut) ? src : dst;
             inPort  = (src->kind() == PortKind::MasterAudioIn)      ? src : dst;
@@ -1243,17 +1208,10 @@ public:
         createConnection(outPort, inPort, kind);
     }
 
-    NodeId audioNodeForClip(NodeId clipId) const {
+    NodeId masterNodeForClip(NodeId clipId) const {
         for (const auto &e : m_edges)
-            if (e.edgeKind == ConnectionItem::AudioToController && e.fromNodeId == clipId)
+            if (e.edgeKind == ConnectionItem::ControllerToMaster && e.fromNodeId == clipId)
                 return e.toNodeId;
-        return 0;
-    }
-
-    NodeId clipForAudioNode(NodeId audioNodeId) const {
-        for (const auto &e : m_edges)
-            if (e.edgeKind == ConnectionItem::AudioToController && e.toNodeId == audioNodeId)
-                return e.fromNodeId;
         return 0;
     }
 
@@ -1268,13 +1226,6 @@ public:
         for (const auto &e : m_edges)
             if (e.edgeKind == ConnectionItem::ScriptToData && e.toNodeId == dataNodeId)
                 return e.fromNodeId;
-        return 0;
-    }
-
-    NodeId masterNodeForAudioController(NodeId audioNodeId) const {
-        for (const auto &e : m_edges)
-            if (e.edgeKind == ConnectionItem::ControllerToMaster && e.fromNodeId == audioNodeId)
-                return e.toNodeId;
         return 0;
     }
 
@@ -1365,7 +1316,8 @@ QVector<NodeId> GroupNodeItem::memberIds() const {
 void ClipNodeItem::updateLayout() {
     prepareGeometryChange();
     const qreal midY = nodeHeight() / 2.0;
-    m_chainOutPort->setPos(PORT_X, PROXY_Y + bodyHeight() + PORT_R);
+    const qreal chainOutY = PROXY_Y + bodyHeight() + audioStripHeight() + PORT_R;
+    m_chainOutPort->setPos(PORT_X, chainOutY);
     m_contextPort->setPos(NODE_W, midY);
     if (m_audioPort) m_audioPort->setPos(0, midY);
     if (m_shaderAudioInPort)
@@ -1455,12 +1407,6 @@ QVariant ClipNodeItem::itemChange(GraphicsItemChange change, const QVariant &val
 }
 
 QVariant TransformContextNodeItem::itemChange(GraphicsItemChange change, const QVariant &value) {
-    if (change == ItemPositionHasChanged && scene())
-        static_cast<ClipNodeScene *>(scene())->updateConnectionsForNode(this);
-    return QGraphicsItem::itemChange(change, value);
-}
-
-QVariant AudioControllerNodeItem::itemChange(GraphicsItemChange change, const QVariant &value) {
     if (change == ItemPositionHasChanged && scene())
         static_cast<ClipNodeScene *>(scene())->updateConnectionsForNode(this);
     return QGraphicsItem::itemChange(change, value);
@@ -1990,10 +1936,13 @@ QWidget *ClipNodeEditor::makeSubSceneView(ClipNodeScene *scene, QWidget *parent,
 static void wireDeleteCallback(NodeItemBase *item, const std::function<void(NodeId)> &cb) {
     if (auto *clip = dynamic_cast<ClipNodeItem *>(item)) clip->onDeleteRequested = cb;
     else if (auto *ctx = dynamic_cast<TransformContextNodeItem *>(item)) ctx->onDeleteRequested = cb;
-    else if (auto *aud = dynamic_cast<AudioControllerNodeItem *>(item)) aud->onDeleteRequested = cb;
     else if (auto *scr = dynamic_cast<ScriptNodeItem *>(item)) scr->onDeleteRequested = cb;
     else if (auto *mas = dynamic_cast<MasterAudioOutputNodeItem *>(item)) mas->onDeleteRequested = cb;
     else if (auto *grp = dynamic_cast<GroupNodeItem *>(item)) grp->onDeleteRequested = cb;
+}
+
+static void wireEditAudioCallback(ClipNodeItem *item, const std::function<void(NodeId)> &cb) {
+    if (item) item->onEditAudioRequested = cb;
 }
 
 static void wireRenameCallback(NodeItemBase *item, const std::function<void(NodeId)> &cb) {
@@ -2029,27 +1978,13 @@ ClipNodeModel *ClipNodeEditor::addClipNode(const QString &path, const QPixmap &t
     registerItem(nodeItem);
     wireDeleteCallback(nodeItem, [this](NodeId nid) { deleteNodeById(nid); });
     wireRenameCallback(nodeItem, [this](NodeId nid) { renameGroupMemberClip(nid); });
+    wireEditAudioCallback(nodeItem, [this](NodeId cid) { onEditClipAudio(cid); });
 
     model->setNodeId(id);
     model->loadClip(path, thumbnail);
     if (groupMember)
         model->setCardMode(ClipCard::CardMode::GroupMember);
     connectNodeSignals(model, id);
-
-    if (hasAudio) {
-        auto *audioNode = new AudioControllerNodeItem(m_nextId++);
-        const NodeId audioId = audioNode->nodeId();
-        audioNode->setPos(nodeItem->pos().x() - 150.0,
-                          nodeItem->pos().y() + nodeItem->nodeHeight() / 2.0 - SMALL_NODE_H / 2.0);
-        audioNode->onEditRequested = [this](NodeId aid) { onEditAudioNode(aid); };
-        scene->addItem(audioNode);
-        m_audioNodes[audioId] = static_cast<void *>(audioNode);
-        registerItem(audioNode);
-        wireDeleteCallback(audioNode, [this](NodeId nid) { deleteNodeById(nid); });
-
-        scene->createConnectionManually(nodeItem->audioPort(), audioNode->audioInPort(),
-                                          ConnectionItem::AudioToController);
-    }
 
     emit nodeAdded(id);
     return model;
@@ -2113,9 +2048,6 @@ void ClipNodeEditor::deleteNodeById(NodeId nodeId) {
 
     if (m_nodeMap.contains(nodeId)) {
         ClipNodeScene *scene = sceneForNode(nodeId);
-        const NodeId audioId = scene->audioNodeForClip(nodeId);
-        if (audioId != 0)
-            deleteNodeById(audioId);
 
         ClipNodeModel *model = m_nodeMap.take(nodeId);
         m_itemMap.remove(nodeId);
@@ -2164,21 +2096,6 @@ void ClipNodeEditor::deleteNodeById(NodeId nodeId) {
         }
         removeSceneItem(item);
         emit clipChainChanged();
-        return;
-    }
-
-    if (m_audioNodes.contains(nodeId)) {
-        m_audioNodes.remove(nodeId);
-        m_itemMap.remove(nodeId);
-        scene->removeConnectionsForNode(nodeId);
-        AudioControllerNodeItem *item = nullptr;
-        for (auto *sceneItem : scene->items()) {
-            if (auto *ai = dynamic_cast<AudioControllerNodeItem *>(sceneItem)) {
-                if (ai->nodeId() == nodeId) { item = ai; break; }
-            }
-        }
-        removeSceneItem(item);
-        emit audioGraphChanged();
         return;
     }
 
@@ -2254,10 +2171,6 @@ void ClipNodeEditor::clearAllNodes() {
     for (NodeId id : ctxIds)
         deleteNodeById(id);
 
-    const QVector<NodeId> audioIds = m_audioNodes.keys().toVector();
-    for (NodeId id : audioIds)
-        deleteNodeById(id);
-
     const QVector<NodeId> masterIds = m_masterAudioNodes.keys().toVector();
     for (NodeId id : masterIds)
         deleteNodeById(id);
@@ -2269,7 +2182,6 @@ void ClipNodeEditor::clearAllNodes() {
     m_itemMap.clear();
     m_groupNodes.clear();
     m_contextNodes.clear();
-    m_audioNodes.clear();
     m_scriptNodes.clear();
     m_masterAudioNodes.clear();
     m_activeClipA = 0;
@@ -2508,29 +2420,25 @@ void ClipNodeEditor::onOpenTransformEditor(NodeId contextId) {
     dialog.exec();
 }
 
-void ClipNodeEditor::onEditAudioNode(NodeId nodeId) {
-    auto it = m_audioNodes.find(nodeId);
-    if (it == m_audioNodes.end()) return;
-
-    AudioControllerNodeItem *audio = static_cast<AudioControllerNodeItem *>(*it);
+void ClipNodeEditor::onEditClipAudio(NodeId clipId) {
+    auto *clip = dynamic_cast<ClipNodeItem *>(m_itemMap.value(clipId));
+    if (!clip || !clip->hasAudio()) return;
 
     QDialog dialog(this);
     Ui::AudioNodeDialog ui;
     ui.setupUi(&dialog);
 
-    ui.volumeSpin->setValue(audio->volume());
-    ui.mutedCheck->setChecked(audio->muted());
-    // modeCombo order matches AudioPlaybackMode enum: DeckAOnly=0, DeckBOnly=1, Always=2
-    ui.modeCombo->setCurrentIndex((int)audio->playbackMode());
-    ui.delaySpin->setValue(audio->delayMs());
+    ui.volumeSpin->setValue(clip->volume());
+    ui.mutedCheck->setChecked(clip->muted());
+    ui.modeCombo->setCurrentIndex((int)clip->playbackMode());
+    ui.delaySpin->setValue(clip->delayMs());
 
     if (dialog.exec() == QDialog::Accepted) {
-        audio->setVolume(ui.volumeSpin->value());
-        audio->setMuted(ui.mutedCheck->isChecked());
-        audio->setPlaybackMode((AudioPlaybackMode)ui.modeCombo->currentIndex());
-        audio->setDelayMs(ui.delaySpin->value());
-        const NodeId clipId = sceneForNode(nodeId)->clipForAudioNode(nodeId);
-        if (clipId != 0) emit audioControllerChanged(clipId);
+        clip->setVolume(ui.volumeSpin->value());
+        clip->setMuted(ui.mutedCheck->isChecked());
+        clip->setPlaybackMode((AudioPlaybackMode)ui.modeCombo->currentIndex());
+        clip->setDelayMs(ui.delaySpin->value());
+        emit audioControllerChanged(clipId);
     }
 }
 
@@ -2638,17 +2546,13 @@ bool ClipNodeEditor::contextCanvasSize(NodeId clipId, int &w, int &h) const {
 }
 
 bool ClipNodeEditor::audioSettingsForClip(NodeId clipId, int &volume, bool &muted, bool &routedToMaster, AudioPlaybackMode &playbackMode, int &delayMs, QString &outputDeviceId) const {
+    auto *clip = dynamic_cast<ClipNodeItem *>(m_itemMap.value(clipId));
+    if (!clip || !clip->hasAudio()) return false;
+
     ClipNodeScene *scene = sceneForNode(clipId);
-    const NodeId audioNodeId = scene->audioNodeForClip(clipId);
-    if (audioNodeId == 0) return false;
-
-    auto it = m_audioNodes.find(audioNodeId);
-    if (it == m_audioNodes.end()) return false;
-
-    auto *audioNode = static_cast<AudioControllerNodeItem *>(*it);
-    volume = audioNode->volume();
-    muted = audioNode->muted();
-    const NodeId masterId = scene->masterNodeForAudioController(audioNodeId);
+    volume = clip->volume();
+    muted = clip->muted();
+    const NodeId masterId = scene->masterNodeForClip(clipId);
     routedToMaster = (masterId != 0);
     outputDeviceId.clear();
     if (masterId) {
@@ -2656,8 +2560,8 @@ bool ClipNodeEditor::audioSettingsForClip(NodeId clipId, int &volume, bool &mute
         if (!mn) mn = static_cast<MasterAudioOutputNodeItem *>(m_masterAudioNodes.value(masterId));
         if (mn) outputDeviceId = mn->deviceId();
     }
-    playbackMode = audioNode->playbackMode();
-    delayMs = audioNode->delayMs();
+    playbackMode = clip->playbackMode();
+    delayMs = clip->delayMs();
     return true;
 }
 
@@ -2960,6 +2864,12 @@ QJsonObject ClipNodeEditor::saveState(const QDir &sessionDir) const {
             nodeObj["posX"]     = ci->pos().x();
             nodeObj["posY"]     = ci->pos().y();
             nodeObj["hasAudio"] = ci->hasAudio();
+            if (ci->hasAudio()) {
+                nodeObj["audioVolume"]       = ci->volume();
+                nodeObj["audioMuted"]        = ci->muted();
+                nodeObj["audioPlaybackMode"] = (int)ci->playbackMode();
+                nodeObj["audioDelayMs"]      = ci->delayMs();
+            }
             nodeObj["transformX"] = (double)ci->x();
             nodeObj["transformY"] = (double)ci->y();
             nodeObj["transformW"] = (double)ci->w();
@@ -2998,22 +2908,6 @@ QJsonObject ClipNodeEditor::saveState(const QDir &sessionDir) const {
         contextNodes.append(obj);
     }
     root["contextNodes"] = contextNodes;
-
-    QJsonArray audioNodes;
-    for (auto it = m_audioNodes.cbegin(); it != m_audioNodes.cend(); ++it) {
-        auto *an = static_cast<AudioControllerNodeItem *>(m_itemMap.value(it.key()));
-        if (!an) an = static_cast<AudioControllerNodeItem *>(*it);
-        QJsonObject obj;
-        obj["id"]           = (qint64)an->nodeId();
-        obj["posX"]         = an->pos().x();
-        obj["posY"]         = an->pos().y();
-        obj["volume"]       = an->volume();
-        obj["muted"]        = an->muted();
-        obj["playbackMode"] = (int)an->playbackMode();
-        obj["delayMs"]      = an->delayMs();
-        audioNodes.append(obj);
-    }
-    root["audioNodes"] = audioNodes;
 
     QJsonArray scriptNodes;
     for (auto it = m_scriptNodes.cbegin(); it != m_scriptNodes.cend(); ++it) {
@@ -3077,16 +2971,12 @@ PortItem *ClipNodeEditor::findPort(NodeId nodeId, int portKindInt) const {
         if (kind == PortKind::ChainIn)          return ci->chainInPort();
         if (kind == PortKind::ChainOut)         return ci->chainOutPort();
         if (kind == PortKind::TransformContext) return ci->contextPort();
-        if (kind == PortKind::AudioOut)         return ci->audioPort();
+        if (kind == PortKind::AudioControllerOut) return ci->audioPort();
         if (kind == PortKind::ShaderAudioIn)    return ci->shaderAudioInPort();
         if (kind == PortKind::DataIn)           return ci->dataInPort();
     }
     if (auto *xi = dynamic_cast<TransformContextNodeItem *>(base)) {
         if (kind == PortKind::ContextHub) return xi->hubPort();
-    }
-    if (auto *ai = dynamic_cast<AudioControllerNodeItem *>(base)) {
-        if (kind == PortKind::AudioIn) return ai->audioInPort();
-        if (kind == PortKind::AudioControllerOut) return ai->audioOutPort();
     }
     if (auto *mi = dynamic_cast<MasterAudioOutputNodeItem *>(base)) {
         if (kind == PortKind::MasterAudioIn) return mi->audioInPort();
@@ -3097,24 +2987,29 @@ PortItem *ClipNodeEditor::findPort(NodeId nodeId, int portKindInt) const {
     return nullptr;
 }
 
-void ClipNodeEditor::restoreConnections(ClipNodeScene *scene, const QJsonArray &conns) {
+void ClipNodeEditor::restoreConnections(ClipNodeScene *scene, const QJsonArray &conns,
+                                        const QMap<NodeId, NodeId> &legacyClipForAudioNode) {
     for (const auto &val : conns) {
         const QJsonObject obj = val.toObject();
-        const NodeId from = (NodeId)obj["from"].toInteger();
+        NodeId from = (NodeId)obj["from"].toInteger();
         const NodeId to   = (NodeId)obj["to"].toInteger();
         const int    kind = obj["kind"].toInt();
 
         if (kind == (int)ConnectionItem::LegacyClipToTransform) continue;
+        if (kind == (int)ConnectionItem::AudioToController) continue;
+
+        if (kind == (int)ConnectionItem::ControllerToMaster) {
+            const auto it = legacyClipForAudioNode.constFind(from);
+            if (it != legacyClipForAudioNode.constEnd())
+                from = it.value();
+        }
 
         PortItem *fromPort = nullptr, *toPort = nullptr;
         if (kind == ConnectionItem::Chain) {
             fromPort = findPort(from, (int)PortKind::ChainOut);
             toPort   = findPort(to,   (int)PortKind::ChainIn);
-        } else if (kind == ConnectionItem::AudioToController) {
-            fromPort = findPort(from, (int)PortKind::AudioOut);
-            toPort   = findPort(to,   (int)PortKind::AudioIn);
         } else if (kind == ConnectionItem::ClipToShaderAudio) {
-            fromPort = findPort(from, (int)PortKind::AudioOut);
+            fromPort = findPort(from, (int)PortKind::AudioControllerOut);
             toPort   = findPort(to,   (int)PortKind::ShaderAudioIn);
         } else if (kind == ConnectionItem::ControllerToMaster) {
             fromPort = findPort(from, (int)PortKind::AudioControllerOut);
@@ -3135,6 +3030,38 @@ void ClipNodeEditor::restoreConnections(ClipNodeScene *scene, const QJsonArray &
 void ClipNodeEditor::restoreState(const QJsonObject &state) {
     clearAllNodes();
 
+    QMap<NodeId, NodeId> legacyClipForAudioNode;
+    auto collectLegacyAudioLinks = [&](const QJsonArray &conns) {
+        for (const auto &val : conns) {
+            const QJsonObject obj = val.toObject();
+            if (obj["kind"].toInt() != (int)ConnectionItem::AudioToController) continue;
+            legacyClipForAudioNode.insert((NodeId)obj["to"].toInteger(),
+                                          (NodeId)obj["from"].toInteger());
+        }
+    };
+    collectLegacyAudioLinks(state["connections"].toArray());
+    for (const auto &groupVal : state["groups"].toArray()) {
+        const QJsonObject groupObj = groupVal.toObject();
+        collectLegacyAudioLinks(groupObj["connections"].toArray());
+    }
+
+    struct LegacyAudioSettings {
+        int volume = 100;
+        bool muted = false;
+        AudioPlaybackMode playbackMode = AudioPlaybackMode::Always;
+        int delayMs = 0;
+    };
+    QMap<NodeId, LegacyAudioSettings> legacyAudioByNodeId;
+    for (const auto &val : state["audioNodes"].toArray()) {
+        const QJsonObject obj = val.toObject();
+        LegacyAudioSettings settings;
+        settings.volume = obj["volume"].toInt(100);
+        settings.muted = obj["muted"].toBool(false);
+        settings.playbackMode = (AudioPlaybackMode)obj["playbackMode"].toInt((int)AudioPlaybackMode::Always);
+        settings.delayMs = obj["delayMs"].toInt(0);
+        legacyAudioByNodeId.insert((NodeId)obj["id"].toInteger(), settings);
+    }
+
     const QJsonArray clipNodes = state["clipNodes"].toArray();
     for (const auto &val : clipNodes) {
         const QJsonObject obj = val.toObject();
@@ -3147,8 +3074,15 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         const bool hasAudio = obj["hasAudio"].toBool(false);
         const bool hasShaderAudioIn = (desc.kind == SourceDescriptor::Kind::Shader);
         const bool hasDataIn = (desc.kind == SourceDescriptor::Kind::Text);
+
+        int volume = obj["audioVolume"].toInt(100);
+        bool muted = obj["audioMuted"].toBool(false);
+        auto playbackMode = (AudioPlaybackMode)obj["audioPlaybackMode"].toInt((int)AudioPlaybackMode::Always);
+        int delayMs = obj["audioDelayMs"].toInt(0);
+
         auto *model = new ClipNodeModel(this);
-        auto *nodeItem = new ClipNodeItem(model, id, hasAudio, hasShaderAudioIn, hasDataIn);
+        auto *nodeItem = new ClipNodeItem(model, id, hasAudio, hasShaderAudioIn, hasDataIn,
+                                          volume, muted, playbackMode, delayMs);
         nodeItem->setPos(obj["posX"].toDouble(), obj["posY"].toDouble());
         nodeItem->setTransform(
             (float)obj["transformX"].toDouble(0.0),
@@ -3160,6 +3094,7 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         registerItem(nodeItem);
         wireDeleteCallback(nodeItem, [this](NodeId nid) { deleteNodeById(nid); });
         wireRenameCallback(nodeItem, [this](NodeId nid) { renameGroupMemberClip(nid); });
+        wireEditAudioCallback(nodeItem, [this](NodeId cid) { onEditClipAudio(cid); });
 
         using Kind = SourceDescriptor::Kind;
         model->setNodeId(id);
@@ -3176,6 +3111,17 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         emit nodeAdded(id);
     }
 
+    for (auto it = legacyAudioByNodeId.cbegin(); it != legacyAudioByNodeId.cend(); ++it) {
+        const NodeId clipId = legacyClipForAudioNode.value(it.key(), 0);
+        if (!clipId) continue;
+        auto *clip = dynamic_cast<ClipNodeItem *>(m_itemMap.value(clipId));
+        if (!clip || !clip->hasAudio()) continue;
+        clip->setVolume(it.value().volume);
+        clip->setMuted(it.value().muted);
+        clip->setPlaybackMode(it.value().playbackMode);
+        clip->setDelayMs(it.value().delayMs);
+    }
+
     const QJsonArray contextNodes = state["contextNodes"].toArray();
     for (const auto &val : contextNodes) {
         const QJsonObject obj = val.toObject();
@@ -3190,22 +3136,6 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         m_contextNodes[ctxId] = static_cast<void *>(cn);
         registerItem(cn);
         wireDeleteCallback(cn, [this](NodeId nid) { deleteNodeById(nid); });
-    }
-
-    const QJsonArray audioNodes = state["audioNodes"].toArray();
-    for (const auto &val : audioNodes) {
-        const QJsonObject obj = val.toObject();
-        const NodeId audioId = (NodeId)obj["id"].toInteger();
-        m_nextId = audioId;
-        const AudioPlaybackMode mode = (AudioPlaybackMode)obj["playbackMode"].toInt((int)AudioPlaybackMode::Always);
-        auto *an = new AudioControllerNodeItem(m_nextId++,
-            obj["volume"].toInt(100), obj["muted"].toBool(false), mode, obj["delayMs"].toInt(0));
-        an->setPos(obj["posX"].toDouble(), obj["posY"].toDouble());
-        an->onEditRequested = [this](NodeId aid) { onEditAudioNode(aid); };
-        m_scene->addItem(an);
-        m_audioNodes[audioId] = static_cast<void *>(an);
-        registerItem(an);
-        wireDeleteCallback(an, [this](NodeId nid) { deleteNodeById(nid); });
     }
 
     const QJsonArray scriptNodes = state["scriptNodes"].toArray();
@@ -3304,9 +3234,9 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
             setGroupDelegate(group->nodeId(), delegate);
     }
 
-    restoreConnections(m_scene, state["connections"].toArray());
+    restoreConnections(m_scene, state["connections"].toArray(), legacyClipForAudioNode);
     for (const auto &deferred : deferredGroupConnections)
-        restoreConnections(deferred.scene, deferred.connections);
+        restoreConnections(deferred.scene, deferred.connections, legacyClipForAudioNode);
 
     updateGroupDeckHighlights();
     emit clipChainChanged();
