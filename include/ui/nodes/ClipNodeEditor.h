@@ -22,6 +22,14 @@ enum class AudioPlaybackMode {
     Always = 2
 };
 
+struct MasterAudioInputSettings {
+    QString inputDeviceId;
+    QString inputDeviceLabel;
+    int     volume = 100;
+    bool    muted = false;
+    NodeId  routedMasterOutputId = 0;
+};
+
 /// The node-graph compositing editor: hosts the clip/source nodes, their overlay
 /// chain connections, groups, and audio routing. This is the central canvas the
 /// rest of the UI drives, and the source of truth for what each deck composites.
@@ -63,6 +71,9 @@ public:
     QVector<NodeId> clipsForContextOrdered(NodeId contextId) const;
     bool contextCanvasSize(NodeId clipId, int &w, int &h) const;
     bool audioSettingsForClip(NodeId clipId, int &volume, bool &muted, bool &routedToMaster, AudioPlaybackMode &playbackMode, int &delayMs, QString &outputDeviceId) const;
+    bool masterAudioInputSettings(NodeId inputNodeId, MasterAudioInputSettings &settings) const;
+    bool masterAudioOutputDevice(NodeId masterOutputNodeId, QString &outputDeviceId) const;
+    QVector<NodeId> allMasterAudioInputNodeIds() const;
     bool audioSourceForShader(NodeId shaderNodeId, QString &filePath) const;
     std::shared_ptr<ScriptOutput> scriptOutputForDataNode(NodeId dataNodeId) const;
 
@@ -80,6 +91,7 @@ public:
     void addClipsFromFileDialog(NodeId groupId, QGraphicsView *view, bool atViewCenter = false);
     void addTransformContextToGroup(NodeId groupId, QGraphicsView *view, bool atViewCenter = false);
     void addMasterAudioOutputToGroup(NodeId groupId, QGraphicsView *view, bool atViewCenter = false);
+    void addMasterAudioInputToGroup(NodeId groupId, QGraphicsView *view, bool atViewCenter = false);
 
     // ── Session persistence ──────────────────────────────────────────────────
     QJsonObject saveState(const QDir &sessionDir = {}) const;
@@ -104,6 +116,7 @@ private slots:
     void onCanvasContextMenu();
     void onAddTransformContext();
     void onAddMasterAudioOutput();
+    void onAddMasterAudioInput();
     void onAddScriptNode();
     void onEditContextNode(NodeId nodeId);
     void onOpenTransformEditor(NodeId contextId);
@@ -136,6 +149,7 @@ private:
     QPointF scenePosForView(QGraphicsView *view, const QPoint &globalPos) const;
     void addTransformContextTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
     void addMasterAudioOutputTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
+    void addMasterAudioInputTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
     void addScriptNodeTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
 
     ClipNodeScene *m_scene  = nullptr;
@@ -146,6 +160,7 @@ private:
     QMap<NodeId, void *> m_contextNodes;
     QMap<NodeId, void *> m_scriptNodes;
     QMap<NodeId, void *> m_masterAudioNodes;
+    QMap<NodeId, void *> m_masterAudioInputNodes;
     QMap<NodeId, GroupNodeItem *> m_groupNodes;
     NodeId m_activeClipA = 0;
     NodeId m_activeClipB = 0;

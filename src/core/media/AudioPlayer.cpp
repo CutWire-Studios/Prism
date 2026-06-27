@@ -1,4 +1,5 @@
 #include "core/media/AudioPlayer.h"
+#include "core/media/AudioInputMixRegistry.h"
 #include <QAudioFormat>
 #include <QAudioSink>
 #include <QAudio>
@@ -162,6 +163,8 @@ void AudioPlayer::pushAudio() {
         applyGain(chunk, m_crossfadeFactor);
         if (m_pcmTap)
             m_pcmTap(chunk);
+
+        AudioInputMixRegistry::mixIntoPlaybackChunk(m_deviceId, chunk);
 
         if (!m_sink || !m_outputDevice)
             break;

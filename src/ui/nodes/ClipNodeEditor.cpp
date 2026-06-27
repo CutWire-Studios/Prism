@@ -88,6 +88,7 @@ class ClipNodeItem;
 class TransformContextNodeItem;
 class ScriptNodeItem;
 class MasterAudioOutputNodeItem;
+class MasterAudioInputNodeItem;
 class GroupNodeItem;
 class ClipNodeScene;
 class ClipNodeView;
@@ -102,6 +103,7 @@ enum class PortKind {
     AudioIn,
     AudioControllerOut,
     MasterAudioIn,
+    MasterAudioInputOut,
     ScriptOut,
     DataIn
 };
@@ -117,6 +119,7 @@ QColor portKindColor(PortKind kind) {
     case PortKind::AudioIn:            return QColor(0xe8, 0x80, 0x30);
     case PortKind::AudioControllerOut: return QColor(0xe4, 0xb0, 0x42);
     case PortKind::MasterAudioIn:      return QColor(0xe4, 0xb0, 0x42);
+    case PortKind::MasterAudioInputOut: return QColor(0x70, 0xc8, 0xa8);
     case PortKind::ScriptOut:          return QColor(0x70, 0xc0, 0xa8);
     case PortKind::DataIn:             return QColor(0x70, 0xc0, 0xa8);
     }
@@ -133,6 +136,8 @@ bool portsCompatible(PortKind a, PortKind b) {
         (a == PortKind::ShaderAudioIn && b == PortKind::AudioControllerOut)) return true;
     if ((a == PortKind::AudioControllerOut && b == PortKind::MasterAudioIn) ||
         (a == PortKind::MasterAudioIn && b == PortKind::AudioControllerOut)) return true;
+    if ((a == PortKind::MasterAudioInputOut && b == PortKind::MasterAudioIn) ||
+        (a == PortKind::MasterAudioIn && b == PortKind::MasterAudioInputOut)) return true;
     if ((a == PortKind::ScriptOut && b == PortKind::DataIn) ||
         (a == PortKind::DataIn && b == PortKind::ScriptOut)) return true;
     return false;
@@ -141,6 +146,7 @@ bool portsCompatible(PortKind a, PortKind b) {
 bool isSingleConnection(PortKind kind) {
     if (kind == PortKind::ContextHub) return false;
     if (kind == PortKind::AudioControllerOut) return false;
+    if (kind == PortKind::MasterAudioIn) return false;
     return true;
 }
 
@@ -183,7 +189,7 @@ class ConnectionItem : public QGraphicsPathItem {
 public:
     enum EdgeKind { Chain = 0, TransformToContext = 1, AudioToController = 2,
                     ControllerToMaster = 3, LegacyClipToTransform = 4,
-                    ClipToShaderAudio = 5, ScriptToData = 6 };
+                    ClipToShaderAudio = 5, ScriptToData = 6, InputToMaster = 7 };
 
     ConnectionItem(PortItem *from, PortItem *to, EdgeKind kind)
         : QGraphicsPathItem(nullptr), m_from(from), m_to(to), m_kind(kind)
@@ -196,6 +202,7 @@ public:
         else if (kind == AudioToController) color = QColor(0xe8, 0x80, 0x30);
         else if (kind == ClipToShaderAudio) color = QColor(0xe8, 0x90, 0x40);
         else if (kind == ScriptToData) color = QColor(0x70, 0xc8, 0xa0);
+        else if (kind == InputToMaster) color = QColor(0x70, 0xd0, 0x90);
         else color = QColor(0xf0, 0xc0, 0x50);
         m_basePen = QPen(color, 2.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
         setPen(m_basePen);
@@ -683,6 +690,145 @@ private:
     PortItem *m_audioInPort = nullptr;
 };
 
+class MasterAudioInputNodeItem : public NodeItemBase {
+public:
+    explicit MasterAudioInputNodeItem(NodeId id, int volume = 100, bool muted = false)
+        : m_nodeId(id), m_volume(volume), m_muted(muted)
+    {
+        setFlags(ItemIsMovable | ItemSendsGeometryChanges | ItemIsSelectable);
+        setZValue(0);
+
+        m_audioOutPort = new PortItem(PortKind::MasterAudioInputOut, this);
+        m_audioOutPort->setPos(SMALL_NODE_W, SMALL_NODE_H / 2);
+    }
+
+    std::function<void(NodeId)> onDeleteRequested;
+    std::function<void(NodeId)> onSettingsChanged;
+
+    NodeId nodeId() const override { return m_nodeId; }
+    PortItem *audioOutPort() const { return m_audioOutPort; }
+
+    QString deviceId() const { return m_deviceId; }
+    QString deviceLabel() const { return m_deviceLabel; }
+    int volume() const { return m_volume; }
+    bool muted() const { return m_muted; }
+
+    void setDevice(const QString &id, const QString &label) {
+        m_deviceId = id;
+        m_deviceLabel = label;
+        update();
+    }
+    void setVolume(int volume) { m_volume = volume; update(); }
+    void setMuted(bool muted) { m_muted = muted; update(); }
+
+    QRectF boundingRect() const override { return QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H); }
+
+    QRectF getDeviceButtonRect() const { return QRectF(4, SMALL_NODE_H - 32, SMALL_NODE_W - 8, 24); }
+
+    void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
+        p->setRenderHint(QPainter::Antialiasing);
+        p->setPen(QPen(QColor(24, 72, 58), 1));
+        p->setBrush(QColor(18, 40, 34));
+        p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H), 4, 4);
+
+        p->setPen(QColor(120, 220, 170));
+        p->setFont(QFont("Monospace", 8, QFont::Bold));
+        p->drawText(QRectF(6, 8, SMALL_NODE_W - 12, 40),
+                    Qt::AlignCenter, "Master Audio\nInput");
+
+        p->setPen(QColor(180, 230, 200));
+        p->setFont(QFont("Monospace", 7));
+        p->drawText(QRectF(6, 42, SMALL_NODE_W - 12, 24), Qt::AlignCenter,
+                    m_muted ? QStringLiteral("Muted") : QStringLiteral("Vol: %1%").arg(m_volume));
+
+        const QRectF devRect = getDeviceButtonRect();
+        p->setPen(QPen(QColor(120, 220, 170), 1));
+        p->setBrush(QColor(28, 64, 52));
+        p->drawRoundedRect(devRect, 3, 3);
+        p->setPen(QColor(210, 245, 225));
+        const QString devText = m_deviceId.isEmpty() ? QStringLiteral("Default Mic")
+                                                      : m_deviceLabel;
+        const QString elided = p->fontMetrics().elidedText(
+            devText + QStringLiteral(" ▾"), Qt::ElideRight, devRect.width() - 6);
+        p->drawText(devRect, Qt::AlignCenter, elided);
+
+        if (isSelected()) {
+            p->setPen(QPen(kSelectionAccent, 2));
+            p->setBrush(Qt::NoBrush);
+            p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H).adjusted(1, 1, -1, -1), 4, 4);
+        }
+    }
+
+    void mousePressEvent(QGraphicsSceneMouseEvent *e) override {
+        if (getDeviceButtonRect().contains(e->pos())) {
+            showDeviceMenu(e->screenPos());
+            e->accept();
+            return;
+        }
+        QGraphicsItem::mousePressEvent(e);
+    }
+
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent *e) override {
+        QMenu menu;
+        menu.addAction("Set Volume…", [this]() {
+            bool ok = false;
+            const int volume = QInputDialog::getInt(
+                nullptr, QStringLiteral("Mic Volume"), QStringLiteral("Volume %:"),
+                m_volume, 0, 100, 1, &ok);
+            if (!ok) return;
+            setVolume(volume);
+            if (onSettingsChanged) onSettingsChanged(m_nodeId);
+        });
+        menu.addAction(m_muted ? "Unmute" : "Mute", [this]() {
+            setMuted(!m_muted);
+            if (onSettingsChanged) onSettingsChanged(m_nodeId);
+        });
+        menu.addAction("Delete", [this]() {
+            if (onDeleteRequested) onDeleteRequested(m_nodeId);
+        });
+        menu.exec(e->screenPos());
+        e->accept();
+    }
+
+protected:
+    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
+
+private:
+    void showDeviceMenu(const QPoint &screenPos) {
+        QMenu menu;
+        QAction *defAct = menu.addAction(QStringLiteral("System Default Mic"));
+        defAct->setCheckable(true);
+        defAct->setChecked(m_deviceId.isEmpty());
+        menu.addSeparator();
+        const auto inputs = QMediaDevices::audioInputs();
+        for (const QAudioDevice &dev : inputs) {
+            QAction *a = menu.addAction(dev.description());
+            a->setCheckable(true);
+            const QString id = QString::fromUtf8(dev.id());
+            a->setChecked(id == m_deviceId);
+            a->setData(id);
+        }
+        QAction *chosen = menu.exec(screenPos);
+        if (!chosen) return;
+        if (chosen == defAct) {
+            m_deviceId.clear();
+            m_deviceLabel.clear();
+        } else {
+            m_deviceId = chosen->data().toString();
+            m_deviceLabel = chosen->text();
+        }
+        update();
+        if (onSettingsChanged) onSettingsChanged(m_nodeId);
+    }
+
+    NodeId m_nodeId;
+    PortItem *m_audioOutPort = nullptr;
+    QString m_deviceId;
+    QString m_deviceLabel;
+    int m_volume;
+    bool m_muted;
+};
+
 class ScriptNodeItem : public NodeItemBase {
 public:
     ScriptNodeItem(NodeId id, const QString &code = QString(),
@@ -1077,6 +1223,11 @@ public:
             outPort = (src->kind() == PortKind::AudioControllerOut) ? src : dst;
             inPort  = (src->kind() == PortKind::ShaderAudioIn) ? src : dst;
             kind = ConnectionItem::ClipToShaderAudio;
+        } else if ((src->kind() == PortKind::MasterAudioInputOut && dst->kind() == PortKind::MasterAudioIn) ||
+                   (src->kind() == PortKind::MasterAudioIn && dst->kind() == PortKind::MasterAudioInputOut)) {
+            outPort = (src->kind() == PortKind::MasterAudioInputOut) ? src : dst;
+            inPort  = (src->kind() == PortKind::MasterAudioIn) ? src : dst;
+            kind = ConnectionItem::InputToMaster;
         } else if (src->kind() == PortKind::AudioControllerOut || src->kind() == PortKind::MasterAudioIn) {
             outPort = (src->kind() == PortKind::AudioControllerOut) ? src : dst;
             inPort  = (src->kind() == PortKind::MasterAudioIn)      ? src : dst;
@@ -1213,6 +1364,13 @@ public:
     NodeId masterNodeForClip(NodeId clipId) const {
         for (const auto &e : m_edges)
             if (e.edgeKind == ConnectionItem::ControllerToMaster && e.fromNodeId == clipId)
+                return e.toNodeId;
+        return 0;
+    }
+
+    NodeId masterOutputForInput(NodeId inputNodeId) const {
+        for (const auto &e : m_edges)
+            if (e.edgeKind == ConnectionItem::InputToMaster && e.fromNodeId == inputNodeId)
                 return e.toNodeId;
         return 0;
     }
@@ -1415,6 +1573,12 @@ QVariant TransformContextNodeItem::itemChange(GraphicsItemChange change, const Q
 }
 
 QVariant MasterAudioOutputNodeItem::itemChange(GraphicsItemChange change, const QVariant &value) {
+    if (change == ItemPositionHasChanged && scene())
+        static_cast<ClipNodeScene *>(scene())->updateConnectionsForNode(this);
+    return QGraphicsItem::itemChange(change, value);
+}
+
+QVariant MasterAudioInputNodeItem::itemChange(GraphicsItemChange change, const QVariant &value) {
     if (change == ItemPositionHasChanged && scene())
         static_cast<ClipNodeScene *>(scene())->updateConnectionsForNode(this);
     return QGraphicsItem::itemChange(change, value);
@@ -1945,6 +2109,7 @@ static void wireDeleteCallback(NodeItemBase *item, const std::function<void(Node
     else if (auto *ctx = dynamic_cast<TransformContextNodeItem *>(item)) ctx->onDeleteRequested = cb;
     else if (auto *scr = dynamic_cast<ScriptNodeItem *>(item)) scr->onDeleteRequested = cb;
     else if (auto *mas = dynamic_cast<MasterAudioOutputNodeItem *>(item)) mas->onDeleteRequested = cb;
+    else if (auto *mai = dynamic_cast<MasterAudioInputNodeItem *>(item)) mai->onDeleteRequested = cb;
     else if (auto *grp = dynamic_cast<GroupNodeItem *>(item)) grp->onDeleteRequested = cb;
 }
 
@@ -2122,6 +2287,21 @@ void ClipNodeEditor::deleteNodeById(NodeId nodeId) {
         return;
     }
 
+    if (m_masterAudioInputNodes.contains(nodeId)) {
+        m_masterAudioInputNodes.remove(nodeId);
+        m_itemMap.remove(nodeId);
+        scene->removeConnectionsForNode(nodeId);
+        MasterAudioInputNodeItem *item = nullptr;
+        for (auto *sceneItem : scene->items()) {
+            if (auto *mi = dynamic_cast<MasterAudioInputNodeItem *>(sceneItem)) {
+                if (mi->nodeId() == nodeId) { item = mi; break; }
+            }
+        }
+        removeSceneItem(item);
+        emit audioGraphChanged();
+        return;
+    }
+
     if (m_scriptNodes.contains(nodeId)) {
         m_scriptNodes.remove(nodeId);
         m_itemMap.remove(nodeId);
@@ -2183,6 +2363,10 @@ void ClipNodeEditor::clearAllNodes() {
     for (NodeId id : masterIds)
         deleteNodeById(id);
 
+    const QVector<NodeId> masterInputIds = m_masterAudioInputNodes.keys().toVector();
+    for (NodeId id : masterInputIds)
+        deleteNodeById(id);
+
     const QVector<NodeId> scriptIds = m_scriptNodes.keys().toVector();
     for (NodeId id : scriptIds)
         deleteNodeById(id);
@@ -2192,6 +2376,7 @@ void ClipNodeEditor::clearAllNodes() {
     m_contextNodes.clear();
     m_scriptNodes.clear();
     m_masterAudioNodes.clear();
+    m_masterAudioInputNodes.clear();
     m_activeClipA = 0;
     m_activeClipB = 0;
 }
@@ -2251,6 +2436,7 @@ void ClipNodeEditor::onCanvasContextMenu() {
     menu.addAction("Group Selection", this, &ClipNodeEditor::groupSelection);
     menu.addAction("Add Transform Context Node", this, &ClipNodeEditor::onAddTransformContext);
     menu.addAction("Add Master Audio Output", this, &ClipNodeEditor::onAddMasterAudioOutput);
+    menu.addAction("Add Master Audio Input", this, &ClipNodeEditor::onAddMasterAudioInput);
 #ifdef SWITCHX_HAVE_LUA
     menu.addAction("Add Script Node", this, &ClipNodeEditor::onAddScriptNode);
 #endif
@@ -2263,6 +2449,10 @@ void ClipNodeEditor::onAddTransformContext() {
 
 void ClipNodeEditor::onAddMasterAudioOutput() {
     addMasterAudioOutputTo(m_scene, m_view, QCursor::pos());
+}
+
+void ClipNodeEditor::onAddMasterAudioInput() {
+    addMasterAudioInputTo(m_scene, m_view, QCursor::pos());
 }
 
 void ClipNodeEditor::onAddScriptNode() {
@@ -2298,6 +2488,20 @@ void ClipNodeEditor::addMasterAudioOutputTo(ClipNodeScene *scene, QGraphicsView 
     masterNode->onDeviceChanged = [this](NodeId) { emit audioGraphChanged(); };
     registerItem(masterNode);
     wireDeleteCallback(masterNode, [this](NodeId nid) { deleteNodeById(nid); });
+    emit clipChainChanged();
+    emit audioGraphChanged();
+}
+
+void ClipNodeEditor::addMasterAudioInputTo(ClipNodeScene *scene, QGraphicsView *view,
+                                           const QPoint &globalPos) {
+    if (!scene) return;
+    auto *inputNode = new MasterAudioInputNodeItem(m_nextId++);
+    inputNode->setPos(scenePosForView(view, globalPos));
+    scene->addItem(inputNode);
+    m_masterAudioInputNodes[inputNode->nodeId()] = static_cast<void *>(inputNode);
+    inputNode->onSettingsChanged = [this](NodeId) { emit audioGraphChanged(); };
+    registerItem(inputNode);
+    wireDeleteCallback(inputNode, [this](NodeId nid) { deleteNodeById(nid); });
     emit clipChainChanged();
     emit audioGraphChanged();
 }
@@ -2342,6 +2546,9 @@ void ClipNodeEditor::showGroupSceneContextMenu(NodeId groupId, QGraphicsView *vi
     });
     menu.addAction("Add Master Audio Output", [this, groupId, view]() {
         addMasterAudioOutputToGroup(groupId, view);
+    });
+    menu.addAction("Add Master Audio Input", [this, groupId, view]() {
+        addMasterAudioInputToGroup(groupId, view);
     });
 #ifdef SWITCHX_HAVE_LUA
     menu.addAction("Add Script Node", [this, groupId, view]() {
@@ -2388,6 +2595,14 @@ void ClipNodeEditor::addMasterAudioOutputToGroup(NodeId groupId, QGraphicsView *
         ? view->viewport()->mapToGlobal(view->viewport()->rect().center())
         : QCursor::pos();
     addMasterAudioOutputTo(subSceneForGroup(groupId), view, globalPos);
+}
+
+void ClipNodeEditor::addMasterAudioInputToGroup(NodeId groupId, QGraphicsView *view,
+                                                bool atViewCenter) {
+    const QPoint globalPos = atViewCenter && view
+        ? view->viewport()->mapToGlobal(view->viewport()->rect().center())
+        : QCursor::pos();
+    addMasterAudioInputTo(subSceneForGroup(groupId), view, globalPos);
 }
 
 void ClipNodeEditor::addScriptNodeToGroup(NodeId groupId, QGraphicsView *view, bool atViewCenter) {
@@ -2571,6 +2786,34 @@ bool ClipNodeEditor::audioSettingsForClip(NodeId clipId, int &volume, bool &mute
     playbackMode = clip->playbackMode();
     delayMs = clip->delayMs();
     return true;
+}
+
+bool ClipNodeEditor::masterAudioInputSettings(NodeId inputNodeId, MasterAudioInputSettings &settings) const {
+    auto *inputNode = static_cast<MasterAudioInputNodeItem *>(m_itemMap.value(inputNodeId));
+    if (!inputNode)
+        inputNode = static_cast<MasterAudioInputNodeItem *>(m_masterAudioInputNodes.value(inputNodeId));
+    if (!inputNode) return false;
+
+    settings.inputDeviceId = inputNode->deviceId();
+    settings.inputDeviceLabel = inputNode->deviceLabel();
+    settings.volume = inputNode->volume();
+    settings.muted = inputNode->muted();
+    settings.routedMasterOutputId = sceneForNode(inputNodeId)->masterOutputForInput(inputNodeId);
+    return true;
+}
+
+bool ClipNodeEditor::masterAudioOutputDevice(NodeId masterOutputNodeId, QString &outputDeviceId) const {
+    auto *outputNode = static_cast<MasterAudioOutputNodeItem *>(m_itemMap.value(masterOutputNodeId));
+    if (!outputNode)
+        outputNode = static_cast<MasterAudioOutputNodeItem *>(m_masterAudioNodes.value(masterOutputNodeId));
+    if (!outputNode) return false;
+
+    outputDeviceId = outputNode->deviceId();
+    return true;
+}
+
+QVector<NodeId> ClipNodeEditor::allMasterAudioInputNodeIds() const {
+    return m_masterAudioInputNodes.keys().toVector();
 }
 
 bool ClipNodeEditor::audioSourceForShader(NodeId shaderNodeId, QString &filePath) const {
@@ -2946,6 +3189,22 @@ QJsonObject ClipNodeEditor::saveState(const QDir &sessionDir) const {
     }
     root["masterAudioNodes"] = masterAudioNodes;
 
+    QJsonArray masterAudioInputNodes;
+    for (auto it = m_masterAudioInputNodes.cbegin(); it != m_masterAudioInputNodes.cend(); ++it) {
+        auto *in = static_cast<MasterAudioInputNodeItem *>(m_itemMap.value(it.key()));
+        if (!in) in = static_cast<MasterAudioInputNodeItem *>(*it);
+        QJsonObject obj;
+        obj["id"]   = (qint64)in->nodeId();
+        obj["posX"] = in->pos().x();
+        obj["posY"] = in->pos().y();
+        obj["deviceId"]    = in->deviceId();
+        obj["deviceLabel"] = in->deviceLabel();
+        obj["volume"] = in->volume();
+        obj["muted"]  = in->muted();
+        masterAudioInputNodes.append(obj);
+    }
+    root["masterAudioInputNodes"] = masterAudioInputNodes;
+
     QJsonArray groups;
     for (auto it = m_groupNodes.cbegin(); it != m_groupNodes.cend(); ++it) {
         GroupNodeItem *group = it.value();
@@ -2989,6 +3248,9 @@ PortItem *ClipNodeEditor::findPort(NodeId nodeId, int portKindInt) const {
     if (auto *mi = dynamic_cast<MasterAudioOutputNodeItem *>(base)) {
         if (kind == PortKind::MasterAudioIn) return mi->audioInPort();
     }
+    if (auto *in = dynamic_cast<MasterAudioInputNodeItem *>(base)) {
+        if (kind == PortKind::MasterAudioInputOut) return in->audioOutPort();
+    }
     if (auto *si = dynamic_cast<ScriptNodeItem *>(base)) {
         if (kind == PortKind::ScriptOut) return si->scriptOutPort();
     }
@@ -3021,6 +3283,9 @@ void ClipNodeEditor::restoreConnections(ClipNodeScene *scene, const QJsonArray &
             toPort   = findPort(to,   (int)PortKind::ShaderAudioIn);
         } else if (kind == ConnectionItem::ControllerToMaster) {
             fromPort = findPort(from, (int)PortKind::AudioControllerOut);
+            toPort   = findPort(to,   (int)PortKind::MasterAudioIn);
+        } else if (kind == ConnectionItem::InputToMaster) {
+            fromPort = findPort(from, (int)PortKind::MasterAudioInputOut);
             toPort   = findPort(to,   (int)PortKind::MasterAudioIn);
         } else if (kind == ConnectionItem::ScriptToData) {
             fromPort = findPort(from, (int)PortKind::ScriptOut);
@@ -3180,6 +3445,23 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         m_masterAudioNodes[masterId] = static_cast<void *>(mn);
         registerItem(mn);
         wireDeleteCallback(mn, [this](NodeId nid) { deleteNodeById(nid); });
+    }
+
+    const QJsonArray masterAudioInputNodes = state["masterAudioInputNodes"].toArray();
+    for (const auto &val : masterAudioInputNodes) {
+        const QJsonObject obj = val.toObject();
+        const NodeId inputId = (NodeId)obj["id"].toInteger();
+        m_nextId = inputId;
+        auto *in = new MasterAudioInputNodeItem(m_nextId++,
+                                              obj["volume"].toInt(100),
+                                              obj["muted"].toBool(false));
+        in->setPos(obj["posX"].toDouble(), obj["posY"].toDouble());
+        in->setDevice(obj["deviceId"].toString(), obj["deviceLabel"].toString());
+        in->onSettingsChanged = [this](NodeId) { emit audioGraphChanged(); };
+        m_scene->addItem(in);
+        m_masterAudioInputNodes[inputId] = static_cast<void *>(in);
+        registerItem(in);
+        wireDeleteCallback(in, [this](NodeId nid) { deleteNodeById(nid); });
     }
 
     struct DeferredSceneConnections {

@@ -100,6 +100,8 @@ set(SOURCES
     src/core/media/AudioDecoder.cpp
     src/core/media/AudioAnalyzer.cpp
     src/core/media/AudioPlayer.cpp
+    src/core/media/AudioInputCapture.cpp
+    src/core/media/AudioInputMixRegistry.cpp
     src/core/sources/ImageSource.cpp
     src/core/sources/SlideshowSource.cpp
     src/core/sources/CanvasSource.cpp
@@ -184,6 +186,8 @@ set(HEADERS
     include/core/media/AudioDecoder.h
     include/core/media/AudioAnalyzer.h
     include/core/media/AudioPlayer.h
+    include/core/media/AudioInputCapture.h
+    include/core/media/AudioInputMixRegistry.h
     include/core/sources/ImageSource.h
     include/core/sources/SlideshowSource.h
     include/core/sources/CanvasSource.h

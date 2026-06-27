@@ -7,13 +7,15 @@
 #include "core/sources/ShaderSource.h"
 #include "core/sources/HtmlSource.h"
 #include "core/sources/TextSource.h"
-#include "core/media/AudioPlayer.h"
+#include "core/media/AudioInputCapture.h"
+#include "core/media/AudioInputMixRegistry.h"
 #include <QSlider>
 #include <QPushButton>
 #include <QLabel>
 #include <QMessageBox>
 #include <QMediaDevices>
 #include <QCameraDevice>
+#include <QSet>
 #include <algorithm>
 
 DeckController::DeckController(OutputWindow  *outputWindow,
@@ -60,6 +62,58 @@ void DeckController::stopDeckAudio(bool deckA) {
 void DeckController::releaseAllDeckAudio() {
     m_audioPlayerA.reset();
     m_audioPlayerB.reset();
+}
+
+void DeckController::releaseAllMasterAudioInputs() {
+    m_inputCaptures.clear();
+    AudioInputMixRegistry::clearAll();
+}
+
+void DeckController::syncMasterAudioInputs() {
+    if (!m_editor) return;
+
+    QSet<NodeId> activeInputs;
+    for (NodeId inputId : m_editor->allMasterAudioInputNodeIds()) {
+        MasterAudioInputSettings settings;
+        if (!m_editor->masterAudioInputSettings(inputId, settings))
+            continue;
+        if (settings.routedMasterOutputId == 0)
+            continue;
+
+        QString outputDeviceId;
+        if (!m_editor->masterAudioOutputDevice(settings.routedMasterOutputId, outputDeviceId))
+            continue;
+
+        activeInputs.insert(inputId);
+        auto &capture = m_inputCaptures[inputId];
+        if (!capture)
+            capture = std::make_unique<AudioInputCapture>(this);
+
+        const bool needsRestart = !capture->isRunning()
+            || capture->inputDeviceId() != settings.inputDeviceId
+            || capture->targetOutputDeviceId() != outputDeviceId;
+
+        capture->setInputDeviceId(settings.inputDeviceId);
+        capture->setTargetOutputDeviceId(outputDeviceId);
+        capture->setVolumePercent(settings.volume);
+        capture->setMuted(settings.muted);
+        capture->setProgramRecordingTap([this](const QByteArray &pcm) {
+            if (m_outputHub)
+                m_outputHub->submitMicProgramAudioChunk(pcm);
+        });
+
+        if (needsRestart)
+            capture->start();
+    }
+
+    for (auto it = m_inputCaptures.begin(); it != m_inputCaptures.end(); ) {
+        if (!activeInputs.contains(it->first)) {
+            it->second->stop();
+            it = m_inputCaptures.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 void DeckController::updateDeckAudio(bool deckA, NodeId clipId, const ClipNodeModel *node,

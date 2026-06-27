@@ -95,6 +95,7 @@ public:
     bool isProgramAudioRecording() const;
     void submitProgramAudioChunk(int deckIndex, const QByteArray &pcm);
     void submitDeckAudioChunk(int deckIndex, NodeId clipId, const QByteArray &pcm);
+    void submitMicProgramAudioChunk(const QByteArray &pcm);
 
     void stopAllRecording();
     void addRecordingMarker(const QString &label);

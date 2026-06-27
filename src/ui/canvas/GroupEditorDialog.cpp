@@ -31,9 +31,11 @@ GroupEditorDialog::GroupEditorDialog(NodeId groupId, ClipNodeEditor *editor, QWi
     auto *addElementBtn = new QPushButton("Add Element ▾", this);
     auto *addContextBtn = new QPushButton("Add Transform Context", this);
     auto *addAudioBtn = new QPushButton("Add Master Audio Output", this);
+    auto *addMicBtn = new QPushButton("Add Master Audio Input", this);
     toolbar->addWidget(addElementBtn);
     toolbar->addWidget(addContextBtn);
     toolbar->addWidget(addAudioBtn);
+    toolbar->addWidget(addMicBtn);
     toolbar->addStretch();
     layout->addLayout(toolbar);
 
@@ -68,6 +70,9 @@ GroupEditorDialog::GroupEditorDialog(NodeId groupId, ClipNodeEditor *editor, QWi
         });
         connect(addAudioBtn, &QPushButton::clicked, this, [editor, groupId, view]() {
             editor->addMasterAudioOutputToGroup(groupId, view, true);
+        });
+        connect(addMicBtn, &QPushButton::clicked, this, [editor, groupId, view]() {
+            editor->addMasterAudioInputToGroup(groupId, view, true);
         });
     }
 

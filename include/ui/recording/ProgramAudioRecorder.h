@@ -54,6 +54,9 @@ public:
     /// Writes a single PCM stream (deck/clip iso recording).
     void submitPcm(const QByteArray &pcm);
 
+    /// Adds auxiliary live input (microphone) to the program mix recording.
+    void submitMicChunk(const QByteArray &pcm);
+
     void addMarker(const QString &label);
 
 signals:
@@ -79,6 +82,7 @@ private:
 
     QByteArray m_deckQueueA;
     QByteArray m_deckQueueB;
+    QByteArray m_micQueue;
     QByteArray m_pcmQueue;
 
     AVFormatContext *m_fmtCtx   = nullptr;

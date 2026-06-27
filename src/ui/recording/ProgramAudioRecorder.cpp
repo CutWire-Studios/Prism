@@ -211,6 +211,14 @@ void ProgramAudioRecorder::submitPcm(const QByteArray &pcm) {
     drainPcmQueue(false);
 }
 
+void ProgramAudioRecorder::submitMicChunk(const QByteArray &pcm) {
+    if (!m_recording || pcm.isEmpty())
+        return;
+
+    m_micQueue.append(pcm);
+    drainMixQueues();
+}
+
 void ProgramAudioRecorder::drainPcmQueue(bool flushPartial) {
     const int blockBytes = kMixBlockSamples * kBytesPerSampleFrame;
 
@@ -234,15 +242,17 @@ void ProgramAudioRecorder::drainMixQueues() {
     QVector<float> mixed(kMixBlockSamples * kChannels);
     QVector<float> blockA(kMixBlockSamples * kChannels);
     QVector<float> blockB(kMixBlockSamples * kChannels);
+    QVector<float> blockM(kMixBlockSamples * kChannels);
 
-    while (!m_deckQueueA.isEmpty() || !m_deckQueueB.isEmpty()) {
+    while (!m_deckQueueA.isEmpty() || !m_deckQueueB.isEmpty() || !m_micQueue.isEmpty()) {
         const int takenA = takeBlockBytes(m_deckQueueA, blockBytes, blockA.data());
         const int takenB = takeBlockBytes(m_deckQueueB, blockBytes, blockB.data());
-        if (takenA == 0 && takenB == 0)
+        const int takenM = takeBlockBytes(m_micQueue, blockBytes, blockM.data());
+        if (takenA == 0 && takenB == 0 && takenM == 0)
             break;
 
         for (int i = 0; i < kMixBlockSamples * kChannels; ++i) {
-            const float sum = blockA[i] + blockB[i];
+            const float sum = blockA[i] + blockB[i] + blockM[i];
             mixed[i] = std::clamp(sum, -1.0f, 1.0f);
         }
         encodeMixedBlock(mixed.constData(), kMixBlockSamples);
@@ -332,6 +342,7 @@ QJsonDocument ProgramAudioRecorder::buildMarkersJson(const QString &audioPath,
 void ProgramAudioRecorder::cleanup() {
     m_deckQueueA.clear();
     m_deckQueueB.clear();
+    m_micQueue.clear();
     m_pcmQueue.clear();
 
     if (m_packet) {

@@ -2,11 +2,13 @@
 
 #include <QObject>
 #include <memory>
+#include <unordered_map>
 #include "ui/nodes/ClipNodeEditor.h"
 #include "ui/canvas/VideoWidget.h"
 #include "ui/output/OutputWindow.h"
 #include "ui/output/OutputHub.h"
 #include "core/media/AudioPlayer.h"
+#include "core/media/AudioInputCapture.h"
 
 class QSlider;
 class QPushButton;
@@ -41,6 +43,8 @@ public:
     void applyAudioControllerToDeck(bool deckA, NodeId clipId, bool forceSeek = true);
     void refreshShaderAudioForActiveDecks();
     void refreshTextDataForActiveDecks();
+    void syncMasterAudioInputs();
+    void releaseAllMasterAudioInputs();
 
     // ── UI state ─────────────────────────────────────────────────────────────
     void updateDeckUI(bool deckA, const QString &name, bool hasTimeline,
@@ -75,4 +79,5 @@ private:
 
     std::unique_ptr<AudioPlayer> m_audioPlayerA;
     std::unique_ptr<AudioPlayer> m_audioPlayerB;
+    std::unordered_map<NodeId, std::unique_ptr<AudioInputCapture>> m_inputCaptures;
 };

@@ -512,6 +512,12 @@ void OutputHub::submitProgramAudioChunk(int deckIndex, const QByteArray &pcm) {
     m_programAudioRecorder->submitDeckChunk(deckIndex, pcm);
 }
 
+void OutputHub::submitMicProgramAudioChunk(const QByteArray &pcm) {
+    if (!m_programAudioRecorder || !m_programAudioRecorder->isRecording())
+        return;
+    m_programAudioRecorder->submitMicChunk(pcm);
+}
+
 void OutputHub::submitDeckAudioChunk(int deckIndex, NodeId clipId, const QByteArray &pcm) {
     if (pcm.isEmpty() || (deckIndex != 0 && deckIndex != 1))
         return;

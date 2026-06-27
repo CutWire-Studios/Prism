@@ -304,6 +304,7 @@ void MainWindow::shutdownLivePipeline() {
         m_deckController->setActiveNodeA(0);
         m_deckController->setActiveNodeB(0);
         m_deckController->releaseAllDeckAudio();
+        m_deckController->releaseAllMasterAudioInputs();
     }
 
     if (m_outputHub) {
@@ -639,6 +640,7 @@ void MainWindow::setupConnections() {
             m_deckController->applyAudioControllerToDeck(false, m_deckController->activeNodeB());
         m_deckController->refreshShaderAudioForActiveDecks();
         m_deckController->refreshTextDataForActiveDecks();
+        m_deckController->syncMasterAudioInputs();
         rebuildActiveDeckChains();
     });
     connect(m_clipNodeEditor, &ClipNodeEditor::audioControllerChanged, this, [this](NodeId clipId) {
