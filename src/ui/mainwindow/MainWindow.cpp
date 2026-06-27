@@ -161,7 +161,7 @@ MainWindow::MainWindow(QWidget *parent)
     });
 
     // ── Controllers ───────────────────────────────────────────────────────────
-    m_deckController = new DeckController(m_outputWindow, m_clipNodeEditor, this);
+    m_deckController = new DeckController(m_outputWindow, m_clipNodeEditor, m_outputHub, this);
 
     m_hotkeyManager = new HotkeyManager(this, m_clipNodeEditor, this);
     connect(m_hotkeyManager, &HotkeyManager::deckARequested,

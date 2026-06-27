@@ -153,8 +153,15 @@ void AudioPlayer::pushAudio() {
                 }
                 break;
             }
-            applyGain(chunk);
+            applyGain(chunk, 1.0f);
         }
+
+        if (m_isoPcmTap)
+            m_isoPcmTap(chunk);
+
+        applyGain(chunk, m_crossfadeFactor);
+        if (m_pcmTap)
+            m_pcmTap(chunk);
 
         if (!m_sink || !m_outputDevice)
             break;
@@ -164,8 +171,9 @@ void AudioPlayer::pushAudio() {
     }
 }
 
-void AudioPlayer::applyGain(QByteArray &pcmChunk) const {
-    const float gain = m_muted ? 0.0f : static_cast<float>(m_volumePercent) / 100.0f;
+void AudioPlayer::applyGain(QByteArray &pcmChunk, float crossfadeFactor) const {
+    const float gain = m_muted ? 0.0f
+                               : static_cast<float>(m_volumePercent) / 100.0f * crossfadeFactor;
     if (gain == 1.0f) return;
 
     auto *samples = reinterpret_cast<float *>(pcmChunk.data());

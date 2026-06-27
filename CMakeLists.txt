@@ -148,6 +148,7 @@ set(SOURCES
     src/ui/obs/ObsWebSocketClient.cpp
     src/ui/obs/ObsIntegration.cpp
     src/ui/recording/ProgramRecorder.cpp
+    src/ui/recording/ProgramAudioRecorder.cpp
     src/ui/recording/RecordingOptions.cpp
     src/ui/recording/RecordingSettingsDialog.cpp
     src/ui/editors/ShaderEditDialog.cpp
@@ -234,6 +235,7 @@ set(HEADERS
     include/ui/obs/ObsWebSocketClient.h
     include/ui/obs/ObsIntegration.h
     include/ui/recording/ProgramRecorder.h
+    include/ui/recording/ProgramAudioRecorder.h
     include/ui/recording/RecordingOptions.h
     include/ui/recording/RecordingSettingsDialog.h
     include/ui/output/ProgramOutputSink.h

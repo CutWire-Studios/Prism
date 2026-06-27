@@ -15,6 +15,7 @@
 #include "ui/output/VirtualCameraProgramSink.h"
 #include "ui/output/ProgramFrameSource.h"
 #include "ui/recording/ProgramRecorder.h"
+#include "ui/recording/ProgramAudioRecorder.h"
 #include "ui/recording/RecordingOptions.h"
 #include "ui/nodes/ClipNodeModel.h"
 
@@ -31,7 +32,11 @@ public:
         Program,
         DeckA,
         DeckB,
-        Source
+        Source,
+        ProgramAudio,
+        DeckAAudio,
+        DeckBAudio,
+        ClipAudio
     };
 
     explicit OutputHub(QObject *parent = nullptr);
@@ -79,6 +84,18 @@ public:
     bool startSourceRecording(NodeId nodeId, const QString &label);
     void stopSourceRecording(NodeId nodeId);
 
+    bool startProgramAudioRecording();
+    void stopProgramAudioRecording();
+    bool startDeckAAudioRecording();
+    void stopDeckAAudioRecording();
+    bool startDeckBAudioRecording();
+    void stopDeckBAudioRecording();
+    bool startClipAudioRecording(NodeId nodeId, const QString &label);
+    void stopClipAudioRecording(NodeId nodeId);
+    bool isProgramAudioRecording() const;
+    void submitProgramAudioChunk(int deckIndex, const QByteArray &pcm);
+    void submitDeckAudioChunk(int deckIndex, NodeId clipId, const QByteArray &pcm);
+
     void stopAllRecording();
     void addRecordingMarker(const QString &label);
 
@@ -101,6 +118,7 @@ private slots:
 private:
     static QString sanitizeFileStem(const QString &name);
     QString makeTrackOutputPath(const QString &suffix) const;
+    QString makeAudioTrackOutputPath(const QString &suffix) const;
     void syncFrameConsumers();
     int  activeFrameConsumerCount() const;
     bool needsDeckFrameReadback() const;
@@ -114,6 +132,7 @@ private:
     void maybeStopProgressTimer();
     void placeOnSecondaryScreen(QWidget *window);
     ProgramRecorder *recorderFor(TrackKind kind, NodeId sourceNodeId = 0) const;
+    ProgramAudioRecorder *audioRecorderFor(TrackKind kind, NodeId sourceNodeId = 0) const;
 
     ProgramFrameSource *m_frameSource = nullptr;
     QPointer<VideoWidget> m_videoWidget;
@@ -122,6 +141,10 @@ private:
     std::unique_ptr<NdiProgramSink>            m_ndiSink;
     std::unique_ptr<VirtualCameraProgramSink>  m_virtualCameraSink;
     std::unique_ptr<ProgramRecorder>           m_programRecorder;
+    std::unique_ptr<ProgramAudioRecorder>      m_programAudioRecorder;
+    std::unique_ptr<ProgramAudioRecorder>      m_deckAAudioRecorder;
+    std::unique_ptr<ProgramAudioRecorder>      m_deckBAudioRecorder;
+    std::unordered_map<NodeId, std::unique_ptr<ProgramAudioRecorder>> m_clipAudioRecorders;
     std::unique_ptr<ProgramRecorder>           m_deckARecorder;
     std::unique_ptr<ProgramRecorder>           m_deckBRecorder;
     std::unordered_map<NodeId, std::unique_ptr<ProgramRecorder>> m_sourceRecorders;

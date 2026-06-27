@@ -1,6 +1,8 @@
 #include "ui/recording/RecordingSettingsDialog.h"
 #include "ui/nodes/ClipNodeEditor.h"
 #include "ui/recording/ProgramRecorder.h"
+#include "core/media/VideoPlayer.h"
+#include "core/sources/SourceDescriptor.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
@@ -82,6 +84,22 @@ RecordingSettingsDialog::RecordingSettingsDialog(OutputHub *hub, ClipNodeEditor 
     streamsOuter->addWidget(scroll);
     mainLayout->addWidget(streamsGroup, 1);
 
+    auto *audioGroup = new QGroupBox(tr("Audio recording"), this);
+    auto *audioOuter = new QVBoxLayout(audioGroup);
+    auto *audioHint = new QLabel(
+        tr("Saved as separate FLAC files. Program audio follows the crossfader; deck and clip "
+           "tracks record at full clip volume. Clip tracks record only while that clip is loaded "
+           "on Deck A or B. Sync with video in your editor (automatic sync coming later)."),
+        this);
+    audioHint->setWordWrap(true);
+    audioHint->setStyleSheet(QStringLiteral("color: #888; font-size: 11px;"));
+    audioOuter->addWidget(audioHint);
+    auto *audioWidget = new QWidget(this);
+    m_audioListLayout = new QVBoxLayout(audioWidget);
+    m_audioListLayout->setContentsMargins(0, 0, 0, 0);
+    audioOuter->addWidget(audioWidget);
+    mainLayout->addWidget(audioGroup);
+
     auto *dirGroup = new QGroupBox(tr("Output folder"), this);
     auto *dirLayout = new QHBoxLayout(dirGroup);
     m_outputDirEdit = new QLineEdit(this);
@@ -98,6 +116,7 @@ RecordingSettingsDialog::RecordingSettingsDialog(OutputHub *hub, ClipNodeEditor 
     mainLayout->addWidget(closeBtn, 0, Qt::AlignRight);
 
     rebuildStreamRows();
+    rebuildAudioRows();
 
     m_uiTimer->setInterval(500);
     connect(m_uiTimer, &QTimer::timeout, this, &RecordingSettingsDialog::refreshTrackUi);
@@ -151,10 +170,50 @@ void RecordingSettingsDialog::rebuildStreamRows() {
     m_streamListLayout->addStretch(1);
 }
 
+void RecordingSettingsDialog::rebuildAudioRows() {
+    while (QLayoutItem *item = m_audioListLayout->takeAt(0)) {
+        if (QWidget *w = item->widget())
+            w->deleteLater();
+        delete item;
+    }
+    m_audioRows.clear();
+
+    auto addRow = [&](const QString &label, OutputHub::TrackKind kind, NodeId nodeId = 0) {
+        StreamRow row;
+        row.kind   = kind;
+        row.nodeId = nodeId;
+        row.label  = label;
+        auto *widget = makeStreamRowWidget(label, row.timeLabel, row.toggleBtn, this);
+        m_audioListLayout->addWidget(widget);
+        connect(row.toggleBtn, &QPushButton::toggled, this, &RecordingSettingsDialog::onTrackToggled);
+        m_audioRows.append(row);
+    };
+
+    addRow(tr("Program audio"), OutputHub::TrackKind::ProgramAudio);
+    addRow(tr("Deck A audio (iso)"), OutputHub::TrackKind::DeckAAudio);
+    addRow(tr("Deck B audio (iso)"), OutputHub::TrackKind::DeckBAudio);
+
+    if (m_editor) {
+        for (ClipNodeModel *node : m_editor->allNodes()) {
+            if (!node || !node->hasSource())
+                continue;
+            if (node->sourceDescriptor().kind != SourceDescriptor::Kind::VideoFile)
+                continue;
+            if (!VideoPlayer::fileHasAudio(node->sourceDescriptor().path))
+                continue;
+            addRow(node->sourceName(), OutputHub::TrackKind::ClipAudio, node->nodeId());
+        }
+    }
+}
+
 RecordingSettingsDialog::StreamRow *RecordingSettingsDialog::rowForSender() {
     auto *btn = qobject_cast<QPushButton *>(sender());
     if (!btn) return nullptr;
     for (StreamRow &row : m_rows) {
+        if (row.toggleBtn == btn)
+            return &row;
+    }
+    for (StreamRow &row : m_audioRows) {
         if (row.toggleBtn == btn)
             return &row;
     }
@@ -182,6 +241,20 @@ void RecordingSettingsDialog::onTrackToggled(bool on) {
         case OutputHub::TrackKind::Source:
             ok = m_hub->startSourceRecording(row->nodeId, row->label);
             break;
+        case OutputHub::TrackKind::ProgramAudio:
+            ok = m_hub->startProgramAudioRecording();
+            break;
+        case OutputHub::TrackKind::DeckAAudio:
+            ok = m_hub->startDeckAAudioRecording();
+            break;
+        case OutputHub::TrackKind::DeckBAudio:
+            ok = m_hub->startDeckBAudioRecording();
+            break;
+        case OutputHub::TrackKind::ClipAudio:
+            ok = m_hub->startClipAudioRecording(row->nodeId, row->label);
+            break;
+        default:
+            break;
         }
         if (!ok) {
             row->toggleBtn->blockSignals(true);
@@ -194,6 +267,12 @@ void RecordingSettingsDialog::onTrackToggled(bool on) {
         case OutputHub::TrackKind::DeckA:    m_hub->stopDeckARecording(); break;
         case OutputHub::TrackKind::DeckB:    m_hub->stopDeckBRecording(); break;
         case OutputHub::TrackKind::Source:   m_hub->stopSourceRecording(row->nodeId); break;
+        case OutputHub::TrackKind::ProgramAudio: m_hub->stopProgramAudioRecording(); break;
+        case OutputHub::TrackKind::DeckAAudio:  m_hub->stopDeckAAudioRecording(); break;
+        case OutputHub::TrackKind::DeckBAudio:  m_hub->stopDeckBAudioRecording(); break;
+        case OutputHub::TrackKind::ClipAudio:   m_hub->stopClipAudioRecording(row->nodeId); break;
+        default:
+            break;
         }
     }
 
@@ -210,6 +289,13 @@ void RecordingSettingsDialog::syncFromHub() {
         row.toggleBtn->setText(active ? tr("Stop") : tr("Record"));
         row.toggleBtn->blockSignals(false);
     }
+    for (StreamRow &row : m_audioRows) {
+        const bool active = m_hub->isTrackRecording(row.kind, row.nodeId);
+        row.toggleBtn->blockSignals(true);
+        row.toggleBtn->setChecked(active);
+        row.toggleBtn->setText(active ? tr("Stop") : tr("Record"));
+        row.toggleBtn->blockSignals(false);
+    }
     refreshTrackUi();
 }
 
@@ -217,6 +303,18 @@ void RecordingSettingsDialog::refreshTrackUi() {
     if (!m_hub) return;
 
     for (StreamRow &row : m_rows) {
+        const bool active = m_hub->isTrackRecording(row.kind, row.nodeId);
+        row.toggleBtn->setText(active ? tr("Stop") : tr("Record"));
+        if (active) {
+            const qint64 ms = m_hub->trackRecordingDurationMs(row.kind, row.nodeId);
+            row.timeLabel->setText(formatElapsed(ms));
+            row.timeLabel->setStyleSheet(QStringLiteral("color: #e04545; font-family: monospace;"));
+        } else {
+            row.timeLabel->setText(QStringLiteral("00:00:00"));
+            row.timeLabel->setStyleSheet(QStringLiteral("color: #888; font-family: monospace;"));
+        }
+    }
+    for (StreamRow &row : m_audioRows) {
         const bool active = m_hub->isTrackRecording(row.kind, row.nodeId);
         row.toggleBtn->setText(active ? tr("Stop") : tr("Record"));
         if (active) {

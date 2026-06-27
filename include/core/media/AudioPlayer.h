@@ -4,6 +4,7 @@
 #include <QString>
 #include <QTimer>
 #include <memory>
+#include <functional>
 #include "core/media/AudioDecoder.h"
 
 class QAudioSink;
@@ -25,6 +26,7 @@ public:
     bool seek(double seconds);
 
     void setVolumePercent(int volumePercent);
+    void setCrossfadeFactor(float factor) { m_crossfadeFactor = factor; }
     void setMuted(bool muted);
 
     bool isPlaying() const;
@@ -38,11 +40,17 @@ public:
     void setOutputDeviceId(const QString &deviceId) { m_deviceId = deviceId; }
     QString outputDeviceId() const { return m_deviceId; }
 
+    using PcmTapFn = std::function<void(const QByteArray &)>;
+    /// Post-crossfade PCM (for program audio mix recording).
+    void setPcmTap(PcmTapFn tap) { m_pcmTap = std::move(tap); }
+    /// Pre-crossfade PCM at clip volume (for deck/clip iso recording).
+    void setIsoPcmTap(PcmTapFn tap) { m_isoPcmTap = std::move(tap); }
+
 private slots:
     void pushAudio();
 
 private:
-    void applyGain(QByteArray &pcmChunk) const;
+    void applyGain(QByteArray &pcmChunk, float crossfadeFactor) const;
 
     AudioDecoder m_decoder;
     std::unique_ptr<QAudioSink> m_sink;
@@ -51,8 +59,11 @@ private:
     QString m_currentFilePath;
     QByteArray m_residualBuffer;
     int m_volumePercent = 100;
+    float m_crossfadeFactor = 1.0f;
     bool m_muted = false;
     int m_delayMs = 0;
     QString m_deviceId;   // empty = system default output
     qint64 m_silenceBytesPending = 0;
+    PcmTapFn m_pcmTap;
+    PcmTapFn m_isoPcmTap;
 };

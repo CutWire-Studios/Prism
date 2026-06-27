@@ -1,5 +1,6 @@
 #include "TestSupport.h"
 #include "ui/recording/ProgramRecorder.h"
+#include "ui/recording/ProgramAudioRecorder.h"
 #include "ui/output/OutputHub.h"
 #include "ui/output/ProgramFrameSource.h"
 #include "ui/canvas/VideoWidget.h"
@@ -9,6 +10,8 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+
+#include <cmath>
 
 class FakeProgramFrameSource : public ProgramFrameSource {
 public:
@@ -195,6 +198,68 @@ private slots:
         const QJsonObject markers = QJsonDocument::fromJson(markersFile.readAll()).object();
         QCOMPARE(markers.value(QStringLiteral("track")).toString(), QStringLiteral("Program"));
         QCOMPARE(markers.value(QStringLiteral("markers")).toArray().size(), 2);
+    }
+
+    void outputHub_programAudioRecording() {
+        OutputHub hub;
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        hub.setOutputDir(dir.path());
+
+        QVERIFY(hub.startProgramAudioRecording());
+        QVERIFY(hub.isProgramAudioRecording());
+
+        QByteArray pcm;
+        pcm.resize(ProgramAudioRecorder::kChannels * static_cast<int>(sizeof(float)) * 1024);
+        auto *samples = reinterpret_cast<float *>(pcm.data());
+        for (int i = 0; i < 1024 * ProgramAudioRecorder::kChannels; ++i)
+            samples[i] = 0.1f * std::sin(static_cast<float>(i) * 0.01f);
+
+        for (int i = 0; i < 20; ++i)
+            hub.submitProgramAudioChunk(0, pcm);
+
+        hub.stopProgramAudioRecording();
+        QVERIFY(!hub.isProgramAudioRecording());
+
+        const QStringList files = QDir(dir.path()).entryList({QStringLiteral("*.flac")}, QDir::Files);
+        QVERIFY(!files.isEmpty());
+        QVERIFY(QFileInfo(dir.filePath(files.first())).size() > 0);
+    }
+
+    void programAudioRecorder_buildMarkersJson() {
+        ProgramAudioRecorder::Marker m1;
+        m1.timeMs = 250;
+        m1.label = QStringLiteral("cue");
+
+        const QJsonDocument doc = ProgramAudioRecorder::buildMarkersJson(
+            QStringLiteral("/tmp/audio.flac"),
+            {m1},
+            QStringLiteral("Program audio"),
+            5000);
+
+        const QJsonObject root = doc.object();
+        QCOMPARE(root.value(QStringLiteral("audio")).toString(), QStringLiteral("/tmp/audio.flac"));
+        QCOMPARE(root.value(QStringLiteral("sampleRate")).toInt(), 44100);
+        QCOMPARE(root.value(QStringLiteral("markers")).toArray().size(), 1);
+    }
+
+    void outputHub_deckAudioRecording() {
+        OutputHub hub;
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        hub.setOutputDir(dir.path());
+
+        QVERIFY(hub.startDeckAAudioRecording());
+        QVERIFY(hub.isTrackRecording(OutputHub::TrackKind::DeckAAudio));
+
+        QByteArray pcm(ProgramAudioRecorder::kChannels * static_cast<int>(sizeof(float)) * 1024, Qt::Uninitialized);
+        hub.submitDeckAudioChunk(0, 42, pcm);
+
+        hub.stopDeckAAudioRecording();
+        QVERIFY(!hub.isTrackRecording(OutputHub::TrackKind::DeckAAudio));
+
+        const QStringList files = QDir(dir.path()).entryList({QStringLiteral("*deckA*.flac")}, QDir::Files);
+        QVERIFY(!files.isEmpty());
     }
 
     void outputHub_programRecording() {

@@ -18,10 +18,12 @@
 
 DeckController::DeckController(OutputWindow  *outputWindow,
                                ClipNodeEditor *editor,
+                               OutputHub     *outputHub,
                                QObject       *parent)
     : QObject(parent)
     , m_outputWindow(outputWindow)
     , m_editor(editor)
+    , m_outputHub(outputHub)
 {
 }
 
@@ -34,6 +36,21 @@ QString DeckController::formatTimeShort(double secs) {
 }
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
+
+void DeckController::wireAudioPlayerTap(bool deckA, NodeId clipId) {
+    auto &player = deckA ? m_audioPlayerA : m_audioPlayerB;
+    if (!player) return;
+
+    const int deckIndex = deckA ? 0 : 1;
+    player->setIsoPcmTap([this, deckIndex, clipId](const QByteArray &pcm) {
+        if (m_outputHub)
+            m_outputHub->submitDeckAudioChunk(deckIndex, clipId, pcm);
+    });
+    player->setPcmTap([this, deckIndex](const QByteArray &pcm) {
+        if (m_outputHub)
+            m_outputHub->submitProgramAudioChunk(deckIndex, pcm);
+    });
+}
 
 void DeckController::stopDeckAudio(bool deckA) {
     auto &player = deckA ? m_audioPlayerA : m_audioPlayerB;
@@ -66,6 +83,7 @@ void DeckController::updateDeckAudio(bool deckA, NodeId clipId, const ClipNodeMo
 
     auto &player = deckA ? m_audioPlayerA : m_audioPlayerB;
     if (!player) player = std::make_unique<AudioPlayer>(this);
+    wireAudioPlayerTap(deckA, clipId);
 
     const bool deviceChanged = (player->outputDeviceId() != outputDeviceId);
     player->setOutputDeviceId(outputDeviceId);
@@ -92,7 +110,8 @@ void DeckController::updateDeckAudio(bool deckA, NodeId clipId, const ClipNodeMo
     else if (playbackMode == AudioPlaybackMode::DeckBOnly) volumeFactor = mixB;
     else                                                   volumeFactor = 1.0f;
 
-    player->setVolumePercent(static_cast<int>(volume * volumeFactor));
+    player->setVolumePercent(volume);
+    player->setCrossfadeFactor(volumeFactor);
     player->setMuted(muted);
 
     const bool deckPlaying = deckA ? out->isPlayingA() : out->isPlayingB();

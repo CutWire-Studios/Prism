@@ -41,12 +41,15 @@ private:
     };
 
     void rebuildStreamRows();
+    void rebuildAudioRows();
     StreamRow *rowForSender();
 
     OutputHub       *m_hub = nullptr;
     ClipNodeEditor  *m_editor = nullptr;
     QLineEdit       *m_outputDirEdit = nullptr;
     QVBoxLayout     *m_streamListLayout = nullptr;
+    QVBoxLayout     *m_audioListLayout = nullptr;
     QTimer          *m_uiTimer = nullptr;
     QVector<StreamRow> m_rows;
+    QVector<StreamRow> m_audioRows;
 };

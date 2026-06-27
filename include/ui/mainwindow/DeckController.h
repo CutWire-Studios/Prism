@@ -5,6 +5,7 @@
 #include "ui/nodes/ClipNodeEditor.h"
 #include "ui/canvas/VideoWidget.h"
 #include "ui/output/OutputWindow.h"
+#include "ui/output/OutputHub.h"
 #include "core/media/AudioPlayer.h"
 
 class QSlider;
@@ -18,6 +19,7 @@ class DeckController : public QObject {
 public:
     explicit DeckController(OutputWindow  *outputWindow,
                             ClipNodeEditor *editor,
+                            OutputHub     *outputHub,
                             QObject       *parent = nullptr);
 
     // ── Deck assignment ──────────────────────────────────────────────────────
@@ -60,8 +62,11 @@ public:
     static QString formatTimeShort(double secs);
 
 private:
+    void wireAudioPlayerTap(bool deckA, NodeId clipId);
+
     OutputWindow   *m_outputWindow;
     ClipNodeEditor *m_editor;
+    OutputHub      *m_outputHub;
 
     NodeId m_aClipNodeId = 0;
     NodeId m_bClipNodeId = 0;

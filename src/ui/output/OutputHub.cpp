@@ -15,6 +15,9 @@ OutputHub::OutputHub(QObject *parent)
     , m_ndiSink(std::make_unique<NdiProgramSink>())
     , m_virtualCameraSink(std::make_unique<VirtualCameraProgramSink>())
     , m_programRecorder(std::make_unique<ProgramRecorder>(this))
+    , m_programAudioRecorder(std::make_unique<ProgramAudioRecorder>(this))
+    , m_deckAAudioRecorder(std::make_unique<ProgramAudioRecorder>(this))
+    , m_deckBAudioRecorder(std::make_unique<ProgramAudioRecorder>(this))
     , m_deckARecorder(std::make_unique<ProgramRecorder>(this))
     , m_deckBRecorder(std::make_unique<ProgramRecorder>(this))
     , m_outputDir(ProgramRecorder::defaultOutputDir())
@@ -30,6 +33,16 @@ OutputHub::OutputHub(QObject *parent)
     connectRecorder(m_programRecorder.get());
     connectRecorder(m_deckARecorder.get());
     connectRecorder(m_deckBRecorder.get());
+    if (m_programAudioRecorder) {
+        connect(m_programAudioRecorder.get(), &ProgramAudioRecorder::errorOccurred,
+                this, &OutputHub::recordingError);
+    }
+    auto connectAudioRecorder = [this](ProgramAudioRecorder *rec) {
+        if (!rec) return;
+        connect(rec, &ProgramAudioRecorder::errorOccurred, this, &OutputHub::recordingError);
+    };
+    connectAudioRecorder(m_deckAAudioRecorder.get());
+    connectAudioRecorder(m_deckBAudioRecorder.get());
 
     m_dispatchThread = QThread::create([this] { dispatchLoop(); });
     m_dispatchThread->setObjectName(QStringLiteral("OutputDispatch"));
@@ -228,6 +241,11 @@ ProgramRecorder *OutputHub::recorderFor(TrackKind kind, NodeId sourceNodeId) con
     case TrackKind::Program: return m_programRecorder.get();
     case TrackKind::DeckA:   return m_deckARecorder.get();
     case TrackKind::DeckB:   return m_deckBRecorder.get();
+    case TrackKind::ProgramAudio:
+    case TrackKind::DeckAAudio:
+    case TrackKind::DeckBAudio:
+    case TrackKind::ClipAudio:
+        return nullptr;
     case TrackKind::Source: {
         const auto it = m_sourceRecorders.find(sourceNodeId);
         return it != m_sourceRecorders.end() ? it->second.get() : nullptr;
@@ -236,8 +254,28 @@ ProgramRecorder *OutputHub::recorderFor(TrackKind kind, NodeId sourceNodeId) con
     return nullptr;
 }
 
+ProgramAudioRecorder *OutputHub::audioRecorderFor(TrackKind kind, NodeId sourceNodeId) const {
+    switch (kind) {
+    case TrackKind::ProgramAudio: return m_programAudioRecorder.get();
+    case TrackKind::DeckAAudio:   return m_deckAAudioRecorder.get();
+    case TrackKind::DeckBAudio:   return m_deckBAudioRecorder.get();
+    case TrackKind::ClipAudio: {
+        const auto it = m_clipAudioRecorders.find(sourceNodeId);
+        return it != m_clipAudioRecorders.end() ? it->second.get() : nullptr;
+    }
+    default:
+        return nullptr;
+    }
+}
+
 bool OutputHub::isRecording() const {
     if (m_programRecorder && m_programRecorder->isRecording()) return true;
+    if (m_programAudioRecorder && m_programAudioRecorder->isRecording()) return true;
+    if (m_deckAAudioRecorder && m_deckAAudioRecorder->isRecording()) return true;
+    if (m_deckBAudioRecorder && m_deckBAudioRecorder->isRecording()) return true;
+    for (const auto &entry : m_clipAudioRecorders) {
+        if (entry.second && entry.second->isRecording()) return true;
+    }
     if (m_deckARecorder && m_deckARecorder->isRecording()) return true;
     if (m_deckBRecorder && m_deckBRecorder->isRecording()) return true;
     for (const auto &entry : m_sourceRecorders) {
@@ -251,11 +289,15 @@ bool OutputHub::isProgramRecording() const {
 }
 
 bool OutputHub::isTrackRecording(TrackKind kind, NodeId sourceNodeId) const {
+    if (const ProgramAudioRecorder *audioRec = audioRecorderFor(kind, sourceNodeId))
+        return audioRec->isRecording();
     const ProgramRecorder *rec = recorderFor(kind, sourceNodeId);
     return rec && rec->isRecording();
 }
 
 qint64 OutputHub::trackRecordingDurationMs(TrackKind kind, NodeId sourceNodeId) const {
+    if (const ProgramAudioRecorder *audioRec = audioRecorderFor(kind, sourceNodeId))
+        return audioRec->recordingDurationMs();
     const ProgramRecorder *rec = recorderFor(kind, sourceNodeId);
     return rec ? rec->recordingDurationMs() : 0;
 }
@@ -269,6 +311,16 @@ qint64 OutputHub::longestActiveRecordingMs() const {
     consider(m_programRecorder.get());
     consider(m_deckARecorder.get());
     consider(m_deckBRecorder.get());
+    if (m_programAudioRecorder && m_programAudioRecorder->isRecording())
+        maxMs = qMax(maxMs, m_programAudioRecorder->recordingDurationMs());
+    if (m_deckAAudioRecorder && m_deckAAudioRecorder->isRecording())
+        maxMs = qMax(maxMs, m_deckAAudioRecorder->recordingDurationMs());
+    if (m_deckBAudioRecorder && m_deckBAudioRecorder->isRecording())
+        maxMs = qMax(maxMs, m_deckBAudioRecorder->recordingDurationMs());
+    for (const auto &entry : m_clipAudioRecorders) {
+        if (entry.second && entry.second->isRecording())
+            maxMs = qMax(maxMs, entry.second->recordingDurationMs());
+    }
     for (const auto &entry : m_sourceRecorders)
         consider(entry.second.get());
     return maxMs;
@@ -278,6 +330,16 @@ QStringList OutputHub::activeRecordingTrackLabels() const {
     QStringList labels;
     if (m_programRecorder && m_programRecorder->isRecording())
         labels << tr("Program");
+    if (m_programAudioRecorder && m_programAudioRecorder->isRecording())
+        labels << tr("Program audio");
+    if (m_deckAAudioRecorder && m_deckAAudioRecorder->isRecording())
+        labels << tr("Deck A audio");
+    if (m_deckBAudioRecorder && m_deckBAudioRecorder->isRecording())
+        labels << tr("Deck B audio");
+    for (const auto &entry : m_clipAudioRecorders) {
+        if (entry.second && entry.second->isRecording())
+            labels << entry.second->trackLabel();
+    }
     if (m_deckARecorder && m_deckARecorder->isRecording())
         labels << tr("Deck A");
     if (m_deckBRecorder && m_deckBRecorder->isRecording())
@@ -302,6 +364,12 @@ QString OutputHub::makeTrackOutputPath(const QString &suffix) const {
     QDir().mkpath(m_outputDir);
     const QString stamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd_HH-mm-ss"));
     return ProgramRecorder::makeOutputPath(m_outputDir, stamp, suffix);
+}
+
+QString OutputHub::makeAudioTrackOutputPath(const QString &suffix) const {
+    QDir().mkpath(m_outputDir);
+    const QString stamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd_HH-mm-ss"));
+    return ProgramAudioRecorder::makeOutputPath(m_outputDir, stamp, suffix);
 }
 
 bool OutputHub::startProgramRecording() {
@@ -410,10 +478,154 @@ void OutputHub::stopSourceRecording(NodeId nodeId) {
     emit recordingStateChanged();
 }
 
+bool OutputHub::isProgramAudioRecording() const {
+    return m_programAudioRecorder && m_programAudioRecorder->isRecording();
+}
+
+bool OutputHub::startProgramAudioRecording() {
+    QMutexLocker locker(&m_sinkMutex);
+    if (!m_programAudioRecorder || m_programAudioRecorder->isRecording())
+        return isProgramAudioRecording();
+
+    const QString path = makeAudioTrackOutputPath(QStringLiteral("program"));
+    if (!m_programAudioRecorder->startRecording(path, tr("Program audio"), true))
+        return false;
+
+    m_programAudioRecorder->addMarker(tr("Recording started"));
+    ensureProgressTimer();
+    emit recordingStateChanged();
+    return true;
+}
+
+void OutputHub::stopProgramAudioRecording() {
+    QMutexLocker locker(&m_sinkMutex);
+    if (!m_programAudioRecorder || !m_programAudioRecorder->isRecording())
+        return;
+    m_programAudioRecorder->stopRecording();
+    maybeStopProgressTimer();
+    emit recordingStateChanged();
+}
+
+void OutputHub::submitProgramAudioChunk(int deckIndex, const QByteArray &pcm) {
+    if (!m_programAudioRecorder || !m_programAudioRecorder->isRecording())
+        return;
+    m_programAudioRecorder->submitDeckChunk(deckIndex, pcm);
+}
+
+void OutputHub::submitDeckAudioChunk(int deckIndex, NodeId clipId, const QByteArray &pcm) {
+    if (pcm.isEmpty() || (deckIndex != 0 && deckIndex != 1))
+        return;
+
+    if (deckIndex == 0 && m_deckAAudioRecorder && m_deckAAudioRecorder->isRecording())
+        m_deckAAudioRecorder->submitPcm(pcm);
+    if (deckIndex == 1 && m_deckBAudioRecorder && m_deckBAudioRecorder->isRecording())
+        m_deckBAudioRecorder->submitPcm(pcm);
+
+    const NodeId activeClip = deckIndex == 0 ? m_activeDeckA : m_activeDeckB;
+    if (activeClip == 0 || activeClip != clipId)
+        return;
+
+    const auto it = m_clipAudioRecorders.find(clipId);
+    if (it != m_clipAudioRecorders.end() && it->second && it->second->isRecording())
+        it->second->submitPcm(pcm);
+}
+
+bool OutputHub::startDeckAAudioRecording() {
+    QMutexLocker locker(&m_sinkMutex);
+    if (!m_deckAAudioRecorder || m_deckAAudioRecorder->isRecording())
+        return m_deckAAudioRecorder && m_deckAAudioRecorder->isRecording();
+
+    const QString path = makeAudioTrackOutputPath(QStringLiteral("deckA"));
+    if (!m_deckAAudioRecorder->startRecording(path, tr("Deck A audio"), true))
+        return false;
+
+    m_deckAAudioRecorder->addMarker(tr("Recording started"));
+    ensureProgressTimer();
+    emit recordingStateChanged();
+    return true;
+}
+
+void OutputHub::stopDeckAAudioRecording() {
+    QMutexLocker locker(&m_sinkMutex);
+    if (!m_deckAAudioRecorder || !m_deckAAudioRecorder->isRecording())
+        return;
+    m_deckAAudioRecorder->stopRecording();
+    maybeStopProgressTimer();
+    emit recordingStateChanged();
+}
+
+bool OutputHub::startDeckBAudioRecording() {
+    QMutexLocker locker(&m_sinkMutex);
+    if (!m_deckBAudioRecorder || m_deckBAudioRecorder->isRecording())
+        return m_deckBAudioRecorder && m_deckBAudioRecorder->isRecording();
+
+    const QString path = makeAudioTrackOutputPath(QStringLiteral("deckB"));
+    if (!m_deckBAudioRecorder->startRecording(path, tr("Deck B audio"), true))
+        return false;
+
+    m_deckBAudioRecorder->addMarker(tr("Recording started"));
+    ensureProgressTimer();
+    emit recordingStateChanged();
+    return true;
+}
+
+void OutputHub::stopDeckBAudioRecording() {
+    QMutexLocker locker(&m_sinkMutex);
+    if (!m_deckBAudioRecorder || !m_deckBAudioRecorder->isRecording())
+        return;
+    m_deckBAudioRecorder->stopRecording();
+    maybeStopProgressTimer();
+    emit recordingStateChanged();
+}
+
+bool OutputHub::startClipAudioRecording(NodeId nodeId, const QString &label) {
+    QMutexLocker locker(&m_sinkMutex);
+    if (nodeId == 0)
+        return false;
+    if (isTrackRecording(TrackKind::ClipAudio, nodeId))
+        return true;
+
+    const QString stem = sanitizeFileStem(label);
+    const QString path = makeAudioTrackOutputPath(stem);
+    auto rec = std::make_unique<ProgramAudioRecorder>(this);
+    connect(rec.get(), &ProgramAudioRecorder::errorOccurred, this, &OutputHub::recordingError);
+    const QString trackLabel = label.isEmpty() ? tr("Clip audio") : label;
+    if (!rec->startRecording(path, trackLabel, true))
+        return false;
+
+    rec->addMarker(tr("Recording started"));
+    m_clipAudioRecorders[nodeId] = std::move(rec);
+    ensureProgressTimer();
+    emit recordingStateChanged();
+    return true;
+}
+
+void OutputHub::stopClipAudioRecording(NodeId nodeId) {
+    QMutexLocker locker(&m_sinkMutex);
+    const auto it = m_clipAudioRecorders.find(nodeId);
+    if (it == m_clipAudioRecorders.end() || !it->second->isRecording())
+        return;
+    it->second->stopRecording();
+    m_clipAudioRecorders.erase(it);
+    maybeStopProgressTimer();
+    emit recordingStateChanged();
+}
+
 void OutputHub::stopAllRecording() {
     QMutexLocker locker(&m_sinkMutex);
     if (m_programRecorder && m_programRecorder->isRecording())
         m_programRecorder->stopRecording();
+    if (m_programAudioRecorder && m_programAudioRecorder->isRecording())
+        m_programAudioRecorder->stopRecording();
+    if (m_deckAAudioRecorder && m_deckAAudioRecorder->isRecording())
+        m_deckAAudioRecorder->stopRecording();
+    if (m_deckBAudioRecorder && m_deckBAudioRecorder->isRecording())
+        m_deckBAudioRecorder->stopRecording();
+    for (auto it = m_clipAudioRecorders.begin(); it != m_clipAudioRecorders.end(); ) {
+        if (it->second && it->second->isRecording())
+            it->second->stopRecording();
+        it = m_clipAudioRecorders.erase(it);
+    }
     if (m_deckARecorder && m_deckARecorder->isRecording())
         m_deckARecorder->stopRecording();
     if (m_deckBRecorder && m_deckBRecorder->isRecording())
@@ -440,6 +652,15 @@ void OutputHub::addRecordingMarker(const QString &label) {
     mark(m_deckBRecorder.get());
     for (auto &entry : m_sourceRecorders)
         mark(entry.second.get());
+    auto markAudio = [&](ProgramAudioRecorder *rec) {
+        if (rec && rec->isRecording())
+            rec->addMarker(label);
+    };
+    markAudio(m_programAudioRecorder.get());
+    markAudio(m_deckAAudioRecorder.get());
+    markAudio(m_deckBAudioRecorder.get());
+    for (auto &entry : m_clipAudioRecorders)
+        markAudio(entry.second.get());
 }
 
 void OutputHub::ensureProgressTimer() {
