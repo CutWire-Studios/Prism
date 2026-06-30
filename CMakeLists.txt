@@ -216,9 +216,13 @@ set(SOURCES
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    list(APPEND SOURCES src/core/sources/ScreenSource_linux.cpp)
+    list(APPEND SOURCES
+        src/core/sources/ScreenSource_linux.cpp
+        src/ui/output/VirtualCameraProgramSink_linux.cpp)
 else()
-    list(APPEND SOURCES src/core/sources/ScreenSource_win.cpp)
+    list(APPEND SOURCES
+        src/core/sources/ScreenSource_win.cpp
+        src/ui/output/VirtualCameraProgramSink_win.cpp)
 endif()
 
 set(HEADERS
@@ -370,7 +374,18 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         ${LIBZIP_LIBRARIES}
     )
 elseif(WIN32)
-    target_link_libraries(switchx_core PUBLIC libzip::zip opengl32 mf mfplat mfuuid ole32)
+    FetchContent_Declare(softcam
+        GIT_REPOSITORY https://github.com/tshino/softcam.git
+        GIT_TAG        v1.8.1
+        SOURCE_SUBDIR    .no-cmake)
+    FetchContent_GetProperties(softcam)
+    if(NOT softcam_POPULATED)
+        FetchContent_Populate(softcam)
+    endif()
+    set(SOFTCAM_SOURCE_DIR ${softcam_SOURCE_DIR} CACHE INTERNAL "")
+    add_subdirectory(third_party/softcam)
+
+    target_link_libraries(switchx_core PUBLIC libzip::zip opengl32 mf mfplat mfuuid ole32 softcam)
 else()
     target_link_libraries(switchx_core PUBLIC ${LIBZIP_LIBRARIES})
 endif()
@@ -398,6 +413,14 @@ endif()
 
 qt_add_executable(Prism src/main.cpp)
 target_link_libraries(Prism PRIVATE switchx_core)
+
+if(WIN32)
+    add_custom_command(TARGET Prism POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:softcam>
+            $<TARGET_FILE_DIR:Prism>
+        COMMENT "Copy softcam.dll next to Prism.exe")
+endif()
 
 # Enable testing
 enable_testing()

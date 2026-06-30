@@ -5,7 +5,8 @@
 #include <QVector>
 #include <memory>
 
-/// Exposes the program mix as a V4L2 virtual webcam (v4l2loopback on Linux).
+/// Exposes the program mix as a virtual webcam (v4l2loopback on Linux,
+/// DirectShow Softcam on Windows).
 class VirtualCameraProgramSink : public ProgramOutputSink {
 public:
     VirtualCameraProgramSink();
@@ -22,10 +23,10 @@ public:
     QString devicePath() const { return m_devicePath; }
     void    setDevicePath(const QString &path);
 
-    /// Paths of v4l2loopback devices currently present on the system.
+    /// Linux: v4l2loopback device paths. Windows: empty (single Softcam device).
     static QStringList availableLoopbackDevices();
 
-    /// Saved setting, else first loopback device, else /dev/video42.
+    /// Saved setting, else platform default device name/path.
     static QString defaultDevicePath();
 
 private:
@@ -36,5 +37,4 @@ private:
 
     bool    m_active = false;
     QString m_devicePath;
-    QVector<uint8_t> m_yuyvBuffer;
 };

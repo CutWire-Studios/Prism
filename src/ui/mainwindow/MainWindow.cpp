@@ -121,14 +121,20 @@ MainWindow::MainWindow(QWidget *parent)
     ui->actionVirtualCameraOutput->setEnabled(m_outputHub->virtualCameraAvailable());
     if (!m_outputHub->virtualCameraAvailable()) {
         ui->actionVirtualCameraOutput->setToolTip(
-            tr("Virtual camera output is only available on Linux with v4l2loopback loaded "
-               "(sudo modprobe v4l2loopback)."));
+            tr("Virtual camera output is not available on this platform."));
     } else {
         const QString dev = m_outputHub->virtualCameraDevicePath();
+#ifdef Q_OS_LINUX
         ui->actionVirtualCameraOutput->setToolTip(
             tr("Expose the program mix as a webcam via %1 (v4l2loopback). "
                "Select as a camera source in OBS, Zoom, etc.")
                 .arg(dev.isEmpty() ? tr("a v4l2loopback device") : dev));
+#else
+        ui->actionVirtualCameraOutput->setToolTip(
+            tr("Expose the program mix as a webcam named \"%1\". "
+               "Select it as a camera source in OBS, Zoom, browsers, etc.")
+                .arg(dev.isEmpty() ? QStringLiteral("DirectShow Softcam") : dev));
+#endif
     }
 
     setupAddElementMenu(ui->menuAddElement);
@@ -565,6 +571,7 @@ void MainWindow::setupConnections() {
             ui->actionVirtualCameraOutput->blockSignals(false);
             if (on) {
                 const QString dev = m_outputHub->virtualCameraDevicePath();
+#ifdef Q_OS_LINUX
                 QMessageBox::warning(this, tr("Virtual Camera Output"),
                     tr("Could not start virtual camera output on %1.\n\n"
                        "Ensure v4l2loopback is loaded:\n"
@@ -572,6 +579,13 @@ void MainWindow::setupConnections() {
                        "You may need to specify a device path in settings if the "
                        "loopback device is not at the default location.")
                         .arg(dev.isEmpty() ? tr("(unknown device)") : dev));
+#else
+                QMessageBox::warning(this, tr("Virtual Camera Output"),
+                    tr("Could not start virtual camera output (%1).\n\n"
+                       "Another application may already be using the virtual camera, "
+                       "or softcam.dll may be missing next to SwitchX.exe.")
+                        .arg(dev.isEmpty() ? QStringLiteral("DirectShow Softcam") : dev));
+#endif
             }
         }
     });
