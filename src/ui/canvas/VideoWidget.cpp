@@ -229,10 +229,13 @@ void VideoWidget::renderDeckToFbo(bool deckA) {
                             baseH * canvasBounds.height());
         outRect = bounds;
 
+        const bool flipH = deckA ? m_flipHA : m_flipHB;
+        const bool flipV = deckA ? m_flipVA : m_flipVB;
         glColor4f(1.f, 1.f, 1.f, 1.f);
         renderTexture(deckTex, cx, cy, cw, ch,
                       (float)bounds.x(),     (float)bounds.y(),
-                      (float)bounds.width(), (float)bounds.height());
+                      (float)bounds.width(), (float)bounds.height(),
+                      flipH, flipV);
     }
 
     drawChainSources(chain, chainTex, 1.f, canvasW, canvasH);
@@ -259,7 +262,7 @@ void VideoWidget::renderCompositionGL() {
         return;
     }
 
-    if (m_transitionMode == TransitionMode::DipToWhite) {
+    if (m_transitionMode == TransitionMode::DipToWhite && !m_singleStream) {
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     } else {
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -269,12 +272,23 @@ void VideoWidget::renderCompositionGL() {
     m_videoRectA = QRectF();
     m_videoRectB = QRectF();
 
-    const float t = std::clamp(m_crossfadeB, 0.f, 1.f);
+    const int rw = renderW(), rh = renderH();
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    const int rw = renderW(), rh = renderH();
+    // Single-stream output: show deck A directly, no crossfade/transition.
+    if (m_singleStream) {
+        if (m_deckColorTexA)
+            renderFboTexture(m_deckColorTexA, 0.f, 0.f, (float)rw, (float)rh, 1.f);
+        m_videoRectA = scaleRectToWidget(m_videoRectProgramA);
+        glDisable(GL_BLEND);
+        glColor4f(1.f, 1.f, 1.f, 1.f);
+        return;
+    }
+
+    const float t = std::clamp(m_crossfadeB, 0.f, 1.f);
+
     auto drawDeckFbo = [&](GLuint deckTex, float alpha) {
         if (alpha <= 0.f || !deckTex) return;
         renderFboTexture(deckTex, 0.f, 0.f, (float)rw, (float)rh, alpha);
@@ -522,13 +536,18 @@ void VideoWidget::paintEvent(QPaintEvent *e) {
 // ── Texture rendering ─────────────────────────────────────────────────────────
 
 void VideoWidget::renderTexture(GLuint tex, float cx, float cy, float cw, float ch,
-                                float dstX, float dstY, float dstW, float dstH) {
+                                float dstX, float dstY, float dstW, float dstH,
+                                bool flipH, bool flipV) {
+    float u0 = cx, u1 = cx + cw;
+    float v0 = cy, v1 = cy + ch;
+    if (flipH) std::swap(u0, u1);
+    if (flipV) std::swap(v0, v1);
     glBindTexture(GL_TEXTURE_2D, tex);
     glBegin(GL_QUADS);
-    glTexCoord2f(cx,      cy);      glVertex2f(dstX,        dstY);
-    glTexCoord2f(cx + cw, cy);      glVertex2f(dstX + dstW, dstY);
-    glTexCoord2f(cx + cw, cy + ch); glVertex2f(dstX + dstW, dstY + dstH);
-    glTexCoord2f(cx,      cy + ch); glVertex2f(dstX,        dstY + dstH);
+    glTexCoord2f(u0, v0); glVertex2f(dstX,        dstY);
+    glTexCoord2f(u1, v0); glVertex2f(dstX + dstW, dstY);
+    glTexCoord2f(u1, v1); glVertex2f(dstX + dstW, dstY + dstH);
+    glTexCoord2f(u0, v1); glVertex2f(dstX,        dstY + dstH);
     glEnd();
     glBindTexture(GL_TEXTURE_2D, 0);
 }
@@ -815,6 +834,46 @@ void VideoWidget::setBaseB(float x, float y, float w, float h) {
     update();
 }
 
+void VideoWidget::setFlipA(bool flipH, bool flipV) {
+    m_flipHA = flipH; m_flipVA = flipV;
+    update();
+}
+
+void VideoWidget::setFlipB(bool flipH, bool flipV) {
+    m_flipHB = flipH; m_flipVB = flipV;
+    update();
+}
+
+void VideoWidget::setSingleStreamMode(bool enabled) {
+    if (m_singleStream == enabled) return;
+    m_singleStream = enabled;
+    update();
+}
+
+void VideoWidget::swapDeckContents() {
+    using std::swap;
+    swap(m_sourceA, m_sourceB);
+    swap(m_textureA, m_textureB);
+    swap(m_playingA, m_playingB);
+    swap(m_repeatA, m_repeatB);
+    swap(m_trimStartA, m_trimStartB);
+    swap(m_trimEndA, m_trimEndB);
+    swap(m_playClockA, m_playClockB);
+    swap(m_clockAnchorA, m_clockAnchorB);
+    swap(m_clockDirtyA, m_clockDirtyB);
+    swap(m_cropXA, m_cropXB); swap(m_cropYA, m_cropYB);
+    swap(m_cropWA, m_cropWB); swap(m_cropHA, m_cropHB);
+    swap(m_flipHA, m_flipHB); swap(m_flipVA, m_flipVB);
+    swap(m_baseXA, m_baseXB); swap(m_baseYA, m_baseYB);
+    swap(m_baseWA, m_baseWB); swap(m_baseHA, m_baseHB);
+    swap(m_canvasWidthA, m_canvasWidthB);
+    swap(m_canvasHeightA, m_canvasHeightB);
+    swap(m_overlaysA, m_overlaysB);
+    swap(m_chainA, m_chainB);
+    swap(m_chainTexA, m_chainTexB);
+    update();
+}
+
 void VideoWidget::setCanvasSizeA(int width, int height) {
     m_canvasWidthA = width;
     m_canvasHeightA = height;
@@ -891,6 +950,45 @@ void VideoWidget::setNodeChainB(std::vector<NodeChainSource> chain) {
     }
 }
 
+void VideoWidget::reorderChain(bool deckA, const std::vector<int> &perm) {
+    auto &chain = deckA ? m_chainA : m_chainB;
+    auto &texList = deckA ? m_chainTexA : m_chainTexB;
+    if (perm.size() != chain.size()) return;
+    std::vector<NodeChainSource> newChain(chain.size());
+    std::vector<GLuint> newTex(texList.size(), 0);
+    for (size_t i = 0; i < perm.size(); ++i) {
+        const int from = perm[i];
+        if (from < 0 || from >= (int)chain.size()) return;
+        newChain[i] = std::move(chain[from]);
+        if (from < (int)texList.size()) newTex[i] = texList[from];
+    }
+    chain = std::move(newChain);
+    texList = std::move(newTex);
+    update();
+}
+
+void VideoWidget::setChainVisibility(bool deckA, int chainIndex, bool visible) {
+    auto &chain = deckA ? m_chainA : m_chainB;
+    if (chainIndex < 0 || chainIndex >= (int)chain.size()) return;
+    chain[chainIndex].visible = visible;
+    update();
+}
+
+void VideoWidget::setChainPlacement(bool deckA, int chainIndex,
+                                    float cropX, float cropY, float cropW, float cropH,
+                                    bool flipH, bool flipV,
+                                    float baseX, float baseY, float baseW, float baseH,
+                                    bool visible) {
+    auto &chain = deckA ? m_chainA : m_chainB;
+    if (chainIndex < 0 || chainIndex >= (int)chain.size()) return;
+    auto &e = chain[chainIndex];
+    e.cropX = cropX; e.cropY = cropY; e.cropW = cropW; e.cropH = cropH;
+    e.flipH = flipH; e.flipV = flipV;
+    e.baseX = baseX; e.baseY = baseY; e.baseW = baseW; e.baseH = baseH;
+    e.visible = visible;
+    update();
+}
+
 void VideoWidget::drawChainSources(std::vector<NodeChainSource> &chain,
                                     std::vector<GLuint> &texList, float alpha,
                                     int canvasW, int canvasH) {
@@ -920,6 +1018,7 @@ void VideoWidget::drawChainSources(std::vector<NodeChainSource> &chain,
     }
 
     for (size_t i = 0; i < chain.size() && i < texList.size(); ++i) {
+        if (!chain[i].visible) continue;
         auto *src = chain[i].source.get();
         if (!src || !src->isReady()) continue;
         GLuint tex = src->glTexture() ? src->glTexture() : texList[i];
@@ -932,7 +1031,8 @@ void VideoWidget::drawChainSources(std::vector<NodeChainSource> &chain,
                                chain[i].baseH * canvasBounds.height());
         glColor4f(1.f, 1.f, 1.f, alpha);
         renderTexture(tex, cx, cy, cw, ch,
-                      (float)placement.x(), (float)placement.y(), (float)placement.width(), (float)placement.height());
+                      (float)placement.x(), (float)placement.y(), (float)placement.width(), (float)placement.height(),
+                      chain[i].flipH, chain[i].flipV);
     }
 }
 

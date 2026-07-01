@@ -7,6 +7,8 @@
 #include <QDir>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QPixmap>
+#include <QRectF>
 #include "core/sources/SourceDescriptor.h"
 #include "core/scripting/ScriptOutput.h"
 #include "ui/nodes/ClipNodeModel.h"
@@ -14,7 +16,6 @@
 class ClipNodeScene;
 class QGraphicsView;
 class NodeItemBase;
-class GroupNodeItem;
 
 enum class AudioPlaybackMode {
     DeckAOnly = 0,
@@ -30,9 +31,25 @@ struct MasterAudioInputSettings {
     NodeId  routedMasterOutputId = 0;
 };
 
-/// The node-graph compositing editor: hosts the clip/source nodes, their overlay
-/// chain connections, groups, and audio routing. This is the central canvas the
-/// rest of the UI drives, and the source of truth for what each deck composites.
+/// One resolved layer feeding a deck: an Input node producing pixels plus the
+/// folded crop/flip and Layer placement to apply.
+struct ResolvedLayer {
+    NodeId inputNodeId = 0;
+    float  cropX = 0.f, cropY = 0.f, cropW = 1.f, cropH = 1.f;
+    bool   flipH = false, flipV = false;
+    float  baseX = 0.f, baseY = 0.f, baseW = 1.f, baseH = 1.f;
+    bool   visible = true;
+};
+
+/// A fully resolved blue video stream (bottom→top layers plus canvas size).
+struct ResolvedStream {
+    QVector<ResolvedLayer> layers;   // index 0 = bottom, last = top
+    int canvasWidth = 0, canvasHeight = 0;
+};
+
+/// The node-graph compositing editor. Hosts the four node types on the blue video
+/// pipeline (Input → Process → Switching → Output) plus audio/script routing, and
+/// is the source of truth for what each deck composites.
 class ClipNodeEditor : public QWidget {
     Q_OBJECT
 
@@ -40,7 +57,7 @@ public:
     explicit ClipNodeEditor(QWidget *parent = nullptr);
     ~ClipNodeEditor();
 
-    // ── Clip Management ──────────────────────────────────────────────────────
+    // ── Input node management ────────────────────────────────────────────────
     ClipNodeModel *addClipNode(const QString &path, const QPixmap &thumbnail,
                                ClipNodeScene *targetScene = nullptr,
                                QGraphicsView *viewForPos = nullptr,
@@ -56,42 +73,39 @@ public:
     QVector<ClipNodeModel *> allNodes() const;
     ClipNodeModel *nodeAt(NodeId id) const;
 
-    // ── A/B Deck Selection ───────────────────────────────────────────────────
+    // ── A/B Deck Selection (global invariant across A/B-select nodes) ─────────
     void setActiveDeckClip(NodeId clipId, bool deckA);
-    NodeId activeDeckClipA() const { return m_activeClipA; }
-    NodeId activeDeckClipB() const { return m_activeClipB; }
+    void assignInputToDeck(NodeId inputProducerNode, bool deckA);
+    NodeId deckAInput() const { return m_deckAInput; }
+    NodeId deckBInput() const { return m_deckBInput; }
+    NodeId activeDeckClipA() const { return m_deckAInput; }
+    NodeId activeDeckClipB() const { return m_deckBInput; }
 
-    // ── Get Ordered Clip Chain ──────────────────────────────────────────────
-    QVector<ClipNodeModel *> getClipChain(NodeId fromClip) const;
+    // ── Evaluator ────────────────────────────────────────────────────────────
+    ResolvedStream evaluateVideoInput(NodeId producerNode) const;
 
-    // ── Transform queries ────────────────────────────────────────────────────
-    bool clipTransform(NodeId clipId, float &x, float &y, float &w, float &h) const;
-    void setClipTransform(NodeId clipId, float x, float y, float w, float h);
-    QVector<NodeId> clipsForContext(NodeId contextId) const;
-    QVector<NodeId> clipsForContextOrdered(NodeId contextId) const;
-    bool contextCanvasSize(NodeId clipId, int &w, int &h) const;
+    // ── Layer node placement (for TransformEditorDialog) ─────────────────────
+    struct LayerSlotView {
+        int     index = 0;
+        QRectF  rect;       // normalized base placement
+        QPixmap thumb;
+    };
+    QVector<LayerSlotView> layerSlotViews(NodeId layerId) const;
+    void setLayerSlotRect(NodeId layerId, int index, float x, float y, float w, float h);
+    bool layerCanvasSize(NodeId layerId, int &w, int &h) const;
+
+    // ── Output-node querying ─────────────────────────────────────────────────
+    NodeId outputNodeId() const { return m_outputNode; }
+    bool   outputIsSingleStream() const;
+    NodeId outputSingleProducer() const;
+
+    // ── Audio / script queries ───────────────────────────────────────────────
     bool audioSettingsForClip(NodeId clipId, int &volume, bool &muted, bool &routedToMaster, AudioPlaybackMode &playbackMode, int &delayMs, QString &outputDeviceId) const;
     bool masterAudioInputSettings(NodeId inputNodeId, MasterAudioInputSettings &settings) const;
     bool masterAudioOutputDevice(NodeId masterOutputNodeId, QString &outputDeviceId) const;
     QVector<NodeId> allMasterAudioInputNodeIds() const;
     bool audioSourceForShader(NodeId shaderNodeId, QString &filePath) const;
     std::shared_ptr<ScriptOutput> scriptOutputForDataNode(NodeId dataNodeId) const;
-
-    void addScriptNodeToGroup(NodeId groupId, QGraphicsView *view, bool atViewCenter = false);
-
-    // ── Groups ───────────────────────────────────────────────────────────────
-    void groupSelection();
-    void ungroup(NodeId groupId);
-    QWidget *makeSubSceneView(ClipNodeScene *scene, QWidget *parent, NodeId groupId = 0);
-    ClipNodeScene *subSceneForGroup(NodeId groupId) const;
-    QString groupName(NodeId groupId) const;
-    void renameGroup(NodeId groupId);
-    void renameGroupMemberClip(NodeId clipId);
-    void showGroupSceneContextMenu(NodeId groupId, QGraphicsView *view);
-    void addClipsFromFileDialog(NodeId groupId, QGraphicsView *view, bool atViewCenter = false);
-    void addTransformContextToGroup(NodeId groupId, QGraphicsView *view, bool atViewCenter = false);
-    void addMasterAudioOutputToGroup(NodeId groupId, QGraphicsView *view, bool atViewCenter = false);
-    void addMasterAudioInputToGroup(NodeId groupId, QGraphicsView *view, bool atViewCenter = false);
 
     // ── Session persistence ──────────────────────────────────────────────────
     QJsonObject saveState(const QDir &sessionDir = {}) const;
@@ -108,46 +122,40 @@ signals:
     void nodeRemoved(NodeId nodeId);
     void audioGraphChanged();
     void audioControllerChanged(NodeId clipId);
+    void addInputNodeRequested();
 
 private slots:
-    void onNodeAButtonClicked(NodeId nodeId);
-    void onNodeBButtonClicked(NodeId nodeId);
     void onNodeRemoveRequested(NodeId nodeId);
     void onCanvasContextMenu();
-    void onAddTransformContext();
     void onAddMasterAudioOutput();
     void onAddMasterAudioInput();
     void onAddScriptNode();
-    void onEditContextNode(NodeId nodeId);
-    void onOpenTransformEditor(NodeId contextId);
     void onEditClipAudio(NodeId clipId);
     void onEditScriptNode(NodeId nodeId);
+    void onEditLayerCanvas(NodeId layerId);
+    void onEditLayerTransform(NodeId layerId);
+    void onEditProcessCrop(NodeId processId);
 
 private:
     void connectNodeSignals(ClipNodeModel *model, NodeId id);
     void disconnectNodeSignals(ClipNodeModel *model);
-    QVector<ClipNodeModel *> traverseUpstream(NodeId clipId) const;
 
     ClipNodeScene *sceneForNode(NodeId id) const;
     void registerItem(NodeItemBase *item);
     void removeSceneItem(NodeItemBase *item);
     void deleteNodeById(NodeId nodeId);
     void deleteSelection(QGraphicsView *fromView = nullptr);
-    void openGroupEditor(NodeId groupId);
-    void setGroupDelegate(NodeId groupId, NodeId clipId);
-    void setGroupDelegateForClip(NodeId clipId);
-    NodeId pickDefaultGroupDelegate(ClipNodeScene *subScene, const QSet<NodeId> &members) const;
-    bool isNodeInSubScene(NodeId nodeId, ClipNodeScene *subScene) const;
-    void updateGroupDeckHighlights();
-    NodeId groupContainingNode(NodeId nodeId) const;
-    QSet<NodeId> allGroupMemberIds() const;
-    bool isGroupMember(NodeId nodeId) const;
+    void ensureOutputNode();
+    void updateAbHighlights();
+    void normalizeSwitchingInputs();
+    ResolvedStream evaluateVideoInputGuarded(NodeId producerNode, QSet<NodeId> visited) const;
 
-    class PortItem *findPort(NodeId nodeId, int portKindInt) const;
-    void restoreConnections(ClipNodeScene *scene, const QJsonArray &conns,
-                            const QMap<NodeId, NodeId> &legacyClipForAudioNode = {});
+    class PortItem *findPort(NodeId nodeId, int portKindInt, int slotIndex = -1) const;
+    void restoreConnections(ClipNodeScene *scene, const QJsonArray &conns);
     QPointF scenePosForView(QGraphicsView *view, const QPoint &globalPos) const;
-    void addTransformContextTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
+    void addProcessNodeAt(int effect, const QPoint &globalPos);
+    void addLayerNodeAt(const QPoint &globalPos);
+    void addAbSelectNodeAt(const QPoint &globalPos);
     void addMasterAudioOutputTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
     void addMasterAudioInputTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
     void addScriptNodeTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
@@ -157,12 +165,15 @@ private:
 
     QMap<NodeId, ClipNodeModel *> m_nodeMap;
     QMap<NodeId, NodeItemBase *> m_itemMap;
-    QMap<NodeId, void *> m_contextNodes;
+    QMap<NodeId, void *> m_processNodes;
+    QMap<NodeId, void *> m_layerNodes;
+    QMap<NodeId, void *> m_abSelectNodes;
     QMap<NodeId, void *> m_scriptNodes;
     QMap<NodeId, void *> m_masterAudioNodes;
     QMap<NodeId, void *> m_masterAudioInputNodes;
-    QMap<NodeId, GroupNodeItem *> m_groupNodes;
-    NodeId m_activeClipA = 0;
-    NodeId m_activeClipB = 0;
+    NodeId m_outputNode  = 0;
+    NodeId m_deckAInput  = 0;
+    NodeId m_deckBInput  = 0;
     NodeId m_nextId      = 1;
+    bool   m_restoring   = false;
 };

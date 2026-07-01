@@ -174,7 +174,6 @@ set(SOURCES
     src/ui/canvas/CropSelectorWidget.cpp
     src/ui/canvas/TransformCanvasWidget.cpp
     src/ui/canvas/TransformEditorDialog.cpp
-    src/ui/canvas/GroupEditorDialog.cpp
     src/ui/output/OutputWindow.cpp
     src/ui/output/ProgramMirrorWidget.cpp
     src/ui/output/MirrorOutputWindow.cpp
@@ -274,7 +273,6 @@ set(HEADERS
     include/ui/canvas/CropSelectorWidget.h
     include/ui/canvas/TransformCanvasWidget.h
     include/ui/canvas/TransformEditorDialog.h
-    include/ui/canvas/GroupEditorDialog.h
     include/ui/output/OutputWindow.h
     include/ui/output/ProgramMirrorWidget.h
     include/ui/output/MirrorOutputWindow.h

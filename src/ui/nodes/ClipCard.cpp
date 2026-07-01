@@ -260,6 +260,7 @@ void ClipCard::onEditClicked() {
     case Kind::VideoFile: {
         if (m_clipPath.isEmpty()) return;
         ClipEditDialog dlg(m_clipPath, m_settings, parent);
+        dlg.hideCropTab();
         if (dlg.exec() == QDialog::Accepted) {
             m_settings = dlg.resultSettings();
             m_settings.saveFor(m_clipPath);
@@ -271,6 +272,7 @@ void ClipCard::onEditClicked() {
         if (m_clipPath.isEmpty()) return;
         ClipEditDialog dlg(m_clipPath, m_settings, parent);
         dlg.hideTrimTab();
+        dlg.hideCropTab();
         if (dlg.exec() == QDialog::Accepted) {
             m_settings = dlg.resultSettings();
             m_settings.saveFor(m_clipPath);
@@ -710,18 +712,17 @@ void ClipCard::onBButtonClicked() {
 }
 
 void ClipCard::setCardMode(CardMode mode) {
-    if (m_cardMode == mode) {
-        const bool groupMember = (mode == CardMode::GroupMember);
-        ui->aBtn->setVisible(!groupMember);
-        ui->bBtn->setVisible(!groupMember);
-        ui->setOutputBtn->setVisible(groupMember);
-        return;
-    }
     m_cardMode = mode;
     const bool groupMember = (mode == CardMode::GroupMember);
-    ui->aBtn->setVisible(!groupMember);
-    ui->bBtn->setVisible(!groupMember);
+    const bool inputNode   = (mode == CardMode::InputNode);
+    // Input nodes on the blue pipeline have no A/B, set-output or transform UI.
+    ui->aBtn->setVisible(!groupMember && !inputNode);
+    ui->bBtn->setVisible(!groupMember && !inputNode);
     ui->setOutputBtn->setVisible(groupMember);
+    ui->transformToggleBtn->setVisible(!inputNode);
+    ui->transformContainer->setVisible(false);
+    if (inputNode)
+        ui->transformToggleBtn->setChecked(false);
     if (groupMember) {
         setASelected(false);
         setBSelected(false);

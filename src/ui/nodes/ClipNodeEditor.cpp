@@ -4,7 +4,7 @@
 #include "core/scripting/ScriptRuntime.h"
 #include "ui/editors/ScriptEditDialog.h"
 #include "ui/canvas/TransformEditorDialog.h"
-#include "ui/canvas/GroupEditorDialog.h"
+#include "ui/canvas/CropSelectorWidget.h"
 #include "ui_ContextNodeDialog.h"
 #include "ui_AudioNodeDialog.h"
 #include <QJsonArray>
@@ -85,19 +85,21 @@ static const QColor kSelectionAccent(0x4a, 0x9e, 0xff);
 class PortItem;
 class NodeItemBase;
 class ClipNodeItem;
-class TransformContextNodeItem;
+class ProcessNodeItem;
+class LayerNodeItem;
+class AbSelectNodeItem;
+class OutputNodeItem;
 class ScriptNodeItem;
 class MasterAudioOutputNodeItem;
 class MasterAudioInputNodeItem;
-class GroupNodeItem;
 class ClipNodeScene;
 class ClipNodeView;
 
 enum class PortKind {
     ChainIn,
     ChainOut,
-    TransformContext,
-    ContextHub,
+    AbOut,
+    AbIn,
     AudioOut,
     ShaderAudioIn,
     AudioIn,
@@ -111,9 +113,9 @@ enum class PortKind {
 QColor portKindColor(PortKind kind) {
     switch (kind) {
     case PortKind::ChainIn:            return QColor(0x50, 0xa8, 0xd8);
-    case PortKind::ChainOut:           return QColor(0x50, 0xd0, 0x90);
-    case PortKind::TransformContext:   return QColor(0xd0, 0xb0, 0x50);
-    case PortKind::ContextHub:         return QColor(0xd0, 0xb0, 0x50);
+    case PortKind::ChainOut:           return QColor(0x50, 0xa8, 0xd8);
+    case PortKind::AbOut:              return QColor(0xe0, 0x50, 0x50);
+    case PortKind::AbIn:               return QColor(0xe0, 0x50, 0x50);
     case PortKind::AudioOut:           return QColor(0xe8, 0x80, 0x30);
     case PortKind::ShaderAudioIn:      return QColor(0xe8, 0x80, 0x30);
     case PortKind::AudioIn:            return QColor(0xe8, 0x80, 0x30);
@@ -130,8 +132,8 @@ bool portsCompatible(PortKind a, PortKind b) {
     if (a == b) return false;
     if ((a == PortKind::ChainOut && b == PortKind::ChainIn) ||
         (a == PortKind::ChainIn && b == PortKind::ChainOut)) return true;
-    if ((a == PortKind::TransformContext && b == PortKind::ContextHub) ||
-        (a == PortKind::ContextHub && b == PortKind::TransformContext)) return true;
+    if ((a == PortKind::AbOut && b == PortKind::AbIn) ||
+        (a == PortKind::AbIn && b == PortKind::AbOut)) return true;
     if ((a == PortKind::AudioControllerOut && b == PortKind::ShaderAudioIn) ||
         (a == PortKind::ShaderAudioIn && b == PortKind::AudioControllerOut)) return true;
     if ((a == PortKind::AudioControllerOut && b == PortKind::MasterAudioIn) ||
@@ -144,9 +146,9 @@ bool portsCompatible(PortKind a, PortKind b) {
 }
 
 bool isSingleConnection(PortKind kind) {
-    if (kind == PortKind::ContextHub) return false;
     if (kind == PortKind::AudioControllerOut) return false;
     if (kind == PortKind::MasterAudioIn) return false;
+    if (kind == PortKind::AbIn) return false;   // all A/B-select nodes feed the one Output
     return true;
 }
 
@@ -189,7 +191,8 @@ class ConnectionItem : public QGraphicsPathItem {
 public:
     enum EdgeKind { Chain = 0, TransformToContext = 1, AudioToController = 2,
                     ControllerToMaster = 3, LegacyClipToTransform = 4,
-                    ClipToShaderAudio = 5, ScriptToData = 6, InputToMaster = 7 };
+                    ClipToShaderAudio = 5, ScriptToData = 6, InputToMaster = 7,
+                    AbToOutput = 8 };
 
     ConnectionItem(PortItem *from, PortItem *to, EdgeKind kind)
         : QGraphicsPathItem(nullptr), m_from(from), m_to(to), m_kind(kind)
@@ -198,7 +201,7 @@ public:
         setFlag(QGraphicsItem::ItemIsSelectable, true);
         QColor color;
         if (kind == Chain) color = QColor(0x70, 0xb8, 0xff);
-        else if (kind == TransformToContext) color = QColor(0xd0, 0xb0, 0x70);
+        else if (kind == AbToOutput) color = QColor(0xe0, 0x50, 0x50);
         else if (kind == AudioToController) color = QColor(0xe8, 0x80, 0x30);
         else if (kind == ClipToShaderAudio) color = QColor(0xe8, 0x90, 0x40);
         else if (kind == ScriptToData) color = QColor(0x70, 0xc8, 0xa0);
@@ -277,15 +280,13 @@ public:
         model->setCard(card);
         QObject::connect(card, &ClipCard::preferredHeightChanged, card, [this](int) { updateLayout(); });
 
+        card->setCardMode(ClipCard::CardMode::InputNode);
+
         m_proxy = new QGraphicsProxyWidget(this);
         m_proxy->setWidget(card);
         m_proxy->setPos(0, PROXY_Y);
 
-        m_chainInPort = new PortItem(PortKind::ChainIn, this);
-        m_chainInPort->setPos(PORT_X, IN_PORT_Y);
-
         m_chainOutPort = new PortItem(PortKind::ChainOut, this);
-        m_contextPort = new PortItem(PortKind::TransformContext, this);
 
         if (hasAudio) {
             m_audioPort = new PortItem(PortKind::AudioControllerOut, this);
@@ -305,9 +306,7 @@ public:
 
     NodeId nodeId() const override { return m_nodeId; }
     ClipNodeModel *model() const { return m_model; }
-    PortItem *chainInPort()  const { return m_chainInPort; }
     PortItem *chainOutPort() const { return m_chainOutPort; }
-    PortItem *contextPort() const { return m_contextPort; }
     PortItem *audioPort() const { return m_audioPort; }
     PortItem *shaderAudioInPort() const { return m_shaderAudioInPort; }
     PortItem *dataInPort() const { return m_dataInPort; }
@@ -322,17 +321,6 @@ public:
     void setMuted(bool m) { m_muted = m; update(); }
     void setPlaybackMode(AudioPlaybackMode mode) { m_playbackMode = mode; update(); }
     void setDelayMs(int ms) { m_delayMs = ms; update(); }
-
-    float x() const { return m_x; }
-    float y() const { return m_y; }
-    float w() const { return m_w; }
-    float h() const { return m_h; }
-
-    void setTransform(float x, float y, float w, float h) {
-        m_x = x; m_y = y; m_w = w; m_h = h;
-        if (m_model) m_model->setTransform(x, y, w, h);
-        update();
-    }
 
     qreal bodyHeight() const {
         return m_proxy->widget() ? m_proxy->widget()->height() : CARD_PROXY_H;
@@ -372,13 +360,10 @@ public:
         p->setBrush(QColor(42, 44, 52));
         p->drawPath(hdr);
 
-        p->setPen(QColor(180, 160, 100));
+        p->setPen(QColor(120, 170, 210));
         p->setFont(QFont("Monospace", 7));
         p->drawText(QRectF(4, 2, NODE_W - 8, HEADER_H),
-                    Qt::AlignCenter,
-                    QString("%1%,%2% %3%×%4%")
-                        .arg((int)(m_x * 100)).arg((int)(m_y * 100))
-                        .arg((int)(m_w * 100)).arg((int)(m_h * 100)));
+                    Qt::AlignCenter, QStringLiteral("INPUT"));
 
         if (m_hasAudio) {
             const qreal stripTop = PROXY_Y + bodyHeight();
@@ -425,11 +410,6 @@ public:
                 if (onEditAudioRequested) onEditAudioRequested(m_nodeId);
             });
         }
-        if (m_model && m_model->isGroupMember()) {
-            menu.addAction("Rename", [this]() {
-                if (onRenameRequested) onRenameRequested(m_nodeId);
-            });
-        }
         menu.addAction("Delete", [this]() {
             if (onDeleteRequested) onDeleteRequested(m_nodeId);
         });
@@ -466,99 +446,99 @@ private:
     bool m_muted;
     AudioPlaybackMode m_playbackMode;
     int  m_delayMs;
-    float m_x = 0.f, m_y = 0.f, m_w = 1.f, m_h = 1.f;
     QGraphicsProxyWidget *m_proxy;
-    PortItem *m_chainInPort;
     PortItem *m_chainOutPort;
-    PortItem *m_contextPort;
     PortItem *m_audioPort = nullptr;
     PortItem *m_shaderAudioInPort = nullptr;
     PortItem *m_dataInPort = nullptr;
 };
 
-class TransformContextNodeItem : public NodeItemBase {
+// ── Process node (Crop / FlipH / FlipV) ─────────────────────────────────────
+class ProcessNodeItem : public NodeItemBase {
 public:
-    TransformContextNodeItem(NodeId id, int canvasW = 1280, int canvasH = 720)
-        : m_nodeId(id), m_canvasW(canvasW), m_canvasH(canvasH)
+    enum class Effect { Crop = 0, FlipH = 1, FlipV = 2 };
+
+    ProcessNodeItem(NodeId id, Effect effect)
+        : m_nodeId(id), m_effect(effect)
     {
         setFlags(ItemIsMovable | ItemSendsGeometryChanges | ItemIsSelectable);
         setZValue(0);
-
-        m_hubPort = new PortItem(PortKind::ContextHub, this);
-        m_hubPort->setPos(0, SMALL_NODE_H / 2);
+        m_inPort  = new PortItem(PortKind::ChainIn, this);
+        m_inPort->setPos(0, PROC_H / 2);
+        m_outPort = new PortItem(PortKind::ChainOut, this);
+        m_outPort->setPos(PROC_W, PROC_H / 2);
     }
 
     std::function<void(NodeId)> onEditRequested;
-    std::function<void(NodeId)> onOpenEditorRequested;
     std::function<void(NodeId)> onDeleteRequested;
 
+    static constexpr qreal PROC_W = 116.0;
+    static constexpr qreal PROC_H = 66.0;
+
     NodeId nodeId() const override { return m_nodeId; }
-    PortItem *hubPort() const { return m_hubPort; }
+    PortItem *inPort()  const { return m_inPort; }
+    PortItem *outPort() const { return m_outPort; }
 
-    int canvasW() const { return m_canvasW; }
-    int canvasH() const { return m_canvasH; }
-
-    void setCanvasSize(int w, int h) {
-        m_canvasW = w; m_canvasH = h;
-        update();
+    Effect effect() const { return m_effect; }
+    void cropRect(float &x, float &y, float &w, float &h) const {
+        x = m_cropX; y = m_cropY; w = m_cropW; h = m_cropH;
+    }
+    void setCropRect(float x, float y, float w, float h) {
+        m_cropX = x; m_cropY = y; m_cropW = w; m_cropH = h; update();
     }
 
-    QRectF boundingRect() const override { return QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H); }
+    QRectF boundingRect() const override { return QRectF(0, 0, PROC_W, PROC_H); }
+    QRectF getEditButtonRect() const { return QRectF(8, PROC_H - 24, PROC_W - 16, 18); }
 
     void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
         p->setRenderHint(QPainter::Antialiasing);
         p->setPen(QPen(QColor(55, 56, 62), 1));
-        p->setBrush(QColor(30, 31, 34));
-        p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H), 4, 4);
+        p->setBrush(QColor(28, 30, 36));
+        p->drawRoundedRect(QRectF(0, 0, PROC_W, PROC_H), 4, 4);
 
-        p->setPen(QColor(180, 160, 100));
-        p->setFont(QFont("Monospace", 8));
-        QString label = QString("Canvas\n%1×%2")
-            .arg(m_canvasW).arg(m_canvasH);
-        p->drawText(QRectF(4, 4, SMALL_NODE_W - 8, 35),
-                   Qt::AlignCenter, label);
+        p->setPen(QColor(120, 170, 210));
+        p->setFont(QFont("Monospace", 8, QFont::Bold));
+        QString name = m_effect == Effect::Crop ? "Crop"
+                     : m_effect == Effect::FlipH ? "Flip H" : "Flip V";
+        p->drawText(QRectF(4, 6, PROC_W - 8, 28), Qt::AlignCenter,
+                    QStringLiteral("PROCESS\n%1").arg(name));
 
-        QRectF buttonRect(4, 40, SMALL_NODE_W - 8, 25);
-        p->setPen(QPen(QColor(100, 180, 255), 1));
-        p->setBrush(QColor(20, 80, 150));
-        p->drawRoundedRect(buttonRect, 3, 3);
-        p->setPen(QColor(200, 220, 255));
-        p->setFont(QFont("Monospace", 7));
-        p->drawText(buttonRect, Qt::AlignCenter, "Edit");
+        if (m_effect == Effect::Crop) {
+            const QRectF r = getEditButtonRect();
+            p->setPen(QPen(QColor(100, 180, 255), 1));
+            p->setBrush(QColor(20, 80, 150));
+            p->drawRoundedRect(r, 3, 3);
+            p->setPen(QColor(200, 220, 255));
+            p->setFont(QFont("Monospace", 7));
+            p->drawText(r, Qt::AlignCenter, "Edit Crop");
+        }
 
         if (isSelected()) {
             p->setPen(QPen(kSelectionAccent, 2));
             p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H).adjusted(1, 1, -1, -1), 4, 4);
+            p->drawRoundedRect(QRectF(0, 0, PROC_W, PROC_H).adjusted(1, 1, -1, -1), 4, 4);
         }
     }
 
-    QRectF getEditButtonRect() const {
-        return QRectF(4, 40, SMALL_NODE_W - 8, 25);
-    }
-
-    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *e) override {
-        if (onEditRequested) onEditRequested(m_nodeId);
-        e->accept();
-    }
-
     void mousePressEvent(QGraphicsSceneMouseEvent *e) override {
-        if (getEditButtonRect().contains(e->pos())) {
-            if (onOpenEditorRequested) onOpenEditorRequested(m_nodeId);
+        if (m_effect == Effect::Crop && getEditButtonRect().contains(e->pos())) {
+            if (onEditRequested) onEditRequested(m_nodeId);
             e->accept();
             return;
         }
         QGraphicsItem::mousePressEvent(e);
     }
 
+    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *e) override {
+        if (m_effect == Effect::Crop && onEditRequested) onEditRequested(m_nodeId);
+        e->accept();
+    }
+
     void contextMenuEvent(QGraphicsSceneContextMenuEvent *e) override {
         QMenu menu;
-        menu.addAction("Edit Canvas Size", [this]() {
-            if (onEditRequested) onEditRequested(m_nodeId);
-        });
-        menu.addAction("Delete", [this]() {
-            if (onDeleteRequested) onDeleteRequested(m_nodeId);
-        });
+        if (m_effect == Effect::Crop)
+            menu.addAction("Edit Crop", [this]() { if (onEditRequested) onEditRequested(m_nodeId); });
+        menu.addAction("Delete", [this]() { if (onDeleteRequested) onDeleteRequested(m_nodeId); });
         menu.exec(e->screenPos());
         e->accept();
     }
@@ -568,8 +548,437 @@ protected:
 
 private:
     NodeId m_nodeId;
-    int m_canvasW, m_canvasH;
-    PortItem *m_hubPort;
+    Effect m_effect;
+    float m_cropX = 0.f, m_cropY = 0.f, m_cropW = 1.f, m_cropH = 1.f;
+    PortItem *m_inPort = nullptr;
+    PortItem *m_outPort = nullptr;
+};
+
+// ── Layer node (multi-input compositor with per-slot placement) ─────────────
+struct LayerSlot {
+    float baseX = 0.f, baseY = 0.f, baseW = 1.f, baseH = 1.f;
+    bool  visible = true;
+    QString name;
+};
+
+class LayerNodeItem : public NodeItemBase {
+public:
+    static constexpr qreal SW_W    = 158.0;
+    static constexpr qreal SW_HDR  = 20.0;
+    static constexpr qreal SW_ROW  = 22.0;
+    static constexpr qreal SW_FOOT = 26.0;
+
+    explicit LayerNodeItem(NodeId id, int initialSlots = 1)
+        : m_nodeId(id)
+    {
+        setFlags(ItemIsMovable | ItemSendsGeometryChanges | ItemIsSelectable);
+        setZValue(0);
+        setToolTip("Double-click a layer name to rename · eye toggles visibility · ▲▼ reorders");
+        for (int i = 0; i < initialSlots; ++i)
+            m_slots.push_back(LayerSlot{});
+        rebuildPorts();
+    }
+
+    std::function<void(NodeId)> onEditRequested;      // transform editor
+    std::function<void(NodeId)> onEditCanvasRequested;
+    std::function<void(NodeId)> onDeleteRequested;
+    std::function<void()>       onChanged;
+
+    NodeId nodeId() const override { return m_nodeId; }
+    PortItem *outPort() const { return m_outPort; }
+    int slotCount() const { return m_slots.size(); }
+    PortItem *inPort(int i) const { return (i >= 0 && i < m_inPorts.size()) ? m_inPorts[i] : nullptr; }
+    const QVector<PortItem *> &inPorts() const { return m_inPorts; }
+    const LayerSlot &slot(int i) const { return m_slots[i]; }
+    QVector<LayerSlot> &slotsRef() { return m_slots; }
+    void setSlots(const QVector<LayerSlot> &s) { m_slots = s; rebuildPorts(); }
+
+    int canvasW() const { return m_canvasW; }
+    int canvasH() const { return m_canvasH; }
+    void setCanvasSize(int w, int h) { m_canvasW = w; m_canvasH = h; update(); }
+
+    qreal nodeHeight() const { return SW_HDR + m_slots.size() * SW_ROW + SW_FOOT; }
+    QRectF boundingRect() const override { return QRectF(0, 0, SW_W, nodeHeight()); }
+
+    QRectF rowRect(int i) const { return QRectF(0, SW_HDR + i * SW_ROW, SW_W, SW_ROW); }
+    QRectF eyeRect(int i) const { return QRectF(6, SW_HDR + i * SW_ROW + 3, 16, 16); }
+    QRectF nameRect(int i) const { return QRectF(26, SW_HDR + i * SW_ROW, SW_W - 70, SW_ROW); }
+    QRectF upRect(int i)  const { return QRectF(SW_W - 40, SW_HDR + i * SW_ROW + 3, 16, 16); }
+    QRectF downRect(int i) const { return QRectF(SW_W - 22, SW_HDR + i * SW_ROW + 3, 16, 16); }
+    QRectF editButtonRect() const { return QRectF(6, nodeHeight() - SW_FOOT + 3, SW_W - 12, 20); }
+
+    void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
+        p->setRenderHint(QPainter::Antialiasing);
+        const QRectF bounds(0, 0, SW_W, nodeHeight());
+        p->setPen(QPen(QColor(55, 56, 62), 1));
+        p->setBrush(QColor(28, 32, 40));
+        p->drawRoundedRect(bounds, 5, 5);
+
+        p->setPen(QColor(120, 170, 210));
+        p->setFont(QFont("Monospace", 8, QFont::Bold));
+        p->drawText(QRectF(4, 3, SW_W - 8, SW_HDR - 4), Qt::AlignCenter,
+                    QStringLiteral("LAYER  %1×%2").arg(m_canvasW).arg(m_canvasH));
+
+        for (int i = 0; i < m_slots.size(); ++i) {
+            const LayerSlot &s = m_slots[i];
+            const bool connected = i < m_inPorts.size() && m_inPorts[i]->isConnected();
+            p->setPen(QColor(60, 62, 70));
+            p->drawLine(QPointF(4, SW_HDR + i * SW_ROW), QPointF(SW_W - 4, SW_HDR + i * SW_ROW));
+
+            if (!connected) {
+                // Trailing empty input slot — placeholder, no controls.
+                p->setPen(QColor(110, 115, 125));
+                p->setFont(QFont("Monospace", 7));
+                p->drawText(QRectF(26, SW_HDR + i * SW_ROW, SW_W - 32, SW_ROW),
+                            Qt::AlignVCenter | Qt::AlignLeft, "+ connect input");
+                continue;
+            }
+
+            // eye toggle (show/hide layer)
+            MaterialSymbols::drawCentered(*p, eyeRect(i),
+                                          s.visible ? "visibility" : "visibility_off", 14,
+                                          s.visible ? QColor(120, 200, 160) : QColor(90, 90, 96));
+
+            // editable name (double-click to rename)
+            const QRectF nr = nameRect(i);
+            p->setPen(QColor(190, 195, 205));
+            p->setFont(QFont("Monospace", 7));
+            const QString nm = s.name.isEmpty() ? QStringLiteral("in %1").arg(i + 1) : s.name;
+            p->drawText(nr, Qt::AlignVCenter | Qt::AlignLeft,
+                        p->fontMetrics().elidedText(nm, Qt::ElideRight, nr.width()));
+            p->setPen(QColor(70, 74, 82));
+            p->drawLine(QPointF(nr.left(), nr.bottom() - 2), QPointF(nr.right(), nr.bottom() - 2));
+
+            // up / down
+            p->setPen(QColor(150, 160, 175));
+            p->setFont(QFont("Monospace", 9));
+            if (i > 0)                     p->drawText(upRect(i),   Qt::AlignCenter, "▲");
+            if (i < connectedCount() - 1)  p->drawText(downRect(i), Qt::AlignCenter, "▼");
+        }
+
+        const QRectF er = editButtonRect();
+        p->setPen(QPen(QColor(100, 180, 255), 1));
+        p->setBrush(QColor(20, 80, 150));
+        p->drawRoundedRect(er, 3, 3);
+        p->setPen(QColor(200, 220, 255));
+        p->setFont(QFont("Monospace", 7));
+        p->drawText(er, Qt::AlignCenter, "Edit Layout");
+
+        if (isSelected()) {
+            p->setPen(QPen(kSelectionAccent, 2));
+            p->setBrush(Qt::NoBrush);
+            p->drawRoundedRect(bounds.adjusted(1, 1, -1, -1), 5, 5);
+        }
+    }
+
+    // Number of leading connected input slots (the trailing slot is always empty).
+    int connectedCount() const {
+        int n = 0;
+        for (int i = 0; i < m_inPorts.size(); ++i)
+            if (m_inPorts[i]->isConnected()) ++n;
+        return n;
+    }
+
+    void swapInputs(int a, int b) {
+        std::swap(m_slots[a], m_slots[b]);
+        std::swap(m_inPorts[a], m_inPorts[b]);
+        positionPorts();
+        update();
+        if (onChanged) onChanged();
+    }
+
+    void mousePressEvent(QGraphicsSceneMouseEvent *e) override {
+        for (int i = 0; i < m_slots.size(); ++i) {
+            const bool connected = i < m_inPorts.size() && m_inPorts[i]->isConnected();
+            if (!connected) continue;
+            if (eyeRect(i).contains(e->pos())) {
+                m_slots[i].visible = !m_slots[i].visible;
+                update();
+                if (onChanged) onChanged();
+                e->accept();
+                return;
+            }
+            if (upRect(i).contains(e->pos()) && i > 0 && m_inPorts[i - 1]->isConnected()) {
+                swapInputs(i, i - 1);
+                e->accept();
+                return;
+            }
+            if (downRect(i).contains(e->pos()) && i < connectedCount() - 1) {
+                swapInputs(i, i + 1);
+                e->accept();
+                return;
+            }
+        }
+        if (editButtonRect().contains(e->pos())) {
+            if (onEditRequested) onEditRequested(m_nodeId);
+            e->accept();
+            return;
+        }
+        QGraphicsItem::mousePressEvent(e);
+    }
+
+    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *e) override {
+        for (int i = 0; i < m_slots.size(); ++i) {
+            const bool connected = i < m_inPorts.size() && m_inPorts[i]->isConnected();
+            if (connected && nameRect(i).contains(e->pos())) {
+                bool ok = false;
+                const QString name = QInputDialog::getText(nullptr, "Rename Layer", "Name:",
+                    QLineEdit::Normal, m_slots[i].name, &ok);
+                if (ok) { m_slots[i].name = name; update(); if (onChanged) onChanged(); }
+                e->accept();
+                return;
+            }
+        }
+        QGraphicsItem::mouseDoubleClickEvent(e);
+    }
+
+    // Keep exactly one trailing empty input port; preserve connected ports/data + order.
+    void normalizeInputs();
+
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent *e) override {
+        QMenu menu;
+        menu.addAction("Edit Canvas Size", [this]() { if (onEditCanvasRequested) onEditCanvasRequested(m_nodeId); });
+        menu.addAction("Edit Layout", [this]() { if (onEditRequested) onEditRequested(m_nodeId); });
+        menu.addAction("Delete", [this]() { if (onDeleteRequested) onDeleteRequested(m_nodeId); });
+        menu.exec(e->screenPos());
+        e->accept();
+    }
+
+protected:
+    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
+
+private:
+    void rebuildPorts();
+    void positionPorts();
+
+    NodeId m_nodeId;
+    int m_canvasW = 1280, m_canvasH = 720;
+    QVector<LayerSlot> m_slots;
+    QVector<PortItem *> m_inPorts;
+    PortItem *m_outPort = nullptr;
+};
+
+// ── A/B deck-select node ────────────────────────────────────────────────────
+struct AbSlot { QString name; };
+
+class AbSelectNodeItem : public NodeItemBase {
+public:
+    static constexpr qreal SW_W    = 168.0;
+    static constexpr qreal SW_HDR  = 20.0;
+    static constexpr qreal SW_ROW  = 24.0;
+    static constexpr qreal SW_FOOT = 6.0;
+
+    explicit AbSelectNodeItem(NodeId id, int initialSlots = 1)
+        : m_nodeId(id)
+    {
+        setFlags(ItemIsMovable | ItemSendsGeometryChanges | ItemIsSelectable);
+        setZValue(0);
+        setToolTip("Double-click an input name to rename · A/B assigns the deck");
+        for (int i = 0; i < initialSlots; ++i)
+            m_slots.push_back(AbSlot{});
+        rebuildPorts();
+    }
+
+    std::function<void(NodeId, int, bool)> onAssignDeck;  // (node, slot, deckA)
+    std::function<void(NodeId)> onDeleteRequested;
+    std::function<void()>       onChanged;
+
+    NodeId nodeId() const override { return m_nodeId; }
+    PortItem *abOutPort() const { return m_abOutPort; }
+    int slotCount() const { return m_slots.size(); }
+    PortItem *inPort(int i) const { return (i >= 0 && i < m_inPorts.size()) ? m_inPorts[i] : nullptr; }
+    const QVector<PortItem *> &inPorts() const { return m_inPorts; }
+    const AbSlot &slot(int i) const { return m_slots[i]; }
+    QVector<AbSlot> &slotsRef() { return m_slots; }
+    void setSlots(const QVector<AbSlot> &s) { m_slots = s; rebuildPorts(); }
+
+    // Which slot indices currently drive deck A / B (for highlight); set by editor.
+    void setDeckSlots(int aSlot, int bSlot) { m_aSlot = aSlot; m_bSlot = bSlot; update(); }
+
+    // Whether this node's red output is wired to the Output node; gates the A/B buttons.
+    void setOutputConnected(bool c) { if (m_outputConnected != c) { m_outputConnected = c; update(); } }
+    bool outputConnected() const { return m_outputConnected; }
+
+    qreal nodeHeight() const { return SW_HDR + m_slots.size() * SW_ROW + SW_FOOT; }
+    QRectF boundingRect() const override { return QRectF(0, 0, SW_W, nodeHeight()); }
+
+    QRectF aBtnRect(int i) const { return QRectF(SW_W - 52, SW_HDR + i * SW_ROW + 3, 22, 18); }
+    QRectF bBtnRect(int i) const { return QRectF(SW_W - 28, SW_HDR + i * SW_ROW + 3, 22, 18); }
+    QRectF nameRect(int i) const { return QRectF(6, SW_HDR + i * SW_ROW, SW_W - 62, SW_ROW); }
+
+    void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
+        p->setRenderHint(QPainter::Antialiasing);
+        const QRectF bounds(0, 0, SW_W, nodeHeight());
+        p->setPen(QPen(QColor(72, 46, 46), 1));
+        p->setBrush(QColor(40, 28, 30));
+        p->drawRoundedRect(bounds, 5, 5);
+
+        p->setPen(QColor(230, 120, 120));
+        p->setFont(QFont("Monospace", 8, QFont::Bold));
+        p->drawText(QRectF(4, 3, SW_W - 8, SW_HDR - 4), Qt::AlignCenter, "A/B SELECT");
+
+        for (int i = 0; i < m_slots.size(); ++i) {
+            const bool connected = i < m_inPorts.size() && m_inPorts[i]->isConnected();
+            p->setPen(QColor(70, 50, 52));
+            p->drawLine(QPointF(4, SW_HDR + i * SW_ROW), QPointF(SW_W - 4, SW_HDR + i * SW_ROW));
+
+            if (!connected) {
+                p->setPen(QColor(120, 100, 102));
+                p->setFont(QFont("Monospace", 7));
+                p->drawText(QRectF(8, SW_HDR + i * SW_ROW, SW_W - 12, SW_ROW),
+                            Qt::AlignVCenter | Qt::AlignLeft, "+ connect input");
+                continue;
+            }
+
+            const QRectF nr = nameRect(i);
+            p->setPen(QColor(210, 195, 195));
+            p->setFont(QFont("Monospace", 7));
+            const QString nm = m_slots[i].name.isEmpty() ? QStringLiteral("in %1").arg(i + 1) : m_slots[i].name;
+            p->drawText(nr, Qt::AlignVCenter | Qt::AlignLeft,
+                        p->fontMetrics().elidedText(nm, Qt::ElideRight, nr.width()));
+            p->setPen(QColor(86, 62, 64));
+            p->drawLine(QPointF(nr.left(), nr.bottom() - 2), QPointF(nr.right(), nr.bottom() - 2));
+
+            auto drawBtn = [&](const QRectF &r, const QString &t, bool active) {
+                if (!m_outputConnected) {
+                    p->setPen(QPen(QColor(70, 58, 60), 1));
+                    p->setBrush(QColor(36, 30, 32));
+                    p->drawRoundedRect(r, 3, 3);
+                    p->setPen(QColor(96, 84, 86));
+                    p->setFont(QFont("Monospace", 8, QFont::Bold));
+                    p->drawText(r, Qt::AlignCenter, t);
+                    return;
+                }
+                p->setPen(QPen(active ? QColor(0xe0, 0x50, 0x50) : QColor(90, 70, 72), 1));
+                p->setBrush(active ? QColor(0x80, 0x2a, 0x2a) : QColor(46, 34, 36));
+                p->drawRoundedRect(r, 3, 3);
+                p->setPen(active ? Qt::white : QColor(180, 160, 162));
+                p->setFont(QFont("Monospace", 8, QFont::Bold));
+                p->drawText(r, Qt::AlignCenter, t);
+            };
+            drawBtn(aBtnRect(i), "A", i == m_aSlot);
+            drawBtn(bBtnRect(i), "B", i == m_bSlot);
+        }
+
+        if (isSelected()) {
+            p->setPen(QPen(kSelectionAccent, 2));
+            p->setBrush(Qt::NoBrush);
+            p->drawRoundedRect(bounds.adjusted(1, 1, -1, -1), 5, 5);
+        }
+    }
+
+    void mousePressEvent(QGraphicsSceneMouseEvent *e) override {
+        if (m_outputConnected) {
+            for (int i = 0; i < m_slots.size(); ++i) {
+                if (i >= m_inPorts.size() || !m_inPorts[i]->isConnected()) continue;
+                if (aBtnRect(i).contains(e->pos())) {
+                    if (onAssignDeck) onAssignDeck(m_nodeId, i, true);
+                    e->accept();
+                    return;
+                }
+                if (bBtnRect(i).contains(e->pos())) {
+                    if (onAssignDeck) onAssignDeck(m_nodeId, i, false);
+                    e->accept();
+                    return;
+                }
+            }
+        }
+        QGraphicsItem::mousePressEvent(e);
+    }
+
+    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *e) override {
+        for (int i = 0; i < m_slots.size(); ++i) {
+            if (i >= m_inPorts.size() || !m_inPorts[i]->isConnected()) continue;
+            if (nameRect(i).contains(e->pos())) {
+                bool ok = false;
+                const QString name = QInputDialog::getText(nullptr, "Rename Input", "Name:",
+                    QLineEdit::Normal, m_slots[i].name, &ok);
+                if (ok) { m_slots[i].name = name; update(); if (onChanged) onChanged(); }
+                e->accept();
+                return;
+            }
+        }
+        QGraphicsItem::mouseDoubleClickEvent(e);
+    }
+
+    // Keep exactly one trailing empty input port; preserve connected ports/data + order.
+    void normalizeInputs();
+
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent *e) override {
+        QMenu menu;
+        menu.addAction("Delete", [this]() { if (onDeleteRequested) onDeleteRequested(m_nodeId); });
+        menu.exec(e->screenPos());
+        e->accept();
+    }
+
+protected:
+    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
+
+private:
+    void rebuildPorts();
+    void positionPorts();
+
+    NodeId m_nodeId;
+    QVector<AbSlot> m_slots;
+    QVector<PortItem *> m_inPorts;
+    PortItem *m_abOutPort = nullptr;
+    int m_aSlot = -1, m_bSlot = -1;
+    bool m_outputConnected = false;
+};
+
+// ── Output node (single sink) ───────────────────────────────────────────────
+class OutputNodeItem : public NodeItemBase {
+public:
+    static constexpr qreal OUT_W = 116.0;
+    static constexpr qreal OUT_H = 60.0;
+
+    explicit OutputNodeItem(NodeId id)
+        : m_nodeId(id)
+    {
+        setFlags(ItemIsMovable | ItemSendsGeometryChanges | ItemIsSelectable);
+        setZValue(0);
+        m_chainInPort = new PortItem(PortKind::ChainIn, this);
+        m_chainInPort->setPos(0, OUT_H * 0.33);
+        m_abInPort = new PortItem(PortKind::AbIn, this);
+        m_abInPort->setPos(0, OUT_H * 0.67);
+    }
+
+    NodeId nodeId() const override { return m_nodeId; }
+    PortItem *chainInPort() const { return m_chainInPort; }
+    PortItem *abInPort()    const { return m_abInPort; }
+
+    QRectF boundingRect() const override { return QRectF(0, 0, OUT_W, OUT_H); }
+
+    void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
+        p->setRenderHint(QPainter::Antialiasing);
+        p->setPen(QPen(QColor(70, 90, 110), 1));
+        p->setBrush(QColor(26, 34, 42));
+        p->drawRoundedRect(QRectF(0, 0, OUT_W, OUT_H), 5, 5);
+
+        p->setPen(QColor(150, 200, 240));
+        p->setFont(QFont("Monospace", 10, QFont::Bold));
+        p->drawText(QRectF(0, 0, OUT_W, OUT_H), Qt::AlignCenter, "OUTPUT");
+
+        p->setPen(QColor(90, 150, 200));
+        p->setFont(QFont("Monospace", 6));
+        p->drawText(QRectF(14, OUT_H * 0.33 - 6, 60, 12), Qt::AlignVCenter | Qt::AlignLeft, "video");
+        p->setPen(QColor(220, 110, 110));
+        p->drawText(QRectF(14, OUT_H * 0.67 - 6, 60, 12), Qt::AlignVCenter | Qt::AlignLeft, "A/B");
+
+        if (isSelected()) {
+            p->setPen(QPen(kSelectionAccent, 2));
+            p->setBrush(Qt::NoBrush);
+            p->drawRoundedRect(QRectF(0, 0, OUT_W, OUT_H).adjusted(1, 1, -1, -1), 5, 5);
+        }
+    }
+
+protected:
+    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
+
+private:
+    NodeId m_nodeId;
+    PortItem *m_chainInPort = nullptr;
+    PortItem *m_abInPort = nullptr;
 };
 
 class MasterAudioOutputNodeItem : public NodeItemBase {
@@ -975,159 +1384,28 @@ private:
     ScriptRuntime *m_runtime = nullptr;
 };
 
-class GroupNodeItem : public NodeItemBase {
-public:
-    GroupNodeItem(NodeId id, ClipNodeScene *subScene)
-        : m_nodeId(id), m_subScene(subScene)
-    {
-        setFlags(ItemIsMovable | ItemSendsGeometryChanges | ItemIsSelectable);
-        setZValue(0);
+
+// Ordered input ports for a node whose destination slot must survive save/restore.
+static QVector<PortItem *> orderedInputPorts(NodeItemBase *node) {
+    QVector<PortItem *> ports;
+    if (auto *l = dynamic_cast<LayerNodeItem *>(node)) {
+        ports = l->inPorts();
+    } else if (auto *a = dynamic_cast<AbSelectNodeItem *>(node)) {
+        ports = a->inPorts();
+    } else if (auto *o = dynamic_cast<OutputNodeItem *>(node)) {
+        ports << o->chainInPort() << o->abInPort();
+    } else if (auto *p = dynamic_cast<ProcessNodeItem *>(node)) {
+        ports << p->inPort();
     }
+    return ports;
+}
 
-    std::function<void(NodeId, bool)> onDeckRequested;
-    std::function<void(NodeId)> onEditRequested;
-    std::function<void(NodeId)> onUngroupRequested;
-    std::function<void(NodeId)> onDeleteRequested;
-    std::function<void(NodeId)> onRenameRequested;
-
-    NodeId nodeId() const override { return m_nodeId; }
-    ClipNodeScene *subScene() const { return m_subScene; }
-    NodeId delegateId() const { return m_delegateId; }
-    QString name() const { return m_name; }
-
-    void setName(const QString &name) {
-        m_name = name.trimmed().isEmpty() ? QStringLiteral("Group") : name.trimmed();
-        update();
-    }
-
-    void setDelegateId(NodeId id) {
-        m_delegateId = id;
-        update();
-    }
-
-    bool containsMember(NodeId memberId) const;
-    QVector<NodeId> memberIds() const;
-
-    QRectF boundingRect() const override { return QRectF(0, 0, NODE_W, GROUP_NODE_H); }
-
-    QRectF aButtonRect() const { return QRectF(4, PROXY_Y + 8, 36, 22); }
-    QRectF bButtonRect() const { return QRectF(44, PROXY_Y + 8, 36, 22); }
-    QRectF editButtonRect() const { return QRectF(84, PROXY_Y + 8, 34, 22); }
-
-    void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
-        p->setRenderHint(QPainter::Antialiasing);
-        const QRectF bounds(0, 0, NODE_W, GROUP_NODE_H);
-        p->setPen(QPen(QColor(55, 56, 62), 1));
-        p->setBrush(QColor(28, 32, 40));
-        p->drawRoundedRect(bounds, 6, 6);
-
-        QPainterPath hdr;
-        hdr.moveTo(6, 0);
-        hdr.arcTo(QRectF(0, 0, 12, 12), 90, 90);
-        hdr.lineTo(0, PROXY_Y);
-        hdr.lineTo(NODE_W, PROXY_Y);
-        hdr.lineTo(NODE_W, 6);
-        hdr.arcTo(QRectF(NODE_W - 12, 0, 12, 12), 0, 90);
-        hdr.closeSubpath();
-        p->setPen(Qt::NoPen);
-        p->setBrush(QColor(42, 48, 58));
-        p->drawPath(hdr);
-
-        p->setPen(QColor(160, 180, 210));
-        p->setFont(QFont("Monospace", 8, QFont::Bold));
-        const QFontMetrics fm(p->font());
-        p->drawText(QRectF(4, 2, NODE_W - 8, HEADER_H), Qt::AlignCenter,
-                    fm.elidedText(m_name, Qt::ElideRight, NODE_W - 8));
-
-        auto drawBtn = [&](const QRectF &r, const QString &label, bool active) {
-            p->setPen(QPen(active ? QColor(0x2a, 0x8f, 0xa0) : QColor(80, 85, 95), 1));
-            p->setBrush(active ? QColor(0x2a, 0x5c, 0x66) : QColor(36, 38, 44));
-            p->drawRoundedRect(r, 3, 3);
-            p->setPen(active ? Qt::white : QColor(180, 185, 195));
-            p->setFont(QFont("Monospace", 8));
-            p->drawText(r, Qt::AlignCenter, label);
-        };
-        drawBtn(aButtonRect(), "A", m_aActive);
-        drawBtn(bButtonRect(), "B", m_bActive);
-        drawBtn(editButtonRect(), "Edit", false);
-
-        p->setPen(QColor(120, 130, 150));
-        p->setFont(QFont("Monospace", 7));
-        p->drawText(QRectF(4, PROXY_Y + 36, NODE_W - 8, 40), Qt::AlignCenter,
-                    m_delegateId ? QString("Out: clip %1").arg(m_delegateId)
-                                 : QString("No output"));
-
-        if (isSelected()) {
-            p->setPen(QPen(kSelectionAccent, 2));
-            p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(bounds.adjusted(1, 1, -1, -1), 6, 6);
-        }
-    }
-
-    void setDeckActive(bool deckA, bool active) {
-        if (deckA) m_aActive = active;
-        else       m_bActive = active;
-        update();
-    }
-
-    void mousePressEvent(QGraphicsSceneMouseEvent *e) override {
-        if (aButtonRect().contains(e->pos())) {
-            if (onDeckRequested && m_delegateId) {
-                setDeckActive(true, true);
-                setDeckActive(false, false);
-                onDeckRequested(m_delegateId, true);
-            }
-            e->accept();
-            return;
-        }
-        if (bButtonRect().contains(e->pos())) {
-            if (onDeckRequested && m_delegateId) {
-                setDeckActive(false, true);
-                setDeckActive(true, false);
-                onDeckRequested(m_delegateId, false);
-            }
-            e->accept();
-            return;
-        }
-        if (editButtonRect().contains(e->pos())) {
-            if (onEditRequested) onEditRequested(m_nodeId);
-            e->accept();
-            return;
-        }
-        QGraphicsItem::mousePressEvent(e);
-    }
-
-    void contextMenuEvent(QGraphicsSceneContextMenuEvent *e) override {
-        QMenu menu;
-        menu.addAction("Rename", [this]() {
-            if (onRenameRequested) onRenameRequested(m_nodeId);
-        });
-        menu.addAction("Edit Group", [this]() {
-            if (onEditRequested) onEditRequested(m_nodeId);
-        });
-        menu.addAction("Ungroup", [this]() {
-            if (onUngroupRequested) onUngroupRequested(m_nodeId);
-        });
-        menu.addAction("Delete", [this]() {
-            if (onDeleteRequested) onDeleteRequested(m_nodeId);
-        });
-        menu.exec(e->screenPos());
-        e->accept();
-    }
-
-protected:
-    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
-
-private:
-    static constexpr qreal GROUP_NODE_H = PROXY_Y + 90.0;
-
-    NodeId m_nodeId;
-    NodeId m_delegateId = 0;
-    ClipNodeScene *m_subScene;
-    QString m_name = QStringLiteral("Group");
-    bool m_aActive = false;
-    bool m_bActive = false;
-};
+static int destPortIndex(NodeItemBase *node, PortItem *port) {
+    const QVector<PortItem *> ports = orderedInputPorts(node);
+    for (int i = 0; i < ports.size(); ++i)
+        if (ports[i] == port) return i;
+    return -1;
+}
 
 class ClipNodeScene : public QGraphicsScene {
 public:
@@ -1218,6 +1496,10 @@ public:
             outPort = (src->kind() == PortKind::ChainOut) ? src : dst;
             inPort  = (src->kind() == PortKind::ChainIn)  ? src : dst;
             kind = ConnectionItem::Chain;
+        } else if (src->kind() == PortKind::AbOut || src->kind() == PortKind::AbIn) {
+            outPort = (src->kind() == PortKind::AbOut) ? src : dst;
+            inPort  = (src->kind() == PortKind::AbIn)  ? src : dst;
+            kind = ConnectionItem::AbToOutput;
         } else if ((src->kind() == PortKind::AudioControllerOut && dst->kind() == PortKind::ShaderAudioIn) ||
                    (src->kind() == PortKind::ShaderAudioIn && dst->kind() == PortKind::AudioControllerOut)) {
             outPort = (src->kind() == PortKind::AudioControllerOut) ? src : dst;
@@ -1232,15 +1514,24 @@ public:
             outPort = (src->kind() == PortKind::AudioControllerOut) ? src : dst;
             inPort  = (src->kind() == PortKind::MasterAudioIn)      ? src : dst;
             kind = ConnectionItem::ControllerToMaster;
-        } else if ((src->kind() == PortKind::ScriptOut && dst->kind() == PortKind::DataIn) ||
-                   (src->kind() == PortKind::DataIn && dst->kind() == PortKind::ScriptOut)) {
+        } else {
             outPort = (src->kind() == PortKind::ScriptOut) ? src : dst;
             inPort  = (src->kind() == PortKind::DataIn)    ? src : dst;
             kind = ConnectionItem::ScriptToData;
-        } else {
-            outPort = (src->kind() == PortKind::TransformContext) ? src : dst;
-            inPort  = (src->kind() == PortKind::ContextHub)       ? src : dst;
-            kind = ConnectionItem::TransformToContext;
+        }
+
+        // Rule 1: a Process video-IN accepts only Input or Process producers.
+        if (kind == ConnectionItem::Chain
+            && dynamic_cast<ProcessNodeItem *>(inPort->nodeItem())) {
+            NodeItemBase *up = outPort->nodeItem();
+            if (!dynamic_cast<ClipNodeItem *>(up) && !dynamic_cast<ProcessNodeItem *>(up))
+                return;
+        }
+        // Rule 2: Output's input is blue XOR red (many red A/B nodes allowed, but not mixed with blue).
+        if (auto *out = dynamic_cast<OutputNodeItem *>(inPort->nodeItem())) {
+            PortItem *other = (inPort == out->chainInPort()) ? out->abInPort() : out->chainInPort();
+            if (other && portHasEdge(other))
+                return;
         }
 
         if (isSingleConnection(outPort->kind()))
@@ -1301,60 +1592,28 @@ public:
         return 0;
     }
 
-    NodeId contextForClip(NodeId clipId) const {
+    // Producer node feeding a specific blue input PORT (via a Chain edge).
+    NodeId producerForInputPort(PortItem *inPort) const {
         for (const auto &e : m_edges)
-            if (e.edgeKind == ConnectionItem::TransformToContext && e.fromNodeId == clipId)
-                return e.toNodeId;
+            if (e.edgeKind == ConnectionItem::Chain && e.toPort == inPort)
+                return e.fromNodeId;
         return 0;
     }
 
-    QVector<NodeId> clipsForContext(NodeId contextId) const {
-        QVector<NodeId> result;
-        for (const auto &e : m_edges) {
-            if (e.edgeKind == ConnectionItem::TransformToContext && e.toNodeId == contextId)
-                result.append(e.fromNodeId);
-        }
-        return result;
-    }
-
-    bool chainCrossesSelectionBoundary(const QSet<NodeId> &members) const {
-        for (const auto &e : m_edges) {
-            if (e.edgeKind != ConnectionItem::Chain) continue;
-            const bool fromIn = members.contains(e.fromNodeId);
-            const bool toIn = members.contains(e.toNodeId);
-            if (fromIn != toIn) return true;
-        }
+    // True if any edge terminates on this exact port (robust for multi-connect ports).
+    bool portHasEdge(PortItem *port) const {
+        for (const auto &e : m_edges)
+            if (e.fromPort == port || e.toPort == port)
+                return true;
         return false;
     }
 
-    QVector<ConnectionItem::EdgeKind> edgeKindsBetween(NodeId a, NodeId b) const {
-        QVector<ConnectionItem::EdgeKind> kinds;
-        for (const auto &e : m_edges) {
-            if ((e.fromNodeId == a && e.toNodeId == b) ||
-                (e.fromNodeId == b && e.toNodeId == a))
-                kinds.append(e.edgeKind);
-        }
-        return kinds;
-    }
-
-    struct StoredEdge {
-        NodeId from;
-        NodeId to;
-        ConnectionItem::EdgeKind kind;
-        PortItem *fromPort;
-        PortItem *toPort;
-        ConnectionItem *item;
-    };
-
-    QVector<StoredEdge> internalEdges(const QSet<NodeId> &members) const {
-        QVector<StoredEdge> result;
-        for (const auto &e : m_edges) {
-            if (members.contains(e.fromNodeId) && members.contains(e.toNodeId)) {
-                result.append({ e.fromNodeId, e.toNodeId, e.edgeKind,
-                                e.item->fromPort(), e.item->toPort(), e.item });
-            }
-        }
-        return result;
+    // Producer feeding an Output's red A/B input (via an AbToOutput edge).
+    NodeId abProducerForPort(PortItem *inPort) const {
+        for (const auto &e : m_edges)
+            if (e.edgeKind == ConnectionItem::AbToOutput && e.toPort == inPort)
+                return e.fromNodeId;
+        return 0;
     }
 
     void createConnectionManually(PortItem *outPort, PortItem *inPort, ConnectionItem::EdgeKind kind) {
@@ -1389,16 +1648,14 @@ public:
         return 0;
     }
 
-    QJsonArray edgesToJson(const QSet<NodeId> *excludeBothIn = nullptr) const {
+    QJsonArray edgesToJson() const {
         QJsonArray arr;
         for (const auto &e : m_edges) {
-            if (excludeBothIn && excludeBothIn->contains(e.fromNodeId)
-                && excludeBothIn->contains(e.toNodeId))
-                continue;
             QJsonObject obj;
             obj["from"] = (qint64)e.fromNodeId;
             obj["to"]   = (qint64)e.toNodeId;
             obj["kind"] = (int)e.edgeKind;
+            obj["toPortIndex"] = destPortIndex(e.toPort->nodeItem(), e.toPort);
             arr.append(obj);
         }
         return arr;
@@ -1410,6 +1667,8 @@ private:
         NodeId toNodeId;
         ConnectionItem::EdgeKind edgeKind;
         ConnectionItem *item;
+        PortItem *fromPort;
+        PortItem *toPort;
     };
 
     void createConnection(PortItem *outPort, PortItem *inPort, ConnectionItem::EdgeKind kind) {
@@ -1418,7 +1677,9 @@ private:
         m_edges.append({ outPort->nodeItem()->nodeId(),
                          inPort->nodeItem()->nodeId(),
                          kind,
-                         item });
+                         item,
+                         outPort,
+                         inPort });
         outPort->setConnected(true);
         inPort->setConnected(true);
         if (onConnectionChanged) onConnectionChanged();
@@ -1453,32 +1714,10 @@ void ConnectionItem::contextMenuEvent(QGraphicsSceneContextMenuEvent *e) {
     e->accept();
 }
 
-bool GroupNodeItem::containsMember(NodeId memberId) const {
-    if (!m_subScene) return false;
-    for (auto *item : m_subScene->items()) {
-        if (auto *node = dynamic_cast<NodeItemBase *>(item)) {
-            if (node->nodeId() == memberId) return true;
-        }
-    }
-    return false;
-}
-
-QVector<NodeId> GroupNodeItem::memberIds() const {
-    QVector<NodeId> ids;
-    if (!m_subScene) return ids;
-    for (auto *item : m_subScene->items()) {
-        if (auto *node = dynamic_cast<NodeItemBase *>(item))
-            ids.append(node->nodeId());
-    }
-    return ids;
-}
-
 void ClipNodeItem::updateLayout() {
     prepareGeometryChange();
     const qreal midY = nodeHeight() / 2.0;
-    const qreal chainOutY = PROXY_Y + bodyHeight() + audioStripHeight() + PORT_R;
-    m_chainOutPort->setPos(PORT_X, chainOutY);
-    m_contextPort->setPos(NODE_W, midY);
+    m_chainOutPort->setPos(NODE_W, midY);
     if (m_audioPort) m_audioPort->setPos(0, midY);
     if (m_shaderAudioInPort)
         m_shaderAudioInPort->setPos(0, IN_PORT_Y + PORT_R * 4);
@@ -1566,7 +1805,111 @@ QVariant ClipNodeItem::itemChange(GraphicsItemChange change, const QVariant &val
     return QGraphicsItem::itemChange(change, value);
 }
 
-QVariant TransformContextNodeItem::itemChange(GraphicsItemChange change, const QVariant &value) {
+QVariant ProcessNodeItem::itemChange(GraphicsItemChange change, const QVariant &value) {
+    if (change == ItemPositionHasChanged && scene())
+        static_cast<ClipNodeScene *>(scene())->updateConnectionsForNode(this);
+    return QGraphicsItem::itemChange(change, value);
+}
+
+QVariant LayerNodeItem::itemChange(GraphicsItemChange change, const QVariant &value) {
+    if (change == ItemPositionHasChanged && scene())
+        static_cast<ClipNodeScene *>(scene())->updateConnectionsForNode(this);
+    return QGraphicsItem::itemChange(change, value);
+}
+
+void LayerNodeItem::rebuildPorts() {
+    prepareGeometryChange();
+    for (auto *p : m_inPorts) { if (p->scene()) p->scene()->removeItem(p); delete p; }
+    m_inPorts.clear();
+    for (int i = 0; i < m_slots.size(); ++i)
+        m_inPorts.push_back(new PortItem(PortKind::ChainIn, this));
+    if (!m_outPort) m_outPort = new PortItem(PortKind::ChainOut, this);
+    positionPorts();
+}
+
+void LayerNodeItem::positionPorts() {
+    prepareGeometryChange();
+    for (int i = 0; i < m_inPorts.size(); ++i)
+        m_inPorts[i]->setPos(0, SW_HDR + i * SW_ROW + SW_ROW / 2);
+    if (m_outPort) m_outPort->setPos(SW_W, nodeHeight() / 2.0);
+    if (scene())
+        static_cast<ClipNodeScene *>(scene())->updateConnectionsForNode(this);
+    update();
+}
+
+void LayerNodeItem::normalizeInputs() {
+    QVector<PortItem *> newPorts;
+    QVector<LayerSlot> newSlots;
+    PortItem *trailingEmpty = nullptr;
+    for (int i = 0; i < m_inPorts.size(); ++i) {
+        if (m_inPorts[i]->isConnected()) {
+            newPorts.push_back(m_inPorts[i]);
+            newSlots.push_back(m_slots[i]);
+        } else if (!trailingEmpty) {
+            trailingEmpty = m_inPorts[i];       // reuse the first empty as the trailing slot
+        } else {
+            if (m_inPorts[i]->scene()) m_inPorts[i]->scene()->removeItem(m_inPorts[i]);
+            delete m_inPorts[i];
+        }
+    }
+    if (!trailingEmpty) trailingEmpty = new PortItem(PortKind::ChainIn, this);
+    newPorts.push_back(trailingEmpty);
+    newSlots.push_back(LayerSlot{});
+    m_inPorts = newPorts;
+    m_slots = newSlots;
+    positionPorts();
+}
+
+QVariant AbSelectNodeItem::itemChange(GraphicsItemChange change, const QVariant &value) {
+    if (change == ItemPositionHasChanged && scene())
+        static_cast<ClipNodeScene *>(scene())->updateConnectionsForNode(this);
+    return QGraphicsItem::itemChange(change, value);
+}
+
+void AbSelectNodeItem::rebuildPorts() {
+    prepareGeometryChange();
+    for (auto *p : m_inPorts) { if (p->scene()) p->scene()->removeItem(p); delete p; }
+    m_inPorts.clear();
+    for (int i = 0; i < m_slots.size(); ++i)
+        m_inPorts.push_back(new PortItem(PortKind::ChainIn, this));
+    if (!m_abOutPort) m_abOutPort = new PortItem(PortKind::AbOut, this);
+    positionPorts();
+}
+
+void AbSelectNodeItem::positionPorts() {
+    prepareGeometryChange();
+    for (int i = 0; i < m_inPorts.size(); ++i)
+        m_inPorts[i]->setPos(0, SW_HDR + i * SW_ROW + SW_ROW / 2);
+    if (m_abOutPort) m_abOutPort->setPos(SW_W, nodeHeight() / 2.0);
+    if (scene())
+        static_cast<ClipNodeScene *>(scene())->updateConnectionsForNode(this);
+    update();
+}
+
+void AbSelectNodeItem::normalizeInputs() {
+    QVector<PortItem *> newPorts;
+    QVector<AbSlot> newSlots;
+    PortItem *trailingEmpty = nullptr;
+    for (int i = 0; i < m_inPorts.size(); ++i) {
+        if (m_inPorts[i]->isConnected()) {
+            newPorts.push_back(m_inPorts[i]);
+            newSlots.push_back(m_slots[i]);
+        } else if (!trailingEmpty) {
+            trailingEmpty = m_inPorts[i];
+        } else {
+            if (m_inPorts[i]->scene()) m_inPorts[i]->scene()->removeItem(m_inPorts[i]);
+            delete m_inPorts[i];
+        }
+    }
+    if (!trailingEmpty) trailingEmpty = new PortItem(PortKind::ChainIn, this);
+    newPorts.push_back(trailingEmpty);
+    newSlots.push_back(AbSlot{});
+    m_inPorts = newPorts;
+    m_slots = newSlots;
+    positionPorts();
+}
+
+QVariant OutputNodeItem::itemChange(GraphicsItemChange change, const QVariant &value) {
     if (change == ItemPositionHasChanged && scene())
         static_cast<ClipNodeScene *>(scene())->updateConnectionsForNode(this);
     return QGraphicsItem::itemChange(change, value);
@@ -1585,12 +1928,6 @@ QVariant MasterAudioInputNodeItem::itemChange(GraphicsItemChange change, const Q
 }
 
 QVariant ScriptNodeItem::itemChange(GraphicsItemChange change, const QVariant &value) {
-    if (change == ItemPositionHasChanged && scene())
-        static_cast<ClipNodeScene *>(scene())->updateConnectionsForNode(this);
-    return QGraphicsItem::itemChange(change, value);
-}
-
-QVariant GroupNodeItem::itemChange(GraphicsItemChange change, const QVariant &value) {
     if (change == ItemPositionHasChanged && scene())
         static_cast<ClipNodeScene *>(scene())->updateConnectionsForNode(this);
     return QGraphicsItem::itemChange(change, value);
@@ -1997,6 +2334,7 @@ ClipNodeEditor::ClipNodeEditor(QWidget *parent)
 {
     m_scene = new ClipNodeScene(this);
     m_scene->onConnectionChanged = [this]() {
+        if (!m_restoring) { normalizeSwitchingInputs(); updateAbHighlights(); }
         emit clipChainChanged();
         emit audioGraphChanged();
     };
@@ -2039,1003 +2377,6 @@ QGraphicsView *ClipNodeEditor::graphicsViewFrom(QWidget *widget) {
     return qobject_cast<QGraphicsView *>(widget);
 }
 
-void ClipNodeEditor::registerItem(NodeItemBase *item) {
-    m_itemMap[item->nodeId()] = item;
-}
-
-void ClipNodeEditor::removeSceneItem(NodeItemBase *item) {
-    if (!item || !item->scene()) return;
-    item->scene()->removeItem(item);
-    delete item;
-}
-
-ClipNodeScene *ClipNodeEditor::sceneForNode(NodeId id) const {
-    if (auto *item = m_itemMap.value(id))
-        return static_cast<ClipNodeScene *>(item->scene());
-    return m_scene;
-}
-
-ClipNodeScene *ClipNodeEditor::subSceneForGroup(NodeId groupId) const {
-    if (auto *group = m_groupNodes.value(groupId))
-        return group->subScene();
-    return nullptr;
-}
-
-QString ClipNodeEditor::groupName(NodeId groupId) const {
-    if (auto *group = m_groupNodes.value(groupId))
-        return group->name();
-    return QStringLiteral("Group");
-}
-
-void ClipNodeEditor::renameGroup(NodeId groupId) {
-    auto *group = m_groupNodes.value(groupId);
-    if (!group) return;
-
-    bool ok = false;
-    const QString name = QInputDialog::getText(this, tr("Rename Group"), tr("Name:"),
-                                               QLineEdit::Normal, group->name(), &ok);
-    if (!ok) return;
-
-    group->setName(name);
-}
-
-void ClipNodeEditor::renameGroupMemberClip(NodeId clipId) {
-    ClipNodeModel *model = nodeAt(clipId);
-    if (!model || !model->isGroupMember()) return;
-
-    bool ok = false;
-    const QString name = QInputDialog::getText(this, tr("Rename Clip"), tr("Name:"),
-                                               QLineEdit::Normal, model->sourceName(), &ok);
-    if (!ok) return;
-
-    model->setDisplayName(name.trimmed());
-}
-
-QWidget *ClipNodeEditor::makeSubSceneView(ClipNodeScene *scene, QWidget *parent, NodeId groupId) {
-    auto *view = new ClipNodeView(scene);
-    view->setContextMenuPolicy(Qt::CustomContextMenu);
-    view->onDeleteSelection = [this, view]() { deleteSelection(view); };
-    if (groupId != 0) {
-        connect(view, &QGraphicsView::customContextMenuRequested, this,
-                [this, groupId, view](const QPoint &) {
-                    showGroupSceneContextMenu(groupId, view);
-                });
-    }
-    return new ClipNodeCanvasWidget(view, parent);
-}
-
-static void wireDeleteCallback(NodeItemBase *item, const std::function<void(NodeId)> &cb) {
-    if (auto *clip = dynamic_cast<ClipNodeItem *>(item)) clip->onDeleteRequested = cb;
-    else if (auto *ctx = dynamic_cast<TransformContextNodeItem *>(item)) ctx->onDeleteRequested = cb;
-    else if (auto *scr = dynamic_cast<ScriptNodeItem *>(item)) scr->onDeleteRequested = cb;
-    else if (auto *mas = dynamic_cast<MasterAudioOutputNodeItem *>(item)) mas->onDeleteRequested = cb;
-    else if (auto *mai = dynamic_cast<MasterAudioInputNodeItem *>(item)) mai->onDeleteRequested = cb;
-    else if (auto *grp = dynamic_cast<GroupNodeItem *>(item)) grp->onDeleteRequested = cb;
-}
-
-static void wireEditAudioCallback(ClipNodeItem *item, const std::function<void(NodeId)> &cb) {
-    if (item) item->onEditAudioRequested = cb;
-}
-
-static void wireRenameCallback(NodeItemBase *item, const std::function<void(NodeId)> &cb) {
-    if (auto *clip = dynamic_cast<ClipNodeItem *>(item)) clip->onRenameRequested = cb;
-    else if (auto *grp = dynamic_cast<GroupNodeItem *>(item)) grp->onRenameRequested = cb;
-}
-
-ClipNodeModel *ClipNodeEditor::addClipNode(const QString &path, const QPixmap &thumbnail,
-                                           ClipNodeScene *targetScene,
-                                           QGraphicsView *viewForPos,
-                                           bool groupMember) {
-    ClipNodeScene *scene = targetScene ? targetScene : m_scene;
-    QGraphicsView *view = viewForPos ? viewForPos : m_view;
-
-    const bool hasAudio = VideoPlayer::fileHasAudio(path);
-
-    const NodeId id = m_nextId++;
-    auto *model = new ClipNodeModel(this);
-    auto *nodeItem = new ClipNodeItem(model, id, hasAudio);
-
-    if (viewForPos)
-        nodeItem->setPos(scenePosForView(view, QCursor::pos()));
-    else if (targetScene) {
-        const int idx = m_nodeMap.size();
-        nodeItem->setPos(idx * 160.0 + 20.0, idx * 60.0 + 20.0);
-    } else {
-        const int idx = m_nodeMap.size();
-        nodeItem->setPos(idx * 160.0 + 20.0, idx * 60.0 + 20.0);
-    }
-
-    scene->addItem(nodeItem);
-    m_nodeMap[id] = model;
-    registerItem(nodeItem);
-    wireDeleteCallback(nodeItem, [this](NodeId nid) { deleteNodeById(nid); });
-    wireRenameCallback(nodeItem, [this](NodeId nid) { renameGroupMemberClip(nid); });
-    wireEditAudioCallback(nodeItem, [this](NodeId cid) { onEditClipAudio(cid); });
-
-    model->setNodeId(id);
-    model->loadClip(path, thumbnail);
-    if (groupMember)
-        model->setCardMode(ClipCard::CardMode::GroupMember);
-    connectNodeSignals(model, id);
-
-    emit nodeAdded(id);
-    return model;
-}
-
-ClipNodeModel *ClipNodeEditor::addSourceNode(const SourceDescriptor &desc, const QPixmap &thumbnail,
-                                             ClipNodeScene *targetScene,
-                                             QGraphicsView *viewForPos,
-                                             bool groupMember) {
-    ClipNodeScene *scene = targetScene ? targetScene : m_scene;
-    QGraphicsView *view = viewForPos ? viewForPos : m_view;
-
-    const NodeId id = m_nextId++;
-    auto *model = new ClipNodeModel(this);
-    const bool hasShaderAudioIn = (desc.kind == SourceDescriptor::Kind::Shader);
-    const bool hasDataIn = (desc.kind == SourceDescriptor::Kind::Text);
-    auto *nodeItem = new ClipNodeItem(model, id, false, hasShaderAudioIn, hasDataIn);
-
-    if (viewForPos)
-        nodeItem->setPos(scenePosForView(view, QCursor::pos()));
-    else if (targetScene) {
-        const int idx = m_nodeMap.size();
-        nodeItem->setPos(idx * 160.0 + 20.0, idx * 60.0 + 20.0);
-    } else {
-        const int idx = m_nodeMap.size();
-        nodeItem->setPos(idx * 160.0 + 20.0, idx * 60.0 + 20.0);
-    }
-
-    scene->addItem(nodeItem);
-    m_nodeMap[id] = model;
-    registerItem(nodeItem);
-    wireDeleteCallback(nodeItem, [this](NodeId nid) { deleteNodeById(nid); });
-    wireRenameCallback(nodeItem, [this](NodeId nid) { renameGroupMemberClip(nid); });
-
-    model->setNodeId(id);
-    model->loadSource(desc, thumbnail);
-    if (groupMember)
-        model->setCardMode(ClipCard::CardMode::GroupMember);
-    connectNodeSignals(model, id);
-
-    emit nodeAdded(id);
-    return model;
-}
-
-void ClipNodeEditor::deleteNodeById(NodeId nodeId) {
-    if (m_groupNodes.contains(nodeId)) {
-        auto *group = m_groupNodes.take(nodeId);
-        const QVector<NodeId> members = group->memberIds();
-        for (NodeId memberId : members) {
-            if (m_itemMap.contains(memberId) || m_nodeMap.contains(memberId))
-                deleteNodeById(memberId);
-        }
-        m_itemMap.remove(nodeId);
-        if (group->scene())
-            static_cast<ClipNodeScene *>(group->scene())->removeConnectionsForNode(nodeId);
-        removeSceneItem(group);
-        emit clipChainChanged();
-        emit audioGraphChanged();
-        return;
-    }
-
-    if (m_nodeMap.contains(nodeId)) {
-        ClipNodeScene *scene = sceneForNode(nodeId);
-
-        ClipNodeModel *model = m_nodeMap.take(nodeId);
-        m_itemMap.remove(nodeId);
-        scene->removeConnectionsForNode(nodeId);
-
-        if (m_activeClipA == nodeId) {
-            m_activeClipA = 0;
-            emit deckAClipChanged(0);
-        }
-        if (m_activeClipB == nodeId) {
-            m_activeClipB = 0;
-            emit deckBClipChanged(0);
-        }
-
-        ClipNodeItem *clipItem = nullptr;
-        for (auto *sceneItem : scene->items()) {
-            if (auto *ci = dynamic_cast<ClipNodeItem *>(sceneItem)) {
-                if (ci->nodeId() == nodeId) {
-                    clipItem = ci;
-                    break;
-                }
-            }
-        }
-
-        disconnectNodeSignals(model);
-        model->clearCard();
-        removeSceneItem(clipItem);
-        delete model;
-
-        emit nodeRemoved(nodeId);
-        emit clipChainChanged();
-        emit audioGraphChanged();
-        return;
-    }
-
-    ClipNodeScene *scene = sceneForNode(nodeId);
-
-    if (m_contextNodes.contains(nodeId)) {
-        m_contextNodes.remove(nodeId);
-        m_itemMap.remove(nodeId);
-        scene->removeConnectionsForNode(nodeId);
-        TransformContextNodeItem *item = nullptr;
-        for (auto *sceneItem : scene->items()) {
-            if (auto *ci = dynamic_cast<TransformContextNodeItem *>(sceneItem)) {
-                if (ci->nodeId() == nodeId) { item = ci; break; }
-            }
-        }
-        removeSceneItem(item);
-        emit clipChainChanged();
-        return;
-    }
-
-    if (m_masterAudioNodes.contains(nodeId)) {
-        m_masterAudioNodes.remove(nodeId);
-        m_itemMap.remove(nodeId);
-        scene->removeConnectionsForNode(nodeId);
-        MasterAudioOutputNodeItem *item = nullptr;
-        for (auto *sceneItem : scene->items()) {
-            if (auto *mi = dynamic_cast<MasterAudioOutputNodeItem *>(sceneItem)) {
-                if (mi->nodeId() == nodeId) { item = mi; break; }
-            }
-        }
-        removeSceneItem(item);
-        emit audioGraphChanged();
-        return;
-    }
-
-    if (m_masterAudioInputNodes.contains(nodeId)) {
-        m_masterAudioInputNodes.remove(nodeId);
-        m_itemMap.remove(nodeId);
-        scene->removeConnectionsForNode(nodeId);
-        MasterAudioInputNodeItem *item = nullptr;
-        for (auto *sceneItem : scene->items()) {
-            if (auto *mi = dynamic_cast<MasterAudioInputNodeItem *>(sceneItem)) {
-                if (mi->nodeId() == nodeId) { item = mi; break; }
-            }
-        }
-        removeSceneItem(item);
-        emit audioGraphChanged();
-        return;
-    }
-
-    if (m_scriptNodes.contains(nodeId)) {
-        m_scriptNodes.remove(nodeId);
-        m_itemMap.remove(nodeId);
-        scene->removeConnectionsForNode(nodeId);
-        ScriptNodeItem *item = nullptr;
-        for (auto *sceneItem : scene->items()) {
-            if (auto *si = dynamic_cast<ScriptNodeItem *>(sceneItem)) {
-                if (si->nodeId() == nodeId) { item = si; break; }
-            }
-        }
-        removeSceneItem(item);
-        emit audioGraphChanged();
-        return;
-    }
-}
-
-void ClipNodeEditor::removeNode(NodeId nodeId) {
-    deleteNodeById(nodeId);
-}
-
-void ClipNodeEditor::deleteSelection(QGraphicsView *fromView) {
-    if (!fromView) fromView = m_view;
-    auto *scene = static_cast<ClipNodeScene *>(fromView->scene());
-
-    QList<NodeId> nodeIds;
-    QList<ConnectionItem *> connections;
-    for (auto *item : scene->selectedItems()) {
-        if (auto *conn = dynamic_cast<ConnectionItem *>(item))
-            connections.append(conn);
-        else if (auto *node = dynamic_cast<NodeItemBase *>(item))
-            nodeIds.append(node->nodeId());
-    }
-
-    for (NodeId id : nodeIds) {
-        if (m_itemMap.contains(id) || m_groupNodes.contains(id))
-            deleteNodeById(id);
-    }
-
-    for (auto *conn : connections) {
-        if (conn->scene())
-            scene->removeConnection(conn);
-    }
-}
-
-void ClipNodeEditor::clearAllNodes() {
-    const QVector<NodeId> groupIds = m_groupNodes.keys().toVector();
-    for (NodeId id : groupIds)
-        deleteNodeById(id);
-
-    const QVector<NodeId> clipIds = m_nodeMap.keys().toVector();
-    for (NodeId id : clipIds)
-        deleteNodeById(id);
-
-    const QVector<NodeId> ctxIds = m_contextNodes.keys().toVector();
-    for (NodeId id : ctxIds)
-        deleteNodeById(id);
-
-    const QVector<NodeId> masterIds = m_masterAudioNodes.keys().toVector();
-    for (NodeId id : masterIds)
-        deleteNodeById(id);
-
-    const QVector<NodeId> masterInputIds = m_masterAudioInputNodes.keys().toVector();
-    for (NodeId id : masterInputIds)
-        deleteNodeById(id);
-
-    const QVector<NodeId> scriptIds = m_scriptNodes.keys().toVector();
-    for (NodeId id : scriptIds)
-        deleteNodeById(id);
-
-    m_itemMap.clear();
-    m_groupNodes.clear();
-    m_contextNodes.clear();
-    m_scriptNodes.clear();
-    m_masterAudioNodes.clear();
-    m_masterAudioInputNodes.clear();
-    m_activeClipA = 0;
-    m_activeClipB = 0;
-}
-
-QVector<ClipNodeModel *> ClipNodeEditor::allNodes() const {
-    return m_nodeMap.values().toVector();
-}
-
-ClipNodeModel *ClipNodeEditor::nodeAt(NodeId id) const {
-    auto it = m_nodeMap.find(id);
-    return (it != m_nodeMap.end()) ? *it : nullptr;
-}
-
-void ClipNodeEditor::setActiveDeckClip(NodeId clipId, bool deckA) {
-    if (deckA) {
-        m_activeClipA = clipId;
-        emit deckAClipChanged(clipId);
-    } else {
-        m_activeClipB = clipId;
-        emit deckBClipChanged(clipId);
-    }
-    updateGroupDeckHighlights();
-    emit clipChainChanged();
-}
-
-QVector<ClipNodeModel *> ClipNodeEditor::getClipChain(NodeId fromClip) const {
-    return traverseUpstream(fromClip);
-}
-
-void ClipNodeEditor::onNodeAButtonClicked(NodeId nodeId) {
-    auto *node = nodeAt(nodeId);
-    if (node && node->hasSource())
-        setActiveDeckClip(nodeId, true);
-}
-
-void ClipNodeEditor::onNodeBButtonClicked(NodeId nodeId) {
-    auto *node = nodeAt(nodeId);
-    if (node && node->hasSource())
-        setActiveDeckClip(nodeId, false);
-}
-
-void ClipNodeEditor::onNodeRemoveRequested(NodeId nodeId) {
-    removeNode(nodeId);
-}
-
-void ClipNodeEditor::connectNodeSignals(ClipNodeModel *model, NodeId id) {
-    connect(model, &ClipNodeModel::aButtonClicked,  this, [this, id]() { onNodeAButtonClicked(id); });
-    connect(model, &ClipNodeModel::bButtonClicked,  this, [this, id]() { onNodeBButtonClicked(id); });
-    connect(model, &ClipNodeModel::removeRequested, this, [this, id]() { onNodeRemoveRequested(id); });
-    connect(model, &ClipNodeModel::transformChanged, this,
-            [this, id](float x, float y, float w, float h) { setClipTransform(id, x, y, w, h); });
-    connect(model, &ClipNodeModel::setOutputClicked, this, [this, id]() { setGroupDelegateForClip(id); });
-}
-
-void ClipNodeEditor::onCanvasContextMenu() {
-    QMenu menu;
-    menu.addAction("Group Selection", this, &ClipNodeEditor::groupSelection);
-    menu.addAction("Add Transform Context Node", this, &ClipNodeEditor::onAddTransformContext);
-    menu.addAction("Add Master Audio Output", this, &ClipNodeEditor::onAddMasterAudioOutput);
-    menu.addAction("Add Master Audio Input", this, &ClipNodeEditor::onAddMasterAudioInput);
-#ifdef SWITCHX_HAVE_LUA
-    menu.addAction("Add Script Node", this, &ClipNodeEditor::onAddScriptNode);
-#endif
-    menu.exec(QCursor::pos());
-}
-
-void ClipNodeEditor::onAddTransformContext() {
-    addTransformContextTo(m_scene, m_view, QCursor::pos());
-}
-
-void ClipNodeEditor::onAddMasterAudioOutput() {
-    addMasterAudioOutputTo(m_scene, m_view, QCursor::pos());
-}
-
-void ClipNodeEditor::onAddMasterAudioInput() {
-    addMasterAudioInputTo(m_scene, m_view, QCursor::pos());
-}
-
-void ClipNodeEditor::onAddScriptNode() {
-    addScriptNodeTo(m_scene, m_view, QCursor::pos());
-}
-
-QPointF ClipNodeEditor::scenePosForView(QGraphicsView *view, const QPoint &globalPos) const {
-    if (!view) return QPointF(20, 20);
-    return view->mapToScene(view->mapFromGlobal(globalPos));
-}
-
-void ClipNodeEditor::addTransformContextTo(ClipNodeScene *scene, QGraphicsView *view,
-                                           const QPoint &globalPos) {
-    if (!scene) return;
-    auto *contextNode = new TransformContextNodeItem(m_nextId++);
-    contextNode->setPos(scenePosForView(view, globalPos));
-    contextNode->onEditRequested = [this](NodeId cid) { onEditContextNode(cid); };
-    contextNode->onOpenEditorRequested = [this](NodeId cid) { onOpenTransformEditor(cid); };
-    scene->addItem(contextNode);
-    m_contextNodes[contextNode->nodeId()] = static_cast<void *>(contextNode);
-    registerItem(contextNode);
-    wireDeleteCallback(contextNode, [this](NodeId nid) { deleteNodeById(nid); });
-    emit clipChainChanged();
-}
-
-void ClipNodeEditor::addMasterAudioOutputTo(ClipNodeScene *scene, QGraphicsView *view,
-                                            const QPoint &globalPos) {
-    if (!scene) return;
-    auto *masterNode = new MasterAudioOutputNodeItem(m_nextId++);
-    masterNode->setPos(scenePosForView(view, globalPos));
-    scene->addItem(masterNode);
-    m_masterAudioNodes[masterNode->nodeId()] = static_cast<void *>(masterNode);
-    masterNode->onDeviceChanged = [this](NodeId) { emit audioGraphChanged(); };
-    registerItem(masterNode);
-    wireDeleteCallback(masterNode, [this](NodeId nid) { deleteNodeById(nid); });
-    emit clipChainChanged();
-    emit audioGraphChanged();
-}
-
-void ClipNodeEditor::addMasterAudioInputTo(ClipNodeScene *scene, QGraphicsView *view,
-                                           const QPoint &globalPos) {
-    if (!scene) return;
-    auto *inputNode = new MasterAudioInputNodeItem(m_nextId++);
-    inputNode->setPos(scenePosForView(view, globalPos));
-    scene->addItem(inputNode);
-    m_masterAudioInputNodes[inputNode->nodeId()] = static_cast<void *>(inputNode);
-    inputNode->onSettingsChanged = [this](NodeId) { emit audioGraphChanged(); };
-    registerItem(inputNode);
-    wireDeleteCallback(inputNode, [this](NodeId nid) { deleteNodeById(nid); });
-    emit clipChainChanged();
-    emit audioGraphChanged();
-}
-
-void ClipNodeEditor::addScriptNodeTo(ClipNodeScene *scene, QGraphicsView *view,
-                                    const QPoint &globalPos) {
-#ifdef SWITCHX_HAVE_LUA
-    if (!scene) return;
-
-    ScriptEditDialog dlg(QString(), ScriptTriggerMode::Periodic, 1000, this);
-    if (dlg.exec() != QDialog::Accepted) return;
-
-    const QString code = dlg.resultCode().trimmed();
-    if (code.isEmpty()) return;
-
-    auto *scriptNode = new ScriptNodeItem(m_nextId++, code,
-                                            dlg.resultTriggerMode(),
-                                            dlg.resultIntervalMs());
-    scriptNode->setPos(scenePosForView(view, globalPos));
-    scriptNode->onEditRequested = [this](NodeId sid) { onEditScriptNode(sid); };
-    scene->addItem(scriptNode);
-    m_scriptNodes[scriptNode->nodeId()] = static_cast<void *>(scriptNode);
-    registerItem(scriptNode);
-    wireDeleteCallback(scriptNode, [this](NodeId nid) { deleteNodeById(nid); });
-    emit clipChainChanged();
-    emit audioGraphChanged();
-#else
-    Q_UNUSED(scene);
-    Q_UNUSED(view);
-    Q_UNUSED(globalPos);
-#endif
-}
-
-void ClipNodeEditor::showGroupSceneContextMenu(NodeId groupId, QGraphicsView *view) {
-    ClipNodeScene *scene = subSceneForGroup(groupId);
-    if (!scene || !view) return;
-
-    QMenu menu;
-    menu.addAction("Add Clip...", [this, groupId, view]() { addClipsFromFileDialog(groupId, view); });
-    menu.addAction("Add Transform Context Node", [this, groupId, view]() {
-        addTransformContextToGroup(groupId, view);
-    });
-    menu.addAction("Add Master Audio Output", [this, groupId, view]() {
-        addMasterAudioOutputToGroup(groupId, view);
-    });
-    menu.addAction("Add Master Audio Input", [this, groupId, view]() {
-        addMasterAudioInputToGroup(groupId, view);
-    });
-#ifdef SWITCHX_HAVE_LUA
-    menu.addAction("Add Script Node", [this, groupId, view]() {
-        addScriptNodeToGroup(groupId, view);
-    });
-#endif
-    menu.exec(QCursor::pos());
-}
-
-void ClipNodeEditor::addClipsFromFileDialog(NodeId groupId, QGraphicsView *view, bool atViewCenter) {
-    ClipNodeScene *scene = subSceneForGroup(groupId);
-    if (!scene || !view) return;
-
-    const QStringList files = QFileDialog::getOpenFileNames(
-        view, "Add Clips to Group", {},
-        "Media (*.mp4 *.mkv *.avi *.mov *.webm *.m4v *.mpg *.mpeg "
-        "*.png *.jpg *.jpeg *.gif *.bmp *.webp)");
-    const QPointF basePos = atViewCenter
-        ? scenePosForView(view, view->viewport()->mapToGlobal(view->viewport()->rect().center()))
-        : QPointF();
-
-    for (int i = 0; i < files.size(); ++i) {
-        const QString &path = files.at(i);
-        ClipNodeModel *model = addClipNode(path, ThumbnailExtractor::extract(path, 110, 65),
-                                           scene, atViewCenter ? nullptr : view, true);
-        if (atViewCenter) {
-            if (auto *item = dynamic_cast<ClipNodeItem *>(m_itemMap.value(model->nodeId())))
-                item->setPos(basePos + QPointF(i * 40.0, i * 30.0));
-        }
-    }
-}
-
-void ClipNodeEditor::addTransformContextToGroup(NodeId groupId, QGraphicsView *view,
-                                                bool atViewCenter) {
-    const QPoint globalPos = atViewCenter && view
-        ? view->viewport()->mapToGlobal(view->viewport()->rect().center())
-        : QCursor::pos();
-    addTransformContextTo(subSceneForGroup(groupId), view, globalPos);
-}
-
-void ClipNodeEditor::addMasterAudioOutputToGroup(NodeId groupId, QGraphicsView *view,
-                                                 bool atViewCenter) {
-    const QPoint globalPos = atViewCenter && view
-        ? view->viewport()->mapToGlobal(view->viewport()->rect().center())
-        : QCursor::pos();
-    addMasterAudioOutputTo(subSceneForGroup(groupId), view, globalPos);
-}
-
-void ClipNodeEditor::addMasterAudioInputToGroup(NodeId groupId, QGraphicsView *view,
-                                                bool atViewCenter) {
-    const QPoint globalPos = atViewCenter && view
-        ? view->viewport()->mapToGlobal(view->viewport()->rect().center())
-        : QCursor::pos();
-    addMasterAudioInputTo(subSceneForGroup(groupId), view, globalPos);
-}
-
-void ClipNodeEditor::addScriptNodeToGroup(NodeId groupId, QGraphicsView *view, bool atViewCenter) {
-    const QPoint globalPos = atViewCenter && view
-        ? view->viewport()->mapToGlobal(view->viewport()->rect().center())
-        : QCursor::pos();
-    addScriptNodeTo(subSceneForGroup(groupId), view, globalPos);
-}
-
-void ClipNodeEditor::onEditContextNode(NodeId nodeId) {
-    auto it = m_contextNodes.find(nodeId);
-    if (it == m_contextNodes.end()) return;
-
-    TransformContextNodeItem *context = static_cast<TransformContextNodeItem *>(*it);
-
-    QDialog dialog(this);
-    Ui::ContextNodeDialog ui;
-    ui.setupUi(&dialog);
-
-    ui.wSpin->setValue(context->canvasW());
-    ui.hSpin->setValue(context->canvasH());
-
-    connect(ui.presetCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            &dialog, [&ui](int idx) {
-        if      (idx == 1) { ui.wSpin->setValue(1280); ui.hSpin->setValue(720);  }
-        else if (idx == 2) { ui.wSpin->setValue(1920); ui.hSpin->setValue(1080); }
-        else if (idx == 3) { ui.wSpin->setValue(1024); ui.hSpin->setValue(768);  }
-    });
-
-    if (dialog.exec() == QDialog::Accepted) {
-        context->setCanvasSize(ui.wSpin->value(), ui.hSpin->value());
-        emit clipChainChanged();
-    }
-}
-
-void ClipNodeEditor::onOpenTransformEditor(NodeId contextId) {
-    TransformEditorDialog dialog(contextId, this, this);
-    dialog.exec();
-}
-
-void ClipNodeEditor::onEditClipAudio(NodeId clipId) {
-    auto *clip = dynamic_cast<ClipNodeItem *>(m_itemMap.value(clipId));
-    if (!clip || !clip->hasAudio()) return;
-
-    QDialog dialog(this);
-    Ui::AudioNodeDialog ui;
-    ui.setupUi(&dialog);
-
-    ui.volumeSpin->setValue(clip->volume());
-    ui.mutedCheck->setChecked(clip->muted());
-    ui.modeCombo->setCurrentIndex((int)clip->playbackMode());
-    ui.delaySpin->setValue(clip->delayMs());
-
-    if (dialog.exec() == QDialog::Accepted) {
-        clip->setVolume(ui.volumeSpin->value());
-        clip->setMuted(ui.mutedCheck->isChecked());
-        clip->setPlaybackMode((AudioPlaybackMode)ui.modeCombo->currentIndex());
-        clip->setDelayMs(ui.delaySpin->value());
-        emit audioControllerChanged(clipId);
-    }
-}
-
-void ClipNodeEditor::onEditScriptNode(NodeId nodeId) {
-#ifdef SWITCHX_HAVE_LUA
-    auto it = m_scriptNodes.find(nodeId);
-    if (it == m_scriptNodes.end()) return;
-
-    auto *scriptNode = static_cast<ScriptNodeItem *>(*it);
-    ScriptEditDialog dlg(scriptNode->code(), scriptNode->triggerMode(),
-                         scriptNode->intervalMs(), this);
-    if (dlg.exec() != QDialog::Accepted) return;
-
-    const QString code = dlg.resultCode().trimmed();
-    if (code.isEmpty()) return;
-
-    scriptNode->applySettings(code, dlg.resultTriggerMode(), dlg.resultIntervalMs());
-    emit audioGraphChanged();
-#else
-    Q_UNUSED(nodeId);
-#endif
-}
-
-void ClipNodeEditor::disconnectNodeSignals(ClipNodeModel *model) {
-    disconnect(model, nullptr, this, nullptr);
-}
-
-QVector<ClipNodeModel *> ClipNodeEditor::traverseUpstream(NodeId clipId) const {
-    QVector<ClipNodeModel *> chain;
-    auto *node = nodeAt(clipId);
-    if (!node) return chain;
-
-    chain.push_back(node);
-
-    const NodeId upId = sceneForNode(clipId)->upstreamOf(clipId);
-    if (upId != 0) {
-        const auto upstream = traverseUpstream(upId);
-        for (auto *n : upstream)
-            if (!chain.contains(n)) chain.push_back(n);
-    }
-    return chain;
-}
-
-bool ClipNodeEditor::clipTransform(NodeId clipId, float &x, float &y, float &w, float &h) const {
-    auto *item = dynamic_cast<ClipNodeItem *>(m_itemMap.value(clipId));
-    if (!item) return false;
-    x = item->x();
-    y = item->y();
-    w = item->w();
-    h = item->h();
-    return true;
-}
-
-void ClipNodeEditor::setClipTransform(NodeId clipId, float x, float y, float w, float h) {
-    auto *item = dynamic_cast<ClipNodeItem *>(m_itemMap.value(clipId));
-    if (!item) return;
-    item->setTransform(x, y, w, h);
-    emit clipChainChanged();
-}
-
-QVector<NodeId> ClipNodeEditor::clipsForContext(NodeId contextId) const {
-    return sceneForNode(contextId)->clipsForContext(contextId);
-}
-
-QVector<NodeId> ClipNodeEditor::clipsForContextOrdered(NodeId contextId) const {
-    ClipNodeScene *scene = sceneForNode(contextId);
-    const QVector<NodeId> unordered = scene->clipsForContext(contextId);
-    if (unordered.size() <= 1) return unordered;
-
-    QSet<NodeId> clipSet(unordered.begin(), unordered.end());
-    QVector<NodeId> ordered;
-    ordered.reserve(unordered.size());
-
-    for (NodeId clipId : unordered) {
-        NodeId up = scene->upstreamOf(clipId);
-        if (up == 0 || !clipSet.contains(up)) {
-            NodeId current = clipId;
-            while (current != 0 && clipSet.contains(current) && !ordered.contains(current)) {
-                ordered.append(current);
-                current = scene->downstreamOf(current);
-            }
-        }
-    }
-
-    for (NodeId clipId : unordered) {
-        if (!ordered.contains(clipId))
-            ordered.append(clipId);
-    }
-
-    return ordered;
-}
-
-bool ClipNodeEditor::contextCanvasSize(NodeId clipId, int &w, int &h) const {
-    ClipNodeScene *scene = sceneForNode(clipId);
-    const NodeId contextId = scene->contextForClip(clipId);
-    if (contextId == 0) return false;
-
-    auto it = m_contextNodes.find(contextId);
-    if (it == m_contextNodes.end()) return false;
-
-    auto *contextNode = static_cast<TransformContextNodeItem *>(*it);
-    w = contextNode->canvasW();
-    h = contextNode->canvasH();
-    return true;
-}
-
-bool ClipNodeEditor::audioSettingsForClip(NodeId clipId, int &volume, bool &muted, bool &routedToMaster, AudioPlaybackMode &playbackMode, int &delayMs, QString &outputDeviceId) const {
-    auto *clip = dynamic_cast<ClipNodeItem *>(m_itemMap.value(clipId));
-    if (!clip || !clip->hasAudio()) return false;
-
-    ClipNodeScene *scene = sceneForNode(clipId);
-    volume = clip->volume();
-    muted = clip->muted();
-    const NodeId masterId = scene->masterNodeForClip(clipId);
-    routedToMaster = (masterId != 0);
-    outputDeviceId.clear();
-    if (masterId) {
-        auto *mn = static_cast<MasterAudioOutputNodeItem *>(m_itemMap.value(masterId));
-        if (!mn) mn = static_cast<MasterAudioOutputNodeItem *>(m_masterAudioNodes.value(masterId));
-        if (mn) outputDeviceId = mn->deviceId();
-    }
-    playbackMode = clip->playbackMode();
-    delayMs = clip->delayMs();
-    return true;
-}
-
-bool ClipNodeEditor::masterAudioInputSettings(NodeId inputNodeId, MasterAudioInputSettings &settings) const {
-    auto *inputNode = static_cast<MasterAudioInputNodeItem *>(m_itemMap.value(inputNodeId));
-    if (!inputNode)
-        inputNode = static_cast<MasterAudioInputNodeItem *>(m_masterAudioInputNodes.value(inputNodeId));
-    if (!inputNode) return false;
-
-    settings.inputDeviceId = inputNode->deviceId();
-    settings.inputDeviceLabel = inputNode->deviceLabel();
-    settings.volume = inputNode->volume();
-    settings.muted = inputNode->muted();
-    settings.routedMasterOutputId = sceneForNode(inputNodeId)->masterOutputForInput(inputNodeId);
-    return true;
-}
-
-bool ClipNodeEditor::masterAudioOutputDevice(NodeId masterOutputNodeId, QString &outputDeviceId) const {
-    auto *outputNode = static_cast<MasterAudioOutputNodeItem *>(m_itemMap.value(masterOutputNodeId));
-    if (!outputNode)
-        outputNode = static_cast<MasterAudioOutputNodeItem *>(m_masterAudioNodes.value(masterOutputNodeId));
-    if (!outputNode) return false;
-
-    outputDeviceId = outputNode->deviceId();
-    return true;
-}
-
-QVector<NodeId> ClipNodeEditor::allMasterAudioInputNodeIds() const {
-    return m_masterAudioInputNodes.keys().toVector();
-}
-
-bool ClipNodeEditor::audioSourceForShader(NodeId shaderNodeId, QString &filePath) const {
-    ClipNodeScene *scene = sceneForNode(shaderNodeId);
-    const NodeId clipId = scene->clipForShaderAudio(shaderNodeId);
-    if (clipId == 0) return false;
-
-    const ClipNodeModel *node = nodeAt(clipId);
-    if (!node) return false;
-
-    const SourceDescriptor &desc = node->sourceDescriptor();
-    if (desc.kind != SourceDescriptor::Kind::VideoFile) return false;
-
-    filePath = desc.path;
-    return !filePath.isEmpty();
-}
-
-std::shared_ptr<ScriptOutput> ClipNodeEditor::scriptOutputForDataNode(NodeId dataNodeId) const {
-    ClipNodeScene *scene = sceneForNode(dataNodeId);
-    const NodeId scriptId = scene->scriptNodeForData(dataNodeId);
-    if (scriptId == 0) return nullptr;
-
-    auto it = m_scriptNodes.find(scriptId);
-    if (it == m_scriptNodes.end()) return nullptr;
-
-    auto *scriptNode = static_cast<ScriptNodeItem *>(*it);
-    return scriptNode->output();
-}
-
-NodeId ClipNodeEditor::groupContainingNode(NodeId nodeId) const {
-    for (auto it = m_groupNodes.cbegin(); it != m_groupNodes.cend(); ++it) {
-        if (isNodeInSubScene(nodeId, it.value()->subScene()))
-            return it.key();
-    }
-    return 0;
-}
-
-QSet<NodeId> ClipNodeEditor::allGroupMemberIds() const {
-    QSet<NodeId> ids;
-    for (auto *group : m_groupNodes) {
-        for (NodeId id : group->memberIds())
-            ids.insert(id);
-    }
-    return ids;
-}
-
-bool ClipNodeEditor::isGroupMember(NodeId nodeId) const {
-    return groupContainingNode(nodeId) != 0;
-}
-
-bool ClipNodeEditor::isNodeInSubScene(NodeId nodeId, ClipNodeScene *subScene) const {
-    auto *item = m_itemMap.value(nodeId);
-    return item && item->scene() == static_cast<QGraphicsScene *>(subScene);
-}
-
-NodeId ClipNodeEditor::pickDefaultGroupDelegate(ClipNodeScene *subScene,
-                                                const QSet<NodeId> &members) const {
-    if (!subScene || members.isEmpty()) return 0;
-
-    for (NodeId clipId : members) {
-        if (!nodeAt(clipId)) continue;
-        const NodeId downstream = subScene->downstreamOf(clipId);
-        if (downstream == 0 || !members.contains(downstream))
-            return clipId;
-    }
-
-    for (NodeId clipId : members) {
-        if (nodeAt(clipId)) return clipId;
-    }
-    return 0;
-}
-
-void ClipNodeEditor::updateGroupDeckHighlights() {
-    for (auto *group : m_groupNodes) {
-        const NodeId delegate = group->delegateId();
-        group->setDeckActive(true, delegate != 0 && delegate == m_activeClipA);
-        group->setDeckActive(false, delegate != 0 && delegate == m_activeClipB);
-    }
-}
-
-void ClipNodeEditor::setGroupDelegate(NodeId groupId, NodeId clipId) {
-    auto *group = m_groupNodes.value(groupId);
-    if (!group || !nodeAt(clipId)) return;
-    if (!isNodeInSubScene(clipId, group->subScene())) return;
-
-    group->setDelegateId(clipId);
-    for (NodeId memberId : group->memberIds()) {
-        if (auto *model = nodeAt(memberId))
-            model->setOutputSelected(memberId == clipId);
-    }
-    updateGroupDeckHighlights();
-    emit clipChainChanged();
-}
-
-void ClipNodeEditor::setGroupDelegateForClip(NodeId clipId) {
-    const NodeId groupId = groupContainingNode(clipId);
-    if (groupId != 0)
-        setGroupDelegate(groupId, clipId);
-}
-
-void ClipNodeEditor::openGroupEditor(NodeId groupId) {
-    GroupEditorDialog dlg(groupId, this, this);
-    dlg.exec();
-}
-
-void ClipNodeEditor::groupSelection() {
-    QSet<NodeId> members;
-    QPointF centroid;
-    int count = 0;
-
-    for (auto *item : m_scene->selectedItems()) {
-        if (auto *node = dynamic_cast<NodeItemBase *>(item)) {
-            if (dynamic_cast<GroupNodeItem *>(node)) continue;
-            members.insert(node->nodeId());
-            centroid += node->scenePos();
-            ++count;
-        }
-    }
-
-    if (members.size() < 2) {
-        QMessageBox::information(this, "Group", "Select at least two nodes to group.");
-        return;
-    }
-
-    if (m_scene->chainCrossesSelectionBoundary(members)) {
-        QMessageBox::information(this, "Group",
-            "Cannot group: a chain connection crosses the selection boundary.");
-        return;
-    }
-
-    if (count > 0)
-        centroid /= count;
-
-    auto *subScene = new ClipNodeScene(this);
-    subScene->onConnectionChanged = m_scene->onConnectionChanged;
-
-    const NodeId groupId = m_nextId++;
-    auto *group = new GroupNodeItem(groupId, subScene);
-    group->setPos(centroid);
-    group->onDeckRequested = [this](NodeId delegateId, bool deckA) {
-        setActiveDeckClip(delegateId, deckA);
-    };
-    group->onEditRequested = [this](NodeId gid) { openGroupEditor(gid); };
-    group->onUngroupRequested = [this](NodeId gid) { ungroup(gid); };
-    group->onDeleteRequested = [this](NodeId gid) { deleteNodeById(gid); };
-    group->onRenameRequested = [this](NodeId gid) { renameGroup(gid); };
-
-    m_scene->addItem(group);
-    m_groupNodes[groupId] = group;
-    registerItem(group);
-
-    const auto internalEdges = m_scene->internalEdges(members);
-    for (const auto &edge : internalEdges)
-        m_scene->removeConnection(edge.item);
-
-    for (NodeId memberId : members) {
-        if (auto *item = m_itemMap.value(memberId)) {
-            m_scene->removeItem(item);
-            subScene->addItem(item);
-        }
-        if (auto *model = nodeAt(memberId))
-            model->setCardMode(ClipCard::CardMode::GroupMember);
-    }
-
-    for (const auto &edge : internalEdges)
-        subScene->createConnectionManually(edge.fromPort, edge.toPort, edge.kind);
-
-    NodeId delegateId = 0;
-    for (NodeId memberId : members) {
-        if (!m_nodeMap.contains(memberId)) continue;
-        if (subScene->downstreamOf(memberId) == 0 ||
-            !members.contains(subScene->downstreamOf(memberId))) {
-            delegateId = memberId;
-            break;
-        }
-    }
-    if (delegateId == 0) {
-        for (NodeId memberId : members) {
-            if (m_nodeMap.contains(memberId)) {
-                delegateId = memberId;
-                break;
-            }
-        }
-    }
-    if (delegateId != 0)
-        setGroupDelegate(groupId, delegateId);
-
-    emit clipChainChanged();
-}
-
-void ClipNodeEditor::ungroup(NodeId groupId) {
-    auto *group = m_groupNodes.value(groupId);
-    if (!group) return;
-
-    ClipNodeScene *subScene = group->subScene();
-    const QSet<NodeId> members(group->memberIds().begin(), group->memberIds().end());
-    const auto internalEdges = subScene->internalEdges(members);
-
-    for (const auto &edge : internalEdges)
-        subScene->removeConnection(edge.item);
-
-    for (NodeId memberId : members) {
-        if (auto *item = m_itemMap.value(memberId)) {
-            subScene->removeItem(item);
-            m_scene->addItem(item);
-        }
-        if (auto *model = nodeAt(memberId)) {
-            model->setCardMode(ClipCard::CardMode::Deck);
-            model->setOutputSelected(false);
-        }
-    }
-
-    for (const auto &edge : internalEdges)
-        m_scene->createConnectionManually(edge.fromPort, edge.toPort, edge.kind);
-
-    m_groupNodes.remove(groupId);
-    m_itemMap.remove(groupId);
-    m_scene->removeConnectionsForNode(groupId);
-    removeSceneItem(group);
-
-    emit clipChainChanged();
-}
 
 // ── Session persistence ───────────────────────────────────────────────────────
 
@@ -3098,36 +2439,750 @@ static SourceDescriptor descriptorFromJson(const QJsonObject &o) {
     return d;
 }
 
+// ── Node registration / callbacks ───────────────────────────────────────────
+
+static void wireDeleteCallback(NodeItemBase *item, const std::function<void(NodeId)> &cb) {
+    if (auto *clip = dynamic_cast<ClipNodeItem *>(item)) clip->onDeleteRequested = cb;
+    else if (auto *pr = dynamic_cast<ProcessNodeItem *>(item)) pr->onDeleteRequested = cb;
+    else if (auto *ly = dynamic_cast<LayerNodeItem *>(item)) ly->onDeleteRequested = cb;
+    else if (auto *ab = dynamic_cast<AbSelectNodeItem *>(item)) ab->onDeleteRequested = cb;
+    else if (auto *scr = dynamic_cast<ScriptNodeItem *>(item)) scr->onDeleteRequested = cb;
+    else if (auto *mas = dynamic_cast<MasterAudioOutputNodeItem *>(item)) mas->onDeleteRequested = cb;
+    else if (auto *mai = dynamic_cast<MasterAudioInputNodeItem *>(item)) mai->onDeleteRequested = cb;
+}
+
+static void wireEditAudioCallback(ClipNodeItem *item, const std::function<void(NodeId)> &cb) {
+    if (item) item->onEditAudioRequested = cb;
+}
+
+void ClipNodeEditor::registerItem(NodeItemBase *item) {
+    m_itemMap[item->nodeId()] = item;
+}
+
+void ClipNodeEditor::removeSceneItem(NodeItemBase *item) {
+    if (!item || !item->scene()) return;
+    item->scene()->removeItem(item);
+    delete item;
+}
+
+ClipNodeScene *ClipNodeEditor::sceneForNode(NodeId id) const {
+    if (auto *item = m_itemMap.value(id))
+        return static_cast<ClipNodeScene *>(item->scene());
+    return m_scene;
+}
+
+void ClipNodeEditor::ensureOutputNode() {
+    if (m_outputNode != 0) return;
+    const NodeId id = m_nextId++;
+    auto *out = new OutputNodeItem(id);
+    out->setPos(360, 40);
+    m_scene->addItem(out);
+    m_outputNode = id;
+    registerItem(out);
+}
+
+// ── Input node management ───────────────────────────────────────────────────
+
+ClipNodeModel *ClipNodeEditor::addClipNode(const QString &path, const QPixmap &thumbnail,
+                                           ClipNodeScene *targetScene,
+                                           QGraphicsView *viewForPos,
+                                           bool /*groupMember*/) {
+    ClipNodeScene *scene = targetScene ? targetScene : m_scene;
+    QGraphicsView *view = viewForPos ? viewForPos : m_view;
+
+    const bool hasAudio = VideoPlayer::fileHasAudio(path);
+
+    const NodeId id = m_nextId++;
+    auto *model = new ClipNodeModel(this);
+    auto *nodeItem = new ClipNodeItem(model, id, hasAudio);
+
+    if (viewForPos)
+        nodeItem->setPos(scenePosForView(view, QCursor::pos()));
+    else {
+        const int idx = m_nodeMap.size();
+        nodeItem->setPos(idx * 160.0 + 20.0, idx * 60.0 + 20.0);
+    }
+
+    scene->addItem(nodeItem);
+    m_nodeMap[id] = model;
+    registerItem(nodeItem);
+    wireDeleteCallback(nodeItem, [this](NodeId nid) { deleteNodeById(nid); });
+    wireEditAudioCallback(nodeItem, [this](NodeId cid) { onEditClipAudio(cid); });
+
+    model->setNodeId(id);
+    model->loadClip(path, thumbnail);
+    connectNodeSignals(model, id);
+
+    ensureOutputNode();
+    emit nodeAdded(id);
+    return model;
+}
+
+ClipNodeModel *ClipNodeEditor::addSourceNode(const SourceDescriptor &desc, const QPixmap &thumbnail,
+                                             ClipNodeScene *targetScene,
+                                             QGraphicsView *viewForPos,
+                                             bool /*groupMember*/) {
+    ClipNodeScene *scene = targetScene ? targetScene : m_scene;
+    QGraphicsView *view = viewForPos ? viewForPos : m_view;
+
+    const NodeId id = m_nextId++;
+    auto *model = new ClipNodeModel(this);
+    const bool hasShaderAudioIn = (desc.kind == SourceDescriptor::Kind::Shader);
+    const bool hasDataIn = (desc.kind == SourceDescriptor::Kind::Text);
+    auto *nodeItem = new ClipNodeItem(model, id, false, hasShaderAudioIn, hasDataIn);
+
+    if (viewForPos)
+        nodeItem->setPos(scenePosForView(view, QCursor::pos()));
+    else {
+        const int idx = m_nodeMap.size();
+        nodeItem->setPos(idx * 160.0 + 20.0, idx * 60.0 + 20.0);
+    }
+
+    scene->addItem(nodeItem);
+    m_nodeMap[id] = model;
+    registerItem(nodeItem);
+    wireDeleteCallback(nodeItem, [this](NodeId nid) { deleteNodeById(nid); });
+
+    model->setNodeId(id);
+    model->loadSource(desc, thumbnail);
+    connectNodeSignals(model, id);
+
+    ensureOutputNode();
+    emit nodeAdded(id);
+    return model;
+}
+
+// ── Process / Layer / A-B node creation ─────────────────────────────────────
+
+void ClipNodeEditor::addProcessNodeAt(int effect, const QPoint &globalPos) {
+    const NodeId id = m_nextId++;
+    auto *node = new ProcessNodeItem(id, (ProcessNodeItem::Effect)effect);
+    node->setPos(scenePosForView(m_view, globalPos));
+    node->onEditRequested = [this](NodeId nid) { onEditProcessCrop(nid); };
+    m_scene->addItem(node);
+    m_processNodes[id] = static_cast<void *>(node);
+    registerItem(node);
+    wireDeleteCallback(node, [this](NodeId nid) { deleteNodeById(nid); });
+    ensureOutputNode();
+    emit clipChainChanged();
+}
+
+void ClipNodeEditor::addLayerNodeAt(const QPoint &globalPos) {
+    const NodeId id = m_nextId++;
+    auto *node = new LayerNodeItem(id);
+    node->setPos(scenePosForView(m_view, globalPos));
+    node->onEditRequested = [this](NodeId nid) { onEditLayerTransform(nid); };
+    node->onEditCanvasRequested = [this](NodeId nid) { onEditLayerCanvas(nid); };
+    node->onChanged = [this]() { emit clipChainChanged(); };
+    m_scene->addItem(node);
+    m_layerNodes[id] = static_cast<void *>(node);
+    registerItem(node);
+    wireDeleteCallback(node, [this](NodeId nid) { deleteNodeById(nid); });
+    ensureOutputNode();
+    emit clipChainChanged();
+}
+
+void ClipNodeEditor::updateAbHighlights() {
+    for (auto it = m_abSelectNodes.cbegin(); it != m_abSelectNodes.cend(); ++it) {
+        auto *ab = static_cast<AbSelectNodeItem *>(it.value());
+        ab->setOutputConnected(m_scene->portHasEdge(ab->abOutPort()));
+        int aSlot = -1, bSlot = -1;
+        for (int i = 0; i < ab->slotCount(); ++i) {
+            const NodeId prod = m_scene->producerForInputPort(ab->inPort(i));
+            if (prod != 0 && prod == m_deckAInput) aSlot = i;
+            if (prod != 0 && prod == m_deckBInput) bSlot = i;
+        }
+        ab->setDeckSlots(aSlot, bSlot);
+    }
+}
+
+void ClipNodeEditor::addAbSelectNodeAt(const QPoint &globalPos) {
+    const NodeId id = m_nextId++;
+    auto *node = new AbSelectNodeItem(id);
+    node->setPos(scenePosForView(m_view, globalPos));
+    node->onChanged = [this]() { emit clipChainChanged(); };
+    node->onAssignDeck = [this](NodeId abId, int slot, bool deckA) {
+        auto *ab = static_cast<AbSelectNodeItem *>(m_abSelectNodes.value(abId));
+        if (!ab) return;
+        const NodeId prod = m_scene->producerForInputPort(ab->inPort(slot));
+        if (prod == 0) return;
+        assignInputToDeck(prod, deckA);
+    };
+    m_scene->addItem(node);
+    m_abSelectNodes[id] = static_cast<void *>(node);
+    registerItem(node);
+    wireDeleteCallback(node, [this](NodeId nid) { deleteNodeById(nid); });
+    ensureOutputNode();
+    emit clipChainChanged();
+}
+
+// ── Deletion ────────────────────────────────────────────────────────────────
+
+void ClipNodeEditor::deleteNodeById(NodeId nodeId) {
+    if (nodeId == m_outputNode) {
+        const bool onlyOutput = m_nodeMap.isEmpty() && m_processNodes.isEmpty()
+            && m_layerNodes.isEmpty() && m_abSelectNodes.isEmpty()
+            && m_scriptNodes.isEmpty() && m_masterAudioNodes.isEmpty()
+            && m_masterAudioInputNodes.isEmpty();
+        if (!onlyOutput) return;   // Output is not deletable while other nodes exist.
+    }
+
+    ClipNodeScene *scene = sceneForNode(nodeId);
+    NodeItemBase *item = m_itemMap.value(nodeId);
+    if (!item) return;
+    scene->removeConnectionsForNode(nodeId);
+
+    if (m_deckAInput == nodeId) { m_deckAInput = 0; emit deckAClipChanged(0); }
+    if (m_deckBInput == nodeId) { m_deckBInput = 0; emit deckBClipChanged(0); }
+
+    if (m_nodeMap.contains(nodeId)) {
+        ClipNodeModel *model = m_nodeMap.take(nodeId);
+        m_itemMap.remove(nodeId);
+        disconnectNodeSignals(model);
+        model->clearCard();
+        removeSceneItem(item);
+        delete model;
+        emit nodeRemoved(nodeId);
+        emit clipChainChanged();
+        emit audioGraphChanged();
+        return;
+    }
+
+    m_itemMap.remove(nodeId);
+    m_processNodes.remove(nodeId);
+    m_layerNodes.remove(nodeId);
+    m_abSelectNodes.remove(nodeId);
+    m_scriptNodes.remove(nodeId);
+    m_masterAudioNodes.remove(nodeId);
+    m_masterAudioInputNodes.remove(nodeId);
+    if (nodeId == m_outputNode) m_outputNode = 0;
+    removeSceneItem(item);
+    updateAbHighlights();
+    emit clipChainChanged();
+    emit audioGraphChanged();
+}
+
+void ClipNodeEditor::removeNode(NodeId nodeId) {
+    deleteNodeById(nodeId);
+}
+
+void ClipNodeEditor::deleteSelection(QGraphicsView *fromView) {
+    if (!fromView) fromView = m_view;
+    auto *scene = static_cast<ClipNodeScene *>(fromView->scene());
+
+    QList<NodeId> nodeIds;
+    QList<ConnectionItem *> connections;
+    for (auto *item : scene->selectedItems()) {
+        if (auto *conn = dynamic_cast<ConnectionItem *>(item))
+            connections.append(conn);
+        else if (auto *node = dynamic_cast<NodeItemBase *>(item))
+            nodeIds.append(node->nodeId());
+    }
+
+    for (NodeId id : nodeIds) {
+        if (m_itemMap.contains(id))
+            deleteNodeById(id);
+    }
+    for (auto *conn : connections) {
+        if (conn->scene())
+            scene->removeConnection(conn);
+    }
+}
+
+void ClipNodeEditor::clearAllNodes() {
+    const QVector<NodeId> clipIds = m_nodeMap.keys().toVector();
+    for (NodeId id : clipIds) deleteNodeById(id);
+
+    for (NodeId id : m_processNodes.keys().toVector()) deleteNodeById(id);
+    for (NodeId id : m_layerNodes.keys().toVector()) deleteNodeById(id);
+    for (NodeId id : m_abSelectNodes.keys().toVector()) deleteNodeById(id);
+    for (NodeId id : m_masterAudioNodes.keys().toVector()) deleteNodeById(id);
+    for (NodeId id : m_masterAudioInputNodes.keys().toVector()) deleteNodeById(id);
+    for (NodeId id : m_scriptNodes.keys().toVector()) deleteNodeById(id);
+
+    if (m_outputNode != 0) {
+        if (auto *item = m_itemMap.value(m_outputNode)) {
+            m_scene->removeConnectionsForNode(m_outputNode);
+            removeSceneItem(item);
+        }
+        m_itemMap.remove(m_outputNode);
+        m_outputNode = 0;
+    }
+
+    m_itemMap.clear();
+    m_processNodes.clear();
+    m_layerNodes.clear();
+    m_abSelectNodes.clear();
+    m_scriptNodes.clear();
+    m_masterAudioNodes.clear();
+    m_masterAudioInputNodes.clear();
+    m_deckAInput = 0;
+    m_deckBInput = 0;
+}
+
+QVector<ClipNodeModel *> ClipNodeEditor::allNodes() const {
+    return m_nodeMap.values().toVector();
+}
+
+ClipNodeModel *ClipNodeEditor::nodeAt(NodeId id) const {
+    auto it = m_nodeMap.find(id);
+    return (it != m_nodeMap.end()) ? *it : nullptr;
+}
+
+// ── Deck assignment ─────────────────────────────────────────────────────────
+
+void ClipNodeEditor::setActiveDeckClip(NodeId clipId, bool deckA) {
+    if (deckA) { m_deckAInput = clipId; emit deckAClipChanged(clipId); }
+    else       { m_deckBInput = clipId; emit deckBClipChanged(clipId); }
+    updateAbHighlights();
+    emit clipChainChanged();
+}
+
+void ClipNodeEditor::assignInputToDeck(NodeId inputProducerNode, bool deckA) {
+    if (deckA) {
+        if (m_deckBInput == inputProducerNode) { m_deckBInput = 0; emit deckBClipChanged(0); }
+        m_deckAInput = inputProducerNode;
+        emit deckAClipChanged(inputProducerNode);
+    } else {
+        if (m_deckAInput == inputProducerNode) { m_deckAInput = 0; emit deckAClipChanged(0); }
+        m_deckBInput = inputProducerNode;
+        emit deckBClipChanged(inputProducerNode);
+    }
+    updateAbHighlights();
+    emit clipChainChanged();
+}
+
+// ── Evaluator ───────────────────────────────────────────────────────────────
+
+ResolvedStream ClipNodeEditor::evaluateVideoInput(NodeId producerNode) const {
+    return evaluateVideoInputGuarded(producerNode, {});
+}
+
+ResolvedStream ClipNodeEditor::evaluateVideoInputGuarded(NodeId producerNode,
+                                                         QSet<NodeId> visited) const {
+    ResolvedStream out;
+    if (producerNode == 0 || visited.contains(producerNode)) return out;
+    visited.insert(producerNode);
+
+    NodeItemBase *item = m_itemMap.value(producerNode);
+    if (!item) return out;
+
+    if (dynamic_cast<ClipNodeItem *>(item)) {
+        ResolvedLayer layer;
+        layer.inputNodeId = producerNode;
+        out.layers.push_back(layer);
+        return out;
+    }
+
+    if (auto *pr = dynamic_cast<ProcessNodeItem *>(item)) {
+        const NodeId up = m_scene->producerForInputPort(pr->inPort());
+        out = evaluateVideoInputGuarded(up, visited);
+        for (ResolvedLayer &l : out.layers) {
+            if (pr->effect() == ProcessNodeItem::Effect::FlipH) {
+                l.flipH = !l.flipH;
+            } else if (pr->effect() == ProcessNodeItem::Effect::FlipV) {
+                l.flipV = !l.flipV;
+            } else { // Crop
+                float nx, ny, nw, nh;
+                pr->cropRect(nx, ny, nw, nh);
+                float ax = l.flipH ? (1.f - nx - nw) : nx;
+                float ay = l.flipV ? (1.f - ny - nh) : ny;
+                l.cropX = l.cropX + ax * l.cropW;
+                l.cropY = l.cropY + ay * l.cropH;
+                l.cropW = nw * l.cropW;
+                l.cropH = nh * l.cropH;
+            }
+        }
+        return out;
+    }
+
+    if (auto *ly = dynamic_cast<LayerNodeItem *>(item)) {
+        // Bottom of the list = bottom-most layer, so walk slots last→first
+        // (ResolvedStream index 0 is the bottom layer).
+        for (int i = ly->slotCount() - 1; i >= 0; --i) {
+            const NodeId up = m_scene->producerForInputPort(ly->inPort(i));
+            if (up == 0) continue;
+            ResolvedStream sub = evaluateVideoInputGuarded(up, visited);
+            const LayerSlot &s = ly->slot(i);
+            for (ResolvedLayer &l : sub.layers) {
+                l.baseX = s.baseX; l.baseY = s.baseY; l.baseW = s.baseW; l.baseH = s.baseH;
+                l.visible = l.visible && s.visible;
+                out.layers.push_back(l);
+            }
+        }
+        out.canvasWidth = ly->canvasW();
+        out.canvasHeight = ly->canvasH();
+        return out;
+    }
+
+    // A/B-select and everything else are not blue producers.
+    return out;
+}
+
+// ── Output querying ─────────────────────────────────────────────────────────
+
+bool ClipNodeEditor::outputIsSingleStream() const {
+    return outputSingleProducer() != 0;
+}
+
+NodeId ClipNodeEditor::outputSingleProducer() const {
+    if (m_outputNode == 0) return 0;
+    auto *out = dynamic_cast<OutputNodeItem *>(m_itemMap.value(m_outputNode));
+    if (!out) return 0;
+    return m_scene->producerForInputPort(out->chainInPort());
+}
+
+// ── Layer placement views ───────────────────────────────────────────────────
+
+void ClipNodeEditor::normalizeSwitchingInputs() {
+    auto defaultName = [this](NodeId producer) -> QString {
+        const ResolvedStream s = evaluateVideoInput(producer);
+        if (!s.layers.isEmpty())
+            if (auto *m = nodeAt(s.layers.first().inputNodeId))
+                return m->sourceName();
+        return {};
+    };
+    for (auto it = m_layerNodes.cbegin(); it != m_layerNodes.cend(); ++it) {
+        auto *ly = static_cast<LayerNodeItem *>(it.value());
+        ly->normalizeInputs();
+        for (int i = 0; i < ly->slotCount(); ++i) {
+            if (!ly->slotsRef()[i].name.isEmpty()) continue;
+            const NodeId prod = m_scene->producerForInputPort(ly->inPort(i));
+            if (prod != 0) ly->slotsRef()[i].name = defaultName(prod);
+        }
+    }
+    for (auto it = m_abSelectNodes.cbegin(); it != m_abSelectNodes.cend(); ++it) {
+        auto *ab = static_cast<AbSelectNodeItem *>(it.value());
+        ab->normalizeInputs();
+        for (int i = 0; i < ab->slotCount(); ++i) {
+            if (!ab->slotsRef()[i].name.isEmpty()) continue;
+            const NodeId prod = m_scene->producerForInputPort(ab->inPort(i));
+            if (prod != 0) ab->slotsRef()[i].name = defaultName(prod);
+        }
+    }
+}
+
+QVector<ClipNodeEditor::LayerSlotView> ClipNodeEditor::layerSlotViews(NodeId layerId) const {
+    QVector<LayerSlotView> views;
+    auto *ly = dynamic_cast<LayerNodeItem *>(m_itemMap.value(layerId));
+    if (!ly) return views;
+    for (int i = 0; i < ly->slotCount(); ++i) {
+        const NodeId up = m_scene->producerForInputPort(ly->inPort(i));
+        if (up == 0) continue;   // skip the trailing empty input
+        LayerSlotView v;
+        v.index = i;
+        const LayerSlot &s = ly->slot(i);
+        v.rect = QRectF(s.baseX, s.baseY, s.baseW, s.baseH);
+        ResolvedStream sub = evaluateVideoInput(up);
+        if (!sub.layers.isEmpty()) {
+            if (auto *m = nodeAt(sub.layers.first().inputNodeId))
+                v.thumb = m->thumbnail();
+        }
+        views.push_back(v);
+    }
+    return views;
+}
+
+void ClipNodeEditor::setLayerSlotRect(NodeId layerId, int index, float x, float y, float w, float h) {
+    auto *ly = dynamic_cast<LayerNodeItem *>(m_itemMap.value(layerId));
+    if (!ly || index < 0 || index >= ly->slotCount()) return;
+    LayerSlot &s = ly->slotsRef()[index];
+    s.baseX = x; s.baseY = y; s.baseW = w; s.baseH = h;
+    ly->update();
+    emit clipChainChanged();
+}
+
+bool ClipNodeEditor::layerCanvasSize(NodeId layerId, int &w, int &h) const {
+    auto *ly = dynamic_cast<LayerNodeItem *>(m_itemMap.value(layerId));
+    if (!ly) return false;
+    w = ly->canvasW(); h = ly->canvasH();
+    return true;
+}
+
+// ── Audio / script queries ──────────────────────────────────────────────────
+
+bool ClipNodeEditor::audioSettingsForClip(NodeId clipId, int &volume, bool &muted, bool &routedToMaster, AudioPlaybackMode &playbackMode, int &delayMs, QString &outputDeviceId) const {
+    auto *clip = dynamic_cast<ClipNodeItem *>(m_itemMap.value(clipId));
+    if (!clip || !clip->hasAudio()) return false;
+
+    volume = clip->volume();
+    muted = clip->muted();
+    const NodeId masterId = m_scene->masterNodeForClip(clipId);
+    routedToMaster = (masterId != 0);
+    outputDeviceId.clear();
+    if (masterId) {
+        if (auto *mn = dynamic_cast<MasterAudioOutputNodeItem *>(m_itemMap.value(masterId)))
+            outputDeviceId = mn->deviceId();
+    }
+    playbackMode = clip->playbackMode();
+    delayMs = clip->delayMs();
+    return true;
+}
+
+bool ClipNodeEditor::masterAudioInputSettings(NodeId inputNodeId, MasterAudioInputSettings &settings) const {
+    auto *inputNode = dynamic_cast<MasterAudioInputNodeItem *>(m_itemMap.value(inputNodeId));
+    if (!inputNode) return false;
+
+    settings.inputDeviceId = inputNode->deviceId();
+    settings.inputDeviceLabel = inputNode->deviceLabel();
+    settings.volume = inputNode->volume();
+    settings.muted = inputNode->muted();
+    settings.routedMasterOutputId = m_scene->masterOutputForInput(inputNodeId);
+    return true;
+}
+
+bool ClipNodeEditor::masterAudioOutputDevice(NodeId masterOutputNodeId, QString &outputDeviceId) const {
+    auto *outputNode = dynamic_cast<MasterAudioOutputNodeItem *>(m_itemMap.value(masterOutputNodeId));
+    if (!outputNode) return false;
+    outputDeviceId = outputNode->deviceId();
+    return true;
+}
+
+QVector<NodeId> ClipNodeEditor::allMasterAudioInputNodeIds() const {
+    return m_masterAudioInputNodes.keys().toVector();
+}
+
+bool ClipNodeEditor::audioSourceForShader(NodeId shaderNodeId, QString &filePath) const {
+    const NodeId clipId = m_scene->clipForShaderAudio(shaderNodeId);
+    if (clipId == 0) return false;
+    const ClipNodeModel *node = nodeAt(clipId);
+    if (!node) return false;
+    const SourceDescriptor &desc = node->sourceDescriptor();
+    if (desc.kind != SourceDescriptor::Kind::VideoFile) return false;
+    filePath = desc.path;
+    return !filePath.isEmpty();
+}
+
+std::shared_ptr<ScriptOutput> ClipNodeEditor::scriptOutputForDataNode(NodeId dataNodeId) const {
+    const NodeId scriptId = m_scene->scriptNodeForData(dataNodeId);
+    if (scriptId == 0) return nullptr;
+    auto *scriptNode = static_cast<ScriptNodeItem *>(m_scriptNodes.value(scriptId));
+    return scriptNode ? scriptNode->output() : nullptr;
+}
+
+// ── Context menu / add-node flow ────────────────────────────────────────────
+
+void ClipNodeEditor::onCanvasContextMenu() {
+    QMenu menu;
+    const QPoint pos = QCursor::pos();
+    menu.addAction("Add Input Node…", this, [this]() { emit addInputNodeRequested(); });
+
+    QMenu *proc = menu.addMenu("Add Process Node");
+    proc->addAction("Crop", this, [this, pos]() { addProcessNodeAt((int)ProcessNodeItem::Effect::Crop, pos); });
+    proc->addAction("Flip Horizontal", this, [this, pos]() { addProcessNodeAt((int)ProcessNodeItem::Effect::FlipH, pos); });
+    proc->addAction("Flip Vertical", this, [this, pos]() { addProcessNodeAt((int)ProcessNodeItem::Effect::FlipV, pos); });
+
+    QMenu *sw = menu.addMenu("Add Switching Node");
+    sw->addAction("Layer", this, [this, pos]() { addLayerNodeAt(pos); });
+    sw->addAction("A/B Deck Select", this, [this, pos]() { addAbSelectNodeAt(pos); });
+
+    menu.addSeparator();
+    menu.addAction("Add Master Audio Output", this, &ClipNodeEditor::onAddMasterAudioOutput);
+    menu.addAction("Add Master Audio Input", this, &ClipNodeEditor::onAddMasterAudioInput);
+#ifdef SWITCHX_HAVE_LUA
+    menu.addAction("Add Script Node", this, &ClipNodeEditor::onAddScriptNode);
+#endif
+    menu.exec(pos);
+}
+
+void ClipNodeEditor::onAddMasterAudioOutput() { addMasterAudioOutputTo(m_scene, m_view, QCursor::pos()); }
+void ClipNodeEditor::onAddMasterAudioInput()  { addMasterAudioInputTo(m_scene, m_view, QCursor::pos()); }
+void ClipNodeEditor::onAddScriptNode()        { addScriptNodeTo(m_scene, m_view, QCursor::pos()); }
+
+QPointF ClipNodeEditor::scenePosForView(QGraphicsView *view, const QPoint &globalPos) const {
+    if (!view) return QPointF(20, 20);
+    return view->mapToScene(view->mapFromGlobal(globalPos));
+}
+
+void ClipNodeEditor::addMasterAudioOutputTo(ClipNodeScene *scene, QGraphicsView *view,
+                                            const QPoint &globalPos) {
+    if (!scene) return;
+    auto *masterNode = new MasterAudioOutputNodeItem(m_nextId++);
+    masterNode->setPos(scenePosForView(view, globalPos));
+    scene->addItem(masterNode);
+    m_masterAudioNodes[masterNode->nodeId()] = static_cast<void *>(masterNode);
+    masterNode->onDeviceChanged = [this](NodeId) { emit audioGraphChanged(); };
+    registerItem(masterNode);
+    wireDeleteCallback(masterNode, [this](NodeId nid) { deleteNodeById(nid); });
+    emit audioGraphChanged();
+}
+
+void ClipNodeEditor::addMasterAudioInputTo(ClipNodeScene *scene, QGraphicsView *view,
+                                           const QPoint &globalPos) {
+    if (!scene) return;
+    auto *inputNode = new MasterAudioInputNodeItem(m_nextId++);
+    inputNode->setPos(scenePosForView(view, globalPos));
+    scene->addItem(inputNode);
+    m_masterAudioInputNodes[inputNode->nodeId()] = static_cast<void *>(inputNode);
+    inputNode->onSettingsChanged = [this](NodeId) { emit audioGraphChanged(); };
+    registerItem(inputNode);
+    wireDeleteCallback(inputNode, [this](NodeId nid) { deleteNodeById(nid); });
+    emit audioGraphChanged();
+}
+
+void ClipNodeEditor::addScriptNodeTo(ClipNodeScene *scene, QGraphicsView *view,
+                                     const QPoint &globalPos) {
+#ifdef SWITCHX_HAVE_LUA
+    if (!scene) return;
+    ScriptEditDialog dlg(QString(), ScriptTriggerMode::Periodic, 1000, this);
+    if (dlg.exec() != QDialog::Accepted) return;
+    const QString code = dlg.resultCode().trimmed();
+    if (code.isEmpty()) return;
+
+    auto *scriptNode = new ScriptNodeItem(m_nextId++, code,
+                                          dlg.resultTriggerMode(), dlg.resultIntervalMs());
+    scriptNode->setPos(scenePosForView(view, globalPos));
+    scriptNode->onEditRequested = [this](NodeId sid) { onEditScriptNode(sid); };
+    scene->addItem(scriptNode);
+    m_scriptNodes[scriptNode->nodeId()] = static_cast<void *>(scriptNode);
+    registerItem(scriptNode);
+    wireDeleteCallback(scriptNode, [this](NodeId nid) { deleteNodeById(nid); });
+    emit audioGraphChanged();
+#else
+    Q_UNUSED(scene); Q_UNUSED(view); Q_UNUSED(globalPos);
+#endif
+}
+
+// ── Edit dialogs ────────────────────────────────────────────────────────────
+
+void ClipNodeEditor::onEditClipAudio(NodeId clipId) {
+    auto *clip = dynamic_cast<ClipNodeItem *>(m_itemMap.value(clipId));
+    if (!clip || !clip->hasAudio()) return;
+
+    QDialog dialog(this);
+    Ui::AudioNodeDialog ui;
+    ui.setupUi(&dialog);
+    ui.volumeSpin->setValue(clip->volume());
+    ui.mutedCheck->setChecked(clip->muted());
+    ui.modeCombo->setCurrentIndex((int)clip->playbackMode());
+    ui.delaySpin->setValue(clip->delayMs());
+    if (dialog.exec() == QDialog::Accepted) {
+        clip->setVolume(ui.volumeSpin->value());
+        clip->setMuted(ui.mutedCheck->isChecked());
+        clip->setPlaybackMode((AudioPlaybackMode)ui.modeCombo->currentIndex());
+        clip->setDelayMs(ui.delaySpin->value());
+        emit audioControllerChanged(clipId);
+    }
+}
+
+void ClipNodeEditor::onEditScriptNode(NodeId nodeId) {
+#ifdef SWITCHX_HAVE_LUA
+    auto *scriptNode = static_cast<ScriptNodeItem *>(m_scriptNodes.value(nodeId));
+    if (!scriptNode) return;
+    ScriptEditDialog dlg(scriptNode->code(), scriptNode->triggerMode(),
+                         scriptNode->intervalMs(), this);
+    if (dlg.exec() != QDialog::Accepted) return;
+    const QString code = dlg.resultCode().trimmed();
+    if (code.isEmpty()) return;
+    scriptNode->applySettings(code, dlg.resultTriggerMode(), dlg.resultIntervalMs());
+    emit audioGraphChanged();
+#else
+    Q_UNUSED(nodeId);
+#endif
+}
+
+void ClipNodeEditor::onEditLayerCanvas(NodeId layerId) {
+    auto *ly = dynamic_cast<LayerNodeItem *>(m_itemMap.value(layerId));
+    if (!ly) return;
+
+    QDialog dialog(this);
+    Ui::ContextNodeDialog ui;
+    ui.setupUi(&dialog);
+    ui.wSpin->setValue(ly->canvasW());
+    ui.hSpin->setValue(ly->canvasH());
+    connect(ui.presetCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            &dialog, [&ui](int idx) {
+        if      (idx == 1) { ui.wSpin->setValue(1280); ui.hSpin->setValue(720);  }
+        else if (idx == 2) { ui.wSpin->setValue(1920); ui.hSpin->setValue(1080); }
+        else if (idx == 3) { ui.wSpin->setValue(1024); ui.hSpin->setValue(768);  }
+    });
+    if (dialog.exec() == QDialog::Accepted) {
+        ly->setCanvasSize(ui.wSpin->value(), ui.hSpin->value());
+        emit clipChainChanged();
+    }
+}
+
+void ClipNodeEditor::onEditLayerTransform(NodeId layerId) {
+    TransformEditorDialog dialog((int)layerId, this, this);
+    dialog.exec();
+}
+
+void ClipNodeEditor::onEditProcessCrop(NodeId processId) {
+    auto *pr = dynamic_cast<ProcessNodeItem *>(m_itemMap.value(processId));
+    if (!pr) return;
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("Edit Crop");
+    auto *layout = new QVBoxLayout(&dialog);
+    auto *selector = new CropSelectorWidget(&dialog);
+    float x, y, w, h;
+    pr->cropRect(x, y, w, h);
+    // Show the upstream input node's thumbnail as reference, if any.
+    const NodeId up = m_scene->producerForInputPort(pr->inPort());
+    ResolvedStream sub = evaluateVideoInput(up);
+    if (!sub.layers.isEmpty()) {
+        if (auto *m = nodeAt(sub.layers.first().inputNodeId))
+            selector->setFrame(m->thumbnail().toImage());
+    }
+    selector->setCrop(x, y, w, h);
+    layout->addWidget(selector);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    if (dialog.exec() == QDialog::Accepted) {
+        pr->setCropRect(selector->cropX(), selector->cropY(),
+                        selector->cropW(), selector->cropH());
+        emit clipChainChanged();
+    }
+}
+
+void ClipNodeEditor::onNodeRemoveRequested(NodeId nodeId) { removeNode(nodeId); }
+
+void ClipNodeEditor::connectNodeSignals(ClipNodeModel *model, NodeId id) {
+    connect(model, &ClipNodeModel::removeRequested, this, [this, id]() { onNodeRemoveRequested(id); });
+}
+
+void ClipNodeEditor::disconnectNodeSignals(ClipNodeModel *model) {
+    disconnect(model, nullptr, this, nullptr);
+}
+
+// ── Serialization ───────────────────────────────────────────────────────────
+
+static QJsonObject layerSlotToJson(const LayerSlot &s) {
+    QJsonObject o;
+    o["baseX"] = (double)s.baseX; o["baseY"] = (double)s.baseY;
+    o["baseW"] = (double)s.baseW; o["baseH"] = (double)s.baseH;
+    o["visible"] = s.visible;
+    o["name"] = s.name;
+    return o;
+}
+
 QJsonObject ClipNodeEditor::saveState(const QDir &sessionDir) const {
     QJsonObject root;
+    root["graphVersion"] = 2;
     root["nextId"] = (qint64)m_nextId;
+    root["deckAInput"] = (qint64)m_deckAInput;
+    root["deckBInput"] = (qint64)m_deckBInput;
 
-    const QSet<NodeId> groupMembers = allGroupMemberIds();
-
-    QJsonArray clipNodes;
+    QJsonArray inputNodes;
     for (auto it = m_nodeMap.cbegin(); it != m_nodeMap.cend(); ++it) {
         const NodeId id = it.key();
         const ClipNodeModel *model = it.value();
         QJsonObject nodeObj;
         nodeObj["id"] = (qint64)id;
-
         if (auto *ci = dynamic_cast<ClipNodeItem *>(m_itemMap.value(id))) {
-            nodeObj["posX"]     = ci->pos().x();
-            nodeObj["posY"]     = ci->pos().y();
+            nodeObj["posX"] = ci->pos().x();
+            nodeObj["posY"] = ci->pos().y();
             nodeObj["hasAudio"] = ci->hasAudio();
             if (ci->hasAudio()) {
-                nodeObj["audioVolume"]       = ci->volume();
-                nodeObj["audioMuted"]        = ci->muted();
+                nodeObj["audioVolume"] = ci->volume();
+                nodeObj["audioMuted"] = ci->muted();
                 nodeObj["audioPlaybackMode"] = (int)ci->playbackMode();
-                nodeObj["audioDelayMs"]      = ci->delayMs();
+                nodeObj["audioDelayMs"] = ci->delayMs();
             }
-            nodeObj["transformX"] = (double)ci->x();
-            nodeObj["transformY"] = (double)ci->y();
-            nodeObj["transformW"] = (double)ci->w();
-            nodeObj["transformH"] = (double)ci->h();
         }
-
-        nodeObj["source"]   = descriptorToJson(model->sourceDescriptor(), sessionDir);
+        nodeObj["source"] = descriptorToJson(model->sourceDescriptor(), sessionDir);
         QJsonObject settingsObj = model->settings().toJson();
         if (sessionDir.isAbsolute()) {
             QJsonArray overlays = settingsObj["overlays"].toArray();
@@ -3141,49 +3196,84 @@ QJsonObject ClipNodeEditor::saveState(const QDir &sessionDir) const {
             settingsObj["overlays"] = overlays;
         }
         nodeObj["settings"] = settingsObj;
-        nodeObj["repeat"]   = model->isRepeat();
-        clipNodes.append(nodeObj);
+        nodeObj["repeat"] = model->isRepeat();
+        inputNodes.append(nodeObj);
     }
-    root["clipNodes"] = clipNodes;
+    root["inputNodes"] = inputNodes;
 
-    QJsonArray contextNodes;
-    for (auto it = m_contextNodes.cbegin(); it != m_contextNodes.cend(); ++it) {
-        auto *cn = static_cast<TransformContextNodeItem *>(m_itemMap.value(it.key()));
-        if (!cn) cn = static_cast<TransformContextNodeItem *>(*it);
-        QJsonObject obj;
-        obj["id"]      = (qint64)cn->nodeId();
-        obj["posX"]    = cn->pos().x();
-        obj["posY"]    = cn->pos().y();
-        obj["canvasW"] = cn->canvasW();
-        obj["canvasH"] = cn->canvasH();
-        contextNodes.append(obj);
+    QJsonArray processNodes;
+    for (auto it = m_processNodes.cbegin(); it != m_processNodes.cend(); ++it) {
+        auto *pr = static_cast<ProcessNodeItem *>(it.value());
+        QJsonObject o;
+        o["id"] = (qint64)pr->nodeId();
+        o["posX"] = pr->pos().x(); o["posY"] = pr->pos().y();
+        o["effect"] = (int)pr->effect();
+        float x, y, w, h; pr->cropRect(x, y, w, h);
+        o["cropX"] = (double)x; o["cropY"] = (double)y;
+        o["cropW"] = (double)w; o["cropH"] = (double)h;
+        processNodes.append(o);
     }
-    root["contextNodes"] = contextNodes;
+    root["processNodes"] = processNodes;
+
+    QJsonArray layerNodes;
+    for (auto it = m_layerNodes.cbegin(); it != m_layerNodes.cend(); ++it) {
+        auto *ly = static_cast<LayerNodeItem *>(it.value());
+        QJsonObject o;
+        o["id"] = (qint64)ly->nodeId();
+        o["posX"] = ly->pos().x(); o["posY"] = ly->pos().y();
+        o["canvasW"] = ly->canvasW(); o["canvasH"] = ly->canvasH();
+        QJsonArray slotArr;
+        for (int i = 0; i < ly->slotCount(); ++i)
+            slotArr.append(layerSlotToJson(ly->slot(i)));
+        o["slots"] = slotArr;
+        layerNodes.append(o);
+    }
+    root["layerNodes"] = layerNodes;
+
+    QJsonArray abSelectNodes;
+    for (auto it = m_abSelectNodes.cbegin(); it != m_abSelectNodes.cend(); ++it) {
+        auto *ab = static_cast<AbSelectNodeItem *>(it.value());
+        QJsonObject o;
+        o["id"] = (qint64)ab->nodeId();
+        o["posX"] = ab->pos().x(); o["posY"] = ab->pos().y();
+        QJsonArray slotArr;
+        for (int i = 0; i < ab->slotCount(); ++i) {
+            QJsonObject so; so["name"] = ab->slot(i).name; slotArr.append(so);
+        }
+        o["slots"] = slotArr;
+        abSelectNodes.append(o);
+    }
+    root["abSelectNodes"] = abSelectNodes;
+
+    if (m_outputNode != 0) {
+        if (auto *out = m_itemMap.value(m_outputNode)) {
+            QJsonObject o;
+            o["id"] = (qint64)m_outputNode;
+            o["posX"] = out->pos().x(); o["posY"] = out->pos().y();
+            root["outputNode"] = o;
+        }
+    }
 
     QJsonArray scriptNodes;
     for (auto it = m_scriptNodes.cbegin(); it != m_scriptNodes.cend(); ++it) {
-        auto *sn = static_cast<ScriptNodeItem *>(m_itemMap.value(it.key()));
-        if (!sn) sn = static_cast<ScriptNodeItem *>(*it);
+        auto *sn = static_cast<ScriptNodeItem *>(it.value());
         QJsonObject obj;
-        obj["id"]           = (qint64)sn->nodeId();
-        obj["posX"]         = sn->pos().x();
-        obj["posY"]         = sn->pos().y();
-        obj["luaCode"]      = sn->code();
-        obj["triggerMode"]  = static_cast<int>(sn->triggerMode());
-        obj["intervalMs"]   = sn->intervalMs();
+        obj["id"] = (qint64)sn->nodeId();
+        obj["posX"] = sn->pos().x(); obj["posY"] = sn->pos().y();
+        obj["luaCode"] = sn->code();
+        obj["triggerMode"] = static_cast<int>(sn->triggerMode());
+        obj["intervalMs"] = sn->intervalMs();
         scriptNodes.append(obj);
     }
     root["scriptNodes"] = scriptNodes;
 
     QJsonArray masterAudioNodes;
     for (auto it = m_masterAudioNodes.cbegin(); it != m_masterAudioNodes.cend(); ++it) {
-        auto *mn = static_cast<MasterAudioOutputNodeItem *>(m_itemMap.value(it.key()));
-        if (!mn) mn = static_cast<MasterAudioOutputNodeItem *>(*it);
+        auto *mn = static_cast<MasterAudioOutputNodeItem *>(it.value());
         QJsonObject obj;
-        obj["id"]   = (qint64)mn->nodeId();
-        obj["posX"] = mn->pos().x();
-        obj["posY"] = mn->pos().y();
-        obj["deviceId"]    = mn->deviceId();
+        obj["id"] = (qint64)mn->nodeId();
+        obj["posX"] = mn->pos().x(); obj["posY"] = mn->pos().y();
+        obj["deviceId"] = mn->deviceId();
         obj["deviceLabel"] = mn->deviceLabel();
         masterAudioNodes.append(obj);
     }
@@ -3191,65 +3281,54 @@ QJsonObject ClipNodeEditor::saveState(const QDir &sessionDir) const {
 
     QJsonArray masterAudioInputNodes;
     for (auto it = m_masterAudioInputNodes.cbegin(); it != m_masterAudioInputNodes.cend(); ++it) {
-        auto *in = static_cast<MasterAudioInputNodeItem *>(m_itemMap.value(it.key()));
-        if (!in) in = static_cast<MasterAudioInputNodeItem *>(*it);
+        auto *in = static_cast<MasterAudioInputNodeItem *>(it.value());
         QJsonObject obj;
-        obj["id"]   = (qint64)in->nodeId();
-        obj["posX"] = in->pos().x();
-        obj["posY"] = in->pos().y();
-        obj["deviceId"]    = in->deviceId();
+        obj["id"] = (qint64)in->nodeId();
+        obj["posX"] = in->pos().x(); obj["posY"] = in->pos().y();
+        obj["deviceId"] = in->deviceId();
         obj["deviceLabel"] = in->deviceLabel();
         obj["volume"] = in->volume();
-        obj["muted"]  = in->muted();
+        obj["muted"] = in->muted();
         masterAudioInputNodes.append(obj);
     }
     root["masterAudioInputNodes"] = masterAudioInputNodes;
 
-    QJsonArray groups;
-    for (auto it = m_groupNodes.cbegin(); it != m_groupNodes.cend(); ++it) {
-        GroupNodeItem *group = it.value();
-        QJsonObject obj;
-        obj["id"] = (qint64)group->nodeId();
-        obj["posX"] = group->pos().x();
-        obj["posY"] = group->pos().y();
-        obj["delegateId"] = (qint64)group->delegateId();
-        obj["name"] = group->name();
-        QJsonArray members;
-        for (auto mit = m_itemMap.cbegin(); mit != m_itemMap.cend(); ++mit) {
-            if (mit.value()->scene() == group->subScene())
-                members.append((qint64)mit.key());
-        }
-        obj["members"] = members;
-        obj["connections"] = group->subScene()->edgesToJson();
-        groups.append(obj);
-    }
-    root["groups"] = groups;
-
-    root["connections"] = m_scene->edgesToJson(&groupMembers);
+    root["connections"] = m_scene->edgesToJson();
     return root;
 }
 
-PortItem *ClipNodeEditor::findPort(NodeId nodeId, int portKindInt) const {
+PortItem *ClipNodeEditor::findPort(NodeId nodeId, int portKindInt, int slotIndex) const {
     const PortKind kind = (PortKind)portKindInt;
     auto *base = m_itemMap.value(nodeId);
     if (!base) return nullptr;
 
     if (auto *ci = dynamic_cast<ClipNodeItem *>(base)) {
-        if (kind == PortKind::ChainIn)          return ci->chainInPort();
-        if (kind == PortKind::ChainOut)         return ci->chainOutPort();
-        if (kind == PortKind::TransformContext) return ci->contextPort();
+        if (kind == PortKind::ChainOut)           return ci->chainOutPort();
         if (kind == PortKind::AudioControllerOut) return ci->audioPort();
-        if (kind == PortKind::ShaderAudioIn)    return ci->shaderAudioInPort();
-        if (kind == PortKind::DataIn)           return ci->dataInPort();
+        if (kind == PortKind::ShaderAudioIn)      return ci->shaderAudioInPort();
+        if (kind == PortKind::DataIn)             return ci->dataInPort();
     }
-    if (auto *xi = dynamic_cast<TransformContextNodeItem *>(base)) {
-        if (kind == PortKind::ContextHub) return xi->hubPort();
+    if (auto *pr = dynamic_cast<ProcessNodeItem *>(base)) {
+        if (kind == PortKind::ChainIn)  return pr->inPort();
+        if (kind == PortKind::ChainOut) return pr->outPort();
     }
-    if (auto *mi = dynamic_cast<MasterAudioOutputNodeItem *>(base)) {
-        if (kind == PortKind::MasterAudioIn) return mi->audioInPort();
+    if (auto *ly = dynamic_cast<LayerNodeItem *>(base)) {
+        if (kind == PortKind::ChainOut) return ly->outPort();
+        if (kind == PortKind::ChainIn)  return ly->inPort(slotIndex);
     }
-    if (auto *in = dynamic_cast<MasterAudioInputNodeItem *>(base)) {
-        if (kind == PortKind::MasterAudioInputOut) return in->audioOutPort();
+    if (auto *ab = dynamic_cast<AbSelectNodeItem *>(base)) {
+        if (kind == PortKind::AbOut)   return ab->abOutPort();
+        if (kind == PortKind::ChainIn) return ab->inPort(slotIndex);
+    }
+    if (auto *out = dynamic_cast<OutputNodeItem *>(base)) {
+        if (kind == PortKind::ChainIn) return out->chainInPort();
+        if (kind == PortKind::AbIn)    return out->abInPort();
+    }
+    if (auto *mo = dynamic_cast<MasterAudioOutputNodeItem *>(base)) {
+        if (kind == PortKind::MasterAudioIn) return mo->audioInPort();
+    }
+    if (auto *mi = dynamic_cast<MasterAudioInputNodeItem *>(base)) {
+        if (kind == PortKind::MasterAudioInputOut) return mi->audioOutPort();
     }
     if (auto *si = dynamic_cast<ScriptNodeItem *>(base)) {
         if (kind == PortKind::ScriptOut) return si->scriptOutPort();
@@ -3257,27 +3336,21 @@ PortItem *ClipNodeEditor::findPort(NodeId nodeId, int portKindInt) const {
     return nullptr;
 }
 
-void ClipNodeEditor::restoreConnections(ClipNodeScene *scene, const QJsonArray &conns,
-                                        const QMap<NodeId, NodeId> &legacyClipForAudioNode) {
+void ClipNodeEditor::restoreConnections(ClipNodeScene *scene, const QJsonArray &conns) {
     for (const auto &val : conns) {
         const QJsonObject obj = val.toObject();
-        NodeId from = (NodeId)obj["from"].toInteger();
+        const NodeId from = (NodeId)obj["from"].toInteger();
         const NodeId to   = (NodeId)obj["to"].toInteger();
         const int    kind = obj["kind"].toInt();
-
-        if (kind == (int)ConnectionItem::LegacyClipToTransform) continue;
-        if (kind == (int)ConnectionItem::AudioToController) continue;
-
-        if (kind == (int)ConnectionItem::ControllerToMaster) {
-            const auto it = legacyClipForAudioNode.constFind(from);
-            if (it != legacyClipForAudioNode.constEnd())
-                from = it.value();
-        }
+        const int    slot = obj["toPortIndex"].toInt(-1);
 
         PortItem *fromPort = nullptr, *toPort = nullptr;
         if (kind == ConnectionItem::Chain) {
             fromPort = findPort(from, (int)PortKind::ChainOut);
-            toPort   = findPort(to,   (int)PortKind::ChainIn);
+            toPort   = findPort(to,   (int)PortKind::ChainIn, slot);
+        } else if (kind == ConnectionItem::AbToOutput) {
+            fromPort = findPort(from, (int)PortKind::AbOut);
+            toPort   = findPort(to,   (int)PortKind::AbIn);
         } else if (kind == ConnectionItem::ClipToShaderAudio) {
             fromPort = findPort(from, (int)PortKind::AudioControllerOut);
             toPort   = findPort(to,   (int)PortKind::ShaderAudioIn);
@@ -3290,56 +3363,35 @@ void ClipNodeEditor::restoreConnections(ClipNodeScene *scene, const QJsonArray &
         } else if (kind == ConnectionItem::ScriptToData) {
             fromPort = findPort(from, (int)PortKind::ScriptOut);
             toPort   = findPort(to,   (int)PortKind::DataIn);
-        } else {
-            fromPort = findPort(from, (int)PortKind::TransformContext);
-            toPort   = findPort(to,   (int)PortKind::ContextHub);
         }
         if (fromPort && toPort)
-            scene->createConnectionManually(fromPort, toPort,
-                                            (ConnectionItem::EdgeKind)kind);
+            scene->createConnectionManually(fromPort, toPort, (ConnectionItem::EdgeKind)kind);
     }
 }
 
 void ClipNodeEditor::restoreState(const QJsonObject &state) {
+    m_restoring = true;
     clearAllNodes();
 
-    QMap<NodeId, NodeId> legacyClipForAudioNode;
-    auto collectLegacyAudioLinks = [&](const QJsonArray &conns) {
-        for (const auto &val : conns) {
-            const QJsonObject obj = val.toObject();
-            if (obj["kind"].toInt() != (int)ConnectionItem::AudioToController) continue;
-            legacyClipForAudioNode.insert((NodeId)obj["to"].toInteger(),
-                                          (NodeId)obj["from"].toInteger());
+    // Clean break: only graphVersion >= 2 graphs are loadable.
+    if (state.value("graphVersion").toInt(0) < 2) {
+        m_nextId = 1;
+        ensureOutputNode();
+        // Leave the graph empty but with an Output node present.
+        if (m_nodeMap.isEmpty() && m_processNodes.isEmpty() && m_layerNodes.isEmpty()
+            && m_abSelectNodes.isEmpty()) {
+            // remove auto Output so a fresh empty graph has nothing
+            if (m_outputNode) { deleteNodeById(m_outputNode); }
         }
-    };
-    collectLegacyAudioLinks(state["connections"].toArray());
-    for (const auto &groupVal : state["groups"].toArray()) {
-        const QJsonObject groupObj = groupVal.toObject();
-        collectLegacyAudioLinks(groupObj["connections"].toArray());
+        m_restoring = false;
+        emit clipChainChanged();
+        emit audioGraphChanged();
+        return;
     }
 
-    struct LegacyAudioSettings {
-        int volume = 100;
-        bool muted = false;
-        AudioPlaybackMode playbackMode = AudioPlaybackMode::Always;
-        int delayMs = 0;
-    };
-    QMap<NodeId, LegacyAudioSettings> legacyAudioByNodeId;
-    for (const auto &val : state["audioNodes"].toArray()) {
-        const QJsonObject obj = val.toObject();
-        LegacyAudioSettings settings;
-        settings.volume = obj["volume"].toInt(100);
-        settings.muted = obj["muted"].toBool(false);
-        settings.playbackMode = (AudioPlaybackMode)obj["playbackMode"].toInt((int)AudioPlaybackMode::Always);
-        settings.delayMs = obj["delayMs"].toInt(0);
-        legacyAudioByNodeId.insert((NodeId)obj["id"].toInteger(), settings);
-    }
-
-    const QJsonArray clipNodes = state["clipNodes"].toArray();
-    for (const auto &val : clipNodes) {
+    for (const auto &val : state["inputNodes"].toArray()) {
         const QJsonObject obj = val.toObject();
         const NodeId clipId = (NodeId)obj["id"].toInteger();
-
         m_nextId = clipId;
         const NodeId id = m_nextId++;
 
@@ -3348,25 +3400,17 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         const bool hasShaderAudioIn = (desc.kind == SourceDescriptor::Kind::Shader);
         const bool hasDataIn = (desc.kind == SourceDescriptor::Kind::Text);
 
-        int volume = obj["audioVolume"].toInt(100);
-        bool muted = obj["audioMuted"].toBool(false);
-        auto playbackMode = (AudioPlaybackMode)obj["audioPlaybackMode"].toInt((int)AudioPlaybackMode::Always);
-        int delayMs = obj["audioDelayMs"].toInt(0);
-
         auto *model = new ClipNodeModel(this);
         auto *nodeItem = new ClipNodeItem(model, id, hasAudio, hasShaderAudioIn, hasDataIn,
-                                          volume, muted, playbackMode, delayMs);
+                                          obj["audioVolume"].toInt(100),
+                                          obj["audioMuted"].toBool(false),
+                                          (AudioPlaybackMode)obj["audioPlaybackMode"].toInt((int)AudioPlaybackMode::Always),
+                                          obj["audioDelayMs"].toInt(0));
         nodeItem->setPos(obj["posX"].toDouble(), obj["posY"].toDouble());
-        nodeItem->setTransform(
-            (float)obj["transformX"].toDouble(0.0),
-            (float)obj["transformY"].toDouble(0.0),
-            (float)obj["transformW"].toDouble(1.0),
-            (float)obj["transformH"].toDouble(1.0));
         m_scene->addItem(nodeItem);
         m_nodeMap[id] = model;
         registerItem(nodeItem);
         wireDeleteCallback(nodeItem, [this](NodeId nid) { deleteNodeById(nid); });
-        wireRenameCallback(nodeItem, [this](NodeId nid) { renameGroupMemberClip(nid); });
         wireEditAudioCallback(nodeItem, [this](NodeId cid) { onEditClipAudio(cid); });
 
         using Kind = SourceDescriptor::Kind;
@@ -3375,50 +3419,101 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
             model->loadClip(desc.path, QPixmap{});
         else
             model->loadSource(desc, QPixmap{});
-
         if (obj.contains("settings"))
             model->applySettings(ClipSettings::fromJson(obj["settings"].toObject()));
         if (obj["repeat"].toBool()) model->setRepeat(true);
-
         connectNodeSignals(model, id);
         emit nodeAdded(id);
     }
 
-    for (auto it = legacyAudioByNodeId.cbegin(); it != legacyAudioByNodeId.cend(); ++it) {
-        const NodeId clipId = legacyClipForAudioNode.value(it.key(), 0);
-        if (!clipId) continue;
-        auto *clip = dynamic_cast<ClipNodeItem *>(m_itemMap.value(clipId));
-        if (!clip || !clip->hasAudio()) continue;
-        clip->setVolume(it.value().volume);
-        clip->setMuted(it.value().muted);
-        clip->setPlaybackMode(it.value().playbackMode);
-        clip->setDelayMs(it.value().delayMs);
-    }
-
-    const QJsonArray contextNodes = state["contextNodes"].toArray();
-    for (const auto &val : contextNodes) {
+    for (const auto &val : state["processNodes"].toArray()) {
         const QJsonObject obj = val.toObject();
-        const NodeId ctxId = (NodeId)obj["id"].toInteger();
-        m_nextId = ctxId;
-        auto *cn = new TransformContextNodeItem(m_nextId++,
-            obj["canvasW"].toInt(1280), obj["canvasH"].toInt(720));
-        cn->setPos(obj["posX"].toDouble(), obj["posY"].toDouble());
-        cn->onEditRequested = [this](NodeId cid) { onEditContextNode(cid); };
-        cn->onOpenEditorRequested = [this](NodeId cid) { onOpenTransformEditor(cid); };
-        m_scene->addItem(cn);
-        m_contextNodes[ctxId] = static_cast<void *>(cn);
-        registerItem(cn);
-        wireDeleteCallback(cn, [this](NodeId nid) { deleteNodeById(nid); });
+        const NodeId pid = (NodeId)obj["id"].toInteger();
+        m_nextId = pid;
+        auto *pr = new ProcessNodeItem(m_nextId++, (ProcessNodeItem::Effect)obj["effect"].toInt());
+        pr->setPos(obj["posX"].toDouble(), obj["posY"].toDouble());
+        pr->setCropRect((float)obj["cropX"].toDouble(0.0), (float)obj["cropY"].toDouble(0.0),
+                        (float)obj["cropW"].toDouble(1.0), (float)obj["cropH"].toDouble(1.0));
+        pr->onEditRequested = [this](NodeId nid) { onEditProcessCrop(nid); };
+        m_scene->addItem(pr);
+        m_processNodes[pid] = static_cast<void *>(pr);
+        registerItem(pr);
+        wireDeleteCallback(pr, [this](NodeId nid) { deleteNodeById(nid); });
     }
 
-    const QJsonArray scriptNodes = state["scriptNodes"].toArray();
-    for (const auto &val : scriptNodes) {
+    for (const auto &val : state["layerNodes"].toArray()) {
+        const QJsonObject obj = val.toObject();
+        const NodeId lid = (NodeId)obj["id"].toInteger();
+        m_nextId = lid;
+        auto *ly = new LayerNodeItem(m_nextId++, 0);
+        ly->setPos(obj["posX"].toDouble(), obj["posY"].toDouble());
+        ly->setCanvasSize(obj["canvasW"].toInt(1280), obj["canvasH"].toInt(720));
+        QVector<LayerSlot> slotVec;
+        for (const auto &sv : obj["slots"].toArray()) {
+            const QJsonObject so = sv.toObject();
+            LayerSlot s;
+            s.baseX = (float)so["baseX"].toDouble(0.0);
+            s.baseY = (float)so["baseY"].toDouble(0.0);
+            s.baseW = (float)so["baseW"].toDouble(1.0);
+            s.baseH = (float)so["baseH"].toDouble(1.0);
+            s.visible = so["visible"].toBool(true);
+            s.name = so["name"].toString();
+            slotVec.push_back(s);
+        }
+        if (slotVec.isEmpty()) slotVec.push_back(LayerSlot{});
+        ly->setSlots(slotVec);
+        ly->onEditRequested = [this](NodeId nid) { onEditLayerTransform(nid); };
+        ly->onEditCanvasRequested = [this](NodeId nid) { onEditLayerCanvas(nid); };
+        ly->onChanged = [this]() { emit clipChainChanged(); };
+        m_scene->addItem(ly);
+        m_layerNodes[lid] = static_cast<void *>(ly);
+        registerItem(ly);
+        wireDeleteCallback(ly, [this](NodeId nid) { deleteNodeById(nid); });
+    }
+
+    for (const auto &val : state["abSelectNodes"].toArray()) {
+        const QJsonObject obj = val.toObject();
+        const NodeId aid = (NodeId)obj["id"].toInteger();
+        m_nextId = aid;
+        auto *ab = new AbSelectNodeItem(m_nextId++, 0);
+        ab->setPos(obj["posX"].toDouble(), obj["posY"].toDouble());
+        QVector<AbSlot> slotVec;
+        for (const auto &sv : obj["slots"].toArray()) {
+            AbSlot s; s.name = sv.toObject()["name"].toString(); slotVec.push_back(s);
+        }
+        if (slotVec.isEmpty()) slotVec.push_back(AbSlot{});
+        ab->setSlots(slotVec);
+        ab->onChanged = [this]() { emit clipChainChanged(); };
+        ab->onAssignDeck = [this](NodeId abId, int slot, bool deckA) {
+            auto *node = static_cast<AbSelectNodeItem *>(m_abSelectNodes.value(abId));
+            if (!node) return;
+            const NodeId prod = m_scene->producerForInputPort(node->inPort(slot));
+            if (prod == 0) return;
+            assignInputToDeck(prod, deckA);
+        };
+        m_scene->addItem(ab);
+        m_abSelectNodes[aid] = static_cast<void *>(ab);
+        registerItem(ab);
+        wireDeleteCallback(ab, [this](NodeId nid) { deleteNodeById(nid); });
+    }
+
+    if (state.contains("outputNode")) {
+        const QJsonObject obj = state["outputNode"].toObject();
+        const NodeId oid = (NodeId)obj["id"].toInteger();
+        m_nextId = oid;
+        auto *out = new OutputNodeItem(m_nextId++);
+        out->setPos(obj["posX"].toDouble(), obj["posY"].toDouble());
+        m_scene->addItem(out);
+        m_outputNode = oid;
+        registerItem(out);
+    }
+
+    for (const auto &val : state["scriptNodes"].toArray()) {
         const QJsonObject obj = val.toObject();
         const NodeId scriptId = (NodeId)obj["id"].toInteger();
         m_nextId = scriptId;
 #ifdef SWITCHX_HAVE_LUA
-        auto *sn = new ScriptNodeItem(m_nextId++,
-            obj["luaCode"].toString(),
+        auto *sn = new ScriptNodeItem(m_nextId++, obj["luaCode"].toString(),
             static_cast<ScriptTriggerMode>(obj["triggerMode"].toInt(0)),
             obj["intervalMs"].toInt(1000));
         sn->setPos(obj["posX"].toDouble(), obj["posY"].toDouble());
@@ -3432,8 +3527,7 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
 #endif
     }
 
-    const QJsonArray masterAudioNodes = state["masterAudioNodes"].toArray();
-    for (const auto &val : masterAudioNodes) {
+    for (const auto &val : state["masterAudioNodes"].toArray()) {
         const QJsonObject obj = val.toObject();
         const NodeId masterId = (NodeId)obj["id"].toInteger();
         m_nextId = masterId;
@@ -3447,14 +3541,12 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         wireDeleteCallback(mn, [this](NodeId nid) { deleteNodeById(nid); });
     }
 
-    const QJsonArray masterAudioInputNodes = state["masterAudioInputNodes"].toArray();
-    for (const auto &val : masterAudioInputNodes) {
+    for (const auto &val : state["masterAudioInputNodes"].toArray()) {
         const QJsonObject obj = val.toObject();
         const NodeId inputId = (NodeId)obj["id"].toInteger();
         m_nextId = inputId;
-        auto *in = new MasterAudioInputNodeItem(m_nextId++,
-                                              obj["volume"].toInt(100),
-                                              obj["muted"].toBool(false));
+        auto *in = new MasterAudioInputNodeItem(m_nextId++, obj["volume"].toInt(100),
+                                                obj["muted"].toBool(false));
         in->setPos(obj["posX"].toDouble(), obj["posY"].toDouble());
         in->setDevice(obj["deviceId"].toString(), obj["deviceLabel"].toString());
         in->onSettingsChanged = [this](NodeId) { emit audioGraphChanged(); };
@@ -3464,75 +3556,29 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         wireDeleteCallback(in, [this](NodeId nid) { deleteNodeById(nid); });
     }
 
-    struct DeferredSceneConnections {
-        ClipNodeScene *scene = nullptr;
-        QJsonArray connections;
-    };
-    QVector<DeferredSceneConnections> deferredGroupConnections;
+    restoreConnections(m_scene, state["connections"].toArray());
 
-    const QJsonArray groups = state["groups"].toArray();
-    for (const auto &val : groups) {
-        const QJsonObject obj = val.toObject();
-        const NodeId groupId = (NodeId)obj["id"].toInteger();
-        const NodeId delegateId = (NodeId)obj["delegateId"].toInteger();
+    m_restoring = false;
+    normalizeSwitchingInputs();   // append the trailing empty input to each switching node
 
-        auto *subScene = new ClipNodeScene(this);
-        subScene->onConnectionChanged = m_scene->onConnectionChanged;
-
-        m_nextId = groupId;
-        auto *group = new GroupNodeItem(m_nextId++, subScene);
-        group->setPos(obj["posX"].toDouble(), obj["posY"].toDouble());
-        if (obj.contains("name"))
-            group->setName(obj["name"].toString());
-        group->onDeckRequested = [this](NodeId did, bool deckA) { setActiveDeckClip(did, deckA); };
-        group->onEditRequested = [this](NodeId gid) { openGroupEditor(gid); };
-        group->onUngroupRequested = [this](NodeId gid) { ungroup(gid); };
-        group->onDeleteRequested = [this](NodeId gid) { deleteNodeById(gid); };
-        group->onRenameRequested = [this](NodeId gid) { renameGroup(gid); };
-        m_scene->addItem(group);
-        m_groupNodes[group->nodeId()] = group;
-        registerItem(group);
-
-        QSet<NodeId> members;
-        for (const auto &memberVal : obj["members"].toArray())
-            members.insert((NodeId)memberVal.toInteger());
-
-        if (members.isEmpty()) {
-            for (const auto &connVal : obj["connections"].toArray()) {
-                const QJsonObject connObj = connVal.toObject();
-                members.insert((NodeId)connObj["from"].toInteger());
-                members.insert((NodeId)connObj["to"].toInteger());
-            }
-        }
-
-        for (NodeId memberId : members) {
-            if (auto *item = m_itemMap.value(memberId)) {
-                if (item->scene() == m_scene)
-                    m_scene->removeItem(item);
-                subScene->addItem(item);
-            }
-            if (auto *model = nodeAt(memberId))
-                model->setCardMode(ClipCard::CardMode::GroupMember);
-        }
-
-        deferredGroupConnections.append({ subScene, obj["connections"].toArray() });
-
-        NodeId delegate = delegateId;
-        if (delegate == 0 || !members.contains(delegate) || !nodeAt(delegate))
-            delegate = pickDefaultGroupDelegate(subScene, members);
-        if (delegate != 0)
-            setGroupDelegate(group->nodeId(), delegate);
-    }
-
-    restoreConnections(m_scene, state["connections"].toArray(), legacyClipForAudioNode);
-    for (const auto &deferred : deferredGroupConnections)
-        restoreConnections(deferred.scene, deferred.connections, legacyClipForAudioNode);
-
-    updateGroupDeckHighlights();
-    emit clipChainChanged();
-    emit audioGraphChanged();
+    if (m_outputNode == 0
+        && !(m_nodeMap.isEmpty() && m_processNodes.isEmpty()
+             && m_layerNodes.isEmpty() && m_abSelectNodes.isEmpty()
+             && m_scriptNodes.isEmpty() && m_masterAudioNodes.isEmpty()
+             && m_masterAudioInputNodes.isEmpty()))
+        ensureOutputNode();
 
     const qint64 savedNext = state["nextId"].toInteger(0);
     if (savedNext > (qint64)m_nextId)
         m_nextId = (NodeId)savedNext;
+
+    m_deckAInput = (NodeId)state["deckAInput"].toInteger(0);
+    m_deckBInput = (NodeId)state["deckBInput"].toInteger(0);
+    updateAbHighlights();
+
+    emit deckAClipChanged(m_deckAInput);
+    emit deckBClipChanged(m_deckBInput);
+    emit clipChainChanged();
+    emit audioGraphChanged();
 }
+

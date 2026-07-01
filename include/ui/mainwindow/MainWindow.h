@@ -115,6 +115,11 @@ private:
     SessionManager     *m_sessionManager     = nullptr;
     TransitionController *m_transitionCtrl   = nullptr;
     DeckController     *m_deckController     = nullptr;
+    // Source-identity of each deck's currently-loaded stream (base source key +
+    // ordered overlay keys). Lets pushDecks() reuse already-decoded sources —
+    // updating placement, reordering, or swapping decks — instead of reloading.
+    QString      m_deckBaseA,     m_deckBaseB;
+    QStringList  m_deckOverlaysA, m_deckOverlaysB;
     OutputHub          *m_outputHub          = nullptr;
     ObsIntegration     *m_obsIntegration     = nullptr;
     QMenu              *m_obsScenesMenu      = nullptr;
@@ -135,6 +140,7 @@ private:
     void setupDeckPreviewSplitter(bool deckA);
     void refreshPreviewPixmaps();
     void rebuildActiveDeckChains();
+    void pushDecks();
     void applyTheme();
 
     void loadFromFile(const QString &path, bool showErrors);

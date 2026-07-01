@@ -80,18 +80,10 @@ QList<FrameCaptureHelper::LayerRef> FrameCaptureHelper::enumerateLayers(
         layers.append({LayerKind::DeckBase, deckA, -1, deckNodeId,
                        QStringLiteral("Deck %1 — %2").arg(deckLabel, deckNode->sourceName())});
 
-        const QVector<ClipNodeModel *> chain = editor->getClipChain(deckNodeId);
         const auto &chainSources = deckA ? output->chainSourcesA() : output->chainSourcesB();
         for (int i = 0; i < static_cast<int>(chainSources.size()); ++i) {
-            const int modelIndex = i + 1;
-            if (modelIndex >= chain.size())
-                break;
-            ClipNodeModel *layerNode = chain[modelIndex];
-            if (!layerNode)
-                continue;
-            layers.append({LayerKind::DeckChain, deckA, i, layerNode->nodeId(),
-                           QStringLiteral("Deck %1 overlay — %2")
-                               .arg(deckLabel, layerNode->sourceName())});
+            layers.append({LayerKind::DeckChain, deckA, i, deckNodeId,
+                           QStringLiteral("Deck %1 overlay %2").arg(deckLabel).arg(i + 1)});
         }
     };
 

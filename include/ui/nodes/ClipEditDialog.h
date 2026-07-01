@@ -20,6 +20,8 @@ public:
 
     // Call before exec() to remove the Trim tab (e.g. for static images).
     void hideTrimTab();
+    // Call before exec() to remove the Crop tab (crop now lives on Process nodes).
+    void hideCropTab();
 
 protected:
     void showEvent(QShowEvent *event) override;

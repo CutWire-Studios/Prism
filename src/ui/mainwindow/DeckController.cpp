@@ -64,6 +64,12 @@ void DeckController::releaseAllDeckAudio() {
     m_audioPlayerB.reset();
 }
 
+void DeckController::swapDeckAudio() {
+    std::swap(m_audioPlayerA, m_audioPlayerB);
+    std::swap(m_aClipNodeId, m_bClipNodeId);
+    std::swap(m_lastTimeA, m_lastTimeB);
+}
+
 void DeckController::releaseAllMasterAudioInputs() {
     m_inputCaptures.clear();
     AudioInputMixRegistry::clearAll();
@@ -250,22 +256,11 @@ void DeckController::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool d
     const SourceDescriptor &desc = node->sourceDescriptor();
     auto *out = m_outputWindow->videoWidget();
 
-    // Fetch transform for this clip.
-    float baseX = 0.f, baseY = 0.f, baseW = 1.f, baseH = 1.f;
-    if (!m_editor->clipTransform(nodeId, baseX, baseY, baseW, baseH)) {
-        if (desc.kind == Kind::VideoFile || desc.kind == Kind::Image) {
-            // Hard fail for file types that need a transform.
-            if (deckA) out->setSourceA(nullptr);
-            else       out->setSourceB(nullptr);
-            stopDeckAudio(deckA);
-            return;
-        }
-    }
-
-    // Apply transform and crop.
+    // Base placement / crop / flip are applied by MainWindow::pushDecks() from the
+    // resolved stream; here we only wire overlays and the deck source/audio.
     auto applyTransform = [&](bool a) {
-        if (a) { out->setBaseA(baseX, baseY, baseW, baseH); out->setCropA(node->cropX(), node->cropY(), node->cropW(), node->cropH()); out->setOverlaysA(node->overlays()); }
-        else   { out->setBaseB(baseX, baseY, baseW, baseH); out->setCropB(node->cropX(), node->cropY(), node->cropW(), node->cropH()); out->setOverlaysB(node->overlays()); }
+        if (a) out->setOverlaysA(node->overlays());
+        else   out->setOverlaysB(node->overlays());
     };
 
     switch (desc.kind) {

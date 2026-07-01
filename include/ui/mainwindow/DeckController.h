@@ -37,6 +37,8 @@ public:
 
     // ── Audio ────────────────────────────────────────────────────────────────
     void stopDeckAudio(bool deckA);
+    /// Exchange the A/B audio players + node ids (pairs with VideoWidget::swapDeckContents).
+    void swapDeckAudio();
     void releaseAllDeckAudio();
     void updateDeckAudio(bool deckA, NodeId clipId, const ClipNodeModel *node,
                          double currentTimeHint = -1.0, bool forceSeek = false);

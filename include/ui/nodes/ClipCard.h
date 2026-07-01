@@ -12,7 +12,7 @@ namespace Ui { class ClipCard; }
 class ClipCard : public QFrame {
     Q_OBJECT
 public:
-    enum class CardMode { Deck, GroupMember };
+    enum class CardMode { Deck, GroupMember, InputNode };
 
     explicit ClipCard(int index, QWidget *parent = nullptr);
     ~ClipCard();

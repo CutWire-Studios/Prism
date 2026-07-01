@@ -18,13 +18,11 @@ public:
     /// (e.g. transparent canvas, bad file path).
     static std::unique_ptr<MediaSource> create(const SourceDescriptor &desc);
 
-    /// Build a NodeChainSource entry (used by VideoWidget overlay chain).
-    static VideoWidget::NodeChainSource makeChainEntry(ClipNodeModel *node,
+    /// Build a NodeChainSource entry for one resolved layer.
+    static VideoWidget::NodeChainSource makeLayerEntry(const ResolvedLayer &layer,
                                                        ClipNodeEditor *editor);
 
-    /// Build the full overlay chain starting upstream from fromClip.
+    /// Build the full deck stream (index 0 = bottom/deck-primary, 1..N = overlays).
     static std::vector<VideoWidget::NodeChainSource>
-    buildChain(const QVector<ClipNodeModel *> &chain,
-               ClipNodeEditor *editor,
-               int canvasWidth = 0, int canvasHeight = 0);
+    buildStream(const ResolvedStream &stream, ClipNodeEditor *editor);
 };

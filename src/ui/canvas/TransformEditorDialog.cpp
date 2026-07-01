@@ -1,7 +1,6 @@
 #include "ui/canvas/TransformEditorDialog.h"
 #include "ui/canvas/TransformCanvasWidget.h"
 #include "ui/nodes/ClipNodeEditor.h"
-#include "ui/nodes/ClipNodeModel.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPushButton>
@@ -10,18 +9,21 @@
 TransformEditorDialog::TransformEditorDialog(int contextId, ClipNodeEditor *editor, QWidget *parent)
     : QDialog(parent), m_contextId(contextId), m_editor(editor)
 {
-    setWindowTitle("Transform Editor");
+    setWindowTitle("Layer Layout");
     setMinimumSize(1000, 800);
     resize(1200, 900);
     setModal(true);
 
     auto *layout = new QVBoxLayout(this);
 
-    auto *titleLabel = new QLabel(QString("Edit Transform - Context %1").arg(contextId));
+    auto *titleLabel = new QLabel(QString("Place inputs on the layer canvas"));
     titleLabel->setStyleSheet("font-weight: bold; font-size: 12px;");
     layout->addWidget(titleLabel);
 
     m_canvas = new TransformCanvasWidget();
+    int cw = 1280, ch = 720;
+    m_editor->layerCanvasSize((NodeId)m_contextId, cw, ch);
+    m_canvas->setCanvasSize(cw, ch);
     layout->addWidget(m_canvas);
 
     auto *buttonLayout = new QHBoxLayout();
@@ -40,34 +42,24 @@ TransformEditorDialog::TransformEditorDialog(int contextId, ClipNodeEditor *edit
 
 void TransformEditorDialog::populateClips() {
     QVector<ClipItem> items;
-
-    auto clipIds = m_editor->clipsForContextOrdered(m_contextId);
-    for (int clipId : clipIds) {
-        auto *clipNode = m_editor->nodeAt(clipId);
-        if (!clipNode) continue;
-
-        float x, y, w, h;
-        if (!m_editor->clipTransform(clipId, x, y, w, h)) continue;
-
+    const auto slotViews = m_editor->layerSlotViews((NodeId)m_contextId);
+    for (const auto &s : slotViews) {
         ClipItem item;
-        item.clipId = clipId;
-        item.rect = QRectF(x, y, w, h);
-        item.thumbnail = clipNode->thumbnail();
-
+        item.clipId = s.index;   // slot index doubles as the item id
+        item.rect = s.rect;
+        item.thumbnail = s.thumb;
         items.push_back(item);
     }
-
     m_canvas->setClips(items);
 }
 
 void TransformEditorDialog::onApply() {
-    auto clips = m_canvas->getClips();
-
+    const auto clips = m_canvas->getClips();
     for (const auto &clip : clips) {
-        m_editor->setClipTransform(clip.clipId, clip.rect.x(), clip.rect.y(),
+        m_editor->setLayerSlotRect((NodeId)m_contextId, clip.clipId,
+                                   clip.rect.x(), clip.rect.y(),
                                    clip.rect.width(), clip.rect.height());
     }
-
     accept();
 }
 

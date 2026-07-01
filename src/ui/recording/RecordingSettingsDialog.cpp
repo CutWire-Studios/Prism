@@ -65,7 +65,8 @@ RecordingSettingsDialog::RecordingSettingsDialog(OutputHub *hub, ClipNodeEditor 
     auto *mainLayout = new QVBoxLayout(this);
 
     auto *hint = new QLabel(
-        tr("Start and stop each stream independently. Live sources record only while loaded on Deck A or B."),
+        tr("Start and stop each stream independently. Tip: start Program mix and Program audio "
+           "at the same time so the files are easy to match in your editor."),
         this);
     hint->setWordWrap(true);
     hint->setStyleSheet(QStringLiteral("color: #888; font-size: 11px;"));
@@ -73,6 +74,14 @@ RecordingSettingsDialog::RecordingSettingsDialog(OutputHub *hub, ClipNodeEditor 
 
     auto *streamsGroup = new QGroupBox(tr("Recording streams"), this);
     auto *streamsOuter = new QVBoxLayout(streamsGroup);
+
+    auto *streamsHint = new QLabel(
+        tr("Video saves as H.264 MKV (no audio). Live-source rows record only while that source "
+           "is loaded on Deck A or B."),
+        this);
+    streamsHint->setWordWrap(true);
+    streamsHint->setStyleSheet(QStringLiteral("color: #888; font-size: 11px;"));
+    streamsOuter->addWidget(streamsHint);
 
     auto *scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
@@ -87,9 +96,10 @@ RecordingSettingsDialog::RecordingSettingsDialog(OutputHub *hub, ClipNodeEditor 
     auto *audioGroup = new QGroupBox(tr("Audio recording"), this);
     auto *audioOuter = new QVBoxLayout(audioGroup);
     auto *audioHint = new QLabel(
-        tr("Saved as separate FLAC files. Program audio follows the crossfader; deck and clip "
-           "tracks record at full clip volume. Clip tracks record only while that clip is loaded "
-           "on Deck A or B. Sync with video in your editor (automatic sync coming later)."),
+        tr("Saved as separate FLAC files (sync with video in your editor; automatic sync coming "
+           "later). Program audio follows the crossfader and includes a connected Master Audio "
+           "Input mic. Deck and clip isos record at full clip volume without the mic. Clip audio "
+           "records only while that clip is loaded on Deck A or B."),
         this);
     audioHint->setWordWrap(true);
     audioHint->setStyleSheet(QStringLiteral("color: #888; font-size: 11px;"));

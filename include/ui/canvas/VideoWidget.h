@@ -80,12 +80,35 @@ public:
     struct NodeChainSource {
         std::unique_ptr<MediaSource> source;
         float cropX = 0.f, cropY = 0.f, cropW = 1.f, cropH = 1.f;
+        bool  flipH = false, flipV = false;
         float baseX = 0.f, baseY = 0.f, baseW = 1.f, baseH = 1.f;
         bool  playing = false;   // whether to call nextFrame() each tick
-        int   canvasWidth = 0, canvasHeight = 0;  // transform context canvas size (0 = no context)
+        bool  visible = true;    // Layer-node eye toggle (hidden layers are skipped, still advanced)
+        int   canvasWidth = 0, canvasHeight = 0;  // canvas size from Layer node (0 = no canvas)
     };
     void setNodeChainA(std::vector<NodeChainSource> chain);
     void setNodeChainB(std::vector<NodeChainSource> chain);
+
+    // In-place layer edits that avoid rebuilding/re-decoding MediaSources.
+    void reorderChain(bool deckA, const std::vector<int> &perm);
+    void setChainVisibility(bool deckA, int chainIndex, bool visible);
+    void setChainPlacement(bool deckA, int chainIndex,
+                           float cropX, float cropY, float cropW, float cropH,
+                           bool flipH, bool flipV,
+                           float baseX, float baseY, float baseW, float baseH,
+                           bool visible);
+
+    // Deck-primary flip (folded from process nodes on the base layer).
+    void setFlipA(bool flipH, bool flipV);
+    void setFlipB(bool flipH, bool flipV);
+
+    // Single-stream output: show deck A directly with no crossfade/transition.
+    void setSingleStreamMode(bool enabled);
+    bool singleStreamMode() const { return m_singleStream; }
+
+    // Exchange all A/B deck content (sources, textures, chains, placement, playback
+    // clocks) so a clip can move between decks without re-decoding from disk.
+    void swapDeckContents();
 
     bool   isPlayingA()      const { return m_playingA; }
     bool   isPlayingB()      const { return m_playingB; }
@@ -239,6 +262,13 @@ private:
     float m_cropXA = 0.f, m_cropYA = 0.f, m_cropWA = 1.f, m_cropHA = 1.f;
     float m_cropXB = 0.f, m_cropYB = 0.f, m_cropWB = 1.f, m_cropHB = 1.f;
 
+    // Deck-primary flip (folded from process nodes)
+    bool m_flipHA = false, m_flipVA = false;
+    bool m_flipHB = false, m_flipVB = false;
+
+    // Single-stream output mode (deck A only, no crossfade)
+    bool m_singleStream = false;
+
     // Base placement: normalised [0, 1]
     float m_baseXA = 0.f, m_baseYA = 0.f, m_baseWA = 1.f, m_baseHA = 1.f;
     float m_baseXB = 0.f, m_baseYB = 0.f, m_baseWB = 1.f, m_baseHB = 1.f;
@@ -279,7 +309,8 @@ private:
     QRectF computeContainedRect(QSize frameSize, float cw, float ch,
                                 const QRectF &bounds) const;
     void   renderTexture(GLuint tex, float cx, float cy, float cw, float ch,
-                         float dstX, float dstY, float dstW, float dstH);
+                         float dstX, float dstY, float dstW, float dstH,
+                         bool flipH = false, bool flipV = false);
     void   renderFboTexture(GLuint tex, float dstX, float dstY, float dstW, float dstH,
                             float alpha);
     void   renderOverlays(QPainter &p, const QList<OverlayItem> &overlays,

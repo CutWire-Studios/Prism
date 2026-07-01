@@ -125,21 +125,23 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
     return nullptr;
 }
 
-VideoWidget::NodeChainSource SourceFactory::makeChainEntry(ClipNodeModel *node,
-                                                            ClipNodeEditor *editor) {
+VideoWidget::NodeChainSource SourceFactory::makeLayerEntry(const ResolvedLayer &layer,
+                                                           ClipNodeEditor *editor) {
     using Kind = SourceDescriptor::Kind;
-    const SourceDescriptor &desc = node->sourceDescriptor();
     VideoWidget::NodeChainSource entry;
-    entry.cropX = node->cropX(); entry.cropY = node->cropY();
-    entry.cropW = node->cropW(); entry.cropH = node->cropH();
+    entry.cropX = layer.cropX; entry.cropY = layer.cropY;
+    entry.cropW = layer.cropW; entry.cropH = layer.cropH;
+    entry.flipH = layer.flipH; entry.flipV = layer.flipV;
+    entry.baseX = layer.baseX; entry.baseY = layer.baseY;
+    entry.baseW = layer.baseW; entry.baseH = layer.baseH;
+    entry.visible = layer.visible;
 
-    if (!editor->clipTransform(node->nodeId(), entry.baseX, entry.baseY, entry.baseW, entry.baseH)) {
-        entry.baseX = 0.f; entry.baseY = 0.f; entry.baseW = 1.f; entry.baseH = 1.f;
-    }
+    ClipNodeModel *node = editor->nodeAt(layer.inputNodeId);
+    if (!node) return entry;
+    const SourceDescriptor &desc = node->sourceDescriptor();
 
     auto src = create(desc);
     if (src) {
-        // Prime the source with one frame for chain display.
         if (desc.kind == Kind::VideoFile) {
             auto *vfs = static_cast<VideoFileSource *>(src.get());
             if (node->startTime() > 0) vfs->seek(node->startTime());
@@ -151,7 +153,7 @@ VideoWidget::NodeChainSource SourceFactory::makeChainEntry(ClipNodeModel *node,
         entry.source  = std::move(src);
 
         if (desc.kind == Kind::Text) {
-            if (auto data = editor->scriptOutputForDataNode(node->nodeId())) {
+            if (auto data = editor->scriptOutputForDataNode(layer.inputNodeId)) {
                 if (auto *textSrc = dynamic_cast<TextSource *>(entry.source.get()))
                     textSrc->setDataSource(data);
             }
@@ -161,18 +163,13 @@ VideoWidget::NodeChainSource SourceFactory::makeChainEntry(ClipNodeModel *node,
 }
 
 std::vector<VideoWidget::NodeChainSource>
-SourceFactory::buildChain(const QVector<ClipNodeModel *> &chain,
-                           ClipNodeEditor *editor,
-                           int canvasWidth, int canvasHeight) {
+SourceFactory::buildStream(const ResolvedStream &stream, ClipNodeEditor *editor) {
     std::vector<VideoWidget::NodeChainSource> out;
-    // Index 0 is the primary (deck) clip; overlays start at index 1.
-    for (int i = 1; i < chain.size(); ++i) {
-        auto entry = makeChainEntry(chain[i], editor);
-        if (entry.source) {
-            entry.canvasWidth  = canvasWidth;
-            entry.canvasHeight = canvasHeight;
-            out.push_back(std::move(entry));
-        }
+    for (const ResolvedLayer &layer : stream.layers) {
+        auto entry = makeLayerEntry(layer, editor);
+        entry.canvasWidth  = stream.canvasWidth;
+        entry.canvasHeight = stream.canvasHeight;
+        out.push_back(std::move(entry));
     }
     return out;
 }

@@ -312,6 +312,8 @@ void MainWindow::shutdownLivePipeline() {
         m_deckController->releaseAllDeckAudio();
         m_deckController->releaseAllMasterAudioInputs();
     }
+    m_deckBaseA.clear(); m_deckOverlaysA.clear();
+    m_deckBaseB.clear(); m_deckOverlaysB.clear();
 
     if (m_outputHub) {
         disconnect(m_outputHub, nullptr, this, nullptr);
@@ -636,10 +638,14 @@ void MainWindow::setupConnections() {
     connect(ui->actionStartRemoteControl, &QAction::triggered, this, &MainWindow::onStartRemoteControl);
 
     // ClipNodeEditor signals
-    connect(m_clipNodeEditor, &ClipNodeEditor::deckAClipChanged,
-            this, &MainWindow::onNodeAButtonClicked);
-    connect(m_clipNodeEditor, &ClipNodeEditor::deckBClipChanged,
-            this, &MainWindow::onNodeBButtonClicked);
+    connect(m_clipNodeEditor, &ClipNodeEditor::clipChainChanged,
+            this, &MainWindow::pushDecks);
+    connect(m_clipNodeEditor, &ClipNodeEditor::addInputNodeRequested,
+            this, [this]() {
+        QMenu menu(this);
+        setupAddElementMenu(&menu);
+        menu.exec(QCursor::pos());
+    });
     connect(m_clipNodeEditor, &ClipNodeEditor::nodeAdded,
             m_hotkeyManager, &HotkeyManager::assignHotkeyToNode);
     connect(m_clipNodeEditor, &ClipNodeEditor::nodeRemoved,
@@ -775,6 +781,8 @@ void MainWindow::onClearAllClicked() {
     m_deckController->stopDeckAudio(false);
     m_outputWindow->videoWidget()->clearDeckA();
     m_outputWindow->videoWidget()->clearDeckB();
+    m_deckBaseA.clear(); m_deckOverlaysA.clear();
+    m_deckBaseB.clear(); m_deckOverlaysB.clear();
     m_stackWidget->setCurrentWidget(m_emptyPlaceholder);
 }
 
@@ -813,89 +821,168 @@ void MainWindow::setupAddElementMenu(QMenu *menu) {
 // ── Node deck assignment ──────────────────────────────────────────────────────
 
 void MainWindow::onNodeAButtonClicked(NodeId nodeId) {
-    if (!nodeId) return;
-    auto *node = m_clipNodeEditor->nodeAt(nodeId);
-    if (!node || !node->hasSource()) return;
-
-    if (m_deckController->activeNodeA()) {
-        if (auto *old = m_clipNodeEditor->nodeAt(m_deckController->activeNodeA())) {
-            if (!old->isGroupMember())
-                old->setASelected(false);
-        }
-    }
-    m_deckController->setActiveNodeA(nodeId);
-    if (!node->isGroupMember())
-        node->setASelected(true);
-
-    int canvasW = 0, canvasH = 0;
-    m_clipNodeEditor->contextCanvasSize(nodeId, canvasW, canvasH);
-    auto *out = m_outputWindow->videoWidget();
-    out->setCanvasSizeA(canvasW, canvasH);
-
-    m_deckController->assignNodeToDeck(node, nodeId, true,
-        ui->aProgressSlider, ui->aDeckPlayBtn, ui->aSelectedLabel, ui->aTimeLabel);
-    out->setNodeChainA(SourceFactory::buildChain(
-        m_clipNodeEditor->getClipChain(nodeId), m_clipNodeEditor, canvasW, canvasH));
-    m_obsIntegration->onClipTriggered(node->sourceDescriptor());
-    if (m_outputHub->isRecording())
-        m_outputHub->addRecordingMarker(tr("Deck A: %1").arg(node->sourceName()));
-    m_outputHub->setActiveDeckNodes(m_deckController->activeNodeA(), m_deckController->activeNodeB());
+    if (nodeId) m_clipNodeEditor->assignInputToDeck(nodeId, true);
+    else pushDecks();
 }
-
 void MainWindow::onNodeBButtonClicked(NodeId nodeId) {
-    if (!nodeId) return;
-    auto *node = m_clipNodeEditor->nodeAt(nodeId);
-    if (!node || !node->hasSource()) return;
-
-    if (m_deckController->activeNodeB()) {
-        if (auto *old = m_clipNodeEditor->nodeAt(m_deckController->activeNodeB())) {
-            if (!old->isGroupMember())
-                old->setBSelected(false);
-        }
-    }
-    m_deckController->setActiveNodeB(nodeId);
-    if (!node->isGroupMember())
-        node->setBSelected(true);
-
-    int canvasW = 0, canvasH = 0;
-    m_clipNodeEditor->contextCanvasSize(nodeId, canvasW, canvasH);
-    auto *out = m_outputWindow->videoWidget();
-    out->setCanvasSizeB(canvasW, canvasH);
-
-    m_deckController->assignNodeToDeck(node, nodeId, false,
-        ui->bProgressSlider, ui->bDeckPlayBtn, ui->bSelectedLabel, ui->bTimeLabel);
-    out->setNodeChainB(SourceFactory::buildChain(
-        m_clipNodeEditor->getClipChain(nodeId), m_clipNodeEditor, canvasW, canvasH));
-    m_obsIntegration->onClipTriggered(node->sourceDescriptor());
-    if (m_outputHub->isRecording())
-        m_outputHub->addRecordingMarker(tr("Deck B: %1").arg(node->sourceName()));
-    m_outputHub->setActiveDeckNodes(m_deckController->activeNodeA(), m_deckController->activeNodeB());
+    if (nodeId) m_clipNodeEditor->assignInputToDeck(nodeId, false);
+    else pushDecks();
 }
+void MainWindow::rebuildActiveDeckChains() { pushDecks(); }
 
-void MainWindow::rebuildActiveDeckChains() {
+void MainWindow::pushDecks() {
     auto *out = m_outputWindow->videoWidget();
+    const bool single = m_clipNodeEditor->outputIsSingleStream();
 
-    if (NodeId id = m_deckController->activeNodeA()) {
-        int canvasW = 0, canvasH = 0;
-        m_clipNodeEditor->contextCanvasSize(id, canvasW, canvasH);
-        out->setNodeChainA(SourceFactory::buildChain(
-            m_clipNodeEditor->getClipChain(id), m_clipNodeEditor, canvasW, canvasH));
+    out->setSingleStreamMode(single);
+    ui->crossfaderSlider->setEnabled(!single);
+    ui->transitionCombo->setEnabled(!single);
+
+    // A stream's source identity: base source key + ordered overlay keys. The key
+    // captures file/kind/trim but NOT placement, so equal keys mean the decoded
+    // MediaSources can be reused (only transforms/order updated), never reopened.
+    auto layerKey = [&](const ResolvedLayer &l) -> QString {
+        ClipNodeModel *n = m_clipNodeEditor->nodeAt(l.inputNodeId);
+        if (!n) return QStringLiteral("%1:?").arg(l.inputNodeId);
+        const SourceDescriptor &d = n->sourceDescriptor();
+        return QStringLiteral("%1:%2:%3:%4:%5")
+            .arg(l.inputNodeId).arg((int)d.kind).arg(d.path)
+            .arg(n->startTime()).arg(n->endTime());
+    };
+    auto keysOf = [&](const ResolvedStream &s, QString &base, QStringList &ov) {
+        base.clear(); ov.clear();
+        if (s.layers.isEmpty()) return;
+        base = layerKey(s.layers.first());
+        for (int i = 1; i < s.layers.size(); ++i) ov << layerKey(s.layers[i]);
+    };
+    auto sameStream = [](const QString &b1, const QStringList &o1,
+                         const QString &b2, const QStringList &o2) {
+        return b1 == b2 && o1 == o2;
+    };
+    auto isPermutation = [](QStringList a, QStringList b) {
+        a.sort(); b.sort(); return a == b;
+    };
+
+    const NodeId prodA = single ? m_clipNodeEditor->outputSingleProducer()
+                                : m_clipNodeEditor->deckAInput();
+    const NodeId prodB = single ? 0 : m_clipNodeEditor->deckBInput();
+    ResolvedStream streamA = prodA ? m_clipNodeEditor->evaluateVideoInput(prodA) : ResolvedStream{};
+    ResolvedStream streamB = prodB ? m_clipNodeEditor->evaluateVideoInput(prodB) : ResolvedStream{};
+
+    QString dBaseA, dBaseB;
+    QStringList dOvA, dOvB;
+    keysOf(streamA, dBaseA, dOvA);
+    keysOf(streamB, dBaseB, dOvB);
+
+    // Cross-deck reuse: if a deck wants exactly what the other deck currently holds,
+    // exchange decoded content (video + audio) rather than re-decoding from disk.
+    const bool aWantsCurB = !dBaseA.isEmpty() && sameStream(dBaseA, dOvA, m_deckBaseB, m_deckOverlaysB);
+    const bool bWantsCurA = !dBaseB.isEmpty() && sameStream(dBaseB, dOvB, m_deckBaseA, m_deckOverlaysA);
+    const bool aUnchanged = sameStream(dBaseA, dOvA, m_deckBaseA, m_deckOverlaysA);
+    const bool bUnchanged = sameStream(dBaseB, dOvB, m_deckBaseB, m_deckOverlaysB);
+    if (!(aUnchanged && bUnchanged) && (aWantsCurB || bWantsCurA)) {
+        out->swapDeckContents();
+        m_deckController->swapDeckAudio();
+        std::swap(m_deckBaseA, m_deckBaseB);
+        std::swap(m_deckOverlaysA, m_deckOverlaysB);
     }
 
-    if (NodeId id = m_deckController->activeNodeB()) {
-        int canvasW = 0, canvasH = 0;
-        m_clipNodeEditor->contextCanvasSize(id, canvasW, canvasH);
-        out->setNodeChainB(SourceFactory::buildChain(
-            m_clipNodeEditor->getClipChain(id), m_clipNodeEditor, canvasW, canvasH));
-    }
+    auto pushDeck = [&](bool deckA, const ResolvedStream &stream,
+                        const QString &dBase, const QStringList &dOv,
+                        QSlider *slider, QPushButton *playBtn,
+                        QLabel *selLabel, QLabel *timeLabel) {
+        QString &curBase = deckA ? m_deckBaseA : m_deckBaseB;
+        QStringList &curOv = deckA ? m_deckOverlaysA : m_deckOverlaysB;
+
+        if (stream.layers.isEmpty()) {
+            if (deckA) { out->clearDeckA(); m_deckController->setActiveNodeA(0); }
+            else       { out->clearDeckB(); m_deckController->setActiveNodeB(0); }
+            m_deckController->stopDeckAudio(deckA);
+            curBase.clear(); curOv.clear();
+            return;
+        }
+        const ResolvedLayer base = stream.layers.first();
+        ClipNodeModel *node = m_clipNodeEditor->nodeAt(base.inputNodeId);
+        if (!node) return;
+
+        auto applyBase = [&]() {
+            if (deckA) {
+                out->setBaseA(base.baseX, base.baseY, base.baseW, base.baseH);
+                out->setCropA(base.cropX, base.cropY, base.cropW, base.cropH);
+                out->setFlipA(base.flipH, base.flipV);
+                out->setCanvasSizeA(stream.canvasWidth, stream.canvasHeight);
+            } else {
+                out->setBaseB(base.baseX, base.baseY, base.baseW, base.baseH);
+                out->setCropB(base.cropX, base.cropY, base.cropW, base.cropH);
+                out->setFlipB(base.flipH, base.flipV);
+                out->setCanvasSizeB(stream.canvasWidth, stream.canvasHeight);
+            }
+        };
+        auto applyOverlayPlacements = [&]() {
+            for (int i = 1; i < stream.layers.size(); ++i) {
+                const ResolvedLayer &l = stream.layers[i];
+                out->setChainPlacement(deckA, i - 1,
+                                       l.cropX, l.cropY, l.cropW, l.cropH,
+                                       l.flipH, l.flipV,
+                                       l.baseX, l.baseY, l.baseW, l.baseH,
+                                       l.visible);
+            }
+        };
+        auto refreshUI = [&]() {
+            m_deckController->updateDeckUI(deckA, node->sourceName(),
+                node->sourceDescriptor().kind == SourceDescriptor::Kind::VideoFile,
+                slider, playBtn, selLabel, timeLabel);
+        };
+
+        if (sameStream(dBase, dOv, curBase, curOv)) {
+            // Identical sources (possibly after a swap): update placement only.
+            applyBase();
+            applyOverlayPlacements();
+            refreshUI();
+        } else if (dBase == curBase && !curBase.isEmpty() && isPermutation(dOv, curOv)) {
+            // Overlay reorder with an unchanged primary: permute in place, no re-decode.
+            std::vector<int> perm(dOv.size(), 0);
+            QVector<bool> used(curOv.size(), false);
+            for (int i = 0; i < dOv.size(); ++i)
+                for (int j = 0; j < curOv.size(); ++j)
+                    if (!used[j] && curOv[j] == dOv[i]) { perm[i] = j; used[j] = true; break; }
+            out->reorderChain(deckA, perm);
+            applyBase();
+            applyOverlayPlacements();
+            refreshUI();
+            curOv = dOv;
+        } else {
+            // Source set changed → full (re)load of primary + overlay chain.
+            m_deckController->assignNodeToDeck(node, base.inputNodeId, deckA,
+                                               slider, playBtn, selLabel, timeLabel);
+            applyBase();
+            ResolvedStream overlay;
+            overlay.canvasWidth = stream.canvasWidth;
+            overlay.canvasHeight = stream.canvasHeight;
+            for (int i = 1; i < stream.layers.size(); ++i)
+                overlay.layers.push_back(stream.layers[i]);
+            auto chain = SourceFactory::buildStream(overlay, m_clipNodeEditor);
+            if (deckA) out->setNodeChainA(std::move(chain));
+            else       out->setNodeChainB(std::move(chain));
+            m_obsIntegration->onClipTriggered(node->sourceDescriptor());
+            curBase = dBase; curOv = dOv;
+        }
+    };
+
+    pushDeck(true, streamA, dBaseA, dOvA,
+             ui->aProgressSlider, ui->aDeckPlayBtn, ui->aSelectedLabel, ui->aTimeLabel);
+    pushDeck(false, streamB, dBaseB, dOvB,
+             ui->bProgressSlider, ui->bDeckPlayBtn, ui->bSelectedLabel, ui->bTimeLabel);
+
+    m_outputHub->setActiveDeckNodes(m_deckController->activeNodeA(), m_deckController->activeNodeB());
 }
 
 void MainWindow::onNodeRemoveRequested(NodeId nodeId) {
     m_hotkeyManager->releaseHotkeyForNode(nodeId);
     m_clipNodeEditor->removeNode(nodeId);
     auto *out = m_outputWindow->videoWidget();
-    if (m_deckController->activeNodeA() == nodeId) { m_deckController->setActiveNodeA(0); out->clearDeckA(); }
-    if (m_deckController->activeNodeB() == nodeId) { m_deckController->setActiveNodeB(0); out->clearDeckB(); }
+    if (m_deckController->activeNodeA() == nodeId) { m_deckController->setActiveNodeA(0); out->clearDeckA(); m_deckBaseA.clear(); m_deckOverlaysA.clear(); }
+    if (m_deckController->activeNodeB() == nodeId) { m_deckController->setActiveNodeB(0); out->clearDeckB(); m_deckBaseB.clear(); m_deckOverlaysB.clear(); }
     if (!m_deckController->activeNodeA()) m_deckController->stopDeckAudio(true);
     if (!m_deckController->activeNodeB()) m_deckController->stopDeckAudio(false);
     if (m_clipNodeEditor->allNodes().isEmpty())

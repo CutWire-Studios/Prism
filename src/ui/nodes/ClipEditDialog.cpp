@@ -103,6 +103,11 @@ void ClipEditDialog::hideTrimTab() {
     setWindowTitle("Edit — " + m_clipPath.section('/', -1));
 }
 
+void ClipEditDialog::hideCropTab() {
+    const int idx = ui->tabWidget->indexOf(ui->cropTab);
+    if (idx >= 0) ui->tabWidget->removeTab(idx);
+}
+
 ClipSettings ClipEditDialog::resultSettings() const {
     ClipSettings s;
     s.startTime = m_startTime;
