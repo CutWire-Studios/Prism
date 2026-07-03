@@ -1,4 +1,4 @@
-/* SwitchX Dark Theme (Resolume Arena Inspired) */
+/* CutWire Prism Dark Theme (Resolume Arena Inspired) */
 
 QMainWindow, QDialog, QWidget {
     background-color: #0F0F0F;

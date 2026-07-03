@@ -115,7 +115,7 @@ private slots:
         auto ndiSrc = SourceFactory::create(ndi);
         QVERIFY(!ndiSrc);
 
-#ifndef SWITCHX_HAVE_WEBRTC
+#ifndef PRISM_HAVE_WEBRTC
         SourceDescriptor webrtc;
         webrtc.kind = SourceDescriptor::Kind::WebRtc;
         QVERIFY(!SourceFactory::create(webrtc));

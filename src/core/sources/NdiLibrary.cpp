@@ -1,6 +1,6 @@
 #include "core/sources/NdiLibrary.h"
 
-#ifdef SWITCHX_HAVE_NDI
+#ifdef PRISM_HAVE_NDI
 #include <cstddef>
 #include <Processing.NDI.Lib.h>
 #endif
@@ -11,7 +11,7 @@ NdiLibrary &NdiLibrary::instance() {
 }
 
 bool NdiLibrary::isAvailable() const {
-#ifdef SWITCHX_HAVE_NDI
+#ifdef PRISM_HAVE_NDI
     return true;
 #else
     return false;
@@ -19,7 +19,7 @@ bool NdiLibrary::isAvailable() const {
 }
 
 bool NdiLibrary::acquire() {
-#ifndef SWITCHX_HAVE_NDI
+#ifndef PRISM_HAVE_NDI
     return false;
 #else
     if (m_refs == 0) {
@@ -33,7 +33,7 @@ bool NdiLibrary::acquire() {
 }
 
 void NdiLibrary::release() {
-#ifndef SWITCHX_HAVE_NDI
+#ifndef PRISM_HAVE_NDI
     return;
 #else
     if (m_refs <= 0) return;

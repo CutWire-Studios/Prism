@@ -458,7 +458,7 @@ ProjectPackager::Report ProjectPackager::exportPackage(const QJsonObject &sessio
         return report;
 
     QJsonObject manifest;
-    manifest.insert(QStringLiteral("format"), QStringLiteral("switchx-project"));
+    manifest.insert(QStringLiteral("format"), QStringLiteral("prism-project"));
     manifest.insert(QStringLiteral("formatVersion"), kFormatVersion);
     manifest.insert(QStringLiteral("createdAt"), QDateTime::currentDateTime().toString(Qt::ISODate));
     manifest.insert(QStringLiteral("sessionFile"), QString::fromUtf8(kSessionName));
@@ -511,7 +511,7 @@ ProjectPackager::ImportResult ProjectPackager::importPackage(const QString &pack
     }
 
     const QJsonObject manifest = manifestDoc.object();
-    if (manifest.value(QStringLiteral("format")).toString() != QLatin1String("switchx-project")) {
+    if (manifest.value(QStringLiteral("format")).toString() != QLatin1String("prism-project")) {
         result.error = QStringLiteral("Unsupported package format.");
         return result;
     }

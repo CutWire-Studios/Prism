@@ -62,7 +62,7 @@ private:
     QNetworkReply *m_activeReply = nullptr;
     std::atomic<bool> m_shuttingDown{false};
 
-#ifdef SWITCHX_HAVE_LUA
+#ifdef PRISM_HAVE_LUA
     struct LuaState;
     std::unique_ptr<LuaState> m_lua;
 #endif

@@ -7,7 +7,7 @@
 #include <QHash>
 #include <functional>
 
-#ifdef SWITCHX_HAVE_OBS_WS
+#ifdef PRISM_HAVE_OBS_WS
 class QWebSocket;
 #endif
 
@@ -39,7 +39,7 @@ signals:
     void errorOccurred(const QString &message);
 
 private:
-#ifdef SWITCHX_HAVE_OBS_WS
+#ifdef PRISM_HAVE_OBS_WS
     void onSocketConnected();
     void onSocketDisconnected();
     void onTextMessageReceived(const QString &message);

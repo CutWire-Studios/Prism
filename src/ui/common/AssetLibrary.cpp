@@ -150,7 +150,7 @@ bool AssetLibrary::warnUnlessImportOk(const ClipManager::ImportCheck &check) {
         QMessageBox::warning(
             this, tr("Too Many Files"),
             tr("This folder contains %1 media files.\n\n"
-               "SwitchX can import at most %2 files from a folder at once.\n"
+               "CutWire Prism can import at most %2 files from a folder at once.\n"
                "Use Media \u2192 Add Files to pick specific files instead.")
                 .arg(check.totalItems)
                 .arg(ClipManager::MaxBatchImport));
@@ -159,7 +159,7 @@ bool AssetLibrary::warnUnlessImportOk(const ClipManager::ImportCheck &check) {
         QMessageBox::warning(
             this, tr("Too Many Files"),
             tr("You selected %1 media files.\n\n"
-               "SwitchX can add at most %2 files at once.\n"
+               "CutWire Prism can add at most %2 files at once.\n"
                "Please select a smaller batch.")
                 .arg(check.newItems)
                 .arg(ClipManager::MaxBatchImport));

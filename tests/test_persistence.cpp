@@ -19,7 +19,7 @@ namespace {
 
 QByteArray makeManifestJson(const QJsonObject &extra = {}) {
     QJsonObject manifest;
-    manifest.insert(QStringLiteral("format"), QStringLiteral("switchx-project"));
+    manifest.insert(QStringLiteral("format"), QStringLiteral("prism-project"));
     manifest.insert(QStringLiteral("formatVersion"), ProjectPackager::kFormatVersion);
     manifest.insert(QStringLiteral("sessionFile"), QString::fromUtf8(ProjectPackager::kSessionName));
     manifest.insert(QStringLiteral("files"), QJsonArray{});
@@ -156,7 +156,7 @@ private slots:
         {
             QMap<QString, QByteArray> entries;
             QJsonObject bad;
-            bad.insert(QStringLiteral("format"), QStringLiteral("switchx-project"));
+            bad.insert(QStringLiteral("format"), QStringLiteral("prism-project"));
             bad.insert(QStringLiteral("formatVersion"), 999);
             entries.insert(QString::fromUtf8(ProjectPackager::kManifestName),
                            QJsonDocument(bad).toJson());

@@ -75,7 +75,7 @@ ClipSettings ClipSettings::fromJson(const QJsonObject &o) {
 
 QString ClipSettings::sidecarPath(const QString &clipPath) {
     QFileInfo fi(clipPath);
-    return fi.absolutePath() + "/.switchx/" + fi.fileName() + ".json";
+    return fi.absolutePath() + "/.prism/" + fi.fileName() + ".json";
 }
 
 void ClipSettings::saveFor(const QString &clipPath) const {

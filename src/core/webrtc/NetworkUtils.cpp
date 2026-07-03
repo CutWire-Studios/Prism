@@ -83,7 +83,7 @@ QString promptInterface(QWidget *parent, const QList<Ipv4Interface> &ifaces, int
     const QString chosen = QInputDialog::getItem(
         parent,
         QObject::tr("Network Interface"),
-        QObject::tr("Phone must reach SwitchX on this network:"),
+        QObject::tr("Phone must reach CutWire Prism on this network:"),
         labels,
         defaultIndex,
         false,

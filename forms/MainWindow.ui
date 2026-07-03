@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>SwitchX - Live Media Control</string>
+   <string>CutWire Prism - Live Media Control</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="mainLayout">
@@ -1011,7 +1011,7 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <string>NDI Program Output</string>
    </property>
    <property name="toolTip">
-    <string>Send the program mix as an NDI source (SwitchX Program) for OBS, vMix, etc.</string>
+    <string>Send the program mix as an NDI source (CutWire Prism Program) for OBS, vMix, etc.</string>
    </property>
    <property name="checkable">
     <bool>true</bool>

@@ -10,14 +10,14 @@ set(CMAKE_AUTOUIC ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 
 # Qt
-set(_switchx_qt_components Core Widgets OpenGL OpenGLWidgets Gui Multimedia WebEngineWidgets Network)
+set(_prism_qt_components Core Widgets OpenGL OpenGLWidgets Gui Multimedia WebEngineWidgets Network)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    list(APPEND _switchx_qt_components DBus)
+    list(APPEND _prism_qt_components DBus)
 endif()
-find_package(Qt6 REQUIRED COMPONENTS ${_switchx_qt_components})
+find_package(Qt6 REQUIRED COMPONENTS ${_prism_qt_components})
 find_package(Qt6 QUIET COMPONENTS WebSockets)
 if(TARGET Qt6::WebSockets)
-    set(SWITCHX_HAVE_OBS_WS TRUE)
+    set(PRISM_HAVE_OBS_WS TRUE)
     message(STATUS "Qt WebSockets found — OBS integration enabled")
 else()
     message(STATUS "Qt6 WebSockets not found — OBS integration disabled (install qt6-websockets)")
@@ -56,8 +56,8 @@ if(NOT kissfft_FOUND)
 endif()
 
 # Lua + sol2 (optional — Script node; Text source works without Lua)
-option(SWITCHX_WITH_LUA "Enable Lua script nodes" ON)
-if(SWITCHX_WITH_LUA)
+option(PRISM_WITH_LUA "Enable Lua script nodes" ON)
+if(PRISM_WITH_LUA)
     if(WIN32)
         # vcpkg ships Lua 5.5; sol2 v3.5.0 supports through 5.4 — bundle 5.4 on Windows.
         FetchContent_Declare(lua54
@@ -69,15 +69,15 @@ if(SWITCHX_WITH_LUA)
         list(REMOVE_ITEM _lua_sources
             "${_lua_src_dir}/lua.c" "${_lua_src_dir}/luac.c"
             "${_lua_src_dir}/onelua.c" "${_lua_src_dir}/ltests.c")
-        add_library(switchx_lua STATIC ${_lua_sources})
-        target_include_directories(switchx_lua PUBLIC ${_lua_src_dir})
+        add_library(prism_lua STATIC ${_lua_sources})
+        target_include_directories(prism_lua PUBLIC ${_lua_src_dir})
         if(MSVC)
-            target_compile_definitions(switchx_lua PRIVATE _CRT_SECURE_NO_WARNINGS)
+            target_compile_definitions(prism_lua PRIVATE _CRT_SECURE_NO_WARNINGS)
         endif()
-        set(SWITCHX_LUA_TARGET switchx_lua)
+        set(PRISM_LUA_TARGET prism_lua)
     else()
         pkg_check_modules(LUA REQUIRED lua5.4)
-        set(SWITCHX_LUA_TARGET ${LUA_LIBRARIES})
+        set(PRISM_LUA_TARGET ${LUA_LIBRARIES})
     endif()
 
     FetchContent_Declare(sol2
@@ -85,36 +85,36 @@ if(SWITCHX_WITH_LUA)
         GIT_TAG        v3.5.0)
     FetchContent_MakeAvailable(sol2)
 
-    add_library(switchx_sol2 INTERFACE)
-    target_include_directories(switchx_sol2 INTERFACE
+    add_library(prism_sol2 INTERFACE)
+    target_include_directories(prism_sol2 INTERFACE
         ${sol2_SOURCE_DIR}/include)
     if(WIN32)
-        target_link_libraries(switchx_sol2 INTERFACE ${SWITCHX_LUA_TARGET})
+        target_link_libraries(prism_sol2 INTERFACE ${PRISM_LUA_TARGET})
     else()
-        target_include_directories(switchx_sol2 INTERFACE ${LUA_INCLUDE_DIRS})
-        target_link_libraries(switchx_sol2 INTERFACE ${SWITCHX_LUA_TARGET})
+        target_include_directories(prism_sol2 INTERFACE ${LUA_INCLUDE_DIRS})
+        target_link_libraries(prism_sol2 INTERFACE ${PRISM_LUA_TARGET})
     endif()
-    set(SWITCHX_HAVE_LUA TRUE)
+    set(PRISM_HAVE_LUA TRUE)
     message(STATUS "Lua scripting enabled (sol2 + Lua 5.4)")
 else()
     message(STATUS "Lua scripting disabled")
 endif()
 
 # NDI (optional — program output to OBS etc.)
-option(SWITCHX_WITH_NDI "Enable NDI program output" ON)
-if(SWITCHX_WITH_NDI)
+option(PRISM_WITH_NDI "Enable NDI program output" ON)
+if(PRISM_WITH_NDI)
     find_package(NDI)
     if(NDI_FOUND)
         message(STATUS "NDI found: ${NDI_LIBRARIES}")
-        set(SWITCHX_HAVE_NDI TRUE)
+        set(PRISM_HAVE_NDI TRUE)
     else()
         message(STATUS "NDI SDK not found — NDI output disabled (set NDI_ROOT or install NDI SDK)")
     endif()
 endif()
 
 # WebRTC phone camera (optional — libdatachannel + Qt WebSockets)
-option(SWITCHX_WITH_WEBRTC "Enable WebRTC phone camera source" ON)
-if(SWITCHX_WITH_WEBRTC)
+option(PRISM_WITH_WEBRTC "Enable WebRTC phone camera source" ON)
+if(PRISM_WITH_WEBRTC)
     find_package(Qt6 REQUIRED COMPONENTS WebSockets)
     set(NO_EXAMPLES ON CACHE BOOL "" FORCE)
     set(NO_TESTS ON CACHE BOOL "" FORCE)
@@ -126,7 +126,7 @@ if(SWITCHX_WITH_WEBRTC)
     FetchContent_MakeAvailable(libdatachannel)
     find_package(OpenSSL REQUIRED)
     message(STATUS "WebRTC phone camera source enabled (libdatachannel)")
-    set(SWITCHX_HAVE_WEBRTC TRUE)
+    set(PRISM_HAVE_WEBRTC TRUE)
 endif()
 
 
@@ -159,7 +159,7 @@ set(SOURCES
     src/core/webrtc/WebRtcPairing.cpp
     src/core/webrtc/WebRtcCamPage.cpp
     src/core/webrtc/WebRtcTlsStore.cpp
-    src/core/webrtc/SwitchXVp9RtpDepacketizer.cpp
+    src/core/webrtc/PrismVp9RtpDepacketizer.cpp
     src/core/webrtc/FirewallUtils.cpp
     src/core/webrtc/WebRtcManager.cpp
     src/core/sources/WebRtcSource.cpp
@@ -257,7 +257,7 @@ set(HEADERS
     include/core/webrtc/WebRtcPairing.h
     include/core/webrtc/WebRtcCamPage.h
     include/core/webrtc/WebRtcTlsStore.h
-    include/core/webrtc/SwitchXVp9RtpDepacketizer.h
+    include/core/webrtc/PrismVp9RtpDepacketizer.h
     include/core/webrtc/FirewallUtils.h
     include/core/webrtc/WebRtcManager.h
     include/core/sources/WebRtcSource.h
@@ -330,28 +330,28 @@ set(UI_FILES
 )
 
 # Core library (linked by the app and unit tests)
-add_library(switchx_core STATIC ${SOURCES} ${HEADERS} ${UI_FILES} resources/resources.qrc)
+add_library(prism_core STATIC ${SOURCES} ${HEADERS} ${UI_FILES} resources/resources.qrc)
 
-set_target_properties(switchx_core PROPERTIES
+set_target_properties(prism_core PROPERTIES
     AUTOUIC_SEARCH_PATHS "${CMAKE_CURRENT_SOURCE_DIR}/forms"
 )
 
-target_include_directories(switchx_core PUBLIC
+target_include_directories(prism_core PUBLIC
     include
     third_party/qrcodegen
     ${FFMPEG_INCLUDE_DIRS}
 )
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    target_include_directories(switchx_core PUBLIC
+    target_include_directories(prism_core PUBLIC
         ${GSTREAMER_INCLUDE_DIRS}
         ${GSTREAMER_APP_INCLUDE_DIRS}
         ${LIBZIP_INCLUDE_DIRS}
     )
 elseif(NOT WIN32)
-    target_include_directories(switchx_core PUBLIC ${LIBZIP_INCLUDE_DIRS})
+    target_include_directories(prism_core PUBLIC ${LIBZIP_INCLUDE_DIRS})
 endif()
 
-target_link_libraries(switchx_core PUBLIC
+target_link_libraries(prism_core PUBLIC
     Qt6::Core
     Qt6::Widgets
     Qt6::OpenGL
@@ -365,7 +365,7 @@ target_link_libraries(switchx_core PUBLIC
     kissfft::kissfft
 )
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    target_link_libraries(switchx_core PUBLIC
+    target_link_libraries(prism_core PUBLIC
         Qt6::DBus
         ${GSTREAMER_LIBRARIES}
         ${GSTREAMER_APP_LIBRARIES}
@@ -383,34 +383,34 @@ elseif(WIN32)
     set(SOFTCAM_SOURCE_DIR ${softcam_SOURCE_DIR} CACHE INTERNAL "")
     add_subdirectory(third_party/softcam)
 
-    target_link_libraries(switchx_core PUBLIC libzip::zip opengl32 mf mfplat mfuuid ole32 softcam)
+    target_link_libraries(prism_core PUBLIC libzip::zip opengl32 mf mfplat mfuuid ole32 softcam)
 else()
-    target_link_libraries(switchx_core PUBLIC ${LIBZIP_LIBRARIES})
+    target_link_libraries(prism_core PUBLIC ${LIBZIP_LIBRARIES})
 endif()
 
-if(SWITCHX_HAVE_LUA)
-    target_compile_definitions(switchx_core PUBLIC SWITCHX_HAVE_LUA)
-    target_link_libraries(switchx_core PUBLIC switchx_sol2)
+if(PRISM_HAVE_LUA)
+    target_compile_definitions(prism_core PUBLIC PRISM_HAVE_LUA)
+    target_link_libraries(prism_core PUBLIC prism_sol2)
 endif()
 
-if(SWITCHX_HAVE_NDI)
-    target_compile_definitions(switchx_core PUBLIC SWITCHX_HAVE_NDI)
-    target_include_directories(switchx_core PUBLIC ${NDI_INCLUDE_DIRS})
-    target_link_libraries(switchx_core PUBLIC ${NDI_LIBRARIES})
+if(PRISM_HAVE_NDI)
+    target_compile_definitions(prism_core PUBLIC PRISM_HAVE_NDI)
+    target_include_directories(prism_core PUBLIC ${NDI_INCLUDE_DIRS})
+    target_link_libraries(prism_core PUBLIC ${NDI_LIBRARIES})
 endif()
 
-if(SWITCHX_HAVE_OBS_WS)
-    target_compile_definitions(switchx_core PUBLIC SWITCHX_HAVE_OBS_WS)
-    target_link_libraries(switchx_core PUBLIC Qt6::WebSockets)
+if(PRISM_HAVE_OBS_WS)
+    target_compile_definitions(prism_core PUBLIC PRISM_HAVE_OBS_WS)
+    target_link_libraries(prism_core PUBLIC Qt6::WebSockets)
 endif()
 
-if(SWITCHX_HAVE_WEBRTC)
-    target_compile_definitions(switchx_core PUBLIC SWITCHX_HAVE_WEBRTC)
-    target_link_libraries(switchx_core PUBLIC LibDataChannel::LibDataChannelStatic Qt6::WebSockets OpenSSL::SSL OpenSSL::Crypto)
+if(PRISM_HAVE_WEBRTC)
+    target_compile_definitions(prism_core PUBLIC PRISM_HAVE_WEBRTC)
+    target_link_libraries(prism_core PUBLIC LibDataChannel::LibDataChannelStatic Qt6::WebSockets OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
 qt_add_executable(Prism src/main.cpp)
-target_link_libraries(Prism PRIVATE switchx_core)
+target_link_libraries(Prism PRIVATE prism_core)
 
 if(WIN32)
     add_custom_command(TARGET Prism POST_BUILD
@@ -426,4 +426,4 @@ enable_testing()
 # Add test subdirectory
 add_subdirectory(tests)
 
-install(TARGETS Prism switchx_core RUNTIME DESTINATION bin ARCHIVE DESTINATION lib)
+install(TARGETS Prism prism_core RUNTIME DESTINATION bin ARCHIVE DESTINATION lib)

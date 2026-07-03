@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Configure and build SwitchX on Windows (MSVC + vcpkg + Qt).
+  Configure and build CutWire Prism on Windows (MSVC + vcpkg + Qt).
 
 .PARAMETER QtPath
   Qt MSVC kit prefix, e.g. C:\Qt\6.8.0\msvc2022_64
@@ -70,12 +70,12 @@ $cmakeArgs = @(
     "-A", "x64",
     "-DCMAKE_TOOLCHAIN_FILE=$Toolchain",
     "-DCMAKE_PREFIX_PATH=$QtPath",
-    "-DSWITCHX_WITH_NDI=$(if ($WithNdi) { 'ON' } else { 'OFF' })",
-    "-DSWITCHX_WITH_WEBRTC=$(if ($WithWebRtc) { 'ON' } else { 'OFF' })",
-    "-DSWITCHX_WITH_LUA=$(if ($WithLua) { 'ON' } else { 'OFF' })"
+    "-DPRISM_WITH_NDI=$(if ($WithNdi) { 'ON' } else { 'OFF' })",
+    "-DPRISM_WITH_WEBRTC=$(if ($WithWebRtc) { 'ON' } else { 'OFF' })",
+    "-DPRISM_WITH_LUA=$(if ($WithLua) { 'ON' } else { 'OFF' })"
 )
 
-Write-Host "==> Configuring SwitchX"
+Write-Host "==> Configuring CutWire Prism"
 & $cmake @cmakeArgs $RepoRoot
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -83,7 +83,7 @@ Write-Host "==> Building ($Config)"
 & $cmake --build $buildDir --config $Config --parallel
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$exe = Join-Path $buildDir "$Config\SwitchX.exe"
+$exe = Join-Path $buildDir "$Config\Prism.exe"
 Write-Host "==> Build complete: $exe"
 
 if ($Deploy) {

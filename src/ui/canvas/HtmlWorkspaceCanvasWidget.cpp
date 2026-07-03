@@ -7,7 +7,7 @@
 #include <QMimeData>
 #include <algorithm>
 
-static constexpr char kPresetMime[] = "application/x-switchx-html-preset";
+static constexpr char kPresetMime[] = "application/x-prism-html-preset";
 
 static const QBrush &checkerBrush() {
     static const QBrush brush = [] {

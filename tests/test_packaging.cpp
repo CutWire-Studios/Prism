@@ -175,7 +175,7 @@ private slots:
         files.append(entry);
 
         QJsonObject manifest;
-        manifest.insert(QStringLiteral("format"), QStringLiteral("switchx-project"));
+        manifest.insert(QStringLiteral("format"), QStringLiteral("prism-project"));
         manifest.insert(QStringLiteral("formatVersion"), ProjectPackager::kFormatVersion);
         manifest.insert(QStringLiteral("sessionFile"), QString::fromUtf8(ProjectPackager::kSessionName));
         manifest.insert(QStringLiteral("files"), files);

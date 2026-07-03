@@ -6,7 +6,7 @@
 #include "ui/remote/RemoteProtocol.h"
 #include "core/webrtc/WebRtcPairing.h"
 #include "core/webrtc/WebRtcCamPage.h"
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
 #include "core/webrtc/WebRtcManager.h"
 #endif
 #include <QTcpSocket>
@@ -78,7 +78,7 @@ void RemoteControlServer::onReadyRead() {
             sendTextResponse(socket,
                 QStringLiteral("Missing or invalid pairing data (?d=<base64> or ?s=<token>)"), 400);
         } else {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
             if (sigPort == 0)
                 sigPort = WebRtcManager::instance().signalingPort();
 #endif
@@ -235,7 +235,7 @@ QString RemoteControlServer::getWebPageHtml() const {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SwitchX Remote Console</title>
+    <title>CutWire Prism Remote Console</title>
     <style>
         :root {
             --bg-color: #0d0d0f;
@@ -708,7 +708,7 @@ QString RemoteControlServer::getWebPageHtml() const {
     <div class="wrapper">
         <header class="header">
             <div class="brand">
-                <h1>SwitchX</h1>
+                <h1>CutWire Prism</h1>
                 <div class="subtitle">Remote Console</div>
             </div>
             <div class="status-badge">

@@ -54,7 +54,7 @@ bool firewalldActive() {
 QString getOpenPortCmd(Backend backend, quint16 port) {
     const QString portSpec = QStringLiteral("%1/tcp").arg(port);
     if (backend == Backend::Ufw) {
-        return QStringLiteral("ufw allow %1 comment 'SwitchX (temp)'").arg(portSpec);
+        return QStringLiteral("ufw allow %1 comment 'CutWire Prism (temp)'").arg(portSpec);
     }
     if (backend == Backend::Firewalld) {
         // 2-hour temporary hole; refreshed on each pairing request.
@@ -122,7 +122,7 @@ bool ensurePortsOpen(QWidget *parent, const QList<quint16> &tcpPorts, QString &e
         parent,
         QObject::tr("Firewall Detected"),
         QObject::tr("%1 is active and may block %2.\n\n"
-                      "Allow incoming TCP on port(s) %3 until SwitchX exits?\n"
+                      "Allow incoming TCP on port(s) %3 until CutWire Prism exits?\n"
                       "(Administrator password required)")
             .arg(fwName, purpose, portStrs.join(QStringLiteral(", "))),
         QMessageBox::Yes | QMessageBox::No,

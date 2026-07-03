@@ -18,7 +18,7 @@
 
 namespace {
 
-constexpr char kPresetMime[] = "application/x-switchx-html-preset";
+constexpr char kPresetMime[] = "application/x-prism-html-preset";
 
 struct LegacyPreset { const char *name; const char *resource; };
 

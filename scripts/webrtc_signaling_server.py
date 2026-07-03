@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SwitchX public WebRTC signaling relay + browser camera page.
+"""CutWire Prism public WebRTC signaling relay + browser camera page.
 
 Install deps once:
     pip install fastapi uvicorn
@@ -14,7 +14,7 @@ Run with built-in TLS (Let's Encrypt cert paths):
 
 Production relay: wss://roboti.qzz.io/ws  (https://roboti.qzz.io)
 
-Point SwitchX at: wss://your-host/ws  (or ws://… when using plain HTTP)
+Point CutWire Prism at: wss://your-host/ws  (or ws://… when using plain HTTP)
 """
 
 from __future__ import annotations
@@ -27,10 +27,10 @@ from typing import Dict, List, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
-log = logging.getLogger("switchx.signaling")
+log = logging.getLogger("prism.signaling")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
-app = FastAPI(title="SwitchX WebRTC Signaling", docs_url=None, redoc_url=None)
+app = FastAPI(title="CutWire Prism WebRTC Signaling", docs_url=None, redoc_url=None)
 
 
 @dataclass
@@ -85,7 +85,7 @@ async def _relay(room: Room, from_role: str, from_ws: WebSocket, raw: str, msg_t
     if from_role == "phone" and msg_type in ("offer", "candidate"):
         await from_ws.send_json({
             "type": "waiting",
-            "message": "Waiting for SwitchX desktop — keep the pairing dialog open on your PC",
+            "message": "Waiting for CutWire Prism desktop — keep the pairing dialog open on your PC",
         })
     log.info("queued %s (no %s yet)", msg_type, "desktop" if from_role == "phone" else "phone")
 
@@ -95,7 +95,7 @@ CAM_PAGE_HTML = r"""<!DOCTYPE html>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SwitchX Phone Camera</title>
+    <title>CutWire Prism Phone Camera</title>
     <style>
         body { font-family: system-ui, sans-serif; background: #111; color: #eee; margin: 0; padding: 16px; text-align: center; }
         video { width: 100%; max-width: 480px; border-radius: 12px; background: #000; }
@@ -113,7 +113,7 @@ CAM_PAGE_HTML = r"""<!DOCTYPE html>
     </style>
 </head>
 <body>
-    <h1>SwitchX Phone Camera</h1>
+    <h1>CutWire Prism Phone Camera</h1>
     <p class="status" id="status">Loading…</p>
     <div class="controls">
         <div class="field">
@@ -165,7 +165,7 @@ CAM_PAGE_HTML = r"""<!DOCTYPE html>
             const d = params.get('d');
             if (!d) throw new Error('Missing pairing data (?d=…) in URL.');
             const obj = JSON.parse(base64UrlDecode(d));
-            if (obj.app !== 'switchx') throw new Error('Invalid pairing payload.');
+            if (obj.app !== 'prism') throw new Error('Invalid pairing payload.');
             if (!obj.token) throw new Error('Pairing payload missing token.');
             return obj;
         }
@@ -336,7 +336,7 @@ CAM_PAGE_HTML = r"""<!DOCTYPE html>
                 const msg = JSON.parse(ev.data);
                 if (msg.type === 'hello-ok') return;
                 if (msg.type === 'waiting') {
-                    setStatus(msg.message || 'Waiting for SwitchX desktop…');
+                    setStatus(msg.message || 'Waiting for CutWire Prism desktop…');
                     return;
                 }
                 if (msg.type === 'error') {
@@ -350,7 +350,7 @@ CAM_PAGE_HTML = r"""<!DOCTYPE html>
                     const size = (settings.width && settings.height)
                         ? (' (' + settings.width + '×' + settings.height + ')')
                         : '';
-                    setStatus('Streaming to SwitchX' + size);
+                    setStatus('Streaming to CutWire Prism' + size);
                 } else if (msg.type === 'candidate' && pc && msg.candidate) {
                     await pc.addIceCandidate({ candidate: msg.candidate, sdpMid: msg.mid });
                 }
@@ -387,7 +387,7 @@ async def health() -> dict:
 
 @app.get("/")
 async def root() -> PlainTextResponse:
-    return PlainTextResponse("SwitchX WebRTC signaling relay\n")
+    return PlainTextResponse("CutWire Prism WebRTC signaling relay\n")
 
 
 @app.get("/cam")

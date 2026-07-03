@@ -2,7 +2,7 @@
 #include "ui/nodes/ClipNodeEditor.h"
 #include "ui/mainwindow/SourcePrompt.h"
 #include "core/sources/NdiSource.h"
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
 #include "core/sources/WebRtcSource.h"
 #endif
 #include <QVBoxLayout>
@@ -58,7 +58,7 @@ GroupEditorDialog::GroupEditorDialog(NodeId groupId, ClipNodeEditor *editor, QWi
                 }
             },
             NdiSource::isAvailable(),
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
             WebRtcSource::isAvailable());
 #else
             false);

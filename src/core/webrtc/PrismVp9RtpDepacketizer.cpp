@@ -1,6 +1,6 @@
-#include "core/webrtc/SwitchXVp9RtpDepacketizer.h"
+#include "core/webrtc/PrismVp9RtpDepacketizer.h"
 
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
 
 #include <rtc/rtp.hpp>
 
@@ -122,11 +122,11 @@ size_t vp9DescriptorSize(const uint8_t *payloadData, size_t payloadSize) {
 
 } // namespace
 
-SwitchXVp9RtpDepacketizer::SwitchXVp9RtpDepacketizer() = default;
+PrismVp9RtpDepacketizer::PrismVp9RtpDepacketizer() = default;
 
-SwitchXVp9RtpDepacketizer::~SwitchXVp9RtpDepacketizer() = default;
+PrismVp9RtpDepacketizer::~PrismVp9RtpDepacketizer() = default;
 
-rtc::message_ptr SwitchXVp9RtpDepacketizer::reassemble(rtc::VideoRtpDepacketizer::message_buffer &buffer) {
+rtc::message_ptr PrismVp9RtpDepacketizer::reassemble(rtc::VideoRtpDepacketizer::message_buffer &buffer) {
     if (buffer.empty())
         return nullptr;
 

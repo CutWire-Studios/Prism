@@ -11,7 +11,7 @@
 MirrorOutputWindow::MirrorOutputWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-    setWindowTitle(tr("SwitchX - Preview Output"));
+    setWindowTitle(tr("CutWire Prism - Preview Output"));
     resize(800, 600);
 
     auto *central = new QWidget(this);

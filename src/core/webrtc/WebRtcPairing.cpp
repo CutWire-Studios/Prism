@@ -7,7 +7,7 @@ QJsonObject makePayload(const QString &host, quint16 sigPort, const QString &tok
                         quint16 httpPort, const QString &relayUrl) {
     QJsonObject obj;
     obj.insert(QStringLiteral("v"), 1);
-    obj.insert(QStringLiteral("app"), QStringLiteral("switchx"));
+    obj.insert(QStringLiteral("app"), QStringLiteral("prism"));
     obj.insert(QStringLiteral("host"), host);
     obj.insert(QStringLiteral("sig"), sigPort);
     obj.insert(QStringLiteral("http"), httpPort);
@@ -56,7 +56,7 @@ bool decodeQuery(const QUrlQuery &query, QString &token, quint16 &sigPort) {
         const QByteArray json = QByteArray::fromBase64(d.toUtf8(), QByteArray::Base64UrlEncoding);
         if (json.isEmpty()) return false;
         const QJsonObject obj = QJsonDocument::fromJson(json).object();
-        if (obj.value(QStringLiteral("app")).toString() != QStringLiteral("switchx"))
+        if (obj.value(QStringLiteral("app")).toString() != QStringLiteral("prism"))
             return false;
         token = obj.value(QStringLiteral("token")).toString();
         sigPort = static_cast<quint16>(obj.value(QStringLiteral("sig")).toInt(kDefaultSigPort));

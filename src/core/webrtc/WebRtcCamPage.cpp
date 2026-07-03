@@ -11,7 +11,7 @@ QString html(const QString &token, quint16 sigPort, const QString &relayUrl) {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SwitchX Phone Camera</title>
+    <title>CutWire Prism Phone Camera</title>
     <style>
         body { font-family: system-ui, sans-serif; background: #111; color: #eee; margin: 0; padding: 16px; text-align: center; }
         video { width: 100%; max-width: 480px; border-radius: 12px; background: #000; }
@@ -29,7 +29,7 @@ QString html(const QString &token, quint16 sigPort, const QString &relayUrl) {
     </style>
 </head>
 <body>
-    <h1>SwitchX Phone Camera</h1>
+    <h1>CutWire Prism Phone Camera</h1>
     <p class="status" id="status">Loading cameras…</p>
     <div class="controls">
         <div class="field">
@@ -236,7 +236,7 @@ QString html(const QString &token, quint16 sigPort, const QString &relayUrl) {
                 const msg = JSON.parse(ev.data);
                 if (msg.type === 'hello-ok') return;
                 if (msg.type === 'waiting') {
-                    setStatus(msg.message || 'Waiting for SwitchX desktop…');
+                    setStatus(msg.message || 'Waiting for CutWire Prism desktop…');
                     return;
                 }
                 if (msg.type === 'error') {
@@ -250,7 +250,7 @@ QString html(const QString &token, quint16 sigPort, const QString &relayUrl) {
                     const size = (settings.width && settings.height)
                         ? (' (' + settings.width + '×' + settings.height + ')')
                         : '';
-                    setStatus('Streaming to SwitchX' + size);
+                    setStatus('Streaming to CutWire Prism' + size);
                 } else if (msg.type === 'candidate' && pc && msg.candidate) {
                     await pc.addIceCandidate({ candidate: msg.candidate, sdpMid: msg.mid });
                 }

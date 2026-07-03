@@ -11,7 +11,7 @@
 #include "core/sources/HtmlWorkspace.h"
 #include "core/sources/TextSource.h"
 #include "core/sources/NdiSource.h"
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
 #include "core/sources/WebRtcSource.h"
 #endif
 #include <QObject>
@@ -113,7 +113,7 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
         return src;
     }
     case Kind::WebRtc: {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
         auto src = std::make_unique<WebRtcSource>(desc.path);
         src->setName(desc.displayName.isEmpty() ? QObject::tr("Phone Camera") : desc.displayName);
         return src;

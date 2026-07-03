@@ -1,7 +1,7 @@
 #include "core/sources/NdiSource.h"
 #include "core/sources/NdiLibrary.h"
 
-#ifdef SWITCHX_HAVE_NDI
+#ifdef PRISM_HAVE_NDI
 #include <cstddef>
 #include <Processing.NDI.Lib.h>
 #endif
@@ -17,7 +17,7 @@ bool NdiSource::isAvailable() {
 }
 
 QStringList NdiSource::discoverSources(int waitMs) {
-#ifndef SWITCHX_HAVE_NDI
+#ifndef PRISM_HAVE_NDI
     Q_UNUSED(waitMs);
     return {};
 #else
@@ -50,7 +50,7 @@ bool NdiSource::connectTo(const QString &ndiName) {
     disconnect();
     if (ndiName.isEmpty()) return false;
 
-#ifndef SWITCHX_HAVE_NDI
+#ifndef PRISM_HAVE_NDI
     Q_UNUSED(ndiName);
     return false;
 #else
@@ -82,7 +82,7 @@ bool NdiSource::connectTo(const QString &ndiName) {
 }
 
 void NdiSource::disconnect() {
-#ifdef SWITCHX_HAVE_NDI
+#ifdef PRISM_HAVE_NDI
     if (m_recv) {
         NDIlib_recv_destroy(m_recv);
         m_recv = nullptr;
@@ -104,7 +104,7 @@ void NdiSource::storeVideoFrame(const QImage &img) {
 }
 
 bool NdiSource::nextFrame() {
-#ifndef SWITCHX_HAVE_NDI
+#ifndef PRISM_HAVE_NDI
     return false;
 #else
     if (!m_recv) return false;

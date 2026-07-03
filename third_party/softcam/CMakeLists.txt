@@ -1,4 +1,4 @@
-# Builds tshino/softcam (MIT) as a DLL for SwitchX virtual camera output on Windows.
+# Builds tshino/softcam (MIT) as a DLL for CutWire Prism virtual camera output on Windows.
 # SOFTCAM_SOURCE_DIR must point at a populated FetchContent tree (see root CMakeLists.txt).
 
 if(NOT WIN32)

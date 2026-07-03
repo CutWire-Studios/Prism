@@ -15,7 +15,7 @@ namespace SourcePrompt {
 bool prompt(SourceDescriptor::Kind kind, QWidget *parent,
             SourceDescriptor &outDesc, QPixmap &outThumb);
 
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
 /// Reopens the phone pairing dialog for an existing WebRTC session (reconnect after drop).
 bool reconnectWebRtc(QWidget *parent, const QString &sessionToken,
                      const QString &relayUrl = {});

@@ -3,7 +3,7 @@
 #include "core/webrtc/WebRtcPairing.h"
 #include "core/webrtc/WebRtcCamPage.h"
 #include "core/webrtc/WebRtcTlsStore.h"
-#include "core/webrtc/SwitchXVp9RtpDepacketizer.h"
+#include "core/webrtc/PrismVp9RtpDepacketizer.h"
 #include "core/webrtc/FirewallUtils.h"
 
 #include <QJsonDocument>
@@ -21,7 +21,7 @@
 #include <QWebSocket>
 #include <QWebSocketServer>
 
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
 #include <rtc/rtc.hpp>
 
 extern "C" {
@@ -39,7 +39,7 @@ extern "C" {
 
 namespace {
 
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
 QString makeToken() {
     static const char chars[] = "abcdefghijklmnopqrstuvwxyz0123456789";
     QString token;
@@ -159,7 +159,7 @@ struct Session {
     QPointer<QWebSocket> socket;
     std::shared_ptr<rtc::PeerConnection> pc;
     std::shared_ptr<rtc::Track> videoTrack;
-    std::shared_ptr<SwitchXVp9RtpDepacketizer> depacketizer;
+    std::shared_ptr<PrismVp9RtpDepacketizer> depacketizer;
     std::shared_ptr<rtc::RtcpReceivingSession> rtcpSession;
     Vp9Decoder decoder;
     FrameBuffer frames;
@@ -169,11 +169,11 @@ struct Session {
     bool loggedFirstRtpFrame   = false;
     bool loggedDecodeFailure   = false;
 };
-#endif // SWITCHX_HAVE_WEBRTC
+#endif // PRISM_HAVE_WEBRTC
 
 } // namespace
 
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
 class WebRtcManager::Impl {
 public:
     Impl(const Impl &) = delete;
@@ -215,7 +215,7 @@ public:
             m_server = nullptr;
         }
 
-        m_server = new QWebSocketServer(QStringLiteral("SwitchX-WebRTC"),
+        m_server = new QWebSocketServer(QStringLiteral("Prism-WebRTC"),
                                         QWebSocketServer::NonSecureMode);
         if (!m_server->listen(bindAddress, preferredPort)) {
             delete m_server;
@@ -253,7 +253,7 @@ public:
             m_wssBridge = nullptr;
         }
 
-        m_wssBridge = new QWebSocketServer(QStringLiteral("SwitchX-WebRTC-WSS"),
+        m_wssBridge = new QWebSocketServer(QStringLiteral("Prism-WebRTC-WSS"),
                                            QWebSocketServer::SecureMode, m_owner);
         m_wssBridge->setSslConfiguration(WebRtcTlsStore::sslConfiguration());
         QObject::connect(m_wssBridge, &QWebSocketServer::newConnection, m_owner, [this]() {
@@ -290,7 +290,7 @@ public:
     }
 
     void handleTlsRequest(QSslSocket *socket) {
-        if (socket->property("switchxHandled").toBool())
+        if (socket->property("prismHandled").toBool())
             return;
 
         const QByteArray buffered = socket->peek(qMax<qint64>(socket->bytesAvailable(), 4096));
@@ -314,13 +314,13 @@ public:
         const bool wantsWebSocket = headerText.contains(QStringLiteral("Upgrade:"), Qt::CaseInsensitive)
             && headerText.contains(QStringLiteral("websocket"), Qt::CaseInsensitive);
         if (wantsWebSocket && path.startsWith(QStringLiteral("/ws"))) {
-            socket->setProperty("switchxHandled", true);
+            socket->setProperty("prismHandled", true);
             if (m_wssBridge)
                 m_wssBridge->handleConnection(socket);
             return;
         }
 
-        socket->setProperty("switchxHandled", true);
+        socket->setProperty("prismHandled", true);
 
         if (method != QStringLiteral("GET")) {
             sendHttpText(socket, QStringLiteral("405 Method Not Allowed"), 405);
@@ -751,7 +751,7 @@ private:
             return;
 
         session->videoTrack = track;
-        session->depacketizer = std::make_shared<SwitchXVp9RtpDepacketizer>();
+        session->depacketizer = std::make_shared<PrismVp9RtpDepacketizer>();
         session->rtcpSession  = std::make_shared<rtc::RtcpReceivingSession>();
         session->depacketizer->addToChain(session->rtcpSession);
         track->setMediaHandler(session->depacketizer);
@@ -789,7 +789,7 @@ private:
     std::unordered_map<QString, std::shared_ptr<Session>> m_sessions;
     QHash<QWebSocket *, QString> m_socketTokens;
 };
-#endif // SWITCHX_HAVE_WEBRTC
+#endif // PRISM_HAVE_WEBRTC
 
 WebRtcManager &WebRtcManager::instance() {
     static WebRtcManager mgr;
@@ -799,7 +799,7 @@ WebRtcManager &WebRtcManager::instance() {
 WebRtcManager::WebRtcManager(QObject *parent)
     : QObject(parent)
 {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
     m_impl = new Impl(this);
     m_sigPort  = WebRtcPairing::kDefaultSigPort;
     m_httpPort = WebRtcPairing::kDefaultHttpPort;
@@ -807,7 +807,7 @@ WebRtcManager::WebRtcManager(QObject *parent)
 }
 
 WebRtcManager::~WebRtcManager() {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
     FirewallUtils::releasePorts({
         WebRtcPairing::kDefaultSigPort,
         WebRtcPairing::kDefaultHttpPort
@@ -818,7 +818,7 @@ WebRtcManager::~WebRtcManager() {
 }
 
 bool WebRtcManager::isAvailable() {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
     return true;
 #else
     return false;
@@ -832,7 +832,7 @@ WebRtcPairingInfo WebRtcManager::createSession(const QString &bindAddress, const
 WebRtcPairingInfo WebRtcManager::ensureSession(const QString &bindAddress, const QString &token,
                                                const QString &relayUrl) {
     WebRtcPairingInfo info;
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
     if (!m_impl) return info;
     info = m_impl->createSession(bindAddress, m_sigPort, m_httpPort, token, relayUrl);
 #else
@@ -844,14 +844,14 @@ WebRtcPairingInfo WebRtcManager::ensureSession(const QString &bindAddress, const
 }
 
 QString WebRtcManager::bindAddress() const {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
     if (m_impl) return m_impl->bindAddress();
 #endif
     return {};
 }
 
 bool WebRtcManager::hasSession(const QString &token) const {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
     return m_impl && m_impl->hasSession(token);
 #else
     Q_UNUSED(token);
@@ -860,7 +860,7 @@ bool WebRtcManager::hasSession(const QString &token) const {
 }
 
 void WebRtcManager::destroySession(const QString &token) {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
     if (m_impl) m_impl->destroySession(token);
 #else
     Q_UNUSED(token);
@@ -868,7 +868,7 @@ void WebRtcManager::destroySession(const QString &token) {
 }
 
 void WebRtcManager::registerViewer(const QString &token) {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
     if (m_impl) m_impl->registerViewer(token);
 #else
     Q_UNUSED(token);
@@ -876,7 +876,7 @@ void WebRtcManager::registerViewer(const QString &token) {
 }
 
 void WebRtcManager::unregisterViewer(const QString &token) {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
     if (m_impl) m_impl->unregisterViewer(token);
 #else
     Q_UNUSED(token);
@@ -884,7 +884,7 @@ void WebRtcManager::unregisterViewer(const QString &token) {
 }
 
 bool WebRtcManager::isPeerConnected(const QString &token) const {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
     return m_impl && m_impl->isPeerConnected(token);
 #else
     Q_UNUSED(token);
@@ -893,7 +893,7 @@ bool WebRtcManager::isPeerConnected(const QString &token) const {
 }
 
 bool WebRtcManager::copyLatestFrame(const QString &token, QImage &out, uint64_t &seq, uint64_t sinceSeq) const {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
     return m_impl && m_impl->copyLatestFrame(token, out, seq, sinceSeq);
 #else
     Q_UNUSED(token);

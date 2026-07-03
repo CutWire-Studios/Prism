@@ -43,9 +43,9 @@ jobs:
             --error-exitcode=1 \
             -I include \
             -I third_party/qrcodegen \
-            -D SWITCHX_HAVE_NDI=0 \
-            -D SWITCHX_HAVE_WEBRTC=1 \
-            -D SWITCHX_HAVE_OBS_WS=1 \
+            -D PRISM_HAVE_NDI=0 \
+            -D PRISM_HAVE_WEBRTC=1 \
+            -D PRISM_HAVE_OBS_WS=1 \
             -D QT_MESSAGELOGCONTEXT \
             --quiet \
             src include tests
@@ -107,8 +107,8 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DFETCHCONTENT_BASE_DIR="${FETCHCONTENT_BASE_DIR}" \
-            -DSWITCHX_WITH_NDI=OFF \
-            -DSWITCHX_WITH_WEBRTC=OFF
+            -DPRISM_WITH_NDI=OFF \
+            -DPRISM_WITH_WEBRTC=OFF
 
       - name: Build
         run: |
@@ -130,4 +130,4 @@ jobs:
         run: ctest --output-on-failure --parallel
 
       - name: Verify application binary
-        run: test -x build/SwitchX
+        run: test -x build/Prism

@@ -42,7 +42,7 @@ SessionRecoveryDialog::SessionRecoveryDialog(const QString &autosavePath,
     setMinimumWidth(480);
 
     auto *intro = new QLabel(
-        tr("SwitchX did not shut down cleanly last time. "
+        tr("CutWire Prism did not shut down cleanly last time. "
            "You can recover your last autosaved session or choose a backup."),
         this);
     intro->setWordWrap(true);

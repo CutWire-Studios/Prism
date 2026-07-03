@@ -39,15 +39,15 @@ build() {
 
 run_app() {
     build
-    flatpak --user remote-add --if-not-exists switchx-local "file://${REPO_DIR}"
-    flatpak --user install --or-update switchx-local "${APP_ID}" -y
+    flatpak --user remote-add --if-not-exists prism-local "file://${REPO_DIR}"
+    flatpak --user install --or-update prism-local "${APP_ID}" -y
     flatpak run "${APP_ID}" "$@"
 }
 
 install_app() {
     build
-    flatpak --user remote-add --if-not-exists switchx-local "file://${REPO_DIR}"
-    flatpak --user install --or-update switchx-local "${APP_ID}" -y
+    flatpak --user remote-add --if-not-exists prism-local "file://${REPO_DIR}"
+    flatpak --user install --or-update prism-local "${APP_ID}" -y
 }
 
 export_bundle() {

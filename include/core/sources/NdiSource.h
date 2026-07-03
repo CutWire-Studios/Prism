@@ -5,7 +5,7 @@
 #include <QString>
 #include <QStringList>
 
-/// Receives a network NDI source (another SwitchX instance, OBS, phone app, …).
+/// Receives a network NDI source (another CutWire Prism instance, OBS, phone app, …).
 class NdiSource : public MediaSource {
 public:
     NdiSource();
@@ -30,7 +30,7 @@ public:
 private:
     void storeVideoFrame(const QImage &img);
 
-#ifdef SWITCHX_HAVE_NDI
+#ifdef PRISM_HAVE_NDI
     struct NDIlib_recv_instance_type *m_recv = nullptr;
 #endif
     QImage  m_frame;

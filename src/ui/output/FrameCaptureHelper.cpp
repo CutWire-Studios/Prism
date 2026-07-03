@@ -31,7 +31,7 @@ QString FrameCaptureHelper::capturesDirectory() {
     QString dir = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
     if (dir.isEmpty())
         dir = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
-    dir = QDir(dir).filePath(QStringLiteral("SwitchX/Captures"));
+    dir = QDir(dir).filePath(QStringLiteral("Prism/Captures"));
     QDir().mkpath(dir);
     return dir;
 }

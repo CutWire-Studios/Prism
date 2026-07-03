@@ -15,7 +15,7 @@
 #include "core/sources/ShaderSource.h"
 #include "core/sources/HtmlSource.h"
 #include "core/sources/NdiSource.h"
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
 #include "ui/mainwindow/SourcePrompt.h"
 #endif
 #include <QMessageBox>
@@ -688,7 +688,7 @@ void ClipCard::onEditClicked() {
     }
 
     case Kind::WebRtc: {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
         SourcePrompt::reconnectWebRtc(parent, m_sourceDesc.path, m_sourceDesc.webrtcRelayUrl);
 #endif
         break;

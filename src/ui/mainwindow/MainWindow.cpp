@@ -14,7 +14,7 @@
 #include "core/sources/ShaderSource.h"
 #include "core/sources/HtmlSource.h"
 #include "core/sources/NdiSource.h"
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
 #include "core/sources/WebRtcSource.h"
 #endif
 #include "ui/obs/ObsWebSocketClient.h"
@@ -212,7 +212,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     SessionManager::markRunning();
 
-    qDebug() << "SwitchX initialized - Live Media Control Mode";
+    qDebug() << "CutWire Prism initialized - Live Media Control Mode";
 }
 
 void MainWindow::buildEmptyPlaceholder() {
@@ -233,7 +233,7 @@ void MainWindow::buildEmptyPlaceholder() {
     phText->setAlignment(Qt::AlignCenter);
     phText->setWordWrap(true);
     phText->setText(
-        "<p style='font-size: 16px; font-weight: bold; color: #ccc; margin: 0 0 8px 0;'>Get Started with SwitchX</p>"
+        "<p style='font-size: 16px; font-weight: bold; color: #ccc; margin: 0 0 8px 0;'>Get Started with CutWire Prism</p>"
         "<p style='font-size: 13px; color: #888; line-height: 1.4; margin: 0; max-width: 420px;'>"
         "To begin, click the <b>Add Element</b> button below to load video files, import folders, or create live inputs like "
         "Camera, Screen Capture, or Canvas. Then connect ports to construct your media flow.</p>"
@@ -471,7 +471,7 @@ void MainWindow::setupConnections() {
                 return;
             }
         }
-        auto *preview = m_outputHub->addMirrorOutput(tr("SwitchX - Preview Output"));
+        auto *preview = m_outputHub->addMirrorOutput(tr("CutWire Prism - Preview Output"));
         if (preview) {
             preview->raise();
             preview->activateWindow();
@@ -486,7 +486,7 @@ void MainWindow::setupConnections() {
                 QMessageBox::warning(this, tr("NDI Output"),
                     m_outputHub->ndiAvailable()
                         ? tr("Could not start NDI program output.")
-                        : tr("NDI is not available. Install the NDI SDK and rebuild SwitchX."));
+                        : tr("NDI is not available. Install the NDI SDK and rebuild CutWire Prism."));
             }
         }
     });
@@ -514,7 +514,7 @@ void MainWindow::setupConnections() {
                 QMessageBox::warning(this, tr("Virtual Camera Output"),
                     tr("Could not start virtual camera output (%1).\n\n"
                        "Another application may already be using the virtual camera, "
-                       "or softcam.dll may be missing next to SwitchX.exe.")
+                       "or softcam.dll may be missing next to Prism.exe.")
                         .arg(dev.isEmpty() ? QStringLiteral("DirectShow Softcam") : dev));
 #endif
             }
@@ -740,7 +740,7 @@ void MainWindow::setupAddElementMenu(QMenu *menu) {
                             [this]() { onAddFilesClicked(); },
                             [this](SourceDescriptor::Kind kind) { addSourceOfKind(kind); },
                             NdiSource::isAvailable(),
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
                             WebRtcSource::isAvailable());
 #else
                             false);
@@ -1392,7 +1392,7 @@ void MainWindow::applyTheme() {
 
 void MainWindow::onSaveSessionClicked() {
     QString path = QFileDialog::getSaveFileName(
-        this, "Save Session", QString(), "SwitchX Session (*.sxs);;All Files (*)");
+        this, "Save Session", QString(), "CutWire Prism Session (*.sxs);;All Files (*)");
     if (path.isEmpty()) return;
     path = MainWindowUtils::ensureExtension(path, QStringLiteral(".sxs"));
 
@@ -1404,7 +1404,7 @@ void MainWindow::onSaveSessionClicked() {
 
 void MainWindow::onLoadSessionClicked() {
     QString path = QFileDialog::getOpenFileName(
-        this, "Load Session", QString(), "SwitchX Session (*.sxs);;All Files (*)");
+        this, "Load Session", QString(), "CutWire Prism Session (*.sxs);;All Files (*)");
     if (path.isEmpty()) return;
     loadFromFile(path, true);
 }
@@ -1412,7 +1412,7 @@ void MainWindow::onLoadSessionClicked() {
 void MainWindow::onExportProjectClicked() {
     QString path = QFileDialog::getSaveFileName(
         this, tr("Export Project"), QString(),
-        tr("SwitchX Project (*.switch);;All Files (*)"));
+        tr("CutWire Prism Project (*.switch);;All Files (*)"));
     if (path.isEmpty()) return;
     path = MainWindowUtils::ensureExtension(path, ProjectPackager::kExtension);
 
@@ -1434,7 +1434,7 @@ void MainWindow::onExportProjectClicked() {
 void MainWindow::onImportProjectClicked() {
     const QString packagePath = QFileDialog::getOpenFileName(
         this, tr("Import Project"), QString(),
-        tr("SwitchX Project (*.switch);;All Files (*)"));
+        tr("CutWire Prism Project (*.switch);;All Files (*)"));
     if (packagePath.isEmpty()) return;
 
     const QFileInfo packageInfo(packagePath);
@@ -1520,7 +1520,7 @@ void MainWindow::onFreezeFrameCapture() {
     for (const auto &layer : layers)
         layerCombo->addItem(layer.label);
 
-    auto *saveCheck = new QCheckBox(tr("Save PNG to Pictures/SwitchX/Captures"), &dlg);
+    auto *saveCheck = new QCheckBox(tr("Save PNG to Pictures/Prism/Captures"), &dlg);
     saveCheck->setChecked(true);
     auto *addCheck = new QCheckBox(tr("Add captured frame as a new image element"), &dlg);
     addCheck->setChecked(false);

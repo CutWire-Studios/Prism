@@ -32,7 +32,7 @@ QString ProgramRecorder::defaultOutputDir() {
     QString dir = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
     if (dir.isEmpty())
         dir = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
-    dir = QDir(dir).filePath(QStringLiteral("SwitchX"));
+    dir = QDir(dir).filePath(QStringLiteral("Prism"));
     QDir().mkpath(dir);
     return dir;
 }

@@ -17,9 +17,9 @@ return {
   date = os.date("%Y-%m-%d"),
 })" },
     { "Counter",       ":/scripts/counter.lua", R"(-- Simple incrementing counter (resets when the script node is recreated)
-if not _G.__switchx_count then _G.__switchx_count = 0 end
-_G.__switchx_count = _G.__switchx_count + 1
-return { count = _G.__switchx_count })" },
+if not _G.__prism_count then _G.__prism_count = 0 end
+_G.__prism_count = _G.__prism_count + 1
+return { count = _G.__prism_count })" },
     { "Greeting",      ":/scripts/greeting.lua", R"(-- Greeting with day-of-week — template: {greeting}, today is {weekday}
 local t = os.date("*t")
 local names = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" }

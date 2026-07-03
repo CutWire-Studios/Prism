@@ -170,9 +170,9 @@ CutWire Prism prioritizes **simplicity over features**. Every button should feel
 
 **Optional (all platforms when SDKs are present)**
 
-- **Lua 5.4** — Lua Script nodes (`SWITCHX_WITH_LUA`, default ON)
-- **libdatachannel** + **OpenSSL** + **Qt WebSockets** — WebRTC phone camera (`SWITCHX_WITH_WEBRTC`, default ON; libdatachannel fetched by CMake)
-- **NDI SDK** — NDI input/output (`SWITCHX_WITH_NDI`, default ON; set `NDI_ROOT` on Windows)
+- **Lua 5.4** — Lua Script nodes (`PRISM_WITH_LUA`, default ON)
+- **libdatachannel** + **OpenSSL** + **Qt WebSockets** — WebRTC phone camera (`PRISM_WITH_WEBRTC`, default ON; libdatachannel fetched by CMake)
+- **NDI SDK** — NDI input/output (`PRISM_WITH_NDI`, default ON; set `NDI_ROOT` on Windows)
 
 #### Linux (Debian/Ubuntu)
 
@@ -221,9 +221,9 @@ cd C:\path\to\CutWire Prism
 cmake -B build -G "Visual Studio 17 2022" -A x64 `
   -DCMAKE_TOOLCHAIN_FILE=C:\path\to\vcpkg\scripts\buildsystems\vcpkg.cmake `
   -DCMAKE_PREFIX_PATH=C:\Qt\6.8.0\msvc2022_64 `
-  -DSWITCHX_WITH_NDI=OFF `
-  -DSWITCHX_WITH_WEBRTC=OFF `
-  -DSWITCHX_WITH_LUA=OFF
+  -DPRISM_WITH_NDI=OFF `
+  -DPRISM_WITH_WEBRTC=OFF `
+  -DPRISM_WITH_LUA=OFF
 
 cmake --build build --config Release --parallel
 ```
@@ -249,7 +249,7 @@ Or use the helper script (installs vcpkg deps, configures, builds):
 | Screen / window capture | `QScreenCapture` / `QWindowCapture` |
 | NDI | Supported when [NDI SDK](https://ndi.video/) is installed (`-DNDI_ROOT="C:\Program Files\NDI\NDI 6 SDK"`) |
 | Virtual camera output | Built-in via [softcam](https://github.com/tshino/softcam) (MIT) — appears as **DirectShow Softcam**; `softcam.dll` is copied next to `CutWire Prism.exe` at build time |
-| WebRTC phone camera | Build with `-DSWITCHX_WITH_WEBRTC=ON` + OpenSSL; firewall rules are not auto-opened yet |
+| WebRTC phone camera | Build with `-DPRISM_WITH_WEBRTC=ON` + OpenSSL; firewall rules are not auto-opened yet |
 
 Enable virtual camera output from **View → Virtual Camera Output**. In OBS, Zoom, or a browser, pick the camera named **DirectShow Softcam**. Only one softcam sender can run at a time on the system.
 
@@ -273,12 +273,12 @@ cmake --build build --config Release
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `SWITCHX_WITH_NDI` | `ON` | Enable NDI program output/input when the NDI SDK is found |
-| `SWITCHX_WITH_LUA` | `ON` | Enable Lua Script nodes (Linux: system Lua 5.4; Windows: vcpkg `lua`) |
-| `SWITCHX_WITH_WEBRTC` | `ON` | Enable the WebRTC phone-camera source (libdatachannel fetched by CMake; needs OpenSSL + Qt WebSockets) |
+| `PRISM_WITH_NDI` | `ON` | Enable NDI program output/input when the NDI SDK is found |
+| `PRISM_WITH_LUA` | `ON` | Enable Lua Script nodes (Linux: system Lua 5.4; Windows: vcpkg `lua`) |
+| `PRISM_WITH_WEBRTC` | `ON` | Enable the WebRTC phone-camera source (libdatachannel fetched by CMake; needs OpenSSL + Qt WebSockets) |
 
 OBS integration is enabled automatically when Qt WebSockets is present. Disable an
-optional feature with e.g. `-DSWITCHX_WITH_WEBRTC=OFF`.
+optional feature with e.g. `-DPRISM_WITH_WEBRTC=OFF`.
 
 ### Flatpak
 

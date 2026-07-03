@@ -11,7 +11,7 @@
 #include "ui/common/ThumbHelper.h"
 #include "core/media/ThumbnailExtractor.h"
 #include "core/sources/NdiSource.h"
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
 #include "core/webrtc/WebRtcManager.h"
 #include "core/sources/WebRtcSource.h"
 #include "core/webrtc/WebRtcPairing.h"
@@ -262,7 +262,7 @@ bool promptText(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
 bool promptNdi(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     if (!NdiSource::isAvailable()) {
         QMessageBox::warning(parent, QObject::tr("NDI Input"),
-            QObject::tr("NDI is not available. Install the NDI SDK and rebuild SwitchX with -DNDI_ROOT=…"));
+            QObject::tr("NDI is not available. Install the NDI SDK and rebuild CutWire Prism with -DNDI_ROOT=…"));
         return false;
     }
 
@@ -270,7 +270,7 @@ bool promptNdi(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     if (sources.isEmpty()) {
         QMessageBox::information(parent, QObject::tr("NDI Input"),
             QObject::tr("No NDI sources found on the network.\n\n"
-               "Make sure another app (SwitchX program output, OBS, phone NDI app) is sending NDI, "
+               "Make sure another app (CutWire Prism program output, OBS, phone NDI app) is sending NDI, "
                "then try again."));
         return false;
     }
@@ -287,7 +287,7 @@ bool promptNdi(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     return true;
 }
 
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
 static QJsonObject webRtcQrPayload(const WebRtcPairingInfo &info) {
     return WebRtcPairing::makePayload(
         info.host, info.sigPort, info.token, info.httpPort, info.relayUrl);
@@ -321,10 +321,10 @@ bool showWebRtcConnectionDialog(QWidget *parent, const WebRtcPairingInfo &info, 
 
     auto *hintLabel = new QLabel(
         info.usesRelay()
-            ? QObject::tr("Open SwitchX on your PC first and keep the pairing dialog open, then tap Start here.\n"
-                          "Scan with your phone camera for the browser streamer, or use the SwitchX app.\n"
+            ? QObject::tr("Open CutWire Prism on your PC first and keep the pairing dialog open, then tap Start here.\n"
+                          "Scan with your phone camera for the browser streamer, or use the CutWire Prism app.\n"
                           "Internet pairing may require STUN/TURN for media on different networks.")
-            : QObject::tr("Scan with your phone camera to open the browser streamer, or scan with the SwitchX app to pair natively.\n"
+            : QObject::tr("Scan with your phone camera to open the browser streamer, or scan with the CutWire Prism app to pair natively.\n"
                           "Your phone may warn about the self-signed certificate — accept it to enable the camera."),
         &dlg);
     hintLabel->setWordWrap(true);
@@ -420,7 +420,7 @@ static std::optional<WebRtcSetupChoice> promptWebRtcSetup(QWidget *parent) {
 
     auto *relayEdit = new QLineEdit(&dlg);
     relayEdit->setPlaceholderText(QString::fromLatin1(WebRtcPairing::kDefaultRelayUrl));
-    relayEdit->setText(QSettings(QStringLiteral("SwitchX"), QStringLiteral("WebRTC"))
+    relayEdit->setText(QSettings(QStringLiteral("Prism"), QStringLiteral("WebRTC"))
                            .value(QStringLiteral("relayUrl"),
                                   QString::fromLatin1(WebRtcPairing::kDefaultRelayUrl))
                            .toString());
@@ -457,7 +457,7 @@ static std::optional<WebRtcSetupChoice> promptWebRtcSetup(QWidget *parent) {
                 QObject::tr("Enter a valid relay WebSocket URL (ws:// or wss://)."));
             return std::nullopt;
         }
-        QSettings(QStringLiteral("SwitchX"), QStringLiteral("WebRTC"))
+        QSettings(QStringLiteral("Prism"), QStringLiteral("WebRTC"))
             .setValue(QStringLiteral("relayUrl"), choice.relayUrl);
         return choice;
     }
@@ -472,7 +472,7 @@ bool promptWebRtc(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     if (!WebRtcSource::isAvailable()) {
         QMessageBox::warning(parent, QObject::tr("Phone Camera (WebRTC)"),
             QObject::tr("WebRTC is not available in this build.\n"
-                        "Rebuild with -DSWITCHX_WITH_WEBRTC=ON and install qt6-websockets."));
+                        "Rebuild with -DPRISM_WITH_WEBRTC=ON and install qt6-websockets."));
         return false;
     }
 
@@ -521,7 +521,7 @@ bool reconnectWebRtcDialog(QWidget *parent, const QString &sessionToken, const Q
     if (!WebRtcSource::isAvailable()) {
         QMessageBox::warning(parent, QObject::tr("Phone Camera (WebRTC)"),
             QObject::tr("WebRTC is not available in this build.\n"
-                        "Rebuild with -DSWITCHX_WITH_WEBRTC=ON and install qt6-websockets."));
+                        "Rebuild with -DPRISM_WITH_WEBRTC=ON and install qt6-websockets."));
         return false;
     }
 
@@ -561,7 +561,7 @@ bool reconnectWebRtcDialog(QWidget *parent, const QString &sessionToken, const Q
 
 } // namespace
 
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
 bool reconnectWebRtc(QWidget *parent, const QString &sessionToken, const QString &relayUrl) {
     return reconnectWebRtcDialog(parent, sessionToken, relayUrl);
 }
@@ -590,7 +590,7 @@ bool prompt(SourceDescriptor::Kind kind, QWidget *parent,
     case SourceDescriptor::Kind::Ndi:
         return promptNdi(parent, outDesc, outThumb);
     case SourceDescriptor::Kind::WebRtc:
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
         return promptWebRtc(parent, outDesc, outThumb);
 #else
         Q_UNUSED(parent);
@@ -649,7 +649,7 @@ void buildMenu(QMenu *menu,
     webrtcAction->setEnabled(webrtcAvailable);
     if (!webrtcAvailable) {
         webrtcAction->setToolTip(QObject::tr(
-            "WebRTC not enabled at build time. Rebuild with -DSWITCHX_WITH_WEBRTC=ON."));
+            "WebRTC not enabled at build time. Rebuild with -DPRISM_WITH_WEBRTC=ON."));
     }
 }
 

@@ -101,9 +101,9 @@ modules:
     builddir: true
     config-opts:
       - -DCMAKE_BUILD_TYPE=Release
-      - -DSWITCHX_WITH_NDI=OFF
-      - -DSWITCHX_WITH_LUA=ON
-      - -DSWITCHX_WITH_WEBRTC=ON
+      - -DPRISM_WITH_NDI=OFF
+      - -DPRISM_WITH_LUA=ON
+      - -DPRISM_WITH_WEBRTC=ON
       - -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     build-options:
       prepend-pkg-config-path: /app/lib/pkgconfig
@@ -115,7 +115,7 @@ modules:
       # builddir:true runs these from _flatpak_build/, so reach back to the source root.
       - install -Dm644 ../flatpak/org.cutwire.Prism.desktop /app/share/applications/org.cutwire.Prism.desktop
       - install -Dm644 ../flatpak/org.cutwire.Prism.metainfo.xml /app/share/metainfo/org.cutwire.Prism.metainfo.xml
-      - install -Dm644 ../flatpak/share/icons/hicolor/scalable/apps/org.cutwire.Prism.svg /app/share/icons/hicolor/scalable/apps/org.cutwire.Prism.svg
+      - install -Dm644 ../flatpak/share/icons/hicolor/1024x1024/apps/org.cutwire.Prism.png /app/share/icons/hicolor/1024x1024/apps/org.cutwire.Prism.png
     sources:
       - type: dir
         path: ..

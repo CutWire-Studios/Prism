@@ -4,7 +4,7 @@
 #include <QImage>
 #include <memory>
 
-/// Sends the program mix as an NDI source (obs-ndi, vMix, another SwitchX, etc.).
+/// Sends the program mix as an NDI source (obs-ndi, vMix, another CutWire Prism, etc.).
 class NdiProgramSink : public ProgramOutputSink {
 public:
     NdiProgramSink();

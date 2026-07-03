@@ -2,13 +2,13 @@
 #include "ui/canvas/VideoWidget.h"
 #include "core/sources/NdiLibrary.h"
 
-#ifdef SWITCHX_HAVE_NDI
+#ifdef PRISM_HAVE_NDI
 #include <cstddef>
 #include <Processing.NDI.Lib.h>
 #endif
 
 struct NdiProgramSink::Impl {
-#ifdef SWITCHX_HAVE_NDI
+#ifdef PRISM_HAVE_NDI
     NDIlib_send_instance_t sender = nullptr;
 #endif
 };
@@ -37,7 +37,7 @@ bool NdiProgramSink::isActive() const {
 bool NdiProgramSink::start(const QString &streamName) {
     stop();
 
-#ifndef SWITCHX_HAVE_NDI
+#ifndef PRISM_HAVE_NDI
     Q_UNUSED(streamName);
     return false;
 #else
@@ -45,7 +45,7 @@ bool NdiProgramSink::start(const QString &streamName) {
         return false;
 
     m_ndiName = streamName.isEmpty()
-              ? QStringLiteral("SwitchX Program")
+              ? QStringLiteral("CutWire Prism Program")
               : streamName;
 
     NDIlib_send_create_t desc{};
@@ -70,7 +70,7 @@ void NdiProgramSink::stop() {
 }
 
 void NdiProgramSink::stopInternal() {
-#ifndef SWITCHX_HAVE_NDI
+#ifndef PRISM_HAVE_NDI
     m_active = false;
     m_ndiName.clear();
     m_frameBuffer = {};
@@ -91,7 +91,7 @@ void NdiProgramSink::stopInternal() {
 }
 
 void NdiProgramSink::submitFrame(const QImage &frame) {
-#ifndef SWITCHX_HAVE_NDI
+#ifndef PRISM_HAVE_NDI
     Q_UNUSED(frame);
     return;
 #else

@@ -24,21 +24,21 @@ int main(int argc, char *argv[]) {
     // can be drawn directly without a GPU→CPU→GPU readback.
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 
-    // Resources are compiled into switchx_core (static lib); register them here so
+    // Resources are compiled into prism_core (static lib); register them here so
     // :/… paths (shaders, HTML presets, Lua examples, etc.) resolve at runtime.
     Q_INIT_RESOURCE(resources);
 
     QApplication app(argc, argv);
     MaterialSymbols::init();
-    app.setOrganizationName("SwitchX");
-    app.setApplicationName("SwitchX");
+    app.setOrganizationName("Prism");
+    app.setApplicationName("Prism");
     app.setStyle("fusion");
 
     MainWindow window;
     window.show();
 
-    if (qEnvironmentVariableIsSet("SWITCHX_AUTO_QUIT_MS")) {
-        const int ms = qEnvironmentVariableIntValue("SWITCHX_AUTO_QUIT_MS");
+    if (qEnvironmentVariableIsSet("PRISM_AUTO_QUIT_MS")) {
+        const int ms = qEnvironmentVariableIntValue("PRISM_AUTO_QUIT_MS");
         QTimer::singleShot(qMax(ms, 1), &window, &QWidget::close);
     }
 

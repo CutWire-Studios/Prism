@@ -4,7 +4,7 @@
 WebRtcSource::WebRtcSource(const QString &sessionToken)
     : m_token(sessionToken)
 {
-#ifndef SWITCHX_HAVE_WEBRTC
+#ifndef PRISM_HAVE_WEBRTC
     Q_UNUSED(sessionToken);
 #else
     if (!sessionToken.isEmpty())
@@ -13,14 +13,14 @@ WebRtcSource::WebRtcSource(const QString &sessionToken)
 }
 
 WebRtcSource::~WebRtcSource() {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
     if (!m_token.isEmpty())
         WebRtcManager::instance().unregisterViewer(m_token);
 #endif
 }
 
 bool WebRtcSource::isAvailable() {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
     return WebRtcManager::isAvailable();
 #else
     return false;
@@ -28,7 +28,7 @@ bool WebRtcSource::isAvailable() {
 }
 
 bool WebRtcSource::nextFrame() {
-#ifdef SWITCHX_HAVE_WEBRTC
+#ifdef PRISM_HAVE_WEBRTC
     if (m_token.isEmpty()) return false;
     QImage img;
     uint64_t seq = 0;

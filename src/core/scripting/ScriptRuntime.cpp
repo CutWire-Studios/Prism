@@ -11,7 +11,7 @@
 #include <QTimer>
 #include <QUrl>
 
-#ifdef SWITCHX_HAVE_LUA
+#ifdef PRISM_HAVE_LUA
 extern "C" {
 #include <lua.h>
 #include <lualib.h>
@@ -22,7 +22,7 @@ extern "C" {
 
 namespace {
 
-#ifdef SWITCHX_HAVE_LUA
+#ifdef PRISM_HAVE_LUA
 QJsonValue luaToJsonValue(const sol::object &obj) {
     if (!obj.valid() || obj.get_type() == sol::type::lua_nil)
         return QJsonValue(QJsonValue::Null);
@@ -88,14 +88,14 @@ ScriptRuntime::ScriptRuntime(std::shared_ptr<ScriptOutput> output, QObject *pare
 
     m_network = new QNetworkAccessManager(this);
 
-#ifdef SWITCHX_HAVE_LUA
+#ifdef PRISM_HAVE_LUA
     setupEngine();
 #endif
 }
 
 ScriptRuntime::~ScriptRuntime() {
     shutdown();
-#ifdef SWITCHX_HAVE_LUA
+#ifdef PRISM_HAVE_LUA
     teardownEngine();
 #endif
 }
@@ -157,7 +157,7 @@ void ScriptRuntime::writeOutput(const QString &json, const QString &log) {
     emit executionFinished(true);
 }
 
-#ifdef SWITCHX_HAVE_LUA
+#ifdef PRISM_HAVE_LUA
 struct ScriptRuntime::LuaState {
     sol::state lua;
 };
@@ -178,7 +178,7 @@ void ScriptRuntime::setupEngine() {
             return {};
 
         QNetworkRequest req(url);
-        req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("SwitchX/1.0"));
+        req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Prism/1.0"));
         QNetworkReply *reply = m_network->get(req);
         m_activeReply = reply;
 
@@ -219,7 +219,7 @@ void ScriptRuntime::teardownEngine() {}
 #endif
 
 void ScriptRuntime::executeScript() {
-#ifndef SWITCHX_HAVE_LUA
+#ifndef PRISM_HAVE_LUA
     if (m_shuttingDown.load(std::memory_order_acquire))
         return;
     m_lastError = QStringLiteral("Lua support was disabled at build time.");

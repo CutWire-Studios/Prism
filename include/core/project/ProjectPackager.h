@@ -7,7 +7,7 @@
 
 class ClipNodeModel;
 
-/// Bundles a SwitchX session and its media into a portable `.switch` ZIP archive.
+/// Bundles a CutWire Prism session and its media into a portable `.switch` ZIP archive.
 ///
 /// Archive layout:
 ///   manifest.json

@@ -1,6 +1,6 @@
 #include "ui/obs/ObsWebSocketClient.h"
 
-#ifdef SWITCHX_HAVE_OBS_WS
+#ifdef PRISM_HAVE_OBS_WS
 #include <QWebSocket>
 #include <QAbstractSocket>
 #include <QJsonDocument>
@@ -11,7 +11,7 @@
 
 ObsWebSocketClient::ObsWebSocketClient(QObject *parent)
     : QObject(parent)
-#ifdef SWITCHX_HAVE_OBS_WS
+#ifdef PRISM_HAVE_OBS_WS
     , m_socket(new QWebSocket(QString(), QWebSocketProtocol::VersionLatest, this))
 {
     connect(m_socket, &QWebSocket::connected, this, &ObsWebSocketClient::onSocketConnected);
@@ -33,14 +33,14 @@ ObsWebSocketClient::~ObsWebSocketClient() {
 }
 
 bool ObsWebSocketClient::isAvailable() {
-#ifdef SWITCHX_HAVE_OBS_WS
+#ifdef PRISM_HAVE_OBS_WS
     return true;
 #else
     return false;
 #endif
 }
 
-#ifdef SWITCHX_HAVE_OBS_WS
+#ifdef PRISM_HAVE_OBS_WS
 
 QString ObsWebSocketClient::nextRequestId() {
     return QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -64,7 +64,7 @@ QString ObsWebSocketClient::buildAuthString(const QString &password,
 void ObsWebSocketClient::connectToObs(const QString &host, quint16 port,
                                       const QString &password)
 {
-#ifndef SWITCHX_HAVE_OBS_WS
+#ifndef PRISM_HAVE_OBS_WS
     Q_UNUSED(host);
     Q_UNUSED(port);
     m_lastError = QStringLiteral("Qt WebSockets not available at build time");
@@ -81,7 +81,7 @@ void ObsWebSocketClient::connectToObs(const QString &host, quint16 port,
 }
 
 void ObsWebSocketClient::disconnectFromObs() {
-#ifdef SWITCHX_HAVE_OBS_WS
+#ifdef PRISM_HAVE_OBS_WS
     m_pending.clear();
     if (m_socket->state() != QAbstractSocket::UnconnectedState)
         m_socket->close();
@@ -93,7 +93,7 @@ void ObsWebSocketClient::disconnectFromObs() {
 }
 
 void ObsWebSocketClient::refreshSceneList() {
-#ifdef SWITCHX_HAVE_OBS_WS
+#ifdef PRISM_HAVE_OBS_WS
     sendRequest(QStringLiteral("GetSceneList"), {}, [this](const QJsonObject &responseData) {
         QStringList names;
         const QJsonArray scenes = responseData.value(QStringLiteral("scenes")).toArray();
@@ -110,7 +110,7 @@ void ObsWebSocketClient::refreshSceneList() {
 }
 
 void ObsWebSocketClient::setProgramScene(const QString &sceneName) {
-#ifdef SWITCHX_HAVE_OBS_WS
+#ifdef PRISM_HAVE_OBS_WS
     if (sceneName.isEmpty()) return;
     sendRequest(QStringLiteral("SetCurrentProgramScene"),
                 {{QStringLiteral("sceneName"), sceneName}});
@@ -119,7 +119,7 @@ void ObsWebSocketClient::setProgramScene(const QString &sceneName) {
 #endif
 }
 
-#ifdef SWITCHX_HAVE_OBS_WS
+#ifdef PRISM_HAVE_OBS_WS
 
 void ObsWebSocketClient::onSocketConnected() {
 }

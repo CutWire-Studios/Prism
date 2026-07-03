@@ -2991,7 +2991,7 @@ void ClipNodeEditor::onCanvasContextMenu() {
     menu.addSeparator();
     menu.addAction("Add Master Audio Output", this, &ClipNodeEditor::onAddMasterAudioOutput);
     menu.addAction("Add Master Audio Input", this, &ClipNodeEditor::onAddMasterAudioInput);
-#ifdef SWITCHX_HAVE_LUA
+#ifdef PRISM_HAVE_LUA
     menu.addAction("Add Script Node", this, &ClipNodeEditor::onAddScriptNode);
 #endif
     menu.exec(pos);
@@ -3034,7 +3034,7 @@ void ClipNodeEditor::addMasterAudioInputTo(ClipNodeScene *scene, QGraphicsView *
 
 void ClipNodeEditor::addScriptNodeTo(ClipNodeScene *scene, QGraphicsView *view,
                                      const QPoint &globalPos) {
-#ifdef SWITCHX_HAVE_LUA
+#ifdef PRISM_HAVE_LUA
     if (!scene) return;
     ScriptEditDialog dlg(QString(), ScriptTriggerMode::Periodic, 1000, this);
     if (dlg.exec() != QDialog::Accepted) return;
@@ -3078,7 +3078,7 @@ void ClipNodeEditor::onEditClipAudio(NodeId clipId) {
 }
 
 void ClipNodeEditor::onEditScriptNode(NodeId nodeId) {
-#ifdef SWITCHX_HAVE_LUA
+#ifdef PRISM_HAVE_LUA
     auto *scriptNode = static_cast<ScriptNodeItem *>(m_scriptNodes.value(nodeId));
     if (!scriptNode) return;
     ScriptEditDialog dlg(scriptNode->code(), scriptNode->triggerMode(),
@@ -3524,7 +3524,7 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         const QJsonObject obj = val.toObject();
         const NodeId scriptId = (NodeId)obj["id"].toInteger();
         m_nextId = scriptId;
-#ifdef SWITCHX_HAVE_LUA
+#ifdef PRISM_HAVE_LUA
         auto *sn = new ScriptNodeItem(m_nextId++, obj["luaCode"].toString(),
             static_cast<ScriptTriggerMode>(obj["triggerMode"].toInt(0)),
             obj["intervalMs"].toInt(1000));
