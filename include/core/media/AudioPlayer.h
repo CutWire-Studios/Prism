@@ -28,6 +28,8 @@ public:
     void setVolumePercent(int volumePercent);
     void setCrossfadeFactor(float factor) { m_crossfadeFactor = factor; }
     void setMuted(bool muted);
+    /// Playback rate (time-stretched, pitch preserved). 1.0 = normal.
+    void setSpeed(double speed) { m_decoder.setPlaybackSpeed(speed); }
 
     bool isPlaying() const;
     QString currentFilePath() const { return m_currentFilePath; }

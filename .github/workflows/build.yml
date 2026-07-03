@@ -77,6 +77,7 @@ jobs:
             libavutil-dev
             libswscale-dev
             libswresample-dev
+            libavfilter-dev
             libre2-dev
             libzip-dev
             libssl-dev

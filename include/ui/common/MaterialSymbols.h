@@ -25,7 +25,8 @@ public:
     static QIcon icon(const char *name, int size = 16,
                       const QColor &color = QColor("#cccccc"));
 
-    static void setIconText(QAbstractButton *button, const char *name, int pixelSize = 24);
+    static void setIconText(QAbstractButton *button, const char *name, int pixelSize = 24,
+                            const QColor &color = QColor("#cccccc"));
     static void setLabelText(QLabel *label, const char *name, int pixelSize = 24);
     static void setPlayPause(QAbstractButton *button, bool playing, int pixelSize = 20);
     static void setActionIcon(QAction *action, const char *name, int size = 16,

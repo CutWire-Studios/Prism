@@ -1,12 +1,12 @@
 # Portable FFmpeg finder for Windows, macOS, and Linux
-# Looks for: avcodec, avformat, avutil, swscale, swresample
+# Looks for: avcodec, avformat, avutil, swscale, swresample, avfilter
 
 include(FindPackageHandleStandardArgs)
 
 # Try pkg-config first (Unix-like systems)
 find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
-    pkg_check_modules(PC_FFMPEG QUIET libavcodec libavformat libavutil libswscale libswresample)
+    pkg_check_modules(PC_FFMPEG QUIET libavcodec libavformat libavutil libswscale libswresample libavfilter)
 endif()
 
 # Find include directory
@@ -41,6 +41,11 @@ find_library(FFMPEG_SWRESAMPLE_LIBRARY
     HINTS ${PC_FFMPEG_LIBDIR}
 )
 
+find_library(FFMPEG_AVFILTER_LIBRARY
+    NAMES avfilter
+    HINTS ${PC_FFMPEG_LIBDIR}
+)
+
 # Handle components
 foreach(component ${FFmpeg_FIND_COMPONENTS})
     if(component STREQUAL "avcodec")
@@ -63,6 +68,10 @@ foreach(component ${FFmpeg_FIND_COMPONENTS})
         if(FFMPEG_SWRESAMPLE_LIBRARY)
             set(FFmpeg_swresample_FOUND TRUE)
         endif()
+    elseif(component STREQUAL "avfilter")
+        if(FFMPEG_AVFILTER_LIBRARY)
+            set(FFmpeg_avfilter_FOUND TRUE)
+        endif()
     endif()
 endforeach()
 
@@ -73,6 +82,7 @@ set(FFMPEG_LIBRARIES
     ${FFMPEG_AVUTIL_LIBRARY}
     ${FFMPEG_SWSCALE_LIBRARY}
     ${FFMPEG_SWRESAMPLE_LIBRARY}
+    ${FFMPEG_AVFILTER_LIBRARY}
 )
 
 find_package_handle_standard_args(FFmpeg

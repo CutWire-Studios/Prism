@@ -64,4 +64,26 @@ struct SourceDescriptor {
     bool isFileSource() const {
         return kind == Kind::VideoFile || kind == Kind::Image || kind == Kind::Slideshow;
     }
+
+    // ── Playback capabilities ────────────────────────────────────────────────
+    // Drive which controls (repeat, timeline, play/pause, speed) the UI offers
+    // for a clip of this kind.
+
+    /// Can loop back to the start when it reaches the end.
+    bool isRepeatable() const {
+        return kind == Kind::VideoFile || kind == Kind::Slideshow;
+    }
+    /// Has a finite timeline that can be scrubbed.
+    bool isSeekable() const {
+        return kind == Kind::VideoFile;
+    }
+    /// Play/pause is meaningful (static images and canvases have no motion;
+    /// live sources freeze on the current frame).
+    bool isPausable() const {
+        return kind != Kind::Image && kind != Kind::Canvas;
+    }
+    /// Playback rate can be changed.
+    bool hasSpeedControl() const {
+        return kind == Kind::VideoFile;
+    }
 };

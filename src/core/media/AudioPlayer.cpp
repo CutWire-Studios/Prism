@@ -99,6 +99,16 @@ void AudioPlayer::resume() {
 
 bool AudioPlayer::seek(double seconds) {
     m_residualBuffer.clear();
+    // Drop the audio already queued inside the sink — otherwise up to
+    // bufferSize (~200 ms) of pre-seek sound plays out first and the track
+    // stays audibly behind the video from then on.
+    if (m_sink) {
+        const bool wasSuspended = (m_sink->state() == QAudio::SuspendedState);
+        m_sink->reset();
+        m_outputDevice = m_sink->start();
+        if (wasSuspended)
+            m_sink->suspend();
+    }
     const double targetAudioTime = seconds - (m_delayMs / 1000.0);
     if (targetAudioTime < 0.0) {
         m_silenceBytesPending = static_cast<qint64>(-targetAudioTime * AudioDecoder::kOutputSampleRate * AudioDecoder::kOutputChannels * sizeof(float));

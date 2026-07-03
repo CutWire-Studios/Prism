@@ -18,9 +18,8 @@ class QGraphicsView;
 class NodeItemBase;
 
 enum class AudioPlaybackMode {
-    DeckAOnly = 0,
-    DeckBOnly = 1,
-    Always = 2
+    Always = 0,       // play while the clip is on either deck
+    ActiveDeck = 1    // play only while the clip's deck is the active (crossfader) side
 };
 
 struct MasterAudioInputSettings {

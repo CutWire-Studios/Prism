@@ -265,29 +265,32 @@
                  <string notr="true">font-size: 10px;</string>
                 </property>
                 <property name="text">
-                 <string>Speed:</string>
+                 <string>Speed: 1.00x</string>
                 </property>
                </widget>
               </item>
               <item>
-               <widget class="QSpinBox" name="aDeckSpeedSpinBox">
-                <property name="maximumSize">
-                 <size>
-                  <width>80</width>
-                  <height>16777215</height>
-                 </size>
-                </property>
-                <property name="suffix">
-                 <string>%</string>
+               <widget class="QSlider" name="aDeckSpeedSlider">
+                <property name="toolTip">
+                 <string>Playback speed (0.25x – 4.00x)</string>
                 </property>
                 <property name="minimum">
-                 <number>-200</number>
+                 <number>5</number>
                 </property>
                 <property name="maximum">
-                 <number>200</number>
+                 <number>80</number>
+                </property>
+                <property name="singleStep">
+                 <number>1</number>
+                </property>
+                <property name="pageStep">
+                 <number>5</number>
                 </property>
                 <property name="value">
-                 <number>100</number>
+                 <number>20</number>
+                </property>
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
                 </property>
                </widget>
               </item>
@@ -516,26 +519,32 @@ Split 4-Corner: split into 4 quadrants sliding outwards
                 <string notr="true">font-size: 10px;</string>
                </property>
                <property name="text">
-                <string>Time (s):</string>
+                <string>Time: 1.00 s</string>
                </property>
               </widget>
              </item>
              <item>
-              <widget class="QDoubleSpinBox" name="durationSpin">
-               <property name="styleSheet">
-                <string notr="true">font-size: 10px; background-color: #1e1e1e; color: #fff;</string>
+              <widget class="QSlider" name="durationSlider">
+               <property name="toolTip">
+                <string>Transition time (0 – 1 second)</string>
                </property>
                <property name="minimum">
-                <double>0.100000000000000</double>
+                <number>0</number>
                </property>
                <property name="maximum">
-                <double>10.000000000000000</double>
+                <number>100</number>
                </property>
                <property name="singleStep">
-                <double>0.100000000000000</double>
+                <number>5</number>
+               </property>
+               <property name="pageStep">
+                <number>10</number>
                </property>
                <property name="value">
-                <double>1.000000000000000</double>
+                <number>100</number>
+               </property>
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
                </property>
               </widget>
              </item>
@@ -805,29 +814,32 @@ Split 4-Corner: split into 4 quadrants sliding outwards
                  <string notr="true">font-size: 10px;</string>
                 </property>
                 <property name="text">
-                 <string>Speed:</string>
+                 <string>Speed: 1.00x</string>
                 </property>
                </widget>
               </item>
               <item>
-               <widget class="QSpinBox" name="bDeckSpeedSpinBox">
-                <property name="maximumSize">
-                 <size>
-                  <width>80</width>
-                  <height>16777215</height>
-                 </size>
-                </property>
-                <property name="suffix">
-                 <string>%</string>
+               <widget class="QSlider" name="bDeckSpeedSlider">
+                <property name="toolTip">
+                 <string>Playback speed (0.25x – 4.00x)</string>
                 </property>
                 <property name="minimum">
-                 <number>-200</number>
+                 <number>5</number>
                 </property>
                 <property name="maximum">
-                 <number>200</number>
+                 <number>80</number>
+                </property>
+                <property name="singleStep">
+                 <number>1</number>
+                </property>
+                <property name="pageStep">
+                 <number>5</number>
                 </property>
                 <property name="value">
-                 <number>100</number>
+                 <number>20</number>
+                </property>
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
                 </property>
                </widget>
               </item>

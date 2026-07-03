@@ -763,7 +763,7 @@ QString RemoteControlServer::getWebPageHtml() const {
                         </select>
                     </div>
                     <div>
-                        <input type="number" id="durationSpin" class="input-style" min="0.1" max="10" step="0.1" value="1.0" onchange="setDuration(this.value)">
+                        <input type="number" id="durationSpin" class="input-style" min="0" max="1" step="0.05" value="1.0" onchange="setDuration(this.value)">
                     </div>
                 </div>
             </div>
@@ -868,7 +868,7 @@ QString RemoteControlServer::getWebPageHtml() const {
                 }
 
                 if (data.transitionDuration !== undefined && document.activeElement !== durationSpin) {
-                    durationSpin.value = data.transitionDuration.toFixed(1);
+                    durationSpin.value = data.transitionDuration.toFixed(2);
                 }
 
                 if (data.transitionModes) {

@@ -44,11 +44,16 @@ QIcon MaterialSymbols::icon(const char *name, int size, const QColor &color) {
     return QIcon(pixmap(name, size, color));
 }
 
-void MaterialSymbols::setIconText(QAbstractButton *button, const char *name, int pixelSize) {
+void MaterialSymbols::setIconText(QAbstractButton *button, const char *name, int pixelSize,
+                                  const QColor &color) {
     if (!button)
         return;
-    button->setFont(font(pixelSize));
-    button->setText(QString::fromUtf8(name));
+    // Rendered as a QIcon rather than ligature text: the app stylesheet's font
+    // rules (e.g. QPushButton { font-size: … }) override a font set with
+    // setFont(), which breaks the glyph size and rendering.
+    button->setText(QString());
+    button->setIcon(icon(name, pixelSize, color));
+    button->setIconSize(QSize(pixelSize, pixelSize));
 }
 
 void MaterialSymbols::setLabelText(QLabel *label, const char *name, int pixelSize) {
@@ -59,7 +64,8 @@ void MaterialSymbols::setLabelText(QLabel *label, const char *name, int pixelSiz
 }
 
 void MaterialSymbols::setPlayPause(QAbstractButton *button, bool playing, int pixelSize) {
-    setIconText(button, playing ? Names::Pause : Names::PlayArrow, pixelSize);
+    setIconText(button, playing ? Names::Pause : Names::PlayArrow, pixelSize,
+                QColor("#e0e0e0"));
 }
 
 void MaterialSymbols::setActionIcon(QAction *action, const char *name, int size,

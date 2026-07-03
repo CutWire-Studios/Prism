@@ -24,12 +24,29 @@
     </widget>
    </item>
    <item row="0" column="1">
-    <widget class="QSpinBox" name="volumeSpin">
-     <property name="suffix"><string>%</string></property>
-     <property name="minimum"><number>0</number></property>
-     <property name="maximum"><number>100</number></property>
-     <property name="value"><number>100</number></property>
-    </widget>
+    <layout class="QHBoxLayout" name="volumeRow">
+     <property name="spacing"><number>8</number></property>
+     <item>
+      <widget class="QSlider" name="volumeSlider">
+       <property name="minimum"><number>0</number></property>
+       <property name="maximum"><number>100</number></property>
+       <property name="value"><number>100</number></property>
+       <property name="orientation"><enum>Qt::Horizontal</enum></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="volumeValueLabel">
+       <property name="minimumSize">
+        <size>
+         <width>40</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="text"><string>100%</string></property>
+       <property name="alignment"><set>Qt::AlignRight|Qt::AlignVCenter</set></property>
+      </widget>
+     </item>
+    </layout>
    </item>
    <item row="1" column="0" colspan="2">
     <widget class="QCheckBox" name="mutedCheck">
@@ -44,13 +61,10 @@
    <item row="2" column="1">
     <widget class="QComboBox" name="modeCombo">
      <item>
-      <property name="text"><string>Play only when Deck A is active</string></property>
+      <property name="text"><string>Always play (while on either deck)</string></property>
      </item>
      <item>
-      <property name="text"><string>Play only when Deck B is active</string></property>
-     </item>
-     <item>
-      <property name="text"><string>Continue playing disregards active track</string></property>
+      <property name="text"><string>Play when its deck is active</string></property>
      </item>
     </widget>
    </item>

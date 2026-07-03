@@ -49,9 +49,13 @@ public:
     void releaseAllMasterAudioInputs();
 
     // ── UI state ─────────────────────────────────────────────────────────────
-    void updateDeckUI(bool deckA, const QString &name, bool hasTimeline,
+    void updateDeckUI(bool deckA, const QString &name, const SourceDescriptor &desc,
                       QSlider *progressSlider, QPushButton *playBtn,
                       QLabel *selectedLabel, QLabel *timeLabel);
+
+    // ── Playback speed (per deck, applied to video pacing and audio) ────────
+    void   setDeckSpeed(bool deckA, double speed);
+    double deckSpeed(bool deckA) const { return deckA ? m_speedA : m_speedB; }
 
     // ── Active node IDs ──────────────────────────────────────────────────────
     NodeId activeNodeA() const { return m_aClipNodeId; }
@@ -78,6 +82,8 @@ private:
     NodeId m_bClipNodeId = 0;
     double m_lastTimeA   = 0.0;
     double m_lastTimeB   = 0.0;
+    double m_speedA      = 1.0;
+    double m_speedB      = 1.0;
 
     std::unique_ptr<AudioPlayer> m_audioPlayerA;
     std::unique_ptr<AudioPlayer> m_audioPlayerB;

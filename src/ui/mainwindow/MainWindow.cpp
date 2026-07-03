@@ -90,6 +90,13 @@ MainWindow::MainWindow(QWidget *parent)
     MaterialSymbols::setPlayPause(ui->aDeckPlayBtn, false, 22);
     MaterialSymbols::setPlayPause(ui->bDeckPlayBtn, false, 22);
 
+    // Deck transport controls stay hidden until a clip that supports them is
+    // assigned (pushDecks / assignNodeToDeck toggle them per capability).
+    for (QWidget *w : std::initializer_list<QWidget *>{
+             ui->aProgressSlider, ui->aDeckPlayBtn, ui->aDeckSpeedSlider, ui->speedLabelALabel,
+             ui->bProgressSlider, ui->bDeckPlayBtn, ui->bDeckSpeedSlider, ui->speedLabelBLabel})
+        w->setVisible(false);
+
     const RecordingOptions recOpts = RecordingSettingsDialog::loadSavedOptions();
 
     m_outputWindow = new OutputWindow();
@@ -187,7 +194,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_transitionCtrl = new TransitionController(
         m_outputWindow->videoWidget(),
         ui->transitionCombo,
-        ui->durationSpin,
+        ui->durationSlider,
         ui->autoBtn,
         ui->cutBtn,
         ui->crossfaderSlider,
@@ -603,12 +610,16 @@ void MainWindow::setupConnections() {
     // Deck controls
     connect(ui->aDeckPlayBtn,      &QPushButton::clicked,  this, &MainWindow::onADeckPlayClicked);
     connect(ui->bDeckPlayBtn,      &QPushButton::clicked,  this, &MainWindow::onBDeckPlayClicked);
-    connect(ui->aDeckSpeedSpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
+    connect(ui->aDeckSpeedSlider, &QSlider::valueChanged,
             this, &MainWindow::onADeckSpeedChanged);
-    connect(ui->bDeckSpeedSpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
+    connect(ui->bDeckSpeedSlider, &QSlider::valueChanged,
             this, &MainWindow::onBDeckSpeedChanged);
     connect(ui->crossfaderSlider, &QSlider::valueChanged,
             this, &MainWindow::onCrossfaderMoved);
+    connect(ui->durationSlider, &QSlider::valueChanged, this, [this](int value) {
+        ui->durationLabel->setText(
+            tr("Time: %1 s").arg(value / 100.0, 0, 'f', 2));
+    });
 
     connect(ui->panicBlackoutBtn,   &QPushButton::toggled, this, &MainWindow::onPanicBlackoutClicked);
     connect(ui->panicPauseBtn,      &QPushButton::toggled, this, &MainWindow::onPanicPauseClicked);
@@ -893,16 +904,26 @@ void MainWindow::pushDecks() {
         QString &curBase = deckA ? m_deckBaseA : m_deckBaseB;
         QStringList &curOv = deckA ? m_deckOverlaysA : m_deckOverlaysB;
 
+        QSlider *speedSlider = deckA ? ui->aDeckSpeedSlider : ui->bDeckSpeedSlider;
+        QLabel  *speedLabel  = deckA ? ui->speedLabelALabel : ui->speedLabelBLabel;
+
         if (stream.layers.isEmpty()) {
             if (deckA) { out->clearDeckA(); m_deckController->setActiveNodeA(0); }
             else       { out->clearDeckB(); m_deckController->setActiveNodeB(0); }
             m_deckController->stopDeckAudio(deckA);
+            slider->setVisible(false);
+            playBtn->setVisible(false);
+            speedSlider->setVisible(false);
+            speedLabel->setVisible(false);
             curBase.clear(); curOv.clear();
             return;
         }
         const ResolvedLayer base = stream.layers.first();
         ClipNodeModel *node = m_clipNodeEditor->nodeAt(base.inputNodeId);
         if (!node) return;
+        const bool speedControl = node->sourceDescriptor().hasSpeedControl();
+        speedSlider->setVisible(speedControl);
+        speedLabel->setVisible(speedControl);
 
         auto applyBase = [&]() {
             if (deckA) {
@@ -929,7 +950,7 @@ void MainWindow::pushDecks() {
         };
         auto refreshUI = [&]() {
             m_deckController->updateDeckUI(deckA, node->sourceName(),
-                node->sourceDescriptor().kind == SourceDescriptor::Kind::VideoFile,
+                node->sourceDescriptor(),
                 slider, playBtn, selLabel, timeLabel);
         };
 
@@ -1013,11 +1034,15 @@ void MainWindow::onBDeckPlayClicked() {
 }
 
 void MainWindow::onADeckSpeedChanged(int value) {
-    qDebug() << "A Deck Speed:" << value << "%";
+    const double speed = value * 0.05;
+    ui->speedLabelALabel->setText(tr("Speed: %1x").arg(speed, 0, 'f', 2));
+    m_deckController->setDeckSpeed(true, speed);
 }
 
 void MainWindow::onBDeckSpeedChanged(int value) {
-    qDebug() << "B Deck Speed:" << value << "%";
+    const double speed = value * 0.05;
+    ui->speedLabelBLabel->setText(tr("Speed: %1x").arg(speed, 0, 'f', 2));
+    m_deckController->setDeckSpeed(false, speed);
 }
 
 void MainWindow::syncPanicButtons(QPushButton *activeBtn) {
@@ -1562,7 +1587,7 @@ void MainWindow::onSessionLoaded() {
     // Restore crossfader + transition settings.
     ui->crossfaderSlider->setValue(m_sessionManager->restoredCrossfader());
     ui->transitionCombo->setCurrentIndex(m_sessionManager->restoredTransitionMode());
-    ui->durationSpin->setValue(m_sessionManager->restoredTransitionDuration());
+    m_transitionCtrl->setTransitionDuration(m_sessionManager->restoredTransitionDuration());
 
     // Re-assign active decks.
     const NodeId savedA = m_sessionManager->restoredActiveNodeA();

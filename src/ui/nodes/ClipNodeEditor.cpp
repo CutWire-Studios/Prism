@@ -386,9 +386,8 @@ public:
             p->setFont(QFont("Monospace", 7));
             QString modeStr;
             switch (m_playbackMode) {
-            case AudioPlaybackMode::DeckAOnly: modeStr = "Deck A"; break;
-            case AudioPlaybackMode::DeckBOnly: modeStr = "Deck B"; break;
-            case AudioPlaybackMode::Always:    modeStr = "Always"; break;
+            case AudioPlaybackMode::Always:     modeStr = "Always"; break;
+            case AudioPlaybackMode::ActiveDeck: modeStr = "On Active"; break;
             }
             const QString label = QString("Audio  Vol:%1%  %2\n%3  Delay:%4ms")
                 .arg(m_volume)
@@ -3081,12 +3080,16 @@ void ClipNodeEditor::onEditClipAudio(NodeId clipId) {
     QDialog dialog(this);
     Ui::AudioNodeDialog ui;
     ui.setupUi(&dialog);
-    ui.volumeSpin->setValue(clip->volume());
+    ui.volumeSlider->setValue(clip->volume());
+    ui.volumeValueLabel->setText(QStringLiteral("%1%").arg(clip->volume()));
+    connect(ui.volumeSlider, &QSlider::valueChanged, &dialog, [&ui](int v) {
+        ui.volumeValueLabel->setText(QStringLiteral("%1%").arg(v));
+    });
     ui.mutedCheck->setChecked(clip->muted());
     ui.modeCombo->setCurrentIndex((int)clip->playbackMode());
     ui.delaySpin->setValue(clip->delayMs());
     if (dialog.exec() == QDialog::Accepted) {
-        clip->setVolume(ui.volumeSpin->value());
+        clip->setVolume(ui.volumeSlider->value());
         clip->setMuted(ui.mutedCheck->isChecked());
         clip->setPlaybackMode((AudioPlaybackMode)ui.modeCombo->currentIndex());
         clip->setDelayMs(ui.delaySpin->value());
@@ -3189,7 +3192,7 @@ static QJsonObject layerSlotToJson(const LayerSlot &s) {
 
 QJsonObject ClipNodeEditor::saveState(const QDir &sessionDir) const {
     QJsonObject root;
-    root["graphVersion"] = 2;
+    root["graphVersion"] = 3;
     root["nextId"] = (qint64)m_nextId;
     root["deckAInput"] = (qint64)m_deckAInput;
     root["deckBInput"] = (qint64)m_deckBInput;
@@ -3418,6 +3421,8 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         return;
     }
 
+    const int graphVersion = state.value("graphVersion").toInt(0);
+
     for (const auto &val : state["inputNodes"].toArray()) {
         const QJsonObject obj = val.toObject();
         const NodeId clipId = (NodeId)obj["id"].toInteger();
@@ -3429,11 +3434,20 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         const bool hasShaderAudioIn = (desc.kind == SourceDescriptor::Kind::Shader);
         const bool hasDataIn = (desc.kind == SourceDescriptor::Kind::Text);
 
+        // Version 2 stored {0 = Deck A only, 1 = Deck B only, 2 = Always};
+        // version 3 stores {0 = Always, 1 = Active deck}.
+        int storedMode = obj["audioPlaybackMode"].toInt((int)AudioPlaybackMode::Always);
+        AudioPlaybackMode mode;
+        if (graphVersion < 3)
+            mode = (storedMode == 2) ? AudioPlaybackMode::Always : AudioPlaybackMode::ActiveDeck;
+        else
+            mode = (storedMode == 1) ? AudioPlaybackMode::ActiveDeck : AudioPlaybackMode::Always;
+
         auto *model = new ClipNodeModel(this);
         auto *nodeItem = new ClipNodeItem(model, id, hasAudio, hasShaderAudioIn, hasDataIn,
                                           obj["audioVolume"].toInt(100),
                                           obj["audioMuted"].toBool(false),
-                                          (AudioPlaybackMode)obj["audioPlaybackMode"].toInt((int)AudioPlaybackMode::Always),
+                                          mode,
                                           obj["audioDelayMs"].toInt(0));
         nodeItem->setPos(obj["posX"].toDouble(), obj["posY"].toDouble());
         m_scene->addItem(nodeItem);

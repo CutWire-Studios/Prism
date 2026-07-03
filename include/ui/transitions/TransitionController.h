@@ -4,7 +4,6 @@
 #include "ui/canvas/VideoWidget.h"
 
 class QComboBox;
-class QDoubleSpinBox;
 class QPushButton;
 class QSlider;
 class QVariantAnimation;
@@ -14,9 +13,10 @@ class QVariantAnimation;
 class TransitionController : public QObject {
     Q_OBJECT
 public:
+    /// durationSlider holds hundredths of a second (0–100 = 0–1 s).
     explicit TransitionController(VideoWidget *videoWidget,
                                   QComboBox   *transitionCombo,
-                                  QDoubleSpinBox *durationSpin,
+                                  QSlider     *durationSlider,
                                   QPushButton *autoBtn,
                                   QPushButton *cutBtn,
                                   QSlider     *crossfaderSlider,
@@ -45,7 +45,7 @@ public slots:
 private:
     VideoWidget    *m_videoWidget;
     QComboBox      *m_transitionCombo;
-    QDoubleSpinBox *m_durationSpin;
+    QSlider        *m_durationSlider;
     QPushButton    *m_autoBtn;
     QPushButton    *m_cutBtn;
     QSlider        *m_crossfaderSlider;

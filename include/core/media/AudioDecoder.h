@@ -9,6 +9,9 @@ extern "C" {
 #include <libswresample/swresample.h>
 }
 
+struct AVFilterGraph;
+struct AVFilterContext;
+
 /// FFmpeg audio-file decoder. Resamples any input to interleaved 44.1 kHz
 /// stereo float PCM, handed out one chunk at a time (used by AudioPlayer and
 /// AudioAnalyzer).
@@ -28,7 +31,16 @@ public:
     bool decodeNextChunk(QByteArray &outChunk);
     bool atEnd() const { return m_eof; }
 
+    /// Time-stretch via FFmpeg's atempo filter: the media plays `speed`× faster
+    /// or slower with the pitch preserved.
+    void setPlaybackSpeed(double speed);
+    double playbackSpeed() const { return m_speed; }
+
 private:
+    bool initResampler();
+    bool initFilterGraph();
+    void freeFilterGraph();
+
     AVFormatContext *m_formatCtx = nullptr;
     AVCodecContext *m_codecCtx = nullptr;
     SwrContext *m_swrCtx = nullptr;
@@ -38,4 +50,15 @@ private:
     int m_audioStreamIndex = -1;
     bool m_sentFlushPacket = false;
     bool m_eof = false;
+    // av_seek_frame lands on the packet before the target; the first decoded
+    // frames are trimmed to this time so seeks are sample-accurate.
+    double m_seekTrimTarget = -1.0;
+
+    // atempo time-stretch graph, present only while m_speed != 1.0.
+    AVFilterGraph *m_filterGraph = nullptr;
+    AVFilterContext *m_filterSrc = nullptr;
+    AVFilterContext *m_filterSink = nullptr;
+    AVFrame *m_filtFrame = nullptr;
+    bool m_filterFlushed = false;
+    double m_speed = 1.0;   // persists across open/close
 };

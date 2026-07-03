@@ -68,6 +68,20 @@ void DeckController::swapDeckAudio() {
     std::swap(m_audioPlayerA, m_audioPlayerB);
     std::swap(m_aClipNodeId, m_bClipNodeId);
     std::swap(m_lastTimeA, m_lastTimeB);
+    // Speed belongs to the deck, not the clip: the swapped players adopt their
+    // new deck's rate.
+    if (m_audioPlayerA) m_audioPlayerA->setSpeed(m_speedA);
+    if (m_audioPlayerB) m_audioPlayerB->setSpeed(m_speedB);
+}
+
+void DeckController::setDeckSpeed(bool deckA, double speed) {
+    (deckA ? m_speedA : m_speedB) = speed;
+    m_outputWindow->videoWidget()->setDeckSpeed(deckA, speed);
+    const NodeId nodeId = deckA ? m_aClipNodeId : m_bClipNodeId;
+    // Re-seek the audio to the video position so both resume in sync at the
+    // new rate.
+    if (nodeId)
+        applyAudioControllerToDeck(deckA, nodeId, true);
 }
 
 void DeckController::releaseAllMasterAudioInputs() {
@@ -148,6 +162,7 @@ void DeckController::updateDeckAudio(bool deckA, NodeId clipId, const ClipNodeMo
     const bool deviceChanged = (player->outputDeviceId() != outputDeviceId);
     player->setOutputDeviceId(outputDeviceId);
     player->setDelayMs(audioDelayMs);
+    player->setSpeed(deckA ? m_speedA : m_speedB);
 
     const QString &path = node->sourceDescriptor().path;
     // A device change requires re-creating the sink, so restart at the current
@@ -165,10 +180,11 @@ void DeckController::updateDeckAudio(bool deckA, NodeId clipId, const ClipNodeMo
     auto *out = m_outputWindow->videoWidget();
     const float mixB = out->crossfade();
 
+    // ActiveDeck: fade with the crossfader so the clip is only audible while
+    // its own deck is the active side. Always: full volume on either deck.
     float volumeFactor = 1.0f;
-    if      (playbackMode == AudioPlaybackMode::DeckAOnly) volumeFactor = 1.0f - mixB;
-    else if (playbackMode == AudioPlaybackMode::DeckBOnly) volumeFactor = mixB;
-    else                                                   volumeFactor = 1.0f;
+    if (playbackMode == AudioPlaybackMode::ActiveDeck)
+        volumeFactor = deckA ? (1.0f - mixB) : mixB;
 
     player->setVolumePercent(volume);
     player->setCrossfadeFactor(volumeFactor);
@@ -235,13 +251,16 @@ void DeckController::refreshTextDataForActiveDecks() {
 
 // ── Deck assignment ───────────────────────────────────────────────────────────
 
-void DeckController::updateDeckUI(bool deckA, const QString &name, bool hasTimeline,
+void DeckController::updateDeckUI(bool deckA, const QString &name,
+                                   const SourceDescriptor &desc,
                                    QSlider *progressSlider, QPushButton *playBtn,
                                    QLabel *selectedLabel, QLabel *timeLabel) {
     selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", name));
-    progressSlider->setEnabled(hasTimeline);
-    playBtn->setEnabled(true);
-    if (!hasTimeline) {
+    progressSlider->setVisible(desc.isSeekable());
+    progressSlider->setEnabled(desc.isSeekable());
+    playBtn->setVisible(desc.isPausable());
+    playBtn->setEnabled(desc.isPausable());
+    if (!desc.isSeekable()) {
         progressSlider->setValue(0);
         timeLabel->setText("—");
     }
@@ -251,6 +270,11 @@ void DeckController::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool d
                                        QSlider *progressSlider, QPushButton *playBtn,
                                        QLabel *selectedLabel, QLabel *timeLabel) {
     if (!node) return;
+
+    // Record which node feeds the deck so later audio updates (seek, play/pause,
+    // crossfade, loop restart) can find it again.
+    if (deckA) m_aClipNodeId = nodeId;
+    else       m_bClipNodeId = nodeId;
 
     using Kind = SourceDescriptor::Kind;
     const SourceDescriptor &desc = node->sourceDescriptor();
@@ -285,8 +309,10 @@ void DeckController::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool d
         double dur = deckA ? out->getDurationA() : out->getDurationB();
         progressSlider->setRange(0, 1000);
         progressSlider->setValue(0);
-        progressSlider->setEnabled(desc.kind == Kind::VideoFile && dur > 0);
-        playBtn->setEnabled(true);
+        progressSlider->setVisible(desc.isSeekable());
+        progressSlider->setEnabled(desc.isSeekable() && dur > 0);
+        playBtn->setVisible(desc.isPausable());
+        playBtn->setEnabled(desc.isPausable());
         selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
         timeLabel->setText(formatTimeShort(node->startTime()) + " / " + formatTimeShort(dur));
         return;
@@ -312,9 +338,9 @@ void DeckController::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool d
             out->setSourceB(std::move(src));
             if (desc.kind != Kind::Canvas) out->playB();
         }
-        bool canPlay = (desc.kind != Kind::Canvas);
-        progressSlider->setEnabled(false);
-        playBtn->setEnabled(canPlay);
+        progressSlider->setVisible(false);
+        playBtn->setVisible(desc.isPausable());
+        playBtn->setEnabled(desc.isPausable());
         selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
         if (desc.kind == Kind::Canvas)
             timeLabel->setText(QString("%1x%2").arg(desc.canvasWidth).arg(desc.canvasHeight));

@@ -55,6 +55,10 @@ public:
 
     void setRepeatA(bool repeat) { m_repeatA = repeat; }
     void setRepeatB(bool repeat) { m_repeatB = repeat; }
+
+    // Playback rate for the deck's wall-clock pacing (1.0 = normal).
+    void   setDeckSpeed(bool deckA, double speed);
+    double deckSpeed(bool deckA) const { return deckA ? m_speedA : m_speedB; }
     void setTrimPointsA(double startSec, double endSec);
     void setTrimPointsB(double startSec, double endSec);
 
@@ -257,6 +261,7 @@ private:
     QElapsedTimer m_playClockA, m_playClockB;
     double m_clockAnchorA = 0.0, m_clockAnchorB = 0.0;
     bool   m_clockDirtyA = true, m_clockDirtyB = true;
+    double m_speedA = 1.0, m_speedB = 1.0;
 
     // Crop: normalised [0, 1]
     float m_cropXA = 0.f, m_cropYA = 0.f, m_cropWA = 1.f, m_cropHA = 1.f;

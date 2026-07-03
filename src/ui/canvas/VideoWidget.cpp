@@ -783,6 +783,14 @@ void VideoWidget::stop() {
     m_playingB = false;
 }
 
+void VideoWidget::setDeckSpeed(bool deckA, double speed) {
+    if (speed <= 0.0) speed = 1.0;
+    // Re-anchor the play clock so already-elapsed time isn't re-scaled by the
+    // new rate (which would jump the position).
+    if (deckA) { m_speedA = speed; m_clockDirtyA = true; }
+    else       { m_speedB = speed; m_clockDirtyB = true; }
+}
+
 void VideoWidget::seekA(double seconds) {
     if (!m_sourceA || !m_sourceA->isReady()) return;
     m_clockDirtyA = true;
@@ -860,7 +868,11 @@ void VideoWidget::swapDeckContents() {
     swap(m_trimEndA, m_trimEndB);
     swap(m_playClockA, m_playClockB);
     swap(m_clockAnchorA, m_clockAnchorB);
-    swap(m_clockDirtyA, m_clockDirtyB);
+    // Speed is a deck property and does not swap with the content; re-anchor
+    // both clocks so accumulated elapsed time isn't re-scaled by the other
+    // deck's rate.
+    m_clockDirtyA = true;
+    m_clockDirtyB = true;
     swap(m_cropXA, m_cropXB); swap(m_cropYA, m_cropYB);
     swap(m_cropWA, m_cropWB); swap(m_cropHA, m_cropHB);
     swap(m_flipHA, m_flipHB); swap(m_flipVA, m_flipVB);
@@ -1308,7 +1320,8 @@ bool VideoWidget::advanceDeckPaced(bool deckA) {
         dirty = false;
     }
 
-    double desired = anchor + clock.elapsed() / 1000.0;
+    const double speed = deckA ? m_speedA : m_speedB;
+    double desired = anchor + clock.elapsed() / 1000.0 * speed;
     const double endLimit = (trimEnd > 0) ? trimEnd : dur;
 
     if (endLimit > 0 && desired >= endLimit) {

@@ -140,7 +140,8 @@ void ClipCard::loadClip(const QString &path, const QPixmap &thumbnail) {
     ui->titleLabel->setText(fm.elidedText(m_sourceDesc.displayName, Qt::ElideRight, 108));
     ui->titleLabel->setToolTip(m_sourceDesc.displayName);
 
-    ui->repeatBtn->setEnabled(true);
+    ui->repeatBtn->setVisible(m_sourceDesc.isRepeatable());
+    ui->repeatBtn->setEnabled(m_sourceDesc.isRepeatable());
     ui->editBtn->setEnabled(true);
     ui->aBtn->setEnabled(true);
     ui->bBtn->setEnabled(true);
@@ -187,8 +188,10 @@ void ClipCard::loadSource(const SourceDescriptor &desc, const QPixmap &thumbnail
         tip += tr("\nOBS scene: %1").arg(desc.obsSceneName);
     ui->titleLabel->setToolTip(tip);
 
-    // Repeat only makes sense for slideshows; edit available for all non-empty sources.
-    ui->repeatBtn->setEnabled(desc.kind == SourceDescriptor::Kind::Slideshow);
+    // Repeat only makes sense for videos and slideshows; edit is available for
+    // all non-empty sources.
+    ui->repeatBtn->setVisible(desc.isRepeatable());
+    ui->repeatBtn->setEnabled(desc.isRepeatable());
     ui->editBtn->setEnabled(true);
     ui->aBtn->setEnabled(true);
     ui->bBtn->setEnabled(true);
@@ -203,6 +206,7 @@ void ClipCard::clearClip() {
     ui->thumbnailBtn->setText("Empty");
     ui->titleLabel->setText("—");
     ui->titleLabel->setToolTip({});
+    ui->repeatBtn->setVisible(false);
     ui->repeatBtn->setEnabled(false);
     ui->editBtn->setEnabled(false);
     ui->aBtn->setEnabled(false);

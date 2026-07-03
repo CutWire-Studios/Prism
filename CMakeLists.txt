@@ -39,7 +39,7 @@ else()
 endif()
 
 # FFmpeg
-find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat avutil swscale swresample)
+find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat avutil swscale swresample avfilter)
 
 include(FetchContent)
 find_package(kissfft CONFIG QUIET COMPONENTS float STATIC)

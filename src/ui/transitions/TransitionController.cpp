@@ -1,6 +1,5 @@
 #include "ui/transitions/TransitionController.h"
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QSlider>
 #include <QVariantAnimation>
@@ -8,7 +7,7 @@
 
 TransitionController::TransitionController(VideoWidget    *videoWidget,
                                            QComboBox      *transitionCombo,
-                                           QDoubleSpinBox *durationSpin,
+                                           QSlider        *durationSlider,
                                            QPushButton    *autoBtn,
                                            QPushButton    *cutBtn,
                                            QSlider        *crossfaderSlider,
@@ -16,7 +15,7 @@ TransitionController::TransitionController(VideoWidget    *videoWidget,
     : QObject(parent)
     , m_videoWidget(videoWidget)
     , m_transitionCombo(transitionCombo)
-    , m_durationSpin(durationSpin)
+    , m_durationSlider(durationSlider)
     , m_autoBtn(autoBtn)
     , m_cutBtn(cutBtn)
     , m_crossfaderSlider(crossfaderSlider)
@@ -34,7 +33,7 @@ void TransitionController::shutdown() {
         m_animation = nullptr;
     }
     m_transitionCombo = nullptr;
-    m_durationSpin = nullptr;
+    m_durationSlider = nullptr;
     m_autoBtn = nullptr;
     m_cutBtn = nullptr;
     m_crossfaderSlider = nullptr;
@@ -61,7 +60,7 @@ int TransitionController::currentModeIndex() const {
 }
 
 double TransitionController::currentDurationSecs() const {
-    return m_durationSpin ? m_durationSpin->value() : 1.0;
+    return m_durationSlider ? m_durationSlider->value() / 100.0 : 1.0;
 }
 
 void TransitionController::onTransitionModeChanged(int index) {
@@ -133,8 +132,8 @@ void TransitionController::setTransitionModeIndex(int index) {
 }
 
 void TransitionController::setTransitionDuration(double secs) {
-    if (m_durationSpin) {
-        m_durationSpin->setValue(secs);
+    if (m_durationSlider) {
+        m_durationSlider->setValue(qRound(secs * 100.0));
     }
 }
 
