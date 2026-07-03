@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <RCC>
     <qresource prefix="/">
+        <file>Prism_icon.png</file>
         <file>fonts/MaterialSymbolsRounded-Regular.ttf</file>
         <file>styles/dark.qss</file>
         <file>shaders/neon_kaleidoscope.glsl</file>

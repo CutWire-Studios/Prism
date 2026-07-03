@@ -3,8 +3,10 @@
 #include <QIcon>
 #include <QTimer>
 #include <QtGlobal>
+#include <QThread>
 #include "ui/mainwindow/MainWindow.h"
 #include "ui/common/MaterialSymbols.h"
+#include "ui/mainwindow/PrismSplashScreen.h"
 
 extern "C" {
 #include <libavutil/log.h>
@@ -37,12 +39,7 @@ int main(int argc, char *argv[]) {
     // can be drawn directly without a GPU→CPU→GPU readback.
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 
-    // Resources are compiled into prism_core (static lib); register them here so
-    // :/… paths (shaders, HTML presets, Lua examples, etc.) resolve at runtime.
-    Q_INIT_RESOURCE(resources);
-
     QApplication app(argc, argv);
-    MaterialSymbols::init();
     app.setOrganizationName("Prism");
     app.setApplicationName("Prism");
     // Wayland compositors resolve the window icon by matching the surface's
@@ -53,8 +50,32 @@ int main(int argc, char *argv[]) {
     app.setWindowIcon(QIcon::fromTheme(QStringLiteral("org.cutwire.Prism")));
     app.setStyle("fusion");
 
+    // Initialize and show custom splash screen
+    PrismSplashScreen splash;
+    splash.show();
+    splash.setProgress(15, "Initializing video codecs...");
+    app.processEvents();
+    QThread::msleep(150);
+
+    // Resources are compiled into prism_core (static lib); register them here so
+    // :/… paths (shaders, HTML presets, Lua examples, etc.) resolve at runtime.
+    splash.setProgress(45, "Loading Material Symbols & resources...");
+    app.processEvents();
+    Q_INIT_RESOURCE(resources);
+    MaterialSymbols::init();
+    QThread::msleep(150);
+
+    splash.setProgress(75, "Constructing live media engine...");
+    app.processEvents();
     MainWindow window;
+    QThread::msleep(150);
+
+    splash.setProgress(100, "Starting interface...");
+    app.processEvents();
+    QThread::msleep(100);
+
     window.show();
+    splash.finish(&window);
 
     if (qEnvironmentVariableIsSet("PRISM_AUTO_QUIT_MS")) {
         const int ms = qEnvironmentVariableIntValue("PRISM_AUTO_QUIT_MS");
