@@ -65,6 +65,7 @@
 #include <QCloseEvent>
 #include <QStatusBar>
 #include <QFont>
+#include <QFrame>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -216,6 +217,7 @@ MainWindow::MainWindow(QWidget *parent)
     updateTimer->start(100);
 
     handleStartupRecovery();
+    updateCanvasStack();
 
     m_autosaveTimer = new QTimer(this);
     connect(m_autosaveTimer, &QTimer::timeout, this, &MainWindow::performAutosave);
@@ -229,57 +231,154 @@ MainWindow::MainWindow(QWidget *parent)
 void MainWindow::buildEmptyPlaceholder() {
     m_emptyPlaceholder = new QWidget();
     m_emptyPlaceholder->setObjectName("emptyPlaceholder");
-    m_emptyPlaceholder->setStyleSheet("#emptyPlaceholder { background-color: #141517; }");
     m_emptyPlaceholder->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_emptyPlaceholder->setStyleSheet(R"(
+        #emptyPlaceholder {
+            background-color: #242528;
+        }
+        #emptyCard {
+            background-color: #242528;
+            border: 1px solid #1c1d1f;
+            border-radius: 8px;
+        }
+        #emptyKicker {
+            color: #2a8fa0;
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            background: transparent;
+        }
+        #emptyTitle {
+            color: #E0E0E0;
+            font-size: 15px;
+            font-weight: bold;
+            background: transparent;
+        }
+        #emptySubtitle {
+            color: #aaaaaa;
+            font-size: 12px;
+            background: transparent;
+        }
+        #emptyHint {
+            color: #666666;
+            font-size: 11px;
+            background: transparent;
+        }
+        #emptyDivider {
+            background-color: #33363b;
+            border: none;
+            min-height: 1px;
+            max-height: 1px;
+        }
+        #emptyCard QPushButton#emptyAddBtn {
+            background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #3a6670, stop:1 #1f3d45);
+            color: #FFFFFF;
+            border-top: 1px solid #4a7f8c;
+            border-left: 1px solid #4a7f8c;
+            border-bottom: 1px solid #112226;
+            border-right: 1px solid #112226;
+            border-radius: 6px;
+            padding: 4px 12px;
+            font-weight: bold;
+            font-size: 10px;
+            min-height: 22px;
+            min-width: 120px;
+        }
+        #emptyCard QPushButton#emptyAddBtn:hover {
+            background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4a7f8c, stop:1 #2a5c66);
+        }
+        #emptyCard QPushButton#emptyAddBtn:pressed {
+            background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #15292e, stop:1 #2f545c);
+            border-top: 1px solid #0f1d21;
+            border-left: 1px solid #0f1d21;
+        }
+        #emptyCard QPushButton#emptyAddBtn::menu-indicator {
+            subcontrol-origin: padding;
+            subcontrol-position: right center;
+            right: 8px;
+        }
+    )");
 
-    auto *phLayout = new QVBoxLayout(m_emptyPlaceholder);
-    phLayout->setSpacing(20);
-    phLayout->setContentsMargins(40, 40, 40, 40);
+    auto *outer = new QVBoxLayout(m_emptyPlaceholder);
+    outer->setContentsMargins(24, 24, 24, 24);
+    outer->addStretch(1);
 
-    auto *phIcon = new QLabel(m_emptyPlaceholder);
-    MaterialSymbols::setLabelText(phIcon, MaterialSymbols::Names::Movie, 52);
-    phIcon->setAlignment(Qt::AlignCenter);
+    auto *centerRow = new QHBoxLayout();
+    centerRow->addStretch(1);
 
-    auto *phText = new QLabel(m_emptyPlaceholder);
-    phText->setAlignment(Qt::AlignCenter);
-    phText->setWordWrap(true);
-    phText->setText(
-        "<p style='font-size: 16px; font-weight: bold; color: #ccc; margin: 0 0 8px 0;'>Get Started with CutWire Prism</p>"
-        "<p style='font-size: 13px; color: #888; line-height: 1.4; margin: 0; max-width: 420px;'>"
-        "To begin, click the <b>Add Element</b> button below to load video files, import folders, or create live inputs like "
-        "Camera, Screen Capture, or Canvas. Then connect ports to construct your media flow.</p>"
-    );
+    auto *card = new QFrame(m_emptyPlaceholder);
+    card->setObjectName("emptyCard");
+    card->setFrameShape(QFrame::NoFrame);
+    card->setMaximumWidth(460);
 
-    // Build the "Add Element" popup button.
-    auto *phBtnRow = new QWidget(m_emptyPlaceholder);
-    auto *phBtns   = new QHBoxLayout(phBtnRow);
-    phBtns->setContentsMargins(0, 0, 0, 0);
-    phBtns->setAlignment(Qt::AlignCenter);
+    auto *cardLayout = new QVBoxLayout(card);
+    cardLayout->setContentsMargins(28, 24, 28, 24);
+    cardLayout->setSpacing(10);
+    cardLayout->setAlignment(Qt::AlignHCenter);
 
-    auto *phAddElementBtn = new QPushButton(tr("Add Element"), phBtnRow);
-    phAddElementBtn->setIcon(MaterialSymbols::icon(MaterialSymbols::Names::Add, 16));
-    phAddElementBtn->setObjectName("accentButton");
-    phAddElementBtn->setStyleSheet(
-        "QPushButton#accentButton {"
-        "  font-size: 13px;"
-        "  padding: 8px 28px 8px 20px;"
-        "  min-height: 32px; height: 32px;"
-        "}"
-        "QPushButton#accentButton::menu-indicator {"
-        "  subcontrol-origin: padding; subcontrol-position: right center; right: 8px;"
-        "}"
-    );
+    auto *kicker = new QLabel(tr("GET STARTED"), card);
+    kicker->setObjectName("emptyKicker");
+    kicker->setAlignment(Qt::AlignCenter);
 
-    QMenu *addMenu = new QMenu(phAddElementBtn);
+    auto *logo = new QLabel(card);
+    const QPixmap logoPx(QStringLiteral(":/Prism_icon.png"));
+    logo->setPixmap(logoPx.scaled(88, 88, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    logo->setAlignment(Qt::AlignCenter);
+
+    auto *title = new QLabel(tr("Get Started with CutWire Prism"), card);
+    title->setObjectName("emptyTitle");
+    title->setAlignment(Qt::AlignCenter);
+
+    auto *subtitle = new QLabel(
+        tr("To begin, click Add Element below to load video files, import folders, or create live inputs "
+           "like Camera, Screen Capture, or Canvas. Then connect ports to construct your media flow."),
+        card);
+    subtitle->setObjectName("emptySubtitle");
+    subtitle->setAlignment(Qt::AlignCenter);
+    subtitle->setWordWrap(true);
+
+    auto *divider = new QFrame(card);
+    divider->setObjectName("emptyDivider");
+    divider->setFrameShape(QFrame::HLine);
+    divider->setFixedHeight(1);
+
+    auto *addBtn = new QPushButton(tr("Add Element"), card);
+    addBtn->setObjectName("emptyAddBtn");
+    addBtn->setIcon(MaterialSymbols::icon(MaterialSymbols::Names::Add, 14, QColor("#FFFFFF")));
+    addBtn->setIconSize(QSize(14, 14));
+
+    QMenu *addMenu = new QMenu(addBtn);
     setupAddElementMenu(addMenu);
-    phAddElementBtn->setMenu(addMenu);
-    phBtns->addWidget(phAddElementBtn);
+    addBtn->setMenu(addMenu);
 
-    phLayout->addStretch(1);
-    phLayout->addWidget(phIcon);
-    phLayout->addWidget(phText, 0, Qt::AlignCenter);
-    phLayout->addWidget(phBtnRow);
-    phLayout->addStretch(1);
+    auto *hint = new QLabel(
+        tr("You can also drag media from the asset library on the left."),
+        card);
+    hint->setObjectName("emptyHint");
+    hint->setAlignment(Qt::AlignCenter);
+    hint->setWordWrap(true);
+
+    cardLayout->addWidget(kicker);
+    cardLayout->addWidget(logo, 0, Qt::AlignHCenter);
+    cardLayout->addWidget(title);
+    cardLayout->addWidget(subtitle);
+    cardLayout->addSpacing(2);
+    cardLayout->addWidget(divider);
+    cardLayout->addSpacing(2);
+    cardLayout->addWidget(addBtn, 0, Qt::AlignHCenter);
+    cardLayout->addWidget(hint);
+
+    centerRow->addWidget(card);
+    centerRow->addStretch(1);
+    outer->addLayout(centerRow);
+    outer->addStretch(1);
+}
+
+void MainWindow::updateCanvasStack() {
+    if (!m_stackWidget || !m_clipNodeEditor || !m_emptyPlaceholder)
+        return;
+    m_stackWidget->setCurrentWidget(
+        m_clipNodeEditor->isEmptyGraph() ? m_emptyPlaceholder : m_clipNodeEditor);
 }
 
 MainWindow::~MainWindow() {
@@ -792,7 +891,7 @@ void MainWindow::onClearAllClicked() {
     m_outputWindow->videoWidget()->clearDeckB();
     m_deckBaseA.clear(); m_deckOverlaysA.clear();
     m_deckBaseB.clear(); m_deckOverlaysB.clear();
-    m_stackWidget->setCurrentWidget(m_emptyPlaceholder);
+    updateCanvasStack();
 }
 
 // ── Element management ────────────────────────────────────────────────────────
@@ -1005,8 +1104,7 @@ void MainWindow::onNodeRemoveRequested(NodeId nodeId) {
     if (m_deckController->activeNodeB() == nodeId) { m_deckController->setActiveNodeB(0); out->clearDeckB(); m_deckBaseB.clear(); m_deckOverlaysB.clear(); }
     if (!m_deckController->activeNodeA()) m_deckController->stopDeckAudio(true);
     if (!m_deckController->activeNodeB()) m_deckController->stopDeckAudio(false);
-    if (m_clipNodeEditor->allNodes().isEmpty())
-        m_stackWidget->setCurrentWidget(m_emptyPlaceholder);
+    updateCanvasStack();
 }
 
 // ── Crossfader / deck play ────────────────────────────────────────────────────
@@ -1579,7 +1677,7 @@ void MainWindow::loadFromFile(const QString &path, bool showErrors) {
 
 void MainWindow::onSessionLoaded() {
     m_assetLibrary->rebuild();
-    m_stackWidget->setCurrentWidget(m_clipNodeEditor);
+    updateCanvasStack();
 
     // Restore hotkeys.
     m_hotkeyManager->restoreHotkeys(m_sessionManager->restoredHotkeys());

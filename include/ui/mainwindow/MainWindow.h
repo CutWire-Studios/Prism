@@ -159,6 +159,7 @@ private:
     void showRecordingPanel();
 
     void buildEmptyPlaceholder();
+    void updateCanvasStack();
     void syncPanicButtons(QPushButton *activeBtn);
     void applyPanicFromButtons();
     void clearPanicState();

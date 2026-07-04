@@ -2733,6 +2733,12 @@ QVector<ClipNodeModel *> ClipNodeEditor::allNodes() const {
     return m_nodeMap.values().toVector();
 }
 
+bool ClipNodeEditor::isEmptyGraph() const {
+    return m_nodeMap.isEmpty() && m_processNodes.isEmpty() && m_layerNodes.isEmpty()
+        && m_abSelectNodes.isEmpty() && m_scriptNodes.isEmpty()
+        && m_masterAudioNodes.isEmpty() && m_masterAudioInputNodes.isEmpty();
+}
+
 ClipNodeModel *ClipNodeEditor::nodeAt(NodeId id) const {
     auto it = m_nodeMap.find(id);
     return (it != m_nodeMap.end()) ? *it : nullptr;

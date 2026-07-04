@@ -71,6 +71,8 @@ public:
     // ── Access ──────────────────────────────────────────────────────────────
     QVector<ClipNodeModel *> allNodes() const;
     ClipNodeModel *nodeAt(NodeId id) const;
+    /// True when the graph has no user-placed nodes (Output-only counts as empty).
+    bool isEmptyGraph() const;
 
     // ── A/B Deck Selection (global invariant across A/B-select nodes) ─────────
     void setActiveDeckClip(NodeId clipId, bool deckA);
