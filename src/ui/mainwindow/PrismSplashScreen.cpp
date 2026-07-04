@@ -1,4 +1,5 @@
 #include "ui/mainwindow/PrismSplashScreen.h"
+#include "release.h"
 #include <QPainter>
 #include <QPaintEvent>
 #include <QLinearGradient>
@@ -60,7 +61,7 @@ void PrismSplashScreen::paintEvent(QPaintEvent *event) {
     QFont versionFont = painter.font();
     versionFont.setPointSize(10);
     painter.setFont(versionFont);
-    painter.drawText(180, 210, QStringLiteral("v1.0.0 (GPLv3)"));
+    painter.drawText(180, 210, QStringLiteral(PRISM_VERSION_STRING " (GPLv3)"));
 
     // 5b. Draw community/GitHub info
     painter.setPen(QColor(136, 146, 176)); // #8892b0

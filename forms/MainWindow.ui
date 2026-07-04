@@ -944,10 +944,21 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     </property>
     <addaction name="actionStartRemoteControl"/>
    </widget>
+   <widget class="QMenu" name="menuHelp">
+    <property name="title">
+     <string>Help</string>
+    </property>
+    <addaction name="actionAboutPrism"/>
+    <addaction name="actionPrismDocs"/>
+    <addaction name="actionReportBugs"/>
+    <addaction name="separator"/>
+    <addaction name="actionAboutCutWire"/>
+   </widget>
    <addaction name="menuMedia"/>
    <addaction name="menuOutput"/>
    <addaction name="menuTools"/>
    <addaction name="menuRun"/>
+   <addaction name="menuHelp"/>
   </widget>
   <!-- ── Actions ──────────────────────────────────────────────────────── -->
   <action name="actionLoadFolder">
@@ -1126,6 +1137,38 @@ Split 4-Corner: split into 4 quadrants sliding outwards
    </property>
    <property name="toolTip">
     <string>Start a remote control web server to manage mixing, fader, cut, and auto remotely</string>
+   </property>
+  </action>
+  <action name="actionAboutPrism">
+   <property name="text">
+    <string>About Prism</string>
+   </property>
+   <property name="toolTip">
+    <string>Show the CutWire Prism splash screen</string>
+   </property>
+  </action>
+  <action name="actionPrismDocs">
+   <property name="text">
+    <string>Prism Docs</string>
+   </property>
+   <property name="toolTip">
+    <string>Open the CutWire Prism documentation website</string>
+   </property>
+  </action>
+  <action name="actionReportBugs">
+   <property name="text">
+    <string>Report Bugs</string>
+   </property>
+   <property name="toolTip">
+    <string>Open the Prism GitHub issue tracker</string>
+   </property>
+  </action>
+  <action name="actionAboutCutWire">
+   <property name="text">
+    <string>About CutWire</string>
+   </property>
+   <property name="toolTip">
+    <string>Open the CutWire Studios website</string>
    </property>
   </action>
  </widget>

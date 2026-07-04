@@ -66,8 +66,12 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QDesktopServices>
+#include <QUrl>
 #include <algorithm>
 #include <numeric>
+
+#include "ui/mainwindow/PrismSplashScreen.h"
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
@@ -506,6 +510,18 @@ void MainWindow::setupConnections() {
     ui->actionStayOnTop->setChecked(true);
 
     connect(ui->actionStartRemoteControl, &QAction::triggered, this, &MainWindow::onStartRemoteControl);
+
+    // Help menu
+    connect(ui->actionAboutPrism, &QAction::triggered, this, &MainWindow::onAboutPrism);
+    connect(ui->actionPrismDocs, &QAction::triggered, this, [this]() {
+        QDesktopServices::openUrl(QUrl(QStringLiteral("https://docs.cutwire.org/prism")));
+    });
+    connect(ui->actionReportBugs, &QAction::triggered, this, [this]() {
+        QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/CutWire-Studios/Prism/issues")));
+    });
+    connect(ui->actionAboutCutWire, &QAction::triggered, this, [this]() {
+        QDesktopServices::openUrl(QUrl(QStringLiteral("https://cutwire.org")));
+    });
 
     // ClipNodeEditor signals
     connect(m_clipNodeEditor, &ClipNodeEditor::clipChainChanged,
@@ -1652,6 +1668,13 @@ void MainWindow::onSetOutputResolution() {
 
     if (target == current) return;
     videoWidget->setProgramResolution(target.width(), target.height());
+}
+
+void MainWindow::onAboutPrism() {
+    auto *about = new PrismSplashScreen();
+    about->setAttribute(Qt::WA_DeleteOnClose);
+    about->setProgress(100, tr("CutWire Prism"));
+    about->show();
 }
 
 void MainWindow::onConnectObs() {

@@ -399,8 +399,15 @@ set_target_properties(prism_core PROPERTIES
     AUTOUIC_SEARCH_PATHS "${CMAKE_CURRENT_SOURCE_DIR}/forms"
 )
 
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/release.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/include/release.h"
+    @ONLY
+)
+
 target_include_directories(prism_core PUBLIC
     include
+    "${CMAKE_CURRENT_BINARY_DIR}/include"
     third_party/qrcodegen
     ${FFMPEG_INCLUDE_DIRS}
 )

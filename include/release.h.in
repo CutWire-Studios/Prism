@@ -1,0 +1,3 @@
+#pragma once
+
+#define PRISM_VERSION_STRING "v@PROJECT_VERSION@"
