@@ -23,6 +23,11 @@ public:
     virtual bool    isReady()     const = 0;   // has valid frame data?
     virtual QSize   frameSize()   const = 0;
     virtual const uint8_t *frameData() const = 0;  // RGB24, row-major
+    virtual int frameBytesPerLine() const {
+        const QSize sz = frameSize();
+        if (sz.isEmpty()) return 0;
+        return sz.width() * (hasAlpha() ? 4 : 3);
+    }
 
     // Advance to the next frame. Returns true if the frame buffer changed.
     // Static/live sources that never change return false.

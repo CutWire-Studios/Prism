@@ -1256,8 +1256,17 @@ void VideoWidget::uploadSourceFrameGL(GLuint &tex, MediaSource *source) {
         setupTextureGL(tex, sz, alpha);
 
     glBindTexture(GL_TEXTURE_2D, tex);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sz.width(), sz.height(),
-                    fmt, GL_UNSIGNED_BYTE, source->frameData());
+    const int rowStride = source->frameBytesPerLine();
+    const int bpp       = alpha ? 4 : 3;
+    if (rowStride > 0 && rowStride != sz.width() * bpp) {
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, rowStride / bpp);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sz.width(), sz.height(),
+                        fmt, GL_UNSIGNED_BYTE, source->frameData());
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    } else {
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sz.width(), sz.height(),
+                        fmt, GL_UNSIGNED_BYTE, source->frameData());
+    }
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 

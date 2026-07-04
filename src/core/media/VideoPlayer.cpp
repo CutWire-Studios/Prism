@@ -166,38 +166,55 @@ bool VideoPlayer::decodeFrame() {
         return false;
     }
 
+    auto deliverFrame = [&]() -> bool {
+        if (decodedFrame->color_range == AVCOL_RANGE_UNSPECIFIED)
+            decodedFrame->color_range = AVCOL_RANGE_MPEG;
+
+        sws_scale(swsContext, decodedFrame->data, decodedFrame->linesize, 0,
+                  codecContext->height, frameRGB->data, frameRGB->linesize);
+        frameCount++;
+        av_frame_unref(decodedFrame);
+        return true;
+    };
+
     // packet/decodedFrame are allocated once in open() and reused here; we only
     // unref (not free) them so their buffers can be recycled across frames.
-    while (av_read_frame(formatContext, packet) >= 0) {
+    while (true) {
+        int ret = avcodec_receive_frame(codecContext, decodedFrame);
+        if (ret == 0)
+            return deliverFrame();
+        if (ret == AVERROR_EOF)
+            return false;
+        if (ret != AVERROR(EAGAIN))
+            return false;
+
+        ret = av_read_frame(formatContext, packet);
+        if (ret < 0) {
+            // Drain any frames still buffered in the decoder.
+            ret = avcodec_send_packet(codecContext, nullptr);
+            if (ret < 0 && ret != AVERROR_EOF)
+                return false;
+            continue;
+        }
+
         if (packet->stream_index != videoStreamIndex) {
             av_packet_unref(packet);
             continue;
         }
 
-        int ret = avcodec_send_packet(codecContext, packet);
+        ret = avcodec_send_packet(codecContext, packet);
         av_packet_unref(packet);
-        if (ret < 0)
+        if (ret < 0 && ret != AVERROR(EAGAIN))
             return false;
-
-        ret = avcodec_receive_frame(codecContext, decodedFrame);
-        if (ret == 0) {
-            if (decodedFrame->color_range == AVCOL_RANGE_UNSPECIFIED)
-                decodedFrame->color_range = AVCOL_RANGE_MPEG;
-
-            sws_scale(swsContext, decodedFrame->data, decodedFrame->linesize, 0,
-                      codecContext->height, frameRGB->data, frameRGB->linesize);
-            frameCount++;
-            av_frame_unref(decodedFrame);
-            return true;
-        }
-        // AVERROR(EAGAIN): decoder needs more packets — keep reading.
     }
-
-    return false;
 }
 
 const uint8_t *VideoPlayer::getFrameData() const {
     return frameRGB ? frameRGB->data[0] : nullptr;
+}
+
+int VideoPlayer::getFrameBytesPerLine() const {
+    return frameRGB ? frameRGB->linesize[0] : 0;
 }
 
 QSize VideoPlayer::getFrameSize() const {

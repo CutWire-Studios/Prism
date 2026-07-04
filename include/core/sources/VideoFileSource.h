@@ -16,6 +16,7 @@ public:
     bool    isReady()     const override;
     QSize   frameSize()   const override;
     const uint8_t *frameData() const override;
+    int     frameBytesPerLine() const override;
     bool    nextFrame()         override;
     double  duration()    const override;
     double  currentTime() const override;

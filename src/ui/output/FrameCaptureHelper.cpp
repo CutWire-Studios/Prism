@@ -20,11 +20,11 @@ QImage FrameCaptureHelper::frameFromSource(const MediaSource *source) {
 
     if (source->hasAlpha()) {
         return QImage(source->frameData(), sz.width(), sz.height(),
-                      sz.width() * 4, QImage::Format_RGBA8888).copy();
+                      source->frameBytesPerLine(), QImage::Format_RGBA8888).copy();
     }
 
     return QImage(source->frameData(), sz.width(), sz.height(),
-                  sz.width() * 3, QImage::Format_RGB888).copy();
+                  source->frameBytesPerLine(), QImage::Format_RGB888).copy();
 }
 
 QString FrameCaptureHelper::capturesDirectory() {

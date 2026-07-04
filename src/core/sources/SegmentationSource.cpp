@@ -39,7 +39,8 @@ bool SegmentationSource::nextFrame() {
         if (!sz.isEmpty()) {
             const QImage::Format fmt = m_inner->hasAlpha()
                 ? QImage::Format_RGBA8888 : QImage::Format_RGB888;
-            const QImage wrapped(m_inner->frameData(), sz.width(), sz.height(), fmt);
+            const QImage wrapped(m_inner->frameData(), sz.width(), sz.height(),
+                                 m_inner->frameBytesPerLine(), fmt);
             // Deep copy into an owned RGB frame (detaches from the inner buffer).
             m_currentFrame = wrapped.convertToFormat(QImage::Format_RGB888);
 

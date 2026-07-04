@@ -29,6 +29,7 @@ public:
 
     bool decodeFrame();
     const uint8_t *getFrameData() const;
+    int getFrameBytesPerLine() const;
     QSize getFrameSize() const;
 
     void seek(double seconds);
