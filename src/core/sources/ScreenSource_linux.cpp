@@ -1,11 +1,14 @@
 #include "core/sources/ScreenSource.h"
+#include "core/sources/ScreenCapturePersist.h"
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusMessage>
 #include <QDBusObjectPath>
 #include <QDBusUnixFileDescriptor>
 #include <QDBusArgument>
+#include <QDBusVariant>
 #include <QRandomGenerator>
+#include <QTransform>
 #include <QApplication>
 #include <QMessageBox>
 #include <QDebug>
@@ -20,6 +23,39 @@ static constexpr const char *SESSION_IFACE    = "org.freedesktop.portal.Session"
 
 static QString makeToken(const QString &prefix) {
     return QStringLiteral("%1_%2").arg(prefix).arg(QRandomGenerator::global()->generate());
+}
+
+// Values inside a portal a{sv} results dict can arrive either as plain QVariants
+// or wrapped in a QDBusVariant; unwrap both cases to a string.
+static QString dbusResultString(const QVariant &v) {
+    if (v.canConvert<QDBusVariant>())
+        return v.value<QDBusVariant>().variant().toString();
+    return v.toString();
+}
+
+// Corrects a frame for the compositor's advertised image-orientation. The tag
+// values match GStreamer's videoflip directions; some compositors (notably
+// KWin) deliver screencast frames vertically flipped ("flip-rotate-180").
+static QImage applyOrientation(QImage img, const QString &orientation) {
+    if (orientation.isEmpty() || orientation == QLatin1String("rotate-0"))
+        return img;
+    if (orientation == QLatin1String("flip-rotate-180"))   // vertical flip
+        return img.mirrored(false, true);
+    if (orientation == QLatin1String("flip-rotate-0"))     // horizontal flip
+        return img.mirrored(true, false);
+    if (orientation == QLatin1String("rotate-180"))
+        return img.mirrored(true, true);
+
+    QTransform t;
+    if (orientation == QLatin1String("rotate-90"))
+        return img.transformed(t.rotate(90));
+    if (orientation == QLatin1String("rotate-270"))
+        return img.transformed(t.rotate(270));
+    if (orientation == QLatin1String("flip-rotate-90"))
+        return img.mirrored(false, true).transformed(t.rotate(90));
+    if (orientation == QLatin1String("flip-rotate-270"))
+        return img.mirrored(false, true).transformed(t.rotate(270));
+    return img;
 }
 
 static QString senderName() {
@@ -103,6 +139,7 @@ void ScreenSource::stop() {
     m_dirty = false;
     m_state = State::Idle;
     m_name.clear();
+    m_orientation.clear();
 }
 
 bool ScreenSource::isCapturing() const {
@@ -119,6 +156,7 @@ void ScreenSource::onCreateSessionResponse(uint response, QVariantMap results) {
     if (response != 0) {
         qWarning() << "ScreenSource: CreateSession rejected (code" << response << ")";
         m_state = State::Idle;
+        emit captureConfigured(false, {});
         return;
     }
 
@@ -137,6 +175,17 @@ void ScreenSource::onCreateSessionResponse(uint response, QVariantMap results) {
     opts["types"]        = static_cast<uint>(m_captureType);
     opts["multiple"]     = false;
     opts["cursor_mode"]  = uint(2);
+    // Ask the portal to remember this selection until the app revokes it.
+    opts["persist_mode"] = uint(2);
+    // Re-selecting via the clip node's Edit button forces a fresh pick, so it
+    // deliberately does not pass a restore token.
+    if (!m_pickOnly) {
+        const QString token = ScreenCapturePersist::restoreToken(m_captureId);
+        qDebug() << "ScreenSource: SelectSources — captureId" << m_captureId
+                 << "restore_token" << (token.isEmpty() ? "<none>" : "<restoring>");
+        if (!token.isEmpty())
+            opts["restore_token"] = token;
+    }
 
     QDBusInterface iface(PORTAL_SERVICE, PORTAL_PATH, SCREENCAST_IFACE, bus);
     QDBusMessage reply = iface.call("SelectSources",
@@ -145,6 +194,7 @@ void ScreenSource::onCreateSessionResponse(uint response, QVariantMap results) {
     if (reply.type() == QDBusMessage::ErrorMessage) {
         qWarning() << "ScreenSource: SelectSources error:" << reply.errorMessage();
         m_state = State::Idle;
+        emit captureConfigured(false, {});
         return;
     }
 
@@ -155,6 +205,7 @@ void ScreenSource::onSelectSourcesResponse(uint response, QVariantMap) {
     if (response != 0) {
         qWarning() << "ScreenSource: SelectSources rejected (code" << response << ")";
         m_state = State::Idle;
+        emit captureConfigured(false, {});
         return;
     }
 
@@ -177,6 +228,7 @@ void ScreenSource::onSelectSourcesResponse(uint response, QVariantMap) {
     if (reply.type() == QDBusMessage::ErrorMessage) {
         qWarning() << "ScreenSource: Start error:" << reply.errorMessage();
         m_state = State::Idle;
+        emit captureConfigured(false, {});
         return;
     }
 
@@ -187,6 +239,26 @@ void ScreenSource::onStartResponse(uint response, QVariantMap results) {
     if (response != 0) {
         qWarning() << "ScreenSource: Start rejected (code" << response << ")";
         m_state = State::Idle;
+        emit captureConfigured(false, {});
+        return;
+    }
+
+    // The portal returns a fresh restore token whenever it grants (or renews)
+    // persistence. Remember it so future captures of this source restore the
+    // same selection without prompting.
+    const QString restoreToken = dbusResultString(results.value(QStringLiteral("restore_token")));
+    qDebug() << "ScreenSource: Start ok — captureId" << m_captureId
+             << "restore_token" << (restoreToken.isEmpty() ? "<empty>" : "<received>")
+             << "result keys" << results.keys();
+    if (!restoreToken.isEmpty())
+        ScreenCapturePersist::setRestoreToken(m_captureId, restoreToken);
+    emit captureConfigured(true, restoreToken);
+
+    // Pick-only runs (clip node Edit) just needed the selection/token; tear the
+    // portal session down instead of opening a capture pipeline.
+    if (m_pickOnly) {
+        m_state = State::Idle;
+        stop();
         return;
     }
 
@@ -255,25 +327,37 @@ GstFlowReturn ScreenSource::onNewSample(GstAppSink *sink, gpointer userData) {
     GstSample *sample = gst_app_sink_pull_sample(sink);
     if (!sample) return GST_FLOW_ERROR;
 
-    GstBuffer    *buffer = gst_sample_get_buffer(sample);
-    GstCaps      *caps   = gst_sample_get_caps(sample);
-    GstStructure *st     = gst_caps_get_structure(caps, 0);
+    GstBuffer *buffer = gst_sample_get_buffer(sample);
+    GstCaps   *caps   = gst_sample_get_caps(sample);
 
-    int w = 0, h = 0;
-    gst_structure_get_int(st, "width",  &w);
-    gst_structure_get_int(st, "height", &h);
+    // Map through GstVideoFrame so we use the buffer's real row stride. PipeWire
+    // pads each row to an alignment; assuming a tightly packed width*3 stride
+    // shears the image for windows whose width isn't already aligned (monitors
+    // usually are, which is why full-screen looked fine).
+    GstVideoInfo info;
+    if (gst_video_info_from_caps(&info, caps)) {
+        GstVideoFrame vframe;
+        if (gst_video_frame_map(&vframe, &info, buffer, GST_MAP_READ)) {
+            const int w      = GST_VIDEO_FRAME_WIDTH(&vframe);
+            const int h      = GST_VIDEO_FRAME_HEIGHT(&vframe);
+            const int stride = GST_VIDEO_FRAME_PLANE_STRIDE(&vframe, 0);
+            const auto *data = static_cast<const uchar *>(
+                GST_VIDEO_FRAME_PLANE_DATA(&vframe, 0));
 
-    if (w > 0 && h > 0) {
-        GstMapInfo map;
-        if (gst_buffer_map(buffer, &map, GST_MAP_READ)) {
-            QImage img(map.data, w, h, w * 3, QImage::Format_RGB888);
-            QImage copy = img.copy();
-            gst_buffer_unmap(buffer, &map);
+            if (w > 0 && h > 0 && data) {
+                QImage img(data, w, h, stride, QImage::Format_RGB888);
+                QImage copy = img.copy();  // detach from the mapped buffer
+                gst_video_frame_unmap(&vframe);
 
-            QMetaObject::invokeMethod(self, [self, frame = std::move(copy)]() mutable {
-                self->m_frame = std::move(frame);
-                self->m_dirty = true;
-            }, Qt::QueuedConnection);
+                // Orientation is applied on the object's thread (where m_orientation
+                // is also updated from bus tag messages) to avoid a data race.
+                QMetaObject::invokeMethod(self, [self, frame = std::move(copy)]() mutable {
+                    self->m_frame = applyOrientation(std::move(frame), self->m_orientation);
+                    self->m_dirty = true;
+                }, Qt::QueuedConnection);
+            } else {
+                gst_video_frame_unmap(&vframe);
+            }
         }
     }
 
@@ -286,6 +370,23 @@ gboolean ScreenSource::onBusMessage(GstBus *bus, GstMessage *msg, gpointer userD
     auto *self = static_cast<ScreenSource *>(userData);
 
     switch (GST_MESSAGE_TYPE(msg)) {
+    case GST_MESSAGE_TAG: {
+        GstTagList *tags = nullptr;
+        gst_message_parse_tag(msg, &tags);
+        if (tags) {
+            gchar *orient = nullptr;
+            if (gst_tag_list_get_string(tags, GST_TAG_IMAGE_ORIENTATION, &orient) && orient) {
+                const QString o = QString::fromUtf8(orient);
+                g_free(orient);
+                qDebug() << "ScreenSource: image-orientation" << o;
+                QMetaObject::invokeMethod(self, [self, o]() {
+                    self->m_orientation = o;
+                }, Qt::QueuedConnection);
+            }
+            gst_tag_list_unref(tags);
+        }
+        break;
+    }
     case GST_MESSAGE_ERROR: {
         GError *err = nullptr;
         gchar *debug = nullptr;

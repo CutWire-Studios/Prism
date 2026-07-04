@@ -61,19 +61,32 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
     case Kind::Screen: {
         auto src = std::make_unique<ScreenSource>();
 #ifdef Q_OS_LINUX
-        if (!src->start(ScreenSource::CaptureType::Monitor)) return nullptr;
+        // Linux capture goes through xdg-desktop-portal, which remembers the
+        // chosen monitor/window via the restore token keyed by captureId.
+        src->setCaptureId(desc.captureId);
+        if (!src->start(ScreenSource::CaptureType::Any)) return nullptr;
 #else
         if (!src->start(desc.screenIndex)) return nullptr;
 #endif
         return src;
     }
     case Kind::Window: {
+#ifdef Q_OS_LINUX
+        // On Linux there is no reliable per-window capture outside the portal, so
+        // window capture uses the same portal-backed ScreenSource with a
+        // remembered selection.
+        auto src = std::make_unique<ScreenSource>();
+        src->setCaptureId(desc.captureId);
+        if (!src->start(ScreenSource::CaptureType::Any)) return nullptr;
+        return src;
+#else
         auto src = std::make_unique<WindowCaptureSource>();
         const auto windows = WindowCaptureSource::capturableWindows();
         if (windows.isEmpty()) return nullptr;
         const int idx = qBound(0, desc.windowIndex, windows.size() - 1);
         if (!src->start(windows.at(idx))) return nullptr;
         return src;
+#endif
     }
     case Kind::Canvas:
         if (desc.canvasFill == SourceDescriptor::CanvasFill::Transparent)

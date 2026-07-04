@@ -9,6 +9,12 @@
 #include "ui/common/CameraEnumerator.h"
 #ifndef Q_OS_LINUX
 #include "ui/common/CapturePicker.h"
+#else
+#include "core/sources/ScreenSource.h"
+#include "core/sources/ScreenCapturePersist.h"
+#include <QEventLoop>
+#include <QTimer>
+#include <QUuid>
 #endif
 #include "core/sources/ImageSource.h"
 #include "core/sources/SlideshowSource.h"
@@ -418,65 +424,40 @@ void ClipCard::onEditClicked() {
         }
         break;
 #else
-        if (m_sourceDesc.kind == Kind::Screen) {
-            const auto screens = QGuiApplication::screens();
-            QDialog dlg(parent);
-            dlg.setWindowTitle("Select Screen");
-            dlg.setMinimumWidth(360);
+        // Linux capture is handled by xdg-desktop-portal, which shows its own
+        // system picker. Run it once here (pick-only), remember the resulting
+        // selection under a fresh capture id, and let the deck restore it
+        // silently from then on.
+        ScreenSource picker;
+        picker.setPickOnly(true);
 
-            auto *combo = new QComboBox(&dlg);
-            for (int i = 0; i < screens.size(); ++i)
-                combo->addItem(QString("Screen %1 — %2").arg(i + 1).arg(screens[i]->name()));
-            combo->setCurrentIndex(qBound(0, m_sourceDesc.screenIndex, screens.size() - 1));
+        QEventLoop loop;
+        bool picked = false;
+        QString newToken;
+        connect(&picker, &ScreenSource::captureConfigured, &loop,
+                [&](bool ok, const QString &token) {
+                    picked = ok;
+                    newToken = token;
+                    loop.quit();
+                }, Qt::QueuedConnection);
 
-            auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
-            connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
-            connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+        if (!picker.start(ScreenSource::CaptureType::Any))
+            break;
 
-            auto *layout = new QVBoxLayout(&dlg);
-            layout->addWidget(new QLabel("Choose screen to capture:", &dlg));
-            layout->addWidget(combo);
-            layout->addWidget(buttons);
+        // Safety valve in case the portal never responds.
+        QTimer::singleShot(300000, &loop, &QEventLoop::quit);
+        loop.exec();
+        picker.stop();
 
-            if (dlg.exec() == QDialog::Accepted) {
-                m_sourceDesc.screenIndex  = combo->currentIndex();
-                m_sourceDesc.displayName  = QString("Screen %1").arg(combo->currentIndex() + 1);
-                QFontMetrics fm(ui->titleLabel->font());
-                ui->titleLabel->setText(fm.elidedText(m_sourceDesc.displayName, Qt::ElideRight, 108));
-                ui->titleLabel->setToolTip(m_sourceDesc.displayName);
-                emit sourceDescriptorChanged(m_index, m_sourceDesc);
-            }
-        } else {
-            const auto windows = QWindowCapture::capturableWindows();
-            if (windows.isEmpty())
-                break;
-
-            QDialog dlg(parent);
-            dlg.setWindowTitle("Select Window / Tab");
-            dlg.setMinimumWidth(400);
-
-            auto *combo = new QComboBox(&dlg);
-            for (const auto &w : windows)
-                combo->addItem(w.description().isEmpty() ? "(unnamed)" : w.description());
-            combo->setCurrentIndex(qBound(0, m_sourceDesc.windowIndex, windows.size() - 1));
-
-            auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
-            connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
-            connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
-
-            auto *layout = new QVBoxLayout(&dlg);
-            layout->addWidget(new QLabel("Choose window to capture:", &dlg));
-            layout->addWidget(combo);
-            layout->addWidget(buttons);
-
-            if (dlg.exec() == QDialog::Accepted) {
-                m_sourceDesc.windowIndex  = combo->currentIndex();
-                m_sourceDesc.displayName  = combo->currentText();
-                QFontMetrics fm(ui->titleLabel->font());
-                ui->titleLabel->setText(fm.elidedText(m_sourceDesc.displayName, Qt::ElideRight, 108));
-                ui->titleLabel->setToolTip(m_sourceDesc.displayName);
-                emit sourceDescriptorChanged(m_index, m_sourceDesc);
-            }
+        if (picked) {
+            // Use a new capture id so any deck currently showing this source
+            // reloads (its layer key changes) and restores the freshly picked
+            // selection without a second prompt.
+            ScreenCapturePersist::clearRestoreToken(m_sourceDesc.captureId);
+            const QString newId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+            ScreenCapturePersist::setRestoreToken(newId, newToken);
+            m_sourceDesc.captureId = newId;
+            emit sourceDescriptorChanged(m_index, m_sourceDesc);
         }
         break;
 #endif

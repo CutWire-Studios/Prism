@@ -38,6 +38,7 @@
 #include <QMenu>
 #include <QCursor>
 #include <QMessageBox>
+#include <QUuid>
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QLabel>
@@ -2413,6 +2414,7 @@ static QJsonObject descriptorToJson(const SourceDescriptor &d, const QDir &sessi
     o["cameraIndex"]        = d.cameraIndex;
     o["screenIndex"]        = d.screenIndex;
     o["windowIndex"]        = d.windowIndex;
+    o["captureId"]          = d.captureId;
     o["slideshowIntervalMs"]= d.slideshowIntervalMs;
     o["slideshowEffect"]    = d.slideshowEffect;
     o["slideshowTransitionMs"] = d.slideshowTransitionMs;
@@ -2442,6 +2444,15 @@ static SourceDescriptor descriptorFromJson(const QJsonObject &o) {
     d.cameraIndex        = o["cameraIndex"].toInt();
     d.screenIndex        = o["screenIndex"].toInt();
     d.windowIndex        = o["windowIndex"].toInt();
+    d.captureId          = o["captureId"].toString();
+    // Screen/window captures need a stable id to remember the OS selection.
+    // Sessions saved before this field existed won't have one, so mint one now
+    // (persisted on the next save).
+    if (d.captureId.isEmpty() &&
+        (d.kind == SourceDescriptor::Kind::Screen ||
+         d.kind == SourceDescriptor::Kind::Window)) {
+        d.captureId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    }
     d.slideshowIntervalMs= o["slideshowIntervalMs"].toInt(3000);
     d.slideshowEffect    = o["slideshowEffect"].toInt(0);
     d.slideshowTransitionMs = o["slideshowTransitionMs"].toInt(800);
@@ -2541,10 +2552,18 @@ ClipNodeModel *ClipNodeEditor::addClipNode(const QString &path, const QPixmap &t
     return model;
 }
 
-ClipNodeModel *ClipNodeEditor::addSourceNode(const SourceDescriptor &desc, const QPixmap &thumbnail,
+ClipNodeModel *ClipNodeEditor::addSourceNode(const SourceDescriptor &descIn, const QPixmap &thumbnail,
                                              ClipNodeScene *targetScene,
                                              QGraphicsView *viewForPos,
                                              bool /*groupMember*/) {
+    SourceDescriptor desc = descIn;
+    // Screen/window captures need a stable id to remember the OS selection.
+    if (desc.captureId.isEmpty() &&
+        (desc.kind == SourceDescriptor::Kind::Screen ||
+         desc.kind == SourceDescriptor::Kind::Window)) {
+        desc.captureId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    }
+
     ClipNodeScene *scene = targetScene ? targetScene : m_scene;
     QGraphicsView *view = viewForPos ? viewForPos : m_view;
 
@@ -3246,6 +3265,10 @@ void ClipNodeEditor::onNodeRemoveRequested(NodeId nodeId) { removeNode(nodeId); 
 
 void ClipNodeEditor::connectNodeSignals(ClipNodeModel *model, NodeId id) {
     connect(model, &ClipNodeModel::removeRequested, this, [this, id]() { onNodeRemoveRequested(id); });
+    // Editing a live source's settings (e.g. re-picking a screen/window capture)
+    // must reload any deck currently showing it.
+    connect(model, &ClipNodeModel::sourceDescriptorChanged, this,
+            [this](const SourceDescriptor &) { emit clipChainChanged(); });
 }
 
 void ClipNodeEditor::disconnectNodeSignals(ClipNodeModel *model) {

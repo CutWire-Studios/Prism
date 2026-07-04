@@ -951,9 +951,9 @@ void MainWindow::pushDecks() {
         ClipNodeModel *n = m_clipNodeEditor->nodeAt(l.inputNodeId);
         if (!n) return QStringLiteral("%1:?").arg(l.inputNodeId);
         const SourceDescriptor &d = n->sourceDescriptor();
-        return QStringLiteral("%1:%2:%3:%4:%5")
+        return QStringLiteral("%1:%2:%3:%4:%5:%6")
             .arg(l.inputNodeId).arg((int)d.kind).arg(d.path)
-            .arg(n->startTime()).arg(n->endTime());
+            .arg(n->startTime()).arg(n->endTime()).arg(d.captureId);
     };
     auto keysOf = [&](const ResolvedStream &s, QString &base, QStringList &ov) {
         base.clear(); ov.clear();

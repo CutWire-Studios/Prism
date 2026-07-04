@@ -28,6 +28,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
     pkg_check_modules(GSTREAMER_APP REQUIRED gstreamer-app-1.0)
+    pkg_check_modules(GSTREAMER_VIDEO REQUIRED gstreamer-video-1.0)
     pkg_check_modules(LIBZIP REQUIRED libzip)
 elseif(WIN32)
     find_package(re2 CONFIG REQUIRED)
@@ -143,6 +144,7 @@ set(SOURCES
     src/core/sources/CanvasSource.cpp
     src/core/sources/CameraSource.cpp
     src/core/sources/WindowCaptureSource.cpp
+    src/core/sources/ScreenCapturePersist.cpp
     src/core/project/ClipManager.cpp
     src/core/media/ThumbnailExtractor.cpp
     src/core/project/OverlayItem.cpp
@@ -241,6 +243,7 @@ set(HEADERS
     include/core/sources/CanvasSource.h
     include/core/sources/CameraSource.h
     include/core/sources/ScreenSource.h
+    include/core/sources/ScreenCapturePersist.h
     include/core/sources/WindowCaptureSource.h
     include/core/project/ClipManager.h
     include/core/media/ThumbnailExtractor.h
@@ -349,6 +352,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_include_directories(prism_core PUBLIC
         ${GSTREAMER_INCLUDE_DIRS}
         ${GSTREAMER_APP_INCLUDE_DIRS}
+        ${GSTREAMER_VIDEO_INCLUDE_DIRS}
         ${LIBZIP_INCLUDE_DIRS}
     )
 elseif(NOT WIN32)
@@ -374,6 +378,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         Qt6::DBus
         ${GSTREAMER_LIBRARIES}
         ${GSTREAMER_APP_LIBRARIES}
+        ${GSTREAMER_VIDEO_LIBRARIES}
         ${LIBZIP_LIBRARIES}
     )
 elseif(WIN32)

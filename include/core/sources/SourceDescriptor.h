@@ -36,6 +36,9 @@ struct SourceDescriptor {
     int     cameraIndex      = 0;       // Camera kind
     int     screenIndex      = 0;       // Screen kind
     int     windowIndex      = 0;       // Window kind
+    QString captureId;                  // Screen/Window kind — stable id used to
+                                        // remember the OS capture selection
+                                        // (Linux: xdg-desktop-portal restore token)
     int     slideshowIntervalMs = 3000; // Slideshow kind
     int     slideshowEffect = 0;        // Slideshow kind — SlideshowSource::Effect index
     int     slideshowTransitionMs = 800; // Slideshow kind — transition duration

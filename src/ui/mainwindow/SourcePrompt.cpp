@@ -45,6 +45,7 @@
 #include <QButtonGroup>
 #include <QSettings>
 #include <QUrl>
+#include <QUuid>
 
 #include <algorithm>
 #include <numeric>
@@ -131,6 +132,8 @@ bool promptScreen(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     desc.kind        = SourceDescriptor::Kind::Screen;
     desc.displayName = "Screen Capture";
     desc.screenIndex = 0;
+    // Stable id so the portal selection is remembered across recreations.
+    desc.captureId   = QUuid::createUuid().toString(QUuid::WithoutBraces);
     thumb = ThumbHelper::makeIconThumb(MaterialSymbols::Names::DesktopWindows);
     return true;
 #endif
@@ -150,6 +153,8 @@ bool promptWindow(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     desc.kind        = SourceDescriptor::Kind::Window;
     desc.displayName = "Window / Tab";
     desc.windowIndex = 0;
+    // Stable id so the portal selection is remembered across recreations.
+    desc.captureId   = QUuid::createUuid().toString(QUuid::WithoutBraces);
     thumb = ThumbHelper::makeIconThumb(MaterialSymbols::Names::SelectWindow);
     return true;
 #endif
