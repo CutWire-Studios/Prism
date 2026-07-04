@@ -51,6 +51,12 @@ bool MirrorOutputWindow::isFullscreenActive() const {
 #endif
 }
 
+void MirrorOutputWindow::updateFullscreenIcon() {
+    MaterialSymbols::setIconText(m_fullscreenBtn,
+        isFullscreenActive() ? MaterialSymbols::Names::CloseFullscreen
+                             : MaterialSymbols::Names::Fullscreen, 22);
+}
+
 void MirrorOutputWindow::enterFullscreen() {
 #ifdef Q_OS_MACOS
     // showFullScreen() only fills the area below the menu bar / notch on macOS,
@@ -64,7 +70,9 @@ void MirrorOutputWindow::enterFullscreen() {
 #else
     showFullScreen();
 #endif
-    MaterialSymbols::setIconText(m_fullscreenBtn, MaterialSymbols::Names::CloseFullscreen, 22);
+    // Drive the icon off the actual state so a failed entry (e.g. screen() null)
+    // leaves the button showing "enter fullscreen".
+    updateFullscreenIcon();
 }
 
 void MirrorOutputWindow::exitFullscreen() {
@@ -75,7 +83,7 @@ void MirrorOutputWindow::exitFullscreen() {
 #else
     showNormal();
 #endif
-    MaterialSymbols::setIconText(m_fullscreenBtn, MaterialSymbols::Names::Fullscreen, 22);
+    updateFullscreenIcon();
 }
 
 void MirrorOutputWindow::onFullscreenClicked() {

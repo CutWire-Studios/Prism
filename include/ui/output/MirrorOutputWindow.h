@@ -26,6 +26,7 @@ private slots:
 private:
     void enterFullscreen();
     void exitFullscreen();
+    void updateFullscreenIcon();
     bool isFullscreenActive() const;
 
     ProgramMirrorWidget *m_mirror = nullptr;
