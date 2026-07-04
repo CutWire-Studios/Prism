@@ -72,7 +72,7 @@ QString SessionManager::configDirectory() {
 }
 
 QString SessionManager::autosavePath() {
-    return QDir(configDirectory()).filePath(QStringLiteral("session.sxs"));
+    return QDir(configDirectory()).filePath(QString::fromUtf8(kAutosaveFileName));
 }
 
 QString SessionManager::lockFilePath() {
@@ -137,8 +137,9 @@ bool SessionManager::writeSessionFile(const QJsonObject &json, const QString &pa
 
 QStringList SessionManager::listBackupFiles() {
     QDir dir(backupsDirectory());
-    QStringList files = dir.entryList({QStringLiteral("session-*.sxs")},
-                                      QDir::Files, QDir::Name);
+    QStringList files = dir.entryList(
+        {QStringLiteral("session-*") + QString::fromUtf8(kSessionExtension)},
+        QDir::Files, QDir::Name);
     std::sort(files.begin(), files.end(), std::greater<QString>());
     QStringList paths;
     paths.reserve(files.size());
@@ -167,7 +168,7 @@ bool SessionManager::saveAutosave(const QJsonObject &json, int backupRetention) 
 
     const QString stamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd_HH-mm-ss"));
     const QString backupPath = QDir(backupsDirectory()).filePath(
-        QStringLiteral("session-%1.sxs").arg(stamp));
+        QStringLiteral("session-%1%2").arg(stamp, QString::fromUtf8(kSessionExtension)));
     writeSessionFile(enriched, backupPath);
 
     pruneBackups(backupRetention);

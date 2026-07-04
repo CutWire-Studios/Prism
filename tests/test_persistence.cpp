@@ -108,7 +108,7 @@ private slots:
     void projectPackager_importErrors() {
         QTemporaryDir dir;
         const QString extractBase = dir.filePath(QStringLiteral("extract"));
-        const QString zipPath = dir.filePath(QStringLiteral("pkg.switch"));
+        const QString zipPath = dir.filePath(QStringLiteral("pkg.prism"));
         int caseIndex = 0;
 
         auto runImport = [&](const QMap<QString, QByteArray> &entries) -> ProjectPackager::ImportResult {
@@ -289,7 +289,9 @@ private slots:
 
         const QDir backupDir(SessionManager::backupsDirectory());
         for (int i = 0; i < 5; ++i) {
-            QFile f(backupDir.filePath(QStringLiteral("session-%1.sxs").arg(i, 2, 10, QChar('0'))));
+            QFile f(backupDir.filePath(
+                QStringLiteral("session-%1%2").arg(i, 2, 10, QChar('0'))
+                    .arg(QString::fromUtf8(SessionManager::kSessionExtension))));
             QVERIFY(f.open(QIODevice::WriteOnly));
             f.write("x");
         }

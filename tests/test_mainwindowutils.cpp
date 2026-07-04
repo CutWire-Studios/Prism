@@ -1,4 +1,5 @@
 #include "ui/mainwindow/MainWindowUtils.h"
+#include "ui/session/SessionManager.h"
 
 #include <QtTest>
 
@@ -19,18 +20,21 @@ private slots:
     }
 
     void ensureExtension_missing() {
-        QCOMPARE(MainWindowUtils::ensureExtension(QStringLiteral("/tmp/session"), QStringLiteral(".sxs")),
-                 QStringLiteral("/tmp/session.sxs"));
+        const QString ext = QString::fromUtf8(SessionManager::kSessionExtension);
+        QCOMPARE(MainWindowUtils::ensureExtension(QStringLiteral("/tmp/session"), ext),
+                 QStringLiteral("/tmp/session") + ext);
     }
 
     void ensureExtension_present() {
-        QCOMPARE(MainWindowUtils::ensureExtension(QStringLiteral("/tmp/session.sxs"), QStringLiteral(".sxs")),
-                 QStringLiteral("/tmp/session.sxs"));
+        const QString ext = QString::fromUtf8(SessionManager::kSessionExtension);
+        const QString path = QStringLiteral("/tmp/session") + ext;
+        QCOMPARE(MainWindowUtils::ensureExtension(path, ext), path);
     }
 
     void ensureExtension_differentCase() {
-        QCOMPARE(MainWindowUtils::ensureExtension(QStringLiteral("/tmp/session.SXS"), QStringLiteral(".sxs")),
-                 QStringLiteral("/tmp/session.SXS"));
+        const QString ext = QString::fromUtf8(SessionManager::kSessionExtension);
+        const QString path = QStringLiteral("/tmp/session") + ext.toUpper();
+        QCOMPARE(MainWindowUtils::ensureExtension(path, ext), path);
     }
 
     void diffNewItems() {

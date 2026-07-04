@@ -121,7 +121,7 @@ private slots:
         graph.insert(QStringLiteral("clipNodes"), nodes);
         session.insert(QStringLiteral("graph"), graph);
 
-        const QString packagePath = dir.filePath(QStringLiteral("project.switch"));
+        const QString packagePath = dir.filePath(QStringLiteral("project.prism"));
         const auto exportReport = ProjectPackager::exportPackage(session, {&model}, packagePath);
         QVERIFY2(exportReport.success, qPrintable(exportReport.error));
         QVERIFY(QFileInfo::exists(packagePath));
@@ -150,7 +150,7 @@ private slots:
     void projectPackager_exportEmptySession() {
         QTemporaryDir dir;
         const QJsonObject session{{QStringLiteral("version"), 1}};
-        const QString packagePath = dir.filePath(QStringLiteral("empty.switch"));
+        const QString packagePath = dir.filePath(QStringLiteral("empty.prism"));
         const auto report = ProjectPackager::exportPackage(session, {}, packagePath);
         QVERIFY2(report.success, qPrintable(report.error));
         QVERIFY(QFileInfo::exists(packagePath));
@@ -164,7 +164,7 @@ private slots:
 
     void projectPackager_importWithoutIntegrityCheck() {
         QTemporaryDir dir;
-        const QString zipPath = dir.filePath(QStringLiteral("loose.switch"));
+        const QString zipPath = dir.filePath(QStringLiteral("loose.prism"));
         const QByteArray asset = QByteArray("asset-data");
 
         QJsonArray files;

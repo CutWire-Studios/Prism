@@ -983,7 +983,7 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <string>Export Project…</string>
    </property>
    <property name="toolTip">
-    <string>Bundle session and media into a portable .switch archive</string>
+    <string>Bundle session and media into a portable .prism archive</string>
    </property>
   </action>
   <action name="actionImportProject">
@@ -991,7 +991,7 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <string>Import Project…</string>
    </property>
    <property name="toolTip">
-    <string>Extract and open a .switch project archive</string>
+    <string>Extract and open a .prism project archive</string>
    </property>
   </action>
   <action name="actionClearAll">

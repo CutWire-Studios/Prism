@@ -1583,9 +1583,10 @@ void MainWindow::applyTheme() {
 
 void MainWindow::onSaveSessionClicked() {
     QString path = QFileDialog::getSaveFileName(
-        this, "Save Session", QString(), "CutWire Prism Session (*.sxs);;All Files (*)");
+        this, "Save Session", QString(),
+        QStringLiteral("CutWire Prism Session (*%1);;All Files (*)").arg(SessionManager::kSessionExtension));
     if (path.isEmpty()) return;
-    path = MainWindowUtils::ensureExtension(path, QStringLiteral(".sxs"));
+    path = MainWindowUtils::ensureExtension(path, QString::fromUtf8(SessionManager::kSessionExtension));
 
     if (!m_sessionManager->writeSessionFile(currentSessionJson(path), path)) {
         QMessageBox::warning(this, "Save Session",
@@ -1595,7 +1596,8 @@ void MainWindow::onSaveSessionClicked() {
 
 void MainWindow::onLoadSessionClicked() {
     QString path = QFileDialog::getOpenFileName(
-        this, "Load Session", QString(), "CutWire Prism Session (*.sxs);;All Files (*)");
+        this, "Load Session", QString(),
+        QStringLiteral("CutWire Prism Session (*%1);;All Files (*)").arg(SessionManager::kSessionExtension));
     if (path.isEmpty()) return;
     loadFromFile(path, true);
 }
@@ -1603,9 +1605,9 @@ void MainWindow::onLoadSessionClicked() {
 void MainWindow::onExportProjectClicked() {
     QString path = QFileDialog::getSaveFileName(
         this, tr("Export Project"), QString(),
-        tr("CutWire Prism Project (*.switch);;All Files (*)"));
+        tr("CutWire Prism Project (*%1);;All Files (*)").arg(ProjectPackager::kExtension));
     if (path.isEmpty()) return;
-    path = MainWindowUtils::ensureExtension(path, ProjectPackager::kExtension);
+    path = MainWindowUtils::ensureExtension(path, QString::fromUtf8(ProjectPackager::kExtension));
 
     const ProjectPackager::Report report = ProjectPackager::exportPackage(
         currentSessionJson(), m_clipNodeEditor->allNodes(), path);
@@ -1625,7 +1627,7 @@ void MainWindow::onExportProjectClicked() {
 void MainWindow::onImportProjectClicked() {
     const QString packagePath = QFileDialog::getOpenFileName(
         this, tr("Import Project"), QString(),
-        tr("CutWire Prism Project (*.switch);;All Files (*)"));
+        tr("CutWire Prism Project (*%1);;All Files (*)").arg(ProjectPackager::kExtension));
     if (packagePath.isEmpty()) return;
 
     const QFileInfo packageInfo(packagePath);

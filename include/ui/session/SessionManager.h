@@ -40,6 +40,9 @@ public:
     static void markRunning();
     static void markCleanExit();
 
+    static constexpr const char *kSessionExtension  = ".psm";
+    static constexpr const char *kAutosaveFileName  = "session.psm";
+
     static constexpr int kDefaultBackupRetention = 10;
     static constexpr int kDefaultAutosaveIntervalMs = 120000; // 2 minutes
 
