@@ -954,7 +954,7 @@ void MainWindow::pushDecks() {
         return QStringLiteral("%1:%2:%3:%4:%5:%6:%7")
             .arg(l.inputNodeId).arg((int)d.kind).arg(d.path)
             .arg(n->startTime()).arg(n->endTime()).arg(d.captureId)
-            .arg(l.removeBackground ? 1 : 0);
+            .arg(ProcessEffects::sourceEffectsKey(l.sourceEffects));
     };
     auto keysOf = [&](const ResolvedStream &s, QString &base, QStringList &ov) {
         base.clear(); ov.clear();
@@ -1072,7 +1072,7 @@ void MainWindow::pushDecks() {
             // Source set changed → full (re)load of primary + overlay chain.
             m_deckController->assignNodeToDeck(node, base.inputNodeId, deckA,
                                                slider, playBtn, selLabel, timeLabel,
-                                               base.removeBackground);
+                                               base.sourceEffects);
             applyBase();
             ResolvedStream overlay;
             overlay.canvasWidth = stream.canvasWidth;

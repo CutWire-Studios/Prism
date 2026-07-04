@@ -1,4 +1,5 @@
 #include "ui/nodes/ClipNodeEditor.h"
+#include "ui/nodes/ProcessEffects.h"
 #include "ui/common/MaterialSymbols.h"
 #include "core/project/AssetPathResolver.h"
 #include "core/scripting/ScriptRuntime.h"
@@ -463,13 +464,11 @@ private:
     PortItem *m_dataInPort = nullptr;
 };
 
-// ── Process node (Crop / FlipH / FlipV) ─────────────────────────────────────
+// ── Process node (one item class for every registered effect) ───────────────
 class ProcessNodeItem : public NodeItemBase {
 public:
-    enum class Effect { Crop = 0, FlipH = 1, FlipV = 2, Segment = 3 };
-
-    ProcessNodeItem(NodeId id, Effect effect)
-        : m_nodeId(id), m_effect(effect)
+    ProcessNodeItem(NodeId id, const ProcessEffectDescriptor *desc)
+        : m_nodeId(id), m_desc(desc), m_params(desc->defaultParams)
     {
         setFlags(ItemIsMovable | ItemSendsGeometryChanges | ItemIsSelectable);
         setZValue(0);
@@ -489,13 +488,10 @@ public:
     PortItem *inPort()  const { return m_inPort; }
     PortItem *outPort() const { return m_outPort; }
 
-    Effect effect() const { return m_effect; }
-    void cropRect(float &x, float &y, float &w, float &h) const {
-        x = m_cropX; y = m_cropY; w = m_cropW; h = m_cropH;
-    }
-    void setCropRect(float x, float y, float w, float h) {
-        m_cropX = x; m_cropY = y; m_cropW = w; m_cropH = h; update();
-    }
+    const ProcessEffectDescriptor *descriptor() const { return m_desc; }
+    int effectId() const { return m_desc->id; }
+    const QJsonObject &params() const { return m_params; }
+    void setParams(const QJsonObject &params) { m_params = params; update(); }
 
     QRectF boundingRect() const override { return QRectF(0, 0, PROC_W, PROC_H); }
     QRectF getEditButtonRect() const { return QRectF(8, PROC_H - 24, PROC_W - 16, 18); }
@@ -508,20 +504,17 @@ public:
 
         p->setPen(QColor(120, 170, 210));
         p->setFont(QFont("Monospace", 8, QFont::Bold));
-        QString name = m_effect == Effect::Crop ? "Crop"
-                     : m_effect == Effect::FlipH ? "Flip H"
-                     : m_effect == Effect::FlipV ? "Flip V" : "Remove BG";
         p->drawText(QRectF(4, 6, PROC_W - 8, 28), Qt::AlignCenter,
-                    QStringLiteral("PROCESS\n%1").arg(name));
+                    QStringLiteral("PROCESS\n%1").arg(m_desc->name));
 
-        if (m_effect == Effect::Crop) {
+        if (m_desc->editDialog) {
             const QRectF r = getEditButtonRect();
             p->setPen(QPen(QColor(100, 180, 255), 1));
             p->setBrush(QColor(20, 80, 150));
             p->drawRoundedRect(r, 3, 3);
             p->setPen(QColor(200, 220, 255));
             p->setFont(QFont("Monospace", 7));
-            p->drawText(r, Qt::AlignCenter, "Edit Crop");
+            p->drawText(r, Qt::AlignCenter, m_desc->editLabel);
         }
 
         if (isSelected()) {
@@ -532,7 +525,7 @@ public:
     }
 
     void mousePressEvent(QGraphicsSceneMouseEvent *e) override {
-        if (m_effect == Effect::Crop && getEditButtonRect().contains(e->pos())) {
+        if (m_desc->editDialog && getEditButtonRect().contains(e->pos())) {
             if (onEditRequested) onEditRequested(m_nodeId);
             e->accept();
             return;
@@ -541,14 +534,14 @@ public:
     }
 
     void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *e) override {
-        if (m_effect == Effect::Crop && onEditRequested) onEditRequested(m_nodeId);
+        if (m_desc->editDialog && onEditRequested) onEditRequested(m_nodeId);
         e->accept();
     }
 
     void contextMenuEvent(QGraphicsSceneContextMenuEvent *e) override {
         QMenu menu;
-        if (m_effect == Effect::Crop)
-            menu.addAction("Edit Crop", [this]() { if (onEditRequested) onEditRequested(m_nodeId); });
+        if (m_desc->editDialog)
+            menu.addAction(m_desc->editLabel, [this]() { if (onEditRequested) onEditRequested(m_nodeId); });
         menu.addAction("Delete", [this]() { if (onDeleteRequested) onDeleteRequested(m_nodeId); });
         menu.exec(e->screenPos());
         e->accept();
@@ -559,8 +552,8 @@ protected:
 
 private:
     NodeId m_nodeId;
-    Effect m_effect;
-    float m_cropX = 0.f, m_cropY = 0.f, m_cropW = 1.f, m_cropH = 1.f;
+    const ProcessEffectDescriptor *m_desc;
+    QJsonObject m_params;
     PortItem *m_inPort = nullptr;
     PortItem *m_outPort = nullptr;
 };
@@ -2628,12 +2621,17 @@ ClipNodeModel *ClipNodeEditor::addSourceNode(const SourceDescriptor &descIn, con
 // ── Process / Layer / A-B node creation ─────────────────────────────────────
 
 void ClipNodeEditor::addProcessNodeAt(int effect, const QPoint &globalPos) {
+    const ProcessEffectDescriptor *desc = ProcessEffects::byId(effect);
+    if (!desc) {
+        qWarning() << "addProcessNodeAt: unknown effect id" << effect;
+        return;
+    }
     const NodeId id = m_nextId++;
-    auto *node = new ProcessNodeItem(id, (ProcessNodeItem::Effect)effect);
+    auto *node = new ProcessNodeItem(id, desc);
     node->setPos(scenePosForView(m_view, globalPos));
-    node->onEditRequested = [this](NodeId nid) { onEditProcessCrop(nid); };
+    node->onEditRequested = [this](NodeId nid) { onEditProcessNode(nid); };
     m_scene->addItem(node);
-    m_processNodes[id] = static_cast<void *>(node);
+    m_processNodes[id] = node;
     registerItem(node);
     wireDeleteCallback(node, [this](NodeId nid) { deleteNodeById(nid); });
     ensureOutputNode();
@@ -2648,7 +2646,7 @@ void ClipNodeEditor::addLayerNodeAt(const QPoint &globalPos) {
     node->onEditCanvasRequested = [this](NodeId nid) { onEditLayerCanvas(nid); };
     node->onChanged = [this]() { emit clipChainChanged(); };
     m_scene->addItem(node);
-    m_layerNodes[id] = static_cast<void *>(node);
+    m_layerNodes[id] = node;
     registerItem(node);
     wireDeleteCallback(node, [this](NodeId nid) { deleteNodeById(nid); });
     ensureOutputNode();
@@ -2657,7 +2655,7 @@ void ClipNodeEditor::addLayerNodeAt(const QPoint &globalPos) {
 
 void ClipNodeEditor::updateAbHighlights() {
     for (auto it = m_abSelectNodes.cbegin(); it != m_abSelectNodes.cend(); ++it) {
-        auto *ab = static_cast<AbSelectNodeItem *>(it.value());
+        auto *ab = it.value();
         ab->setOutputConnected(m_scene->portHasEdge(ab->abOutPort()));
         int aSlot = -1, bSlot = -1;
         for (int i = 0; i < ab->slotCount(); ++i) {
@@ -2675,14 +2673,14 @@ void ClipNodeEditor::addAbSelectNodeAt(const QPoint &globalPos) {
     node->setPos(scenePosForView(m_view, globalPos));
     node->onChanged = [this]() { emit clipChainChanged(); };
     node->onAssignDeck = [this](NodeId abId, int slot, bool deckA) {
-        auto *ab = static_cast<AbSelectNodeItem *>(m_abSelectNodes.value(abId));
+        auto *ab = m_abSelectNodes.value(abId);
         if (!ab) return;
         const NodeId prod = m_scene->producerForInputPort(ab->inPort(slot));
         if (prod == 0) return;
         assignInputToDeck(prod, deckA);
     };
     m_scene->addItem(node);
-    m_abSelectNodes[id] = static_cast<void *>(node);
+    m_abSelectNodes[id] = node;
     registerItem(node);
     wireDeleteCallback(node, [this](NodeId nid) { deleteNodeById(nid); });
     ensureOutputNode();
@@ -2836,7 +2834,7 @@ void ClipNodeEditor::assignInputToDeck(NodeId inputProducerNode, bool deckA) {
 QVector<AbSlotInfo> ClipNodeEditor::abSelectInputs() const {
     QVector<AbSlotInfo> out;
     for (auto it = m_abSelectNodes.cbegin(); it != m_abSelectNodes.cend(); ++it) {
-        auto *ab = static_cast<AbSelectNodeItem *>(it.value());
+        auto *ab = it.value();
         for (int i = 0; i < ab->slotCount(); ++i) {
             const NodeId prod = m_scene->producerForInputPort(ab->inPort(i));
             if (!prod) continue;
@@ -2855,7 +2853,7 @@ QVector<AbSlotInfo> ClipNodeEditor::abSelectInputs() const {
 }
 
 bool ClipNodeEditor::triggerAbSlot(const AbSlotRef &ref, bool deckA) {
-    auto *ab = static_cast<AbSelectNodeItem *>(m_abSelectNodes.value(ref.abNodeId));
+    auto *ab = m_abSelectNodes.value(ref.abNodeId);
     if (!ab || !ab->outputConnected()) return false;
     const NodeId prod = m_scene->producerForInputPort(ab->inPort(ref.slot));
     if (!prod) return false;
@@ -2864,7 +2862,7 @@ bool ClipNodeEditor::triggerAbSlot(const AbSlotRef &ref, bool deckA) {
 }
 
 void ClipNodeEditor::setAbSlotHotkeyLabel(const AbSlotRef &ref, const QString &label) {
-    auto *ab = static_cast<AbSelectNodeItem *>(m_abSelectNodes.value(ref.abNodeId));
+    auto *ab = m_abSelectNodes.value(ref.abNodeId);
     if (!ab || ref.slot < 0 || ref.slot >= ab->slotCount()) return;
     ab->slotsRef()[ref.slot].hotkey = label;
     ab->update();
@@ -2872,14 +2870,14 @@ void ClipNodeEditor::setAbSlotHotkeyLabel(const AbSlotRef &ref, const QString &l
 
 void ClipNodeEditor::clearAbSlotHotkeyLabels() {
     for (auto it = m_abSelectNodes.cbegin(); it != m_abSelectNodes.cend(); ++it) {
-        auto *ab = static_cast<AbSelectNodeItem *>(it.value());
+        auto *ab = it.value();
         for (AbSlot &s : ab->slotsRef()) s.hotkey.clear();
         ab->update();
     }
 }
 
 QString ClipNodeEditor::abSlotHotkeyLabel(const AbSlotRef &ref) const {
-    auto *ab = static_cast<AbSelectNodeItem *>(m_abSelectNodes.value(ref.abNodeId));
+    auto *ab = m_abSelectNodes.value(ref.abNodeId);
     if (!ab || ref.slot < 0 || ref.slot >= ab->slotCount()) return {};
     return ab->slot(ref.slot).hotkey;
 }
@@ -2909,23 +2907,10 @@ ResolvedStream ClipNodeEditor::evaluateVideoInputGuarded(NodeId producerNode,
     if (auto *pr = dynamic_cast<ProcessNodeItem *>(item)) {
         const NodeId up = m_scene->producerForInputPort(pr->inPort());
         out = evaluateVideoInputGuarded(up, visited);
+        const ProcessEffectDescriptor *desc = pr->descriptor();
         for (ResolvedLayer &l : out.layers) {
-            if (pr->effect() == ProcessNodeItem::Effect::FlipH) {
-                l.flipH = !l.flipH;
-            } else if (pr->effect() == ProcessNodeItem::Effect::FlipV) {
-                l.flipV = !l.flipV;
-            } else if (pr->effect() == ProcessNodeItem::Effect::Segment) {
-                l.removeBackground = true;
-            } else { // Crop
-                float nx, ny, nw, nh;
-                pr->cropRect(nx, ny, nw, nh);
-                float ax = l.flipH ? (1.f - nx - nw) : nx;
-                float ay = l.flipV ? (1.f - ny - nh) : ny;
-                l.cropX = l.cropX + ax * l.cropW;
-                l.cropY = l.cropY + ay * l.cropH;
-                l.cropW = nw * l.cropW;
-                l.cropH = nh * l.cropH;
-            }
+            if (desc->fold) desc->fold(l, pr->params());
+            if (desc->isDecorator) l.sourceEffects.append({desc->id, pr->params()});
         }
         return out;
     }
@@ -2977,7 +2962,7 @@ void ClipNodeEditor::normalizeSwitchingInputs() {
         return {};
     };
     for (auto it = m_layerNodes.cbegin(); it != m_layerNodes.cend(); ++it) {
-        auto *ly = static_cast<LayerNodeItem *>(it.value());
+        auto *ly = it.value();
         ly->normalizeInputs();
         for (int i = 0; i < ly->slotCount(); ++i) {
             if (!ly->slotsRef()[i].name.isEmpty()) continue;
@@ -2986,7 +2971,7 @@ void ClipNodeEditor::normalizeSwitchingInputs() {
         }
     }
     for (auto it = m_abSelectNodes.cbegin(); it != m_abSelectNodes.cend(); ++it) {
-        auto *ab = static_cast<AbSelectNodeItem *>(it.value());
+        auto *ab = it.value();
         ab->normalizeInputs();
         for (int i = 0; i < ab->slotCount(); ++i) {
             if (!ab->slotsRef()[i].name.isEmpty()) continue;
@@ -3109,7 +3094,7 @@ bool ClipNodeEditor::audioSourceForShader(NodeId shaderNodeId, QString &filePath
 std::shared_ptr<ScriptOutput> ClipNodeEditor::scriptOutputForDataNode(NodeId dataNodeId) const {
     const NodeId scriptId = m_scene->scriptNodeForData(dataNodeId);
     if (scriptId == 0) return nullptr;
-    auto *scriptNode = static_cast<ScriptNodeItem *>(m_scriptNodes.value(scriptId));
+    auto *scriptNode = m_scriptNodes.value(scriptId);
     return scriptNode ? scriptNode->output() : nullptr;
 }
 
@@ -3117,7 +3102,7 @@ void ClipNodeEditor::wireTextScriptBinding(ClipNodeModel *model, NodeId id) {
     model->setScriptBindingProvider([this, id]() {
         ScriptBinding binding;
         const NodeId scriptId = m_scene->scriptNodeForData(id);
-        if (auto *scriptNode = static_cast<ScriptNodeItem *>(m_scriptNodes.value(scriptId))) {
+        if (auto *scriptNode = m_scriptNodes.value(scriptId)) {
             binding.code = scriptNode->code();
             binding.output = scriptNode->output();
             binding.requestRun = [scriptNode]() { scriptNode->runNow(); };
@@ -3134,12 +3119,10 @@ void ClipNodeEditor::onCanvasContextMenu() {
     menu.addAction("Add Input Node…", this, [this]() { emit addInputNodeRequested(); });
 
     QMenu *proc = menu.addMenu("Add Process Node");
-    proc->addAction("Crop", this, [this, pos]() { addProcessNodeAt((int)ProcessNodeItem::Effect::Crop, pos); });
-    proc->addAction("Flip Horizontal", this, [this, pos]() { addProcessNodeAt((int)ProcessNodeItem::Effect::FlipH, pos); });
-    proc->addAction("Flip Vertical", this, [this, pos]() { addProcessNodeAt((int)ProcessNodeItem::Effect::FlipV, pos); });
-#ifdef PRISM_HAVE_SEGMENTATION
-    proc->addAction("Remove Background", this, [this, pos]() { addProcessNodeAt((int)ProcessNodeItem::Effect::Segment, pos); });
-#endif
+    for (const ProcessEffectDescriptor &d : ProcessEffects::all()) {
+        if (!d.available) continue;
+        proc->addAction(d.menuLabel, this, [this, pos, id = d.id]() { addProcessNodeAt(id, pos); });
+    }
 
     QMenu *sw = menu.addMenu("Add Switching Node");
     sw->addAction("Layer", this, [this, pos]() { addLayerNodeAt(pos); });
@@ -3169,7 +3152,7 @@ void ClipNodeEditor::addMasterAudioOutputTo(ClipNodeScene *scene, QGraphicsView 
     auto *masterNode = new MasterAudioOutputNodeItem(m_nextId++);
     masterNode->setPos(scenePosForView(view, globalPos));
     scene->addItem(masterNode);
-    m_masterAudioNodes[masterNode->nodeId()] = static_cast<void *>(masterNode);
+    m_masterAudioNodes[masterNode->nodeId()] = masterNode;
     masterNode->onDeviceChanged = [this](NodeId) { emit audioGraphChanged(); };
     registerItem(masterNode);
     wireDeleteCallback(masterNode, [this](NodeId nid) { deleteNodeById(nid); });
@@ -3182,7 +3165,7 @@ void ClipNodeEditor::addMasterAudioInputTo(ClipNodeScene *scene, QGraphicsView *
     auto *inputNode = new MasterAudioInputNodeItem(m_nextId++);
     inputNode->setPos(scenePosForView(view, globalPos));
     scene->addItem(inputNode);
-    m_masterAudioInputNodes[inputNode->nodeId()] = static_cast<void *>(inputNode);
+    m_masterAudioInputNodes[inputNode->nodeId()] = inputNode;
     inputNode->onSettingsChanged = [this](NodeId) { emit audioGraphChanged(); };
     registerItem(inputNode);
     wireDeleteCallback(inputNode, [this](NodeId nid) { deleteNodeById(nid); });
@@ -3203,7 +3186,7 @@ void ClipNodeEditor::addScriptNodeTo(ClipNodeScene *scene, QGraphicsView *view,
     scriptNode->setPos(scenePosForView(view, globalPos));
     scriptNode->onEditRequested = [this](NodeId sid) { onEditScriptNode(sid); };
     scene->addItem(scriptNode);
-    m_scriptNodes[scriptNode->nodeId()] = static_cast<void *>(scriptNode);
+    m_scriptNodes[scriptNode->nodeId()] = scriptNode;
     registerItem(scriptNode);
     wireDeleteCallback(scriptNode, [this](NodeId nid) { deleteNodeById(nid); });
     emit audioGraphChanged();
@@ -3240,7 +3223,7 @@ void ClipNodeEditor::onEditClipAudio(NodeId clipId) {
 
 void ClipNodeEditor::onEditScriptNode(NodeId nodeId) {
 #ifdef PRISM_HAVE_LUA
-    auto *scriptNode = static_cast<ScriptNodeItem *>(m_scriptNodes.value(nodeId));
+    auto *scriptNode = m_scriptNodes.value(nodeId);
     if (!scriptNode) return;
     ScriptEditDialog dlg(scriptNode->code(), scriptNode->triggerMode(),
                          scriptNode->intervalMs(), this);
@@ -3280,32 +3263,21 @@ void ClipNodeEditor::onEditLayerTransform(NodeId layerId) {
     dialog.exec();
 }
 
-void ClipNodeEditor::onEditProcessCrop(NodeId processId) {
-    auto *pr = dynamic_cast<ProcessNodeItem *>(m_itemMap.value(processId));
-    if (!pr) return;
+void ClipNodeEditor::onEditProcessNode(NodeId processId) {
+    auto *pr = m_processNodes.value(processId);
+    if (!pr || !pr->descriptor()->editDialog) return;
 
-    QDialog dialog(this);
-    dialog.setWindowTitle("Edit Crop");
-    auto *layout = new QVBoxLayout(&dialog);
-    auto *selector = new CropSelectorWidget(&dialog);
-    float x, y, w, h;
-    pr->cropRect(x, y, w, h);
     // Show the upstream input node's thumbnail as reference, if any.
+    QImage reference;
     const NodeId up = m_scene->producerForInputPort(pr->inPort());
     ResolvedStream sub = evaluateVideoInput(up);
     if (!sub.layers.isEmpty()) {
         if (auto *m = nodeAt(sub.layers.first().inputNodeId))
-            selector->setFrame(m->thumbnail().toImage());
+            reference = m->thumbnail().toImage();
     }
-    selector->setCrop(x, y, w, h);
-    layout->addWidget(selector);
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addWidget(buttons);
-    if (dialog.exec() == QDialog::Accepted) {
-        pr->setCropRect(selector->cropX(), selector->cropY(),
-                        selector->cropW(), selector->cropH());
+    QJsonObject params = pr->params();
+    if (pr->descriptor()->editDialog(this, params, reference)) {
+        pr->setParams(params);
         emit clipChainChanged();
     }
 }
@@ -3380,21 +3352,25 @@ QJsonObject ClipNodeEditor::saveState(const QDir &sessionDir) const {
 
     QJsonArray processNodes;
     for (auto it = m_processNodes.cbegin(); it != m_processNodes.cend(); ++it) {
-        auto *pr = static_cast<ProcessNodeItem *>(it.value());
+        auto *pr = it.value();
         QJsonObject o;
         o["id"] = (qint64)pr->nodeId();
         o["posX"] = pr->pos().x(); o["posY"] = pr->pos().y();
-        o["effect"] = (int)pr->effect();
-        float x, y, w, h; pr->cropRect(x, y, w, h);
-        o["cropX"] = (double)x; o["cropY"] = (double)y;
-        o["cropW"] = (double)w; o["cropH"] = (double)h;
+        o["effect"] = pr->effectId();
+        o["params"] = pr->params();
+        if (pr->effectId() == 0) {
+            // Legacy crop keys so older builds can still open this project.
+            const QJsonObject &p = pr->params();
+            o["cropX"] = p["x"].toDouble(0.0); o["cropY"] = p["y"].toDouble(0.0);
+            o["cropW"] = p["w"].toDouble(1.0); o["cropH"] = p["h"].toDouble(1.0);
+        }
         processNodes.append(o);
     }
     root["processNodes"] = processNodes;
 
     QJsonArray layerNodes;
     for (auto it = m_layerNodes.cbegin(); it != m_layerNodes.cend(); ++it) {
-        auto *ly = static_cast<LayerNodeItem *>(it.value());
+        auto *ly = it.value();
         QJsonObject o;
         o["id"] = (qint64)ly->nodeId();
         o["posX"] = ly->pos().x(); o["posY"] = ly->pos().y();
@@ -3409,7 +3385,7 @@ QJsonObject ClipNodeEditor::saveState(const QDir &sessionDir) const {
 
     QJsonArray abSelectNodes;
     for (auto it = m_abSelectNodes.cbegin(); it != m_abSelectNodes.cend(); ++it) {
-        auto *ab = static_cast<AbSelectNodeItem *>(it.value());
+        auto *ab = it.value();
         QJsonObject o;
         o["id"] = (qint64)ab->nodeId();
         o["posX"] = ab->pos().x(); o["posY"] = ab->pos().y();
@@ -3433,7 +3409,7 @@ QJsonObject ClipNodeEditor::saveState(const QDir &sessionDir) const {
 
     QJsonArray scriptNodes;
     for (auto it = m_scriptNodes.cbegin(); it != m_scriptNodes.cend(); ++it) {
-        auto *sn = static_cast<ScriptNodeItem *>(it.value());
+        auto *sn = it.value();
         QJsonObject obj;
         obj["id"] = (qint64)sn->nodeId();
         obj["posX"] = sn->pos().x(); obj["posY"] = sn->pos().y();
@@ -3446,7 +3422,7 @@ QJsonObject ClipNodeEditor::saveState(const QDir &sessionDir) const {
 
     QJsonArray masterAudioNodes;
     for (auto it = m_masterAudioNodes.cbegin(); it != m_masterAudioNodes.cend(); ++it) {
-        auto *mn = static_cast<MasterAudioOutputNodeItem *>(it.value());
+        auto *mn = it.value();
         QJsonObject obj;
         obj["id"] = (qint64)mn->nodeId();
         obj["posX"] = mn->pos().x(); obj["posY"] = mn->pos().y();
@@ -3458,7 +3434,7 @@ QJsonObject ClipNodeEditor::saveState(const QDir &sessionDir) const {
 
     QJsonArray masterAudioInputNodes;
     for (auto it = m_masterAudioInputNodes.cbegin(); it != m_masterAudioInputNodes.cend(); ++it) {
-        auto *in = static_cast<MasterAudioInputNodeItem *>(it.value());
+        auto *in = it.value();
         QJsonObject obj;
         obj["id"] = (qint64)in->nodeId();
         obj["posX"] = in->pos().x(); obj["posY"] = in->pos().y();
@@ -3619,14 +3595,27 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
     for (const auto &val : state["processNodes"].toArray()) {
         const QJsonObject obj = val.toObject();
         const NodeId pid = (NodeId)obj["id"].toInteger();
+        const ProcessEffectDescriptor *desc = ProcessEffects::byId(obj["effect"].toInt());
+        if (!desc) {
+            qWarning() << "restoreState: skipping process node with unknown effect"
+                       << obj["effect"].toInt();
+            continue;
+        }
         m_nextId = pid;
-        auto *pr = new ProcessNodeItem(m_nextId++, (ProcessNodeItem::Effect)obj["effect"].toInt());
+        auto *pr = new ProcessNodeItem(m_nextId++, desc);
         pr->setPos(obj["posX"].toDouble(), obj["posY"].toDouble());
-        pr->setCropRect((float)obj["cropX"].toDouble(0.0), (float)obj["cropY"].toDouble(0.0),
-                        (float)obj["cropW"].toDouble(1.0), (float)obj["cropH"].toDouble(1.0));
-        pr->onEditRequested = [this](NodeId nid) { onEditProcessCrop(nid); };
+        if (obj.contains("params")) {
+            pr->setParams(obj["params"].toObject());
+        } else if (desc->id == 0) {
+            // Projects saved before generic params stored the crop inline.
+            QJsonObject p = desc->defaultParams;
+            p["x"] = obj["cropX"].toDouble(0.0); p["y"] = obj["cropY"].toDouble(0.0);
+            p["w"] = obj["cropW"].toDouble(1.0); p["h"] = obj["cropH"].toDouble(1.0);
+            pr->setParams(p);
+        }
+        pr->onEditRequested = [this](NodeId nid) { onEditProcessNode(nid); };
         m_scene->addItem(pr);
-        m_processNodes[pid] = static_cast<void *>(pr);
+        m_processNodes[pid] = pr;
         registerItem(pr);
         wireDeleteCallback(pr, [this](NodeId nid) { deleteNodeById(nid); });
     }
@@ -3656,7 +3645,7 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         ly->onEditCanvasRequested = [this](NodeId nid) { onEditLayerCanvas(nid); };
         ly->onChanged = [this]() { emit clipChainChanged(); };
         m_scene->addItem(ly);
-        m_layerNodes[lid] = static_cast<void *>(ly);
+        m_layerNodes[lid] = ly;
         registerItem(ly);
         wireDeleteCallback(ly, [this](NodeId nid) { deleteNodeById(nid); });
     }
@@ -3675,14 +3664,14 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         ab->setSlots(slotVec);
         ab->onChanged = [this]() { emit clipChainChanged(); };
         ab->onAssignDeck = [this](NodeId abId, int slot, bool deckA) {
-            auto *node = static_cast<AbSelectNodeItem *>(m_abSelectNodes.value(abId));
+            auto *node = m_abSelectNodes.value(abId);
             if (!node) return;
             const NodeId prod = m_scene->producerForInputPort(node->inPort(slot));
             if (prod == 0) return;
             assignInputToDeck(prod, deckA);
         };
         m_scene->addItem(ab);
-        m_abSelectNodes[aid] = static_cast<void *>(ab);
+        m_abSelectNodes[aid] = ab;
         registerItem(ab);
         wireDeleteCallback(ab, [this](NodeId nid) { deleteNodeById(nid); });
     }
@@ -3709,7 +3698,7 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         sn->setPos(obj["posX"].toDouble(), obj["posY"].toDouble());
         sn->onEditRequested = [this](NodeId sid) { onEditScriptNode(sid); };
         m_scene->addItem(sn);
-        m_scriptNodes[scriptId] = static_cast<void *>(sn);
+        m_scriptNodes[scriptId] = sn;
         registerItem(sn);
         wireDeleteCallback(sn, [this](NodeId nid) { deleteNodeById(nid); });
 #else
@@ -3726,7 +3715,7 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         mn->setDevice(obj["deviceId"].toString(), obj["deviceLabel"].toString());
         mn->onDeviceChanged = [this](NodeId) { emit audioGraphChanged(); };
         m_scene->addItem(mn);
-        m_masterAudioNodes[masterId] = static_cast<void *>(mn);
+        m_masterAudioNodes[masterId] = mn;
         registerItem(mn);
         wireDeleteCallback(mn, [this](NodeId nid) { deleteNodeById(nid); });
     }
@@ -3741,7 +3730,7 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         in->setDevice(obj["deviceId"].toString(), obj["deviceLabel"].toString());
         in->onSettingsChanged = [this](NodeId) { emit audioGraphChanged(); };
         m_scene->addItem(in);
-        m_masterAudioInputNodes[inputId] = static_cast<void *>(in);
+        m_masterAudioInputNodes[inputId] = in;
         registerItem(in);
         wireDeleteCallback(in, [this](NodeId nid) { deleteNodeById(nid); });
     }

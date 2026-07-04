@@ -183,6 +183,7 @@ set(SOURCES
     src/ui/nodes/ClipCard.cpp
     src/ui/nodes/ClipNodeModel.cpp
     src/ui/nodes/ClipNodeEditor.cpp
+    src/ui/nodes/ProcessEffects.cpp
     src/ui/common/AssetLibrary.cpp
     src/ui/nodes/ClipEditDialog.cpp
     src/ui/canvas/CropSelectorWidget.cpp
@@ -290,6 +291,7 @@ set(HEADERS
     include/ui/nodes/ClipCard.h
     include/ui/nodes/ClipNodeModel.h
     include/ui/nodes/ClipNodeEditor.h
+    include/ui/nodes/ProcessEffects.h
     include/ui/common/AssetLibrary.h
     include/ui/nodes/ClipEditDialog.h
     include/ui/canvas/CanvasGeometry.h

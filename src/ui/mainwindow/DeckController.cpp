@@ -7,9 +7,7 @@
 #include "core/sources/ShaderSource.h"
 #include "core/sources/HtmlSource.h"
 #include "core/sources/TextSource.h"
-#ifdef PRISM_HAVE_SEGMENTATION
-#include "core/sources/SegmentationSource.h"
-#endif
+#include "ui/nodes/ProcessEffects.h"
 #include "core/media/AudioInputCapture.h"
 #include "core/media/AudioInputMixRegistry.h"
 #include <QSlider>
@@ -272,7 +270,7 @@ void DeckController::updateDeckUI(bool deckA, const QString &name,
 void DeckController::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA,
                                        QSlider *progressSlider, QPushButton *playBtn,
                                        QLabel *selectedLabel, QLabel *timeLabel,
-                                       bool removeBackground) {
+                                       const QVector<SourceEffectRef> &sourceEffects) {
     if (!node) return;
 
     // Record which node feeds the deck so later audio updates (seek, play/pause,
@@ -291,11 +289,10 @@ void DeckController::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool d
         else   out->setOverlaysB(node->overlays());
     };
 
-#ifdef PRISM_HAVE_SEGMENTATION
-    // Background-removal on the deck primary: the source must be a wrappable
+    // Decorator effects on the deck primary: the source must be a wrappable
     // MediaSource, so route every kind (including VideoFile/Image, which
     // normally take the loadVideo fast path) through SourceFactory and wrap it.
-    if (removeBackground) {
+    if (!sourceEffects.isEmpty()) {
         auto src = SourceFactory::create(desc);
         if (src) {
             if (desc.kind == Kind::Shader) {
@@ -308,7 +305,7 @@ void DeckController::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool d
             } else if (desc.kind == Kind::VideoFile && node->startTime() > 0) {
                 src->seek(node->startTime());
             }
-            src = std::make_unique<SegmentationSource>(std::move(src));
+            src = ProcessEffects::applySourceEffects(std::move(src), sourceEffects);
         }
         applyTransform(deckA);
         if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
@@ -321,7 +318,6 @@ void DeckController::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool d
         timeLabel->setText("LIVE");
         return;
     }
-#endif
 
     switch (desc.kind) {
 

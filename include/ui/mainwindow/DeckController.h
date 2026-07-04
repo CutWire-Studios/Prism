@@ -29,7 +29,7 @@ public:
     void assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA,
                           QSlider *progressSlider, QPushButton *playBtn,
                           QLabel *selectedLabel, QLabel *timeLabel,
-                          bool removeBackground = false);
+                          const QVector<SourceEffectRef> &sourceEffects = {});
 
     /// Assign a ready-made source to whichever deck the crossfader is on.
     void assignSourceToActiveDeck(std::unique_ptr<MediaSource> src,

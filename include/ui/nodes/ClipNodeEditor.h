@@ -12,10 +12,17 @@
 #include "core/sources/SourceDescriptor.h"
 #include "core/scripting/ScriptOutput.h"
 #include "ui/nodes/ClipNodeModel.h"
+#include "ui/nodes/ProcessEffects.h"
 
 class ClipNodeScene;
 class QGraphicsView;
 class NodeItemBase;
+class ProcessNodeItem;
+class LayerNodeItem;
+class AbSelectNodeItem;
+class ScriptNodeItem;
+class MasterAudioOutputNodeItem;
+class MasterAudioInputNodeItem;
 
 enum class AudioPlaybackMode {
     Always = 0,       // play while the clip is on either deck
@@ -53,14 +60,14 @@ struct AbSlotInfo {
 };
 
 /// One resolved layer feeding a deck: an Input node producing pixels plus the
-/// folded crop/flip and Layer placement to apply.
+/// folded crop/flip, Layer placement, and decorator effects to apply.
 struct ResolvedLayer {
     NodeId inputNodeId = 0;
     float  cropX = 0.f, cropY = 0.f, cropW = 1.f, cropH = 1.f;
     bool   flipH = false, flipV = false;
     float  baseX = 0.f, baseY = 0.f, baseW = 1.f, baseH = 1.f;
     bool   visible = true;
-    bool   removeBackground = false;   // ML background removal (segmentation)
+    QVector<SourceEffectRef> sourceEffects;   // decorator effects, upstream→downstream
 };
 
 /// A fully resolved blue video stream (bottom→top layers plus canvas size).
@@ -172,7 +179,7 @@ private slots:
     void onEditScriptNode(NodeId nodeId);
     void onEditLayerCanvas(NodeId layerId);
     void onEditLayerTransform(NodeId layerId);
-    void onEditProcessCrop(NodeId processId);
+    void onEditProcessNode(NodeId processId);
 
 private:
     void connectNodeSignals(ClipNodeModel *model, NodeId id);
@@ -204,12 +211,12 @@ private:
 
     QMap<NodeId, ClipNodeModel *> m_nodeMap;
     QMap<NodeId, NodeItemBase *> m_itemMap;
-    QMap<NodeId, void *> m_processNodes;
-    QMap<NodeId, void *> m_layerNodes;
-    QMap<NodeId, void *> m_abSelectNodes;
-    QMap<NodeId, void *> m_scriptNodes;
-    QMap<NodeId, void *> m_masterAudioNodes;
-    QMap<NodeId, void *> m_masterAudioInputNodes;
+    QMap<NodeId, ProcessNodeItem *> m_processNodes;
+    QMap<NodeId, LayerNodeItem *> m_layerNodes;
+    QMap<NodeId, AbSelectNodeItem *> m_abSelectNodes;
+    QMap<NodeId, ScriptNodeItem *> m_scriptNodes;
+    QMap<NodeId, MasterAudioOutputNodeItem *> m_masterAudioNodes;
+    QMap<NodeId, MasterAudioInputNodeItem *> m_masterAudioInputNodes;
     NodeId m_outputNode  = 0;
     NodeId m_deckAInput  = 0;
     NodeId m_deckBInput  = 0;
