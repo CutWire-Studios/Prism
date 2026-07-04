@@ -2,6 +2,7 @@
 
 #include <QMainWindow>
 #include <QPoint>
+#include <QRect>
 
 namespace Ui { class OutputWindow; }
 class VideoWidget;
@@ -25,7 +26,16 @@ protected:
 
 private:
     void toggleFullscreen();
+    void enterFullscreen();
+    void exitFullscreen();
+    bool isFullscreenActive() const;
     void showContextMenu(const QPoint &globalPos);
 
     Ui::OutputWindow *ui;
+    // macOS: showFullScreen() on a frameless window leaves the menu-bar strip
+    // uncovered, so fullscreen is done by snapping to the screen geometry. That
+    // means isFullScreen() can't be trusted; track it and the pre-fullscreen
+    // geometry ourselves.
+    bool  m_fullscreen = false;
+    QRect m_normalGeometry;
 };

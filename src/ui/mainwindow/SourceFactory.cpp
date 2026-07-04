@@ -15,6 +15,7 @@
 #include "core/sources/WebRtcSource.h"
 #endif
 #include "ui/nodes/ProcessEffects.h"
+#include "core/platform/MacPermissions.h"
 #include <QObject>
 #include <QtGlobal>
 #include <QMediaDevices>
@@ -67,6 +68,10 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
         src->setCaptureId(desc.captureId);
         if (!src->start(ScreenSource::CaptureType::Any)) return nullptr;
 #else
+        // macOS: QScreenCapture silently yields black frames without the Screen
+        // Recording grant. Trigger the prompt; bail if not yet granted so the
+        // caller can tell the user to grant it and relaunch.
+        if (!MacPermissions::ensureScreenCaptureAccess()) return nullptr;
         if (!src->start(desc.screenIndex)) return nullptr;
 #endif
         return src;
@@ -81,6 +86,7 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
         if (!src->start(ScreenSource::CaptureType::Any)) return nullptr;
         return src;
 #else
+        if (!MacPermissions::ensureScreenCaptureAccess()) return nullptr;
         auto src = std::make_unique<WindowCaptureSource>();
         const auto windows = WindowCaptureSource::capturableWindows();
         if (windows.isEmpty()) return nullptr;

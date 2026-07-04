@@ -4,6 +4,7 @@
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QPushButton>
+#include <QScreen>
 #include <QSpacerItem>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -42,20 +43,51 @@ void MirrorOutputWindow::setFrame(const QImage &frame) {
         m_mirror->setFrame(frame);
 }
 
-void MirrorOutputWindow::onFullscreenClicked() {
-    if (isFullScreen()) {
-        showNormal();
-        MaterialSymbols::setIconText(m_fullscreenBtn, MaterialSymbols::Names::Fullscreen, 22);
-    } else {
-        showFullScreen();
-        MaterialSymbols::setIconText(m_fullscreenBtn, MaterialSymbols::Names::CloseFullscreen, 22);
+bool MirrorOutputWindow::isFullscreenActive() const {
+#ifdef Q_OS_MACOS
+    return m_fullscreen;
+#else
+    return isFullScreen();
+#endif
+}
+
+void MirrorOutputWindow::enterFullscreen() {
+#ifdef Q_OS_MACOS
+    // showFullScreen() only fills the area below the menu bar / notch on macOS,
+    // so snap to the full screen geometry instead. See OutputWindow.
+    if (QScreen *s = screen()) {
+        m_normalGeometry = geometry();
+        m_fullscreen = true;
+        setGeometry(s->geometry());
+        raise();
     }
+#else
+    showFullScreen();
+#endif
+    MaterialSymbols::setIconText(m_fullscreenBtn, MaterialSymbols::Names::CloseFullscreen, 22);
+}
+
+void MirrorOutputWindow::exitFullscreen() {
+#ifdef Q_OS_MACOS
+    m_fullscreen = false;
+    if (m_normalGeometry.isValid())
+        setGeometry(m_normalGeometry);
+#else
+    showNormal();
+#endif
+    MaterialSymbols::setIconText(m_fullscreenBtn, MaterialSymbols::Names::Fullscreen, 22);
+}
+
+void MirrorOutputWindow::onFullscreenClicked() {
+    if (isFullscreenActive())
+        exitFullscreen();
+    else
+        enterFullscreen();
 }
 
 void MirrorOutputWindow::keyPressEvent(QKeyEvent *event) {
-    if (event->key() == Qt::Key_Escape && isFullScreen()) {
-        showNormal();
-        MaterialSymbols::setIconText(m_fullscreenBtn, MaterialSymbols::Names::Fullscreen, 22);
+    if (event->key() == Qt::Key_Escape && isFullscreenActive()) {
+        exitFullscreen();
         event->accept();
         return;
     }

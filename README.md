@@ -260,15 +260,23 @@ cmake --build build --parallel
 ```
 
 The build produces an app bundle at `build/Prism.app`. Its `Info.plist` carries the
-camera / microphone / local-network usage strings macOS requires — the first time a
-webcam, audio input, or phone-camera source is used, macOS prompts for permission.
+camera / microphone / local-network usage strings macOS requires.
+
+**Permissions on macOS**
+
+- **Camera & microphone** — Prism requests these on first launch; approve the system
+  prompt (or later in **System Settings → Privacy & Security → Camera / Microphone**).
+- **Screen Recording** — the first time you add a Screen or Window source, macOS opens
+  **System Settings → Privacy & Security → Screen Recording**. Enable Prism there, then
+  **relaunch** — macOS only applies a new Screen Recording grant after restart, so the
+  first attempt won't capture until you reopen the app.
 
 **macOS platform notes**
 
 | Feature | macOS |
 |---------|-------|
 | Video, images, shaders, HTML, webcam, audio | Supported |
-| Screen / window capture | `QScreenCapture` / `QWindowCapture` |
+| Screen / window capture | `QScreenCapture` / `QWindowCapture` (needs Screen Recording permission) |
 | NDI | Supported when the [NDI SDK](https://ndi.video/) is installed (`-DNDI_ROOT=…`) |
 | Virtual camera output | Not available (needs a signed Camera Extension); the menu item is disabled |
 

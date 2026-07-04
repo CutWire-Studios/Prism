@@ -7,6 +7,7 @@
 #include "ui/mainwindow/MainWindow.h"
 #include "ui/common/MaterialSymbols.h"
 #include "ui/mainwindow/PrismSplashScreen.h"
+#include "core/platform/MacPermissions.h"
 
 extern "C" {
 #include <libavutil/log.h>
@@ -76,6 +77,11 @@ int main(int argc, char *argv[]) {
 
     window.show();
     splash.finish(&window);
+
+    // macOS shows the camera/mic prompt only when the app asks explicitly. Do it
+    // once the window is up so the dialog isn't parented to the splash. No-op
+    // elsewhere.
+    MacPermissions::requestCameraAndMicrophone();
 
     if (qEnvironmentVariableIsSet("PRISM_AUTO_QUIT_MS")) {
         const int ms = qEnvironmentVariableIntValue("PRISM_AUTO_QUIT_MS");

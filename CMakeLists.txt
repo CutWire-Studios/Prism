@@ -241,6 +241,7 @@ set(SOURCES
     src/ui/mainwindow/MainWindowUtils.cpp
     src/ui/remote/RemoteServerDialog.cpp
     src/ui/common/QrCodeHelper.cpp
+    src/core/platform/MacPermissions.cpp
     third_party/qrcodegen/qrcodegen.cpp
 )
 
@@ -365,6 +366,7 @@ set(HEADERS
     include/ui/mainwindow/MainWindowUtils.h
     include/ui/remote/RemoteServerDialog.h
     include/ui/common/QrCodeHelper.h
+    include/core/platform/MacPermissions.h
 )
 
 if(PRISM_HAVE_SEGMENTATION)
@@ -451,6 +453,10 @@ else()
     # path, so pass pkg-config's -L dir alongside the bare -lzip.
     target_link_directories(prism_core PUBLIC ${LIBZIP_LIBRARY_DIRS})
     target_link_libraries(prism_core PUBLIC ${LIBZIP_LIBRARIES})
+    if(APPLE)
+        # CoreGraphics: Screen Recording permission preflight/request.
+        target_link_libraries(prism_core PUBLIC "-framework CoreGraphics")
+    endif()
 endif()
 
 if(PRISM_HAVE_LUA)

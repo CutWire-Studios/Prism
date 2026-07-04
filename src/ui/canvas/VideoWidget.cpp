@@ -1415,8 +1415,18 @@ void VideoWidget::updateFrame() {
 
 // ── Frameless window chrome ───────────────────────────────────────────────────
 
+namespace {
+// The output window can be "fullscreen" either via real showFullScreen() or, on
+// macOS, by snapping to the screen geometry (isFullScreen() stays false then —
+// see OutputWindow::enterFullscreen). Treat both as fullscreen so window-drag
+// stays disabled during a live show.
+bool windowIsFullscreen(const QWidget *w) {
+    return w && (w->isFullScreen() || w->property("prismManualFullscreen").toBool());
+}
+} // namespace
+
 void VideoWidget::mousePressEvent(QMouseEvent *event) {
-    if (m_framelessWindowChrome && window() && !window()->isFullScreen()
+    if (m_framelessWindowChrome && window() && !windowIsFullscreen(window())
         && event->button() == Qt::LeftButton) {
         if (auto *wh = window()->windowHandle(); wh && wh->startSystemMove()) {
             event->accept();
@@ -1431,7 +1441,7 @@ void VideoWidget::mousePressEvent(QMouseEvent *event) {
 }
 
 void VideoWidget::mouseMoveEvent(QMouseEvent *event) {
-    if (m_windowDragActive && window() && !window()->isFullScreen()
+    if (m_windowDragActive && window() && !windowIsFullscreen(window())
         && (event->buttons() & Qt::LeftButton)) {
         window()->move(event->globalPosition().toPoint() - m_windowDragOffset);
         event->accept();
