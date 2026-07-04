@@ -27,7 +27,8 @@
 ## Features
 
 - **Node Graph Canvas**: Free-form visual pipeline — wire **Input → Process → Layer → A/B Select → Output** nodes; zoom, pan, and minimap for large shows
-- **Process & Layer Nodes**: Crop and flip in Process nodes; stack and layout multiple inputs in Layer nodes with canvas sizing and transform editing
+- **Process & Layer Nodes**: Crop, flip, and ML background removal in Process nodes; stack and layout multiple inputs in Layer nodes with canvas sizing and transform editing
+- **AI Background Removal**: Remove-Background process node runs MediaPipe's selfie-segmentation model (via ONNX Runtime) to key out a webcam's background live, compositing the subject over the layers below
 - **Multiple Media Source Types**: Video files, images, slideshows, webcams, screen/window capture, custom canvases, GLSL shaders, HTML/QML overlays, text, NDI inputs, and phone cameras (WebRTC)
 - **Live A/B Deck Mixing**: Crossfade between two decks with per-deck speed, **AUTO** / **CUT**, and many transition modes (wipes, slides, dips, 3D cube/flip, and more)
 - **Master Audio Routing**: Master audio-input and master audio-output nodes for per-device capture and mixing inside the graph
@@ -80,6 +81,7 @@ Program output opens in a separate window (mirror, NDI, virtual camera, or recor
 | Web Overlays | Qt WebEngine |
 | Scripting | Lua 5.4 + sol2 (optional) |
 | Audio Analysis | kissfft (FFT spectrum for shaders) |
+| Background Removal | ONNX Runtime + MediaPipe selfie-segmentation model (optional) |
 | Pattern Matching | RE2 |
 | Session Bundles | libzip (portable `.prism` packages) |
 | Streaming Output | NDI SDK (optional) |
@@ -176,6 +178,7 @@ CutWire Prism prioritizes **simplicity over features**. Every button should feel
 - **Lua 5.4** — Lua Script nodes (`PRISM_WITH_LUA`, default ON)
 - **libdatachannel** + **OpenSSL** + **Qt WebSockets** — WebRTC phone camera (`PRISM_WITH_WEBRTC`, default ON; libdatachannel fetched by CMake)
 - **NDI SDK** — NDI input/output (`PRISM_WITH_NDI`, default ON; set `NDI_ROOT` on Windows)
+- **ONNX Runtime** — ML background removal Process node (`PRISM_WITH_SEGMENTATION`, default ON; set `ONNXRUNTIME_ROOT` if not on the default path)
 
 #### Linux (Debian/Ubuntu)
 
@@ -279,6 +282,7 @@ cmake --build build --config Release
 | `PRISM_WITH_NDI` | `ON` | Enable NDI program output/input when the NDI SDK is found |
 | `PRISM_WITH_LUA` | `ON` | Enable Lua Script nodes (Linux: system Lua 5.4; Windows: vcpkg `lua`) |
 | `PRISM_WITH_WEBRTC` | `ON` | Enable the WebRTC phone-camera source (libdatachannel fetched by CMake; needs OpenSSL + Qt WebSockets) |
+| `PRISM_WITH_SEGMENTATION` | `ON` | Enable the ML background-removal Process node (needs ONNX Runtime; set `ONNXRUNTIME_ROOT`) |
 
 OBS integration is enabled automatically when Qt WebSockets is present. Disable an
 optional feature with e.g. `-DPRISM_WITH_WEBRTC=OFF`.
@@ -390,6 +394,15 @@ Run `windeployqt` on `Prism.exe` after building (see Windows build steps). FFmpe
 
 - NDI requires the [NDI SDK](https://ndi.video/) installed and discoverable by CMake (`NDI_ROOT`)
 - OBS integration requires `qt6-websockets`; without it, OBS menu actions are disabled at build time
+
+### Background removal disabled / node missing
+
+The **Remove Background** process node only appears when the project is built with ONNX Runtime.
+
+- Install ONNX Runtime, or download a release from [onnxruntime.ai](https://onnxruntime.ai/) and point CMake at it with `-DONNXRUNTIME_ROOT=/path/to/onnxruntime`
+- Rebuild; CMake prints `ONNX Runtime found … background removal enabled` when detected
+- Disable the feature explicitly with `-DPRISM_WITH_SEGMENTATION=OFF`
+- The selfie-segmentation model is bundled in `resources/models/` and embedded via the Qt resource system — no extra download needed at runtime
 
 ### Build failures
 

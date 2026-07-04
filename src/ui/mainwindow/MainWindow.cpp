@@ -951,9 +951,10 @@ void MainWindow::pushDecks() {
         ClipNodeModel *n = m_clipNodeEditor->nodeAt(l.inputNodeId);
         if (!n) return QStringLiteral("%1:?").arg(l.inputNodeId);
         const SourceDescriptor &d = n->sourceDescriptor();
-        return QStringLiteral("%1:%2:%3:%4:%5:%6")
+        return QStringLiteral("%1:%2:%3:%4:%5:%6:%7")
             .arg(l.inputNodeId).arg((int)d.kind).arg(d.path)
-            .arg(n->startTime()).arg(n->endTime()).arg(d.captureId);
+            .arg(n->startTime()).arg(n->endTime()).arg(d.captureId)
+            .arg(l.removeBackground ? 1 : 0);
     };
     auto keysOf = [&](const ResolvedStream &s, QString &base, QStringList &ov) {
         base.clear(); ov.clear();
@@ -1070,7 +1071,8 @@ void MainWindow::pushDecks() {
         } else {
             // Source set changed → full (re)load of primary + overlay chain.
             m_deckController->assignNodeToDeck(node, base.inputNodeId, deckA,
-                                               slider, playBtn, selLabel, timeLabel);
+                                               slider, playBtn, selLabel, timeLabel,
+                                               base.removeBackground);
             applyBase();
             ResolvedStream overlay;
             overlay.canvasWidth = stream.canvasWidth;

@@ -37,5 +37,6 @@
         <file>shaders/slideshow/glitch.glsl</file>
         <file>shaders/slideshow/mosaicflip.glsl</file>
         <file>shaders/slideshow/swirl.glsl</file>
+        <file>models/selfie_segmentation.onnx</file>
     </qresource>
 </RCC>

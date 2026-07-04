@@ -130,6 +130,18 @@ if(PRISM_WITH_WEBRTC)
     set(PRISM_HAVE_WEBRTC TRUE)
 endif()
 
+# ML background removal (optional — ONNX Runtime + selfie-segmentation model)
+option(PRISM_WITH_SEGMENTATION "Enable ML background removal" ON)
+if(PRISM_WITH_SEGMENTATION)
+    find_package(OnnxRuntime)
+    if(OnnxRuntime_FOUND)
+        message(STATUS "ONNX Runtime found: ${OnnxRuntime_LIBRARIES} — background removal enabled")
+        set(PRISM_HAVE_SEGMENTATION TRUE)
+    else()
+        message(STATUS "ONNX Runtime not found — background removal disabled (set ONNXRUNTIME_ROOT)")
+    endif()
+endif()
+
 
 set(SOURCES
     src/core/media/VideoPlayer.cpp
@@ -228,6 +240,12 @@ else()
         src/ui/output/VirtualCameraProgramSink_win.cpp)
 endif()
 
+if(PRISM_HAVE_SEGMENTATION)
+    list(APPEND SOURCES
+        src/core/segmentation/SelfieSegmenter.cpp
+        src/core/sources/SegmentationSource.cpp)
+endif()
+
 set(HEADERS
     include/core/sources/MediaSource.h
     include/core/sources/SourceDescriptor.h
@@ -320,6 +338,12 @@ set(HEADERS
     include/ui/remote/RemoteServerDialog.h
     include/ui/common/QrCodeHelper.h
 )
+
+if(PRISM_HAVE_SEGMENTATION)
+    list(APPEND HEADERS
+        include/core/segmentation/SelfieSegmenter.h
+        include/core/sources/SegmentationSource.h)
+endif()
 
 set(UI_FILES
     forms/MainWindow.ui
@@ -417,6 +441,11 @@ endif()
 if(PRISM_HAVE_WEBRTC)
     target_compile_definitions(prism_core PUBLIC PRISM_HAVE_WEBRTC)
     target_link_libraries(prism_core PUBLIC LibDataChannel::LibDataChannelStatic Qt6::WebSockets OpenSSL::SSL OpenSSL::Crypto)
+endif()
+
+if(PRISM_HAVE_SEGMENTATION)
+    target_compile_definitions(prism_core PUBLIC PRISM_HAVE_SEGMENTATION)
+    target_link_libraries(prism_core PUBLIC onnxruntime::onnxruntime)
 endif()
 
 qt_add_executable(Prism src/main.cpp)

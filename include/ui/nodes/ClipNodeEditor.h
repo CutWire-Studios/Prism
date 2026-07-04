@@ -60,6 +60,7 @@ struct ResolvedLayer {
     bool   flipH = false, flipV = false;
     float  baseX = 0.f, baseY = 0.f, baseW = 1.f, baseH = 1.f;
     bool   visible = true;
+    bool   removeBackground = false;   // ML background removal (segmentation)
 };
 
 /// A fully resolved blue video stream (bottom→top layers plus canvas size).

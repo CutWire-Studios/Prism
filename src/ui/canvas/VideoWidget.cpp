@@ -930,7 +930,7 @@ void VideoWidget::primeChainSources(std::vector<NodeChainSource> &chain,
         if (!src) continue;
         if (!src->isReady()) src->nextFrame(); // prime first frame if possible
         if (src->isReady())
-            setupTextureGL(texList[i], src->frameSize());
+            setupTextureGL(texList[i], src->frameSize(), src->hasAlpha());
         if (src->isReady())
             uploadSourceFrameGL(texList[i], src);
     }
@@ -1058,7 +1058,7 @@ void VideoWidget::advanceChainSources(std::vector<NodeChainSource> &chain,
             src->nextFrame();
             if (src->isReady()) {
                 makeCurrent();
-                setupTextureGL(texList[i], src->frameSize());
+                setupTextureGL(texList[i], src->frameSize(), src->hasAlpha());
                 uploadSourceFrameGL(texList[i], src);
                 doneCurrent();
                 anyDecoded = true;

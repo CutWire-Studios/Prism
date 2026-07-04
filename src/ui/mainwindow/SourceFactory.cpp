@@ -14,6 +14,9 @@
 #ifdef PRISM_HAVE_WEBRTC
 #include "core/sources/WebRtcSource.h"
 #endif
+#ifdef PRISM_HAVE_SEGMENTATION
+#include "core/sources/SegmentationSource.h"
+#endif
 #include <QObject>
 #include <QtGlobal>
 #include <QMediaDevices>
@@ -171,6 +174,11 @@ VideoWidget::NodeChainSource SourceFactory::makeLayerEntry(const ResolvedLayer &
                     textSrc->setDataSource(data);
             }
         }
+
+#ifdef PRISM_HAVE_SEGMENTATION
+        if (layer.removeBackground)
+            entry.source = std::make_unique<SegmentationSource>(std::move(entry.source));
+#endif
     }
     return entry;
 }

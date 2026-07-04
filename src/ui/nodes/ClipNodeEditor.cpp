@@ -466,7 +466,7 @@ private:
 // ── Process node (Crop / FlipH / FlipV) ─────────────────────────────────────
 class ProcessNodeItem : public NodeItemBase {
 public:
-    enum class Effect { Crop = 0, FlipH = 1, FlipV = 2 };
+    enum class Effect { Crop = 0, FlipH = 1, FlipV = 2, Segment = 3 };
 
     ProcessNodeItem(NodeId id, Effect effect)
         : m_nodeId(id), m_effect(effect)
@@ -509,7 +509,8 @@ public:
         p->setPen(QColor(120, 170, 210));
         p->setFont(QFont("Monospace", 8, QFont::Bold));
         QString name = m_effect == Effect::Crop ? "Crop"
-                     : m_effect == Effect::FlipH ? "Flip H" : "Flip V";
+                     : m_effect == Effect::FlipH ? "Flip H"
+                     : m_effect == Effect::FlipV ? "Flip V" : "Remove BG";
         p->drawText(QRectF(4, 6, PROC_W - 8, 28), Qt::AlignCenter,
                     QStringLiteral("PROCESS\n%1").arg(name));
 
@@ -2883,6 +2884,8 @@ ResolvedStream ClipNodeEditor::evaluateVideoInputGuarded(NodeId producerNode,
                 l.flipH = !l.flipH;
             } else if (pr->effect() == ProcessNodeItem::Effect::FlipV) {
                 l.flipV = !l.flipV;
+            } else if (pr->effect() == ProcessNodeItem::Effect::Segment) {
+                l.removeBackground = true;
             } else { // Crop
                 float nx, ny, nw, nh;
                 pr->cropRect(nx, ny, nw, nh);
@@ -3091,6 +3094,9 @@ void ClipNodeEditor::onCanvasContextMenu() {
     proc->addAction("Crop", this, [this, pos]() { addProcessNodeAt((int)ProcessNodeItem::Effect::Crop, pos); });
     proc->addAction("Flip Horizontal", this, [this, pos]() { addProcessNodeAt((int)ProcessNodeItem::Effect::FlipH, pos); });
     proc->addAction("Flip Vertical", this, [this, pos]() { addProcessNodeAt((int)ProcessNodeItem::Effect::FlipV, pos); });
+#ifdef PRISM_HAVE_SEGMENTATION
+    proc->addAction("Remove Background", this, [this, pos]() { addProcessNodeAt((int)ProcessNodeItem::Effect::Segment, pos); });
+#endif
 
     QMenu *sw = menu.addMenu("Add Switching Node");
     sw->addAction("Layer", this, [this, pos]() { addLayerNodeAt(pos); });

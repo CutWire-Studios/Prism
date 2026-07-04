@@ -7,6 +7,9 @@
 #include "core/sources/ShaderSource.h"
 #include "core/sources/HtmlSource.h"
 #include "core/sources/TextSource.h"
+#ifdef PRISM_HAVE_SEGMENTATION
+#include "core/sources/SegmentationSource.h"
+#endif
 #include "core/media/AudioInputCapture.h"
 #include "core/media/AudioInputMixRegistry.h"
 #include <QSlider>
@@ -268,7 +271,8 @@ void DeckController::updateDeckUI(bool deckA, const QString &name,
 
 void DeckController::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool deckA,
                                        QSlider *progressSlider, QPushButton *playBtn,
-                                       QLabel *selectedLabel, QLabel *timeLabel) {
+                                       QLabel *selectedLabel, QLabel *timeLabel,
+                                       bool removeBackground) {
     if (!node) return;
 
     // Record which node feeds the deck so later audio updates (seek, play/pause,
@@ -286,6 +290,38 @@ void DeckController::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool d
         if (a) out->setOverlaysA(node->overlays());
         else   out->setOverlaysB(node->overlays());
     };
+
+#ifdef PRISM_HAVE_SEGMENTATION
+    // Background-removal on the deck primary: the source must be a wrappable
+    // MediaSource, so route every kind (including VideoFile/Image, which
+    // normally take the loadVideo fast path) through SourceFactory and wrap it.
+    if (removeBackground) {
+        auto src = SourceFactory::create(desc);
+        if (src) {
+            if (desc.kind == Kind::Shader) {
+                QString audioPath;
+                if (m_editor->audioSourceForShader(nodeId, audioPath))
+                    static_cast<ShaderSource *>(src.get())->setAudioSource(audioPath);
+            } else if (desc.kind == Kind::Text) {
+                if (auto data = m_editor->scriptOutputForDataNode(nodeId))
+                    static_cast<TextSource *>(src.get())->setDataSource(data);
+            } else if (desc.kind == Kind::VideoFile && node->startTime() > 0) {
+                src->seek(node->startTime());
+            }
+            src = std::make_unique<SegmentationSource>(std::move(src));
+        }
+        applyTransform(deckA);
+        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
+        else       { out->setSourceB(std::move(src)); out->playB(); }
+        updateDeckAudio(deckA, nodeId, node, node->startTime(), true);
+        progressSlider->setVisible(false);
+        playBtn->setVisible(desc.isPausable());
+        playBtn->setEnabled(desc.isPausable());
+        selectedLabel->setText(QString("%1: %2").arg(deckA ? "A" : "B", node->sourceName()));
+        timeLabel->setText("LIVE");
+        return;
+    }
+#endif
 
     switch (desc.kind) {
 
