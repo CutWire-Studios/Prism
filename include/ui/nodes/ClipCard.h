@@ -2,7 +2,9 @@
 
 #include <QFrame>
 #include <QLabel>
+#include <functional>
 #include "core/project/OverlayItem.h"
+#include "core/scripting/ScriptOutput.h"
 #include "core/sources/SourceDescriptor.h"
 
 namespace Ui { class ClipCard; }
@@ -68,6 +70,11 @@ public:
     // Session restore: programmatically apply settings and toggle states.
     void applySettings(const ClipSettings &s) { m_settings = s; }
     void setRepeat(bool r);
+
+    // Set by ClipNodeEditor on Text-source cards: resolves the Script node
+    // currently wired to this node's DataIn port (if any) so the text editor
+    // can offer the script's variables.
+    std::function<ScriptBinding()> scriptBindingProvider;
 
 signals:
     void triggered(int index);

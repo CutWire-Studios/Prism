@@ -1317,6 +1317,11 @@ public:
     ScriptTriggerMode triggerMode() const { return m_triggerMode; }
     int intervalMs() const { return m_intervalMs; }
 
+    void runNow() {
+        if (m_runtime)
+            QMetaObject::invokeMethod(m_runtime, "runNow", Qt::QueuedConnection);
+    }
+
     void applySettings(const QString &code, ScriptTriggerMode trigger, int intervalMs) {
         m_code = code;
         m_triggerMode = trigger;
@@ -1384,10 +1389,7 @@ public:
 
     void contextMenuEvent(QGraphicsSceneContextMenuEvent *e) override {
         QMenu menu;
-        menu.addAction("Run now", [this]() {
-            if (m_runtime)
-                QMetaObject::invokeMethod(m_runtime, "runNow", Qt::QueuedConnection);
-        });
+        menu.addAction("Run now", [this]() { runNow(); });
         menu.addAction("Delete", [this]() {
             if (onDeleteRequested) onDeleteRequested(m_nodeId);
         });
@@ -2432,6 +2434,19 @@ static QJsonObject descriptorToJson(const SourceDescriptor &d, const QDir &sessi
     o["textAlign"]          = d.textAlign;
     o["textBgTransparent"]  = d.textBgTransparent;
     o["textBgColor"]        = d.textBgColor.name(QColor::HexArgb);
+    o["textBold"]           = d.textBold;
+    o["textItalic"]         = d.textItalic;
+    o["textUnderline"]      = d.textUnderline;
+    o["textLetterSpacing"]  = d.textLetterSpacing;
+    o["textLineHeight"]     = d.textLineHeight;
+    o["textOutlineWidth"]   = d.textOutlineWidth;
+    o["textOutlineColor"]   = d.textOutlineColor.name(QColor::HexArgb);
+    o["textGradient"]       = d.textGradient;
+    o["textColor2"]         = d.textColor2.name(QColor::HexArgb);
+    o["textGradientDir"]    = d.textGradientDir;
+    o["textShadowDx"]       = d.textShadowDx;
+    o["textShadowDy"]       = d.textShadowDy;
+    o["textShadowColor"]    = d.textShadowColor.name(QColor::HexArgb);
     o["webrtcRelayUrl"]     = d.webrtcRelayUrl;
     return o;
 }
@@ -2470,6 +2485,19 @@ static SourceDescriptor descriptorFromJson(const QJsonObject &o) {
     d.textAlign          = o["textAlign"].toInt(0x0084);
     d.textBgTransparent  = o["textBgTransparent"].toBool(true);
     d.textBgColor        = QColor(o["textBgColor"].toString("#ff000000"));
+    d.textBold           = o["textBold"].toBool(false);
+    d.textItalic         = o["textItalic"].toBool(false);
+    d.textUnderline      = o["textUnderline"].toBool(false);
+    d.textLetterSpacing  = o["textLetterSpacing"].toInt(0);
+    d.textLineHeight     = o["textLineHeight"].toInt(100);
+    d.textOutlineWidth   = o["textOutlineWidth"].toInt(0);
+    d.textOutlineColor   = QColor(o["textOutlineColor"].toString("#ff000000"));
+    d.textGradient       = o["textGradient"].toBool(false);
+    d.textColor2         = QColor(o["textColor2"].toString("#ff00bfff"));
+    d.textGradientDir    = o["textGradientDir"].toInt(0);
+    d.textShadowDx       = o["textShadowDx"].toInt(0);
+    d.textShadowDy       = o["textShadowDy"].toInt(0);
+    d.textShadowColor    = QColor(o["textShadowColor"].toString("#a0000000"));
     d.webrtcRelayUrl     = o["webrtcRelayUrl"].toString();
     return d;
 }
@@ -2588,6 +2616,8 @@ ClipNodeModel *ClipNodeEditor::addSourceNode(const SourceDescriptor &descIn, con
 
     model->setNodeId(id);
     model->loadSource(desc, thumbnail);
+    if (desc.kind == SourceDescriptor::Kind::Text)
+        wireTextScriptBinding(model, id);
     connectNodeSignals(model, id);
 
     ensureOutputNode();
@@ -3083,6 +3113,19 @@ std::shared_ptr<ScriptOutput> ClipNodeEditor::scriptOutputForDataNode(NodeId dat
     return scriptNode ? scriptNode->output() : nullptr;
 }
 
+void ClipNodeEditor::wireTextScriptBinding(ClipNodeModel *model, NodeId id) {
+    model->setScriptBindingProvider([this, id]() {
+        ScriptBinding binding;
+        const NodeId scriptId = m_scene->scriptNodeForData(id);
+        if (auto *scriptNode = static_cast<ScriptNodeItem *>(m_scriptNodes.value(scriptId))) {
+            binding.code = scriptNode->code();
+            binding.output = scriptNode->output();
+            binding.requestRun = [scriptNode]() { scriptNode->runNow(); };
+        }
+        return binding;
+    });
+}
+
 // ── Context menu / add-node flow ────────────────────────────────────────────
 
 void ClipNodeEditor::onCanvasContextMenu() {
@@ -3564,6 +3607,8 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
             model->loadClip(desc.path, QPixmap{});
         else
             model->loadSource(desc, QPixmap{});
+        if (desc.kind == Kind::Text)
+            wireTextScriptBinding(model, id);
         if (obj.contains("settings"))
             model->applySettings(ClipSettings::fromJson(obj["settings"].toObject()));
         if (obj["repeat"].toBool()) model->setRepeat(true);

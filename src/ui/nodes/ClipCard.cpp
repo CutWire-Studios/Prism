@@ -657,6 +657,8 @@ void ClipCard::onEditClicked() {
 
     case Kind::Text: {
         TextEditDialog dlg(m_sourceDesc, parent);
+        if (scriptBindingProvider)
+            dlg.setScriptBinding(scriptBindingProvider());
         if (dlg.exec() == QDialog::Accepted) {
             const SourceDescriptor updated = dlg.resultDescriptor();
             if (updated.textTemplate.trimmed().isEmpty())

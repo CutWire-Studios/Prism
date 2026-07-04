@@ -56,6 +56,19 @@ struct SourceDescriptor {
     int     textAlign     = 0x0084;     // Qt::AlignCenter (avoid Qt include in header)
     bool    textBgTransparent = true;
     QColor  textBgColor   = Qt::black;
+    bool    textBold      = false;
+    bool    textItalic    = false;
+    bool    textUnderline = false;
+    int     textLetterSpacing = 0;      // extra tracking in % of normal (0 = none)
+    int     textLineHeight    = 100;    // proportional line height %
+    int     textOutlineWidth  = 0;      // px, 0 = no outline
+    QColor  textOutlineColor  = Qt::black;
+    bool    textGradient      = false;  // fill with color → textColor2 gradient
+    QColor  textColor2        = QColor(0x00, 0xbf, 0xff);
+    int     textGradientDir   = 0;      // 0 vertical, 1 horizontal, 2 diag ↘, 3 diag ↗
+    int     textShadowDx      = 0;      // px, 0/0 = no shadow
+    int     textShadowDy      = 0;
+    QColor  textShadowColor   = QColor(0, 0, 0, 160);
 
     bool isLiveSource() const {
         return kind == Kind::Camera || kind == Kind::Screen ||

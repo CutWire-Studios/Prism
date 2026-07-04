@@ -177,6 +177,7 @@ private slots:
 private:
     void connectNodeSignals(ClipNodeModel *model, NodeId id);
     void disconnectNodeSignals(ClipNodeModel *model);
+    void wireTextScriptBinding(ClipNodeModel *model, NodeId id);
 
     ClipNodeScene *sceneForNode(NodeId id) const;
     void registerItem(NodeItemBase *item);

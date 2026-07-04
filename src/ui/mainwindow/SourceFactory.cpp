@@ -111,17 +111,8 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
         }
         return std::make_unique<HtmlSource>(html, path);
     }
-    case Kind::Text: {
-        QFont font(desc.fontFamily, desc.fontSize);
-        return std::make_unique<TextSource>(
-            desc.textTemplate,
-            font,
-            desc.color,
-            static_cast<Qt::Alignment>(desc.textAlign),
-            QSize(desc.canvasWidth, desc.canvasHeight),
-            desc.textBgTransparent,
-            desc.textBgColor);
-    }
+    case Kind::Text:
+        return std::make_unique<TextSource>(desc);
     case Kind::Ndi: {
         auto src = std::make_unique<NdiSource>();
         if (!src->connectTo(desc.path)) return nullptr;

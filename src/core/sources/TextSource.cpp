@@ -1,81 +1,146 @@
 #include "core/sources/TextSource.h"
 #include <QJsonDocument>
-#include <QJsonObject>
 #include <QJsonValue>
+#include <QLinearGradient>
 #include <QPainter>
 #include <QRegularExpression>
+#include <QTextBlockFormat>
+#include <QTextCursor>
+#include <QTextDocument>
+#include <QTextOption>
 
 namespace {
 
-QString substituteParams(const QString &tmpl, const QJsonObject &params) {
+QString jsonValueToText(const QJsonValue &v) {
+    switch (v.type()) {
+    case QJsonValue::String: return v.toString();
+    case QJsonValue::Bool:   return v.toBool() ? QStringLiteral("true")
+                                               : QStringLiteral("false");
+    case QJsonValue::Double: {
+        const double d = v.toDouble();
+        const qint64 i = static_cast<qint64>(d);
+        if (static_cast<double>(i) == d)
+            return QString::number(i);
+        return QString::number(d);
+    }
+    default: return QString();
+    }
+}
+
+void applyFormat(QTextDocument &doc, const QTextCharFormat &cf, int lineHeightPercent) {
+    QTextCursor cursor(&doc);
+    cursor.select(QTextCursor::Document);
+    cursor.mergeCharFormat(cf);
+    QTextBlockFormat bf;
+    bf.setLineHeight(lineHeightPercent, QTextBlockFormat::ProportionalHeight);
+    cursor.mergeBlockFormat(bf);
+}
+
+} // namespace
+
+QString TextSource::substitutePlaceholders(const QString &tmpl, const QJsonObject &params) {
     static const QRegularExpression tokenRx(QStringLiteral("\\{([a-zA-Z_][a-zA-Z0-9_]*)\\}"));
     QString out = tmpl;
     QRegularExpressionMatchIterator it = tokenRx.globalMatch(tmpl);
     while (it.hasNext()) {
         const QRegularExpressionMatch match = it.next();
         const QString key = match.captured(1);
-        const QString replacement = params.value(key).toString();
-        out.replace(match.captured(0), replacement);
+        out.replace(match.captured(0), jsonValueToText(params.value(key)));
     }
     return out;
 }
 
-} // namespace
+QImage TextSource::renderDescriptor(const SourceDescriptor &desc, const QString &resolvedText) {
+    const QSize canvas(desc.canvasWidth > 0 ? desc.canvasWidth : 1280,
+                       desc.canvasHeight > 0 ? desc.canvasHeight : 720);
 
-TextSource::TextSource(const QString &textTemplate,
-                       const QFont &font,
-                       const QColor &color,
-                       Qt::Alignment align,
-                       const QSize &canvas,
-                       bool bgTransparent,
-                       const QColor &bgColor)
-    : m_template(textTemplate)
-    , m_font(font)
-    , m_color(color)
-    , m_align(align)
-    , m_canvas(canvas)
-    , m_bgTransparent(bgTransparent)
-    , m_bgColor(bgColor)
+    QImage img(canvas, QImage::Format_RGBA8888);
+    img.fill(desc.textBgTransparent ? QColor(Qt::transparent) : desc.textBgColor);
+    if (resolvedText.isEmpty())
+        return img;
+
+    QFont font(desc.fontFamily.isEmpty() ? QStringLiteral("Sans Serif") : desc.fontFamily,
+               desc.fontSize > 0 ? desc.fontSize : 48);
+    font.setBold(desc.textBold);
+    font.setItalic(desc.textItalic);
+    font.setUnderline(desc.textUnderline);
+    if (desc.textLetterSpacing != 0)
+        font.setLetterSpacing(QFont::PercentageSpacing, 100.0 + desc.textLetterSpacing);
+
+    const Qt::Alignment align(desc.textAlign);
+
+    QTextDocument doc;
+    doc.setDefaultFont(font);
+    QTextOption opt;
+    opt.setAlignment(align & Qt::AlignHorizontal_Mask);
+    opt.setWrapMode(QTextOption::WordWrap);
+    doc.setDefaultTextOption(opt);
+    doc.setDocumentMargin(16);
+    doc.setTextWidth(canvas.width());
+    doc.setPlainText(resolvedText);
+
+    const int lineHeight = desc.textLineHeight > 0 ? desc.textLineHeight : 100;
+    const qreal docH = doc.size().height();
+    qreal y = 0;
+    if (align & Qt::AlignVCenter)
+        y = (canvas.height() - docH) / 2.0;
+    else if (align & Qt::AlignBottom)
+        y = canvas.height() - docH;
+
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setRenderHint(QPainter::TextAntialiasing);
+    p.translate(0, y);
+
+    const QPen noOutline(Qt::NoPen);
+    const bool hasOutline = desc.textOutlineWidth > 0;
+
+    if (desc.textShadowDx != 0 || desc.textShadowDy != 0) {
+        QTextCharFormat shadowFmt;
+        shadowFmt.setForeground(desc.textShadowColor);
+        shadowFmt.setTextOutline(hasOutline
+            ? QPen(desc.textShadowColor, desc.textOutlineWidth,
+                   Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)
+            : noOutline);
+        applyFormat(doc, shadowFmt, lineHeight);
+        p.save();
+        p.translate(desc.textShadowDx, desc.textShadowDy);
+        doc.drawContents(&p);
+        p.restore();
+    }
+
+    QBrush fill(desc.color.isValid() ? desc.color : QColor(Qt::white));
+    if (desc.textGradient) {
+        QLinearGradient g;
+        const qreal w = canvas.width();
+        switch (desc.textGradientDir) {
+        case 1:  g = QLinearGradient(0, 0, w, 0);       break; // horizontal
+        case 2:  g = QLinearGradient(0, 0, w, docH);    break; // diagonal ↘
+        case 3:  g = QLinearGradient(0, docH, w, 0);    break; // diagonal ↗
+        default: g = QLinearGradient(0, 0, 0, docH);    break; // vertical
+        }
+        g.setColorAt(0.0, desc.color.isValid() ? desc.color : QColor(Qt::white));
+        g.setColorAt(1.0, desc.textColor2.isValid() ? desc.textColor2 : QColor(Qt::white));
+        fill = QBrush(g);
+    }
+
+    QTextCharFormat mainFmt;
+    mainFmt.setForeground(fill);
+    mainFmt.setTextOutline(hasOutline
+        ? QPen(desc.textOutlineColor, desc.textOutlineWidth,
+               Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)
+        : noOutline);
+    applyFormat(doc, mainFmt, lineHeight);
+    doc.drawContents(&p);
+
+    return img;
+}
+
+TextSource::TextSource(const SourceDescriptor &desc)
+    : m_desc(desc)
 {
-    if (m_font.family().isEmpty())
-        m_font.setFamily(QStringLiteral("Sans Serif"));
-    if (m_font.pointSize() <= 0)
-        m_font.setPointSize(48);
-    render();
-}
-
-void TextSource::setTemplate(const QString &textTemplate) {
-    m_template = textTemplate;
-    render();
-}
-
-void TextSource::setFont(const QFont &font) {
-    m_font = font;
-    render();
-}
-
-void TextSource::setColor(const QColor &color) {
-    m_color = color;
-    render();
-}
-
-void TextSource::setAlignment(Qt::Alignment align) {
-    m_align = align;
-    render();
-}
-
-void TextSource::setCanvasSize(const QSize &size) {
-    m_canvas = size;
-    render();
-}
-
-void TextSource::setBackgroundTransparent(bool transparent) {
-    m_bgTransparent = transparent;
-    render();
-}
-
-void TextSource::setBackgroundColor(const QColor &color) {
-    m_bgColor = color;
+    if (!desc.displayName.isEmpty())
+        m_displayName = desc.displayName;
     render();
 }
 
@@ -103,34 +168,15 @@ bool TextSource::nextFrame() {
     QJsonParseError err{};
     const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8(), &err);
     if (doc.isObject())
-        m_resolvedText = substituteParams(m_template, doc.object());
+        m_resolvedText = substitutePlaceholders(m_desc.textTemplate, doc.object());
     else
-        m_resolvedText = m_template;
+        m_resolvedText = m_desc.textTemplate;
 
     render();
     return true;
 }
 
 void TextSource::render() {
-    if (m_canvas.isEmpty()) {
-        m_image = QImage();
-        return;
-    }
-
-    m_image = QImage(m_canvas, QImage::Format_RGBA8888);
-    if (m_bgTransparent)
-        m_image.fill(Qt::transparent);
-    else
-        m_image.fill(m_bgColor);
-
-    const QString text = m_resolvedText.isEmpty() ? m_template : m_resolvedText;
-    if (text.isEmpty())
-        return;
-
-    QPainter p(&m_image);
-    p.setRenderHint(QPainter::Antialiasing);
-    p.setRenderHint(QPainter::TextAntialiasing);
-    p.setFont(m_font);
-    p.setPen(m_color);
-    p.drawText(QRect(QPoint(0, 0), m_canvas), static_cast<int>(m_align), text);
+    m_image = renderDescriptor(
+        m_desc, m_resolvedText.isEmpty() ? m_desc.textTemplate : m_resolvedText);
 }

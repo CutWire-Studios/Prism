@@ -54,6 +54,11 @@ public:
             m_card->setObsSceneName(sceneName);
         }
     }
+    void setScriptBindingProvider(std::function<ScriptBinding()> provider) {
+        if (m_card) {
+            m_card->scriptBindingProvider = std::move(provider);
+        }
+    }
 
     bool isRepeat() const { return m_card->isRepeat(); }
     void applySettings(const ClipSettings &s) { m_card->applySettings(s); }
