@@ -593,7 +593,7 @@ void ClipCard::onEditClicked() {
     }
 
     case Kind::Html: {
-        HtmlEditDialog dlg(m_sourceDesc.htmlContent, m_sourceDesc.htmlWorkspace, this);
+        HtmlEditDialog dlg(m_sourceDesc.htmlContent, m_sourceDesc.htmlWorkspace, parent);
         if (dlg.exec() == QDialog::Accepted) {
             const QString workspace = dlg.resultWorkspaceJson();
             const QString bakedHtml = dlg.resultBakedHtml().trimmed();

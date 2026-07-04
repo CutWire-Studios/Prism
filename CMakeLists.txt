@@ -10,7 +10,7 @@ set(CMAKE_AUTOUIC ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 
 # Qt
-set(_prism_qt_components Core Widgets OpenGL OpenGLWidgets Gui Multimedia WebEngineWidgets Network)
+set(_prism_qt_components Core Widgets OpenGL OpenGLWidgets Gui Multimedia WebEngineWidgets WebChannel Network)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND _prism_qt_components DBus)
 endif()
@@ -191,6 +191,7 @@ set(SOURCES
     src/ui/editors/HtmlEditDialog.cpp
     src/ui/canvas/HtmlPreviewWidget.cpp
     src/ui/canvas/HtmlWorkspaceCanvasWidget.cpp
+    src/ui/canvas/HtmlVisualEditorWidget.cpp
     src/ui/editors/ScriptEditDialog.cpp
     src/ui/editors/TextEditDialog.cpp
     # Extracted helper / controller classes
@@ -293,6 +294,7 @@ set(HEADERS
     include/ui/editors/HtmlEditDialog.h
     include/ui/canvas/HtmlPreviewWidget.h
     include/ui/canvas/HtmlWorkspaceCanvasWidget.h
+    include/ui/canvas/HtmlVisualEditorWidget.h
     include/ui/editors/ScriptEditDialog.h
     include/ui/editors/TextEditDialog.h
     # Extracted helper / controller headers
@@ -361,6 +363,7 @@ target_link_libraries(prism_core PUBLIC
     Qt6::Gui
     Qt6::Multimedia
     Qt6::WebEngineWidgets
+    Qt6::WebChannel
     Qt6::Network
     re2::re2
     ${FFMPEG_LIBRARIES}

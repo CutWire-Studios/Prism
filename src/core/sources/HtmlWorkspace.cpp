@@ -4,7 +4,6 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QRegularExpression>
 #include <QUuid>
 
 namespace {
@@ -35,75 +34,12 @@ static QString loadResource(const char *path) {
     return QString::fromUtf8(f.readAll());
 }
 
-static QString extractBodyInner(const QString &html) {
-    static const QRegularExpression re(
-        QStringLiteral("<body[^>]*>(.*)</body>"),
-        QRegularExpression::CaseInsensitiveOption
-        | QRegularExpression::DotMatchesEverythingOption);
-    const QRegularExpressionMatch m = re.match(html);
-    return m.hasMatch() ? m.captured(1).trimmed() : html;
-}
-
-static QString extractStyleBlocks(const QString &html) {
-    static const QRegularExpression re(
-        QStringLiteral("<style[^>]*>(.*?)</style>"),
-        QRegularExpression::CaseInsensitiveOption
-        | QRegularExpression::DotMatchesEverythingOption);
-    QString out;
-    auto it = re.globalMatch(html);
-    while (it.hasNext())
-        out += it.next().captured(1).trimmed() + QLatin1Char('\n');
-    return out;
-}
-
-static QString extractScriptBlocks(const QString &html) {
-    static const QRegularExpression re(
-        QStringLiteral("<script[^>]*>(.*?)</script>"),
-        QRegularExpression::CaseInsensitiveOption
-        | QRegularExpression::DotMatchesEverythingOption);
-    QString out;
-    auto it = re.globalMatch(html);
-    while (it.hasNext()) {
-        const QString js = it.next().captured(1).trimmed();
-        if (!js.isEmpty())
-            out += QStringLiteral("<script>(function(){\n%1\n})();</script>\n").arg(js);
-    }
-    return out;
-}
-
-static QString scopeDomIds(QString text, const QString &scope) {
-    static const QRegularExpression idAttr(QStringLiteral("id=\"([^\"]+)\""));
-    text.replace(idAttr, QStringLiteral("id=\"%1-\\1\"").arg(scope));
-
-    static const QRegularExpression getById(
-        QStringLiteral(R"(getElementById\(\s*['"]([^'"]+)['"]\s*\))"));
-    text.replace(getById, QStringLiteral("getElementById('%1-\\1')").arg(scope));
-    return text;
-}
-
-static QString scopeCssIds(QString css, const QString &html, const QString &scope) {
-    static const QRegularExpression idAttr(QStringLiteral("id=\"([^\"]+)\""));
-    auto it = idAttr.globalMatch(html);
-    while (it.hasNext()) {
-        const QString id = it.next().captured(1);
-        css.replace(QStringLiteral("#%1").arg(id),
-                    QStringLiteral("#%1-%2").arg(scope, id));
-    }
-    return css;
-}
-
-struct ParsedFragment {
-    QString styles;
-    QString bodyHtml;
-    QString scripts;
-};
-
-static ParsedFragment parseFragment(const QString &html, const QString &scope) {
-    ParsedFragment p;
-    p.styles   = scopeCssIds(extractStyleBlocks(html), html, scope);
-    p.bodyHtml = scopeDomIds(extractBodyInner(html), scope);
-    p.scripts  = scopeDomIds(extractScriptBlocks(html), scope);
-    return p;
+static QString escapeHtmlAttr(QString s) {
+    s.replace(QLatin1Char('&'), QStringLiteral("&amp;"));
+    s.replace(QLatin1Char('<'), QStringLiteral("&lt;"));
+    s.replace(QLatin1Char('>'), QStringLiteral("&gt;"));
+    s.replace(QLatin1Char('"'), QStringLiteral("&quot;"));
+    return s;
 }
 
 } // namespace
@@ -209,13 +145,26 @@ HtmlWorkspaceComponent HtmlPresetRegistry::makeComponent(const QString &presetId
     return c;
 }
 
+QString HtmlPresetRegistry::presetsAsJsonString() {
+    QJsonArray arr;
+    for (const auto &p : kPresets) {
+        QJsonObject o;
+        o["id"]         = p.id;
+        o["name"]       = p.displayName;
+        o["defaultW"]   = (double)p.defaultW;
+        o["defaultH"]   = (double)p.defaultH;
+        o["intrinsicW"] = p.intrinsicW;
+        o["intrinsicH"] = p.intrinsicH;
+        o["html"]       = loadResource(p.resourcePath);
+        arr.append(o);
+    }
+    return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+}
+
 // ── HtmlWorkspaceBuilder ──────────────────────────────────────────────────────
 
 QString HtmlWorkspaceBuilder::build(const HtmlWorkspace &workspace) {
     QString body;
-    QString styles;
-    QString scripts;
-    int compIndex = 0;
 
     QList<const HtmlWorkspaceComponent *> sorted;
     for (const auto &c : workspace.components) {
@@ -241,21 +190,15 @@ QString HtmlWorkspaceBuilder::build(const HtmlWorkspace &workspace) {
         const int w    = qMax(1, static_cast<int>(c->w * HtmlWorkspace::kCanvasWidth));
         const int h    = qMax(1, static_cast<int>(c->h * HtmlWorkspace::kCanvasHeight));
 
-        const QString scope = QStringLiteral("wx%1").arg(compIndex++);
-        const ParsedFragment parsed = parseFragment(fragment, scope);
-
         const double sx = w / double(qMax(1, info->intrinsicW));
         const double sy = h / double(qMax(1, info->intrinsicH));
 
-        styles += QStringLiteral("/* %1 */\n%2\n").arg(scope, parsed.styles);
-
         body += QString(
             "<div class=\"wx-comp\" style=\"left:%1px;top:%2px;width:%3px;height:%4px;"
-            "z-index:%5;overflow:hidden;\">"
-            "<div style=\"width:%6px;height:%7px;transform-origin:top left;"
-            "transform:scale(%8,%9);\">"
-            "%10"
-            "</div></div>\n")
+            "z-index:%5;\">"
+            "<iframe scrolling=\"no\" style=\"width:%6px;height:%7px;"
+            "transform:scale(%8,%9);\" srcdoc=\"%10\"></iframe>"
+            "</div>\n")
                     .arg(left)
                     .arg(top)
                     .arg(w)
@@ -265,9 +208,7 @@ QString HtmlWorkspaceBuilder::build(const HtmlWorkspace &workspace) {
                     .arg(info->intrinsicH)
                     .arg(sx, 0, 'f', 4)
                     .arg(sy, 0, 'f', 4)
-                    .arg(parsed.bodyHtml);
-
-        scripts += parsed.scripts;
+                    .arg(escapeHtmlAttr(fragment));
     }
 
     return QString(R"(<!DOCTYPE html>
@@ -280,16 +221,18 @@ QString HtmlWorkspaceBuilder::build(const HtmlWorkspace &workspace) {
     width: 1280px; height: 720px; overflow: hidden;
     background: transparent;
   }
-  .wx-comp { position: absolute; contain: layout paint; }
-  .wx-comp > div { backface-visibility: hidden; }
-%1</style>
+  .wx-comp { position: absolute; overflow: hidden; }
+  .wx-comp > iframe {
+    display: block; border: 0; background: transparent;
+    transform-origin: top left;
+  }
+</style>
 </head>
 <body>
-%2
-%3
+%1
 </body>
 </html>)")
-        .arg(styles, body, scripts);
+        .arg(body);
 }
 
 QString HtmlWorkspaceBuilder::buildFromJson(const QString &json) {

@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Visual HTML Editor</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #18191b; color: #e0e8ee;
+    font-family: 'Segoe UI', 'Noto Sans', sans-serif; font-size: 12px;
+    user-select: none; -webkit-user-select: none;
+  }
+  #viewport { position: relative; width: 100%; height: 100%; overflow: hidden; }
+  #stage {
+    position: absolute; left: 0; top: 0; width: 1280px; height: 720px;
+    transform-origin: 0 0;
+    background: repeating-conic-gradient(#2b2d31 0% 25%, #34373c 0% 50%) 0 0 / 32px 32px;
+  }
+  #doc {
+    width: 1280px; height: 720px; border: 0; display: block;
+    background: transparent; pointer-events: none;
+  }
+
+  #overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  #stage-frame { position: absolute; border: 1px solid #3a3e44; }
+  #hover-box { position: absolute; border: 1px solid rgba(0, 229, 255, 0.55); display: none; }
+  #sel-box { position: absolute; border: 1px solid #4fc3d0; display: none; }
+  #sel-box.editing { border: 1px dashed #ffb300; }
+  #sel-box.editing .handle { display: none; }
+  .handle {
+    position: absolute; width: 9px; height: 9px;
+    background: #4fc3d0; border: 1px solid #0c343a; border-radius: 2px;
+  }
+  .handle.nw { left: -5px; top: -5px; }
+  .handle.n  { left: calc(50% - 5px); top: -5px; }
+  .handle.ne { right: -5px; top: -5px; }
+  .handle.e  { right: -5px; top: calc(50% - 5px); }
+  .handle.se { right: -5px; bottom: -5px; }
+  .handle.s  { left: calc(50% - 5px); bottom: -5px; }
+  .handle.sw { left: -5px; bottom: -5px; }
+  .handle.w  { left: -5px; top: calc(50% - 5px); }
+  #sel-tag {
+    position: absolute; transform: translateY(-100%); padding: 2px 7px;
+    background: #4fc3d0; color: #06282d; font-size: 11px; font-weight: bold;
+    border-radius: 3px 3px 0 0; white-space: nowrap; display: none;
+  }
+  #sel-box.editing + #sel-tag, #sel-tag.editing { background: #ffb300; color: #3d2c00; }
+  .guide { position: absolute; background: #ff4081; }
+  .guide.v { width: 1px; }
+  .guide.h { height: 1px; }
+
+  #statusbar {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 10px;
+    font-size: 10px; color: #6a737c; text-align: center; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="viewport">
+  <div id="stage"><iframe id="doc" scrolling="no"></iframe></div>
+  <div id="overlay">
+    <div id="stage-frame"></div>
+    <div id="hover-box"></div>
+    <div id="sel-box"></div>
+    <div id="sel-tag"></div>
+    <div id="guides"></div>
+  </div>
+  <div id="statusbar">
+    Click to select &nbsp;·&nbsp; drag to move &nbsp;·&nbsp; handles to resize
+    &nbsp;·&nbsp; double-click to edit text &nbsp;·&nbsp; Del delete
+    &nbsp;·&nbsp; Ctrl+Z undo &nbsp;·&nbsp; hold Alt to disable snapping
+  </div>
+</div>
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<script>
+"use strict";
+
+const CW = 1280, CH = 720;
+const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+const CURSORS = {
+  nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize',
+  n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize'
+};
+
+const $ = id => document.getElementById(id);
+const viewport = $('viewport'), stage = $('stage'), frame = $('doc');
+const selBox = $('sel-box'), selTag = $('sel-tag'), hoverBox = $('hover-box');
+const guidesEl = $('guides');
+
+let bridge = null;
+let scale = 1, originX = 0, originY = 0;
+let selected = null;      // element inside the iframe document
+let editing = null;       // element in inline text-edit mode
+let drag = null;          // {mode, dir, startPt, startRect, baseTransform}
+let undoStack = [], redoStack = [];
+let pendingLoadPush = false;
+
+for (const dir of HANDLES) {
+  const h = document.createElement('div');
+  h.className = 'handle ' + dir;
+  selBox.appendChild(h);
+}
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const doc = () => frame.contentDocument;
+
+// ── host communication ──────────────────────────────────────────────────────
+
+function serialize() {
+  const d = doc();
+  if (!d || !d.documentElement) return '';
+  const clone = d.documentElement.cloneNode(true);
+  for (const n of clone.querySelectorAll('[data-vx-base]'))
+    n.remove();
+  for (const n of clone.querySelectorAll('[contenteditable]'))
+    n.removeAttribute('contenteditable');
+  return '<!DOCTYPE html>\n' + clone.outerHTML;
+}
+
+let pushQueued = false;
+function push() {
+  if (pushQueued) return;
+  pushQueued = true;
+  requestAnimationFrame(() => {
+    pushQueued = false;
+    if (bridge) bridge.htmlChanged(serialize());
+  });
+}
+
+function rgbToHex(s) {
+  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/.exec(s);
+  if (!m) return s.startsWith('#') ? s : '';
+  if (m[4] !== undefined && parseFloat(m[4]) === 0) return '';
+  const hex = n => parseInt(n).toString(16).padStart(2, '0');
+  return '#' + hex(m[1]) + hex(m[2]) + hex(m[3]);
+}
+
+function descriptor(el) {
+  let s = el.tagName.toLowerCase();
+  if (el.id) s += '#' + el.id;
+  const classes = (el.className && typeof el.className === 'string')
+    ? el.className.trim().split(/\s+/).slice(0, 2) : [];
+  for (const c of classes) if (c) s += '.' + c;
+  return s;
+}
+
+function pushSelectionInfo() {
+  if (!bridge) return;
+  if (!selected || !selected.isConnected) {
+    bridge.selectionChanged('{}');
+    return;
+  }
+  const cs = doc().defaultView.getComputedStyle(selected);
+  bridge.selectionChanged(JSON.stringify({
+    tag: descriptor(selected),
+    color: rgbToHex(cs.color),
+    background: rgbToHex(cs.backgroundColor),
+    fontSize: Math.round(parseFloat(cs.fontSize) || 0),
+    opacity: Math.round((parseFloat(cs.opacity) || 1) * 100)
+  }));
+}
+
+// ── undo / redo ─────────────────────────────────────────────────────────────
+
+function snapshot(preState) {
+  undoStack.push(preState !== undefined ? preState : serialize());
+  if (undoStack.length > 50) undoStack.shift();
+  redoStack.length = 0;
+}
+
+function loadDocument(html) {
+  exitTextEdit(false);
+  setSelected(null);
+  frame.srcdoc = html;
+}
+
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(serialize());
+  pendingLoadPush = true;
+  loadDocument(undoStack.pop());
+}
+
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(serialize());
+  pendingLoadPush = true;
+  loadDocument(redoStack.pop());
+}
+
+frame.addEventListener('load', () => {
+  renderChrome();
+  if (pendingLoadPush) {
+    pendingLoadPush = false;
+    push();
+  }
+});
+
+// ── editor API (called from C++) ────────────────────────────────────────────
+
+window.editor = {
+  setHtml(html, baseHref) {
+    undoStack = [];
+    redoStack = [];
+    pendingLoadPush = false;
+    if (baseHref) {
+      const base = '<base href="' + baseHref.replace(/"/g, '&quot;') + '" data-vx-base>';
+      if (/<head[^>]*>/i.test(html))
+        html = html.replace(/<head[^>]*>/i, m => m + base);
+      else
+        html = base + html;
+    }
+    loadDocument(html);
+  },
+  applyStyle(prop, value) {
+    if (!selected || !selected.isConnected) return;
+    snapshot();
+    selected.style.setProperty(prop, value);
+    push();
+    renderChrome();
+  },
+  deleteSelected() {
+    deleteSelectedElement();
+  }
+};
+
+// ── layout & chrome ─────────────────────────────────────────────────────────
+
+function layout() {
+  const vw = viewport.clientWidth, vh = viewport.clientHeight;
+  const pad = 26, bottom = 26;
+  scale = Math.max(0.05, Math.min((vw - 2 * pad) / CW, (vh - pad - bottom) / CH));
+  originX = (vw - CW * scale) / 2;
+  originY = pad + (vh - pad - bottom - CH * scale) / 2;
+  stage.style.transform = `translate(${originX}px, ${originY}px) scale(${scale})`;
+
+  const f = $('stage-frame');
+  f.style.left = (originX - 1) + 'px';
+  f.style.top = (originY - 1) + 'px';
+  f.style.width = (CW * scale + 2) + 'px';
+  f.style.height = (CH * scale + 2) + 'px';
+}
+
+// Element rect in stage coordinates (iframe renders unscaled at 1280×720).
+function elRect(el) {
+  const r = el.getBoundingClientRect();
+  return { x: r.left, y: r.top, w: r.width, h: r.height };
+}
+
+function toView(v, axisOrigin) { return axisOrigin + v * scale; }
+
+function placeBox(box, r) {
+  box.style.display = 'block';
+  box.style.left = toView(r.x, originX) + 'px';
+  box.style.top = toView(r.y, originY) + 'px';
+  box.style.width = r.w * scale + 'px';
+  box.style.height = r.h * scale + 'px';
+}
+
+function renderChrome() {
+  if (selected && !selected.isConnected)
+    selected = null;
+  if (!selected) {
+    selBox.style.display = 'none';
+    selTag.style.display = 'none';
+    return;
+  }
+  const r = elRect(selected);
+  placeBox(selBox, r);
+  selBox.classList.toggle('editing', !!editing);
+  selTag.classList.toggle('editing', !!editing);
+  selTag.style.display = 'block';
+  selTag.style.left = toView(r.x, originX) + 'px';
+  selTag.style.top = toView(r.y, originY) + 'px';
+  selTag.textContent = editing
+    ? descriptor(selected) + ' — editing text'
+    : drag
+      ? `${Math.round(r.x)}, ${Math.round(r.y)}  ·  ${Math.round(r.w)} × ${Math.round(r.h)}`
+      : descriptor(selected);
+}
+
+function renderHover(el) {
+  if (!el || el === selected || drag || editing) {
+    hoverBox.style.display = 'none';
+    return;
+  }
+  placeBox(hoverBox, elRect(el));
+}
+
+function renderGuides(lines) {
+  guidesEl.textContent = '';
+  for (const g of lines) {
+    const el = document.createElement('div');
+    el.className = 'guide ' + g.axis;
+    if (g.axis === 'v') {
+      el.style.left = toView(g.at, originX) + 'px';
+      el.style.top = originY + 'px';
+      el.style.height = CH * scale + 'px';
+    } else {
+      el.style.top = toView(g.at, originY) + 'px';
+      el.style.left = originX + 'px';
+      el.style.width = CW * scale + 'px';
+    }
+    guidesEl.appendChild(el);
+  }
+}
+
+function setSelected(el) {
+  if (el === selected) return;
+  selected = el;
+  renderChrome();
+  pushSelectionInfo();
+}
+
+// Page scripts may mutate the document (clocks etc.) — keep chrome in sync.
+setInterval(() => {
+  if (selected && !drag) {
+    renderChrome();
+  }
+}, 400);
+
+// ── hit-testing ─────────────────────────────────────────────────────────────
+
+function stagePt(e) {
+  const r = viewport.getBoundingClientRect();
+  return { x: (e.clientX - r.left - originX) / scale, y: (e.clientY - r.top - originY) / scale };
+}
+
+function pickAt(pt) {
+  const d = doc();
+  if (!d || pt.x < 0 || pt.y < 0 || pt.x > CW || pt.y > CH) return null;
+  const el = d.elementFromPoint(pt.x, pt.y);
+  if (!el || el === d.documentElement || el === d.body) return null;
+  return el;
+}
+
+function handleAt(pt) {
+  if (!selected || !selected.isConnected) return null;
+  const r = elRect(selected);
+  const tol = 7 / scale;
+  const pos = {
+    nw: [r.x, r.y], n: [r.x + r.w / 2, r.y], ne: [r.x + r.w, r.y],
+    e: [r.x + r.w, r.y + r.h / 2], se: [r.x + r.w, r.y + r.h],
+    s: [r.x + r.w / 2, r.y + r.h], sw: [r.x, r.y + r.h], w: [r.x, r.y + r.h / 2]
+  };
+  for (const dir of HANDLES) {
+    if (Math.abs(pt.x - pos[dir][0]) <= tol && Math.abs(pt.y - pos[dir][1]) <= tol)
+      return dir;
+  }
+  return null;
+}
+
+// ── snapping (canvas edges and center lines) ────────────────────────────────
+
+function bestSnap(edges, targets) {
+  const tol = 8 / scale;
+  let best = null;
+  for (const e of edges) {
+    for (const t of targets) {
+      const d = t - e;
+      if (Math.abs(d) <= tol && (!best || Math.abs(d) < Math.abs(best.d)))
+        best = { d, at: t };
+    }
+  }
+  return best;
+}
+
+// ── transform composition (non-destructive movement) ────────────────────────
+
+function baseTransform(el) {
+  const t = doc().defaultView.getComputedStyle(el).transform;
+  return (t && t !== 'none') ? t : '';
+}
+
+function applyTranslate(el, dx, dy, base) {
+  el.style.transform = `translate(${dx}px, ${dy}px)` + (base ? ' ' + base : '');
+}
+
+// ── mutations ───────────────────────────────────────────────────────────────
+
+function deleteSelectedElement() {
+  if (!selected || !selected.isConnected) return;
+  exitTextEdit(false);
+  snapshot();
+  selected.remove();
+  setSelected(null);
+  push();
+}
+
+function nudgeSelected(dx, dy) {
+  if (!selected || !selected.isConnected) return;
+  snapshot();
+  applyTranslate(selected, dx, dy, baseTransform(selected));
+  renderChrome();
+  push();
+}
+
+// ── inline text editing ─────────────────────────────────────────────────────
+
+let editingPreState = '';
+
+function enterTextEdit(el) {
+  exitTextEdit(false);
+  editingPreState = serialize();
+  editing = el;
+  el.setAttribute('contenteditable', 'plaintext-only');
+  if (!el.isContentEditable)
+    el.setAttribute('contenteditable', 'true');
+  frame.style.pointerEvents = 'auto';
+  el.focus();
+  el.addEventListener('blur', onEditBlur);
+  doc().addEventListener('keydown', onEditKey);
+  renderChrome();
+}
+
+function onEditBlur() { exitTextEdit(true); }
+function onEditKey(e) {
+  if (e.key === 'Escape') {
+    e.stopPropagation();
+    exitTextEdit(true);
+  }
+}
+
+function exitTextEdit(commit) {
+  if (!editing) return;
+  const el = editing;
+  editing = null;
+  el.removeEventListener('blur', onEditBlur);
+  if (doc()) doc().removeEventListener('keydown', onEditKey);
+  el.removeAttribute('contenteditable');
+  frame.style.pointerEvents = 'none';
+  if (commit && serialize() !== editingPreState) {
+    snapshot(editingPreState);
+    push();
+  }
+  renderChrome();
+}
+
+// ── pointer interaction ─────────────────────────────────────────────────────
+
+viewport.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  if (editing) {
+    // Reaches us only outside the iframe (letterbox) — commit the text edit.
+    exitTextEdit(true);
+    return;
+  }
+  const pt = stagePt(e);
+  const dir = handleAt(pt);
+  if (dir) {
+    startResize(dir, pt);
+    return;
+  }
+  const el = pickAt(pt);
+  setSelected(el);
+  if (el) startMove(pt);
+});
+
+viewport.addEventListener('dblclick', e => {
+  if (e.button !== 0 || editing) return;
+  const el = pickAt(stagePt(e));
+  if (el) {
+    setSelected(el);
+    enterTextEdit(el);
+  }
+});
+
+function startMove(pt) {
+  drag = {
+    mode: 'move', startPt: pt,
+    startRect: elRect(selected),
+    baseTransform: baseTransform(selected),
+    preState: serialize(), snapshotted: false
+  };
+  renderChrome();
+}
+
+function startResize(dir, pt) {
+  drag = {
+    mode: 'resize', dir, startPt: pt,
+    startRect: elRect(selected),
+    baseTransform: baseTransform(selected),
+    preState: serialize(), snapshotted: false
+  };
+  renderChrome();
+}
+
+window.addEventListener('mousemove', e => {
+  const pt = stagePt(e);
+  if (!drag) {
+    if (editing) return;
+    const dir = handleAt(pt);
+    const el = dir ? null : pickAt(pt);
+    viewport.style.cursor = dir ? CURSORS[dir] : (el ? 'move' : 'default');
+    renderHover(el);
+    return;
+  }
+
+  if (!selected || !selected.isConnected) return;
+  const dx0 = pt.x - drag.startPt.x, dy0 = pt.y - drag.startPt.y;
+  if (!drag.snapshotted) {
+    if (!dx0 && !dy0) return;
+    snapshot(drag.preState);
+    drag.snapshotted = true;
+    if (drag.mode === 'resize') {
+      selected.style.boxSizing = 'border-box';
+      if (doc().defaultView.getComputedStyle(selected).display === 'inline')
+        selected.style.display = 'inline-block';
+    }
+  }
+  const r = drag.startRect;
+  const useSnap = !e.altKey;
+  const guides = [];
+  const xTargets = [0, CW / 2, CW], yTargets = [0, CH / 2, CH];
+
+  if (drag.mode === 'move') {
+    let dx = dx0, dy = dy0;
+    if (useSnap) {
+      const nx = r.x + dx, ny = r.y + dy;
+      const sx = bestSnap([nx, nx + r.w / 2, nx + r.w], xTargets);
+      const sy = bestSnap([ny, ny + r.h / 2, ny + r.h], yTargets);
+      if (sx) { dx += sx.d; guides.push({ axis: 'v', at: sx.at }); }
+      if (sy) { dy += sy.d; guides.push({ axis: 'h', at: sy.at }); }
+    }
+    applyTranslate(selected, dx, dy, drag.baseTransform);
+  } else {
+    let L = r.x, T = r.y, R = r.x + r.w, B = r.y + r.h;
+    const d = drag.dir;
+    if (d.includes('w')) L = r.x + dx0;
+    if (d.includes('e')) R = r.x + r.w + dx0;
+    if (d.includes('n')) T = r.y + dy0;
+    if (d.includes('s')) B = r.y + r.h + dy0;
+
+    if (useSnap) {
+      if (d.includes('w') || d.includes('e')) {
+        const s = bestSnap([d.includes('w') ? L : R], xTargets);
+        if (s) {
+          if (d.includes('w')) L += s.d; else R += s.d;
+          guides.push({ axis: 'v', at: s.at });
+        }
+      }
+      if (d.includes('n') || d.includes('s')) {
+        const s = bestSnap([d.includes('n') ? T : B], yTargets);
+        if (s) {
+          if (d.includes('n')) T += s.d; else B += s.d;
+          guides.push({ axis: 'h', at: s.at });
+        }
+      }
+    }
+
+    if (R - L < 8) { if (d.includes('w')) L = R - 8; else R = L + 8; }
+    if (B - T < 8) { if (d.includes('n')) T = B - 8; else B = T + 8; }
+
+    selected.style.width = (R - L) + 'px';
+    selected.style.height = (B - T) + 'px';
+    const tx = L - r.x, ty = T - r.y;
+    if (tx || ty || selected.style.transform)
+      applyTranslate(selected, tx, ty, drag.baseTransform);
+  }
+
+  renderGuides(guides);
+  renderChrome();
+});
+
+window.addEventListener('mouseup', e => {
+  if (e.button !== 0 || !drag) return;
+  const changed = drag.snapshotted;
+  drag = null;
+  renderGuides([]);
+  renderChrome();
+  if (changed) {
+    pushSelectionInfo();
+    push();
+  }
+});
+
+// ── keyboard ────────────────────────────────────────────────────────────────
+
+document.addEventListener('keydown', e => {
+  if (drag || editing) return;
+  const step = e.shiftKey ? 10 : 1;
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+    if (e.shiftKey) redo(); else undo();
+    e.preventDefault();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+    redo();
+    e.preventDefault();
+    return;
+  }
+  switch (e.key) {
+    case 'Delete':
+    case 'Backspace':
+      deleteSelectedElement();
+      break;
+    case 'ArrowLeft':  nudgeSelected(-step, 0); e.preventDefault(); break;
+    case 'ArrowRight': nudgeSelected(step, 0);  e.preventDefault(); break;
+    case 'ArrowUp':    nudgeSelected(0, -step); e.preventDefault(); break;
+    case 'ArrowDown':  nudgeSelected(0, step);  e.preventDefault(); break;
+    case 'Escape':
+      setSelected(null);
+      break;
+  }
+});
+
+window.addEventListener('resize', () => {
+  layout();
+  renderChrome();
+});
+layout();
+
+new QWebChannel(qt.webChannelTransport, ch => {
+  bridge = ch.objects.bridge;
+  bridge.jsReady();
+});
+</script>
+</body>
+</html>

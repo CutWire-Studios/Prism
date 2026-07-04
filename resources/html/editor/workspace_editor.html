@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Workspace Editor</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #18191b; color: #e0e8ee;
+    font-family: 'Segoe UI', 'Noto Sans', sans-serif; font-size: 12px;
+    user-select: none; -webkit-user-select: none;
+  }
+  #app { display: flex; width: 100%; height: 100%; }
+
+  /* ── palette ─────────────────────────────────────────────────────────── */
+  #palette {
+    width: 184px; flex: none; background: #1e2023;
+    border-right: 1px solid #2c2f33; display: flex; flex-direction: column;
+  }
+  .pal-head {
+    padding: 10px 12px 6px; font-size: 11px; font-weight: bold;
+    letter-spacing: 2px; color: #8a949e;
+  }
+  #pal-items {
+    flex: 1; overflow-y: auto; padding: 4px 8px 8px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .pal-item {
+    border: 1px solid #2c2f33; border-radius: 6px; background: #232529;
+    cursor: grab; overflow: hidden;
+  }
+  .pal-item:hover { border-color: #4fc3d0; }
+  .pal-item:active { cursor: grabbing; }
+  .pal-thumb {
+    position: relative; height: 64px; overflow: hidden; pointer-events: none;
+    background: repeating-conic-gradient(#2b2d31 0% 25%, #34373c 0% 50%) 0 0 / 16px 16px;
+  }
+  .pal-thumb iframe { position: absolute; left: 50%; top: 50%; border: 0; background: transparent; }
+  .pal-name { padding: 5px 8px; font-size: 11px; color: #c3ccd4; }
+  .pal-hint {
+    padding: 8px 12px; font-size: 10px; color: #6a737c;
+    border-top: 1px solid #2c2f33;
+  }
+
+  /* ── stage ───────────────────────────────────────────────────────────── */
+  #viewport { position: relative; flex: 1; overflow: hidden; }
+  #stage {
+    position: absolute; left: 0; top: 0; width: 1280px; height: 720px;
+    transform-origin: 0 0;
+    background: repeating-conic-gradient(#2b2d31 0% 25%, #34373c 0% 50%) 0 0 / 32px 32px;
+  }
+  .comp { position: absolute; overflow: hidden; }
+  .comp iframe {
+    position: absolute; left: 0; top: 0; border: 0; display: block;
+    transform-origin: 0 0; pointer-events: none; background: transparent;
+  }
+  .comp.ghosted { opacity: 0.25; }
+  #hint {
+    position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px;
+    align-items: center; justify-content: center; color: #5c656e; pointer-events: none;
+  }
+  #hint .big { font-size: 30px; }
+  #hint .small { font-size: 15px; }
+
+  /* ── chrome overlay (unscaled, stays crisp at any zoom) ─────────────── */
+  #overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  #stage-frame { position: absolute; border: 1px solid #3a3e44; }
+  #hover-box { position: absolute; border: 1px solid rgba(0, 229, 255, 0.55); display: none; }
+  #sel-box { position: absolute; border: 1px solid #4fc3d0; display: none; }
+  .handle {
+    position: absolute; width: 9px; height: 9px;
+    background: #4fc3d0; border: 1px solid #0c343a; border-radius: 2px;
+  }
+  .handle.nw { left: -5px; top: -5px; }
+  .handle.n  { left: calc(50% - 5px); top: -5px; }
+  .handle.ne { right: -5px; top: -5px; }
+  .handle.e  { right: -5px; top: calc(50% - 5px); }
+  .handle.se { right: -5px; bottom: -5px; }
+  .handle.s  { left: calc(50% - 5px); bottom: -5px; }
+  .handle.sw { left: -5px; bottom: -5px; }
+  .handle.w  { left: -5px; top: calc(50% - 5px); }
+  #sel-tag {
+    position: absolute; transform: translateY(-100%); padding: 2px 7px;
+    background: #4fc3d0; color: #06282d; font-size: 11px; font-weight: bold;
+    border-radius: 3px 3px 0 0; white-space: nowrap; display: none;
+  }
+  .guide { position: absolute; background: #ff4081; }
+  .guide.v { width: 1px; }
+  .guide.h { height: 1px; }
+  #ghost {
+    position: absolute; display: none;
+    border: 1px dashed #4fc3d0; background: rgba(79, 195, 208, 0.12);
+  }
+  .safe { position: absolute; border: 1px dashed rgba(255, 255, 255, 0.28); display: none; }
+  .safe span { position: absolute; left: 5px; top: 2px; font-size: 10px; color: rgba(255, 255, 255, 0.4); }
+
+  #statusbar {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 10px;
+    font-size: 10px; color: #6a737c; text-align: center; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="palette">
+    <div class="pal-head">WIDGETS</div>
+    <div id="pal-items"></div>
+    <div class="pal-hint">Drag onto the canvas, or double-click to add</div>
+  </aside>
+  <main id="viewport">
+    <div id="stage">
+      <div id="comps"></div>
+      <div id="hint">
+        <div class="big">Build your overlay</div>
+        <div class="small">Drag a widget from the left panel onto this canvas</div>
+      </div>
+    </div>
+    <div id="overlay">
+      <div id="stage-frame"></div>
+      <div class="safe" id="safe-action"><span>ACTION SAFE</span></div>
+      <div class="safe" id="safe-title"><span>TITLE SAFE</span></div>
+      <div id="hover-box"></div>
+      <div id="sel-box"></div>
+      <div id="sel-tag"></div>
+      <div id="ghost"></div>
+      <div id="guides"></div>
+    </div>
+    <div id="statusbar">
+      Drag to move &nbsp;·&nbsp; handles to resize &nbsp;·&nbsp; hold Alt to disable snapping
+      &nbsp;·&nbsp; Del delete &nbsp;·&nbsp; Ctrl+D duplicate &nbsp;·&nbsp; arrows nudge
+    </div>
+  </main>
+</div>
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<script>
+"use strict";
+
+const CW = 1280, CH = 720;
+const MIN_W = CW * 0.02, MIN_H = CH * 0.02;
+const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+const CURSORS = {
+  nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize',
+  n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize'
+};
+
+const $ = id => document.getElementById(id);
+const viewport = $('viewport'), stage = $('stage'), compsEl = $('comps');
+const selBox = $('sel-box'), selTag = $('sel-tag'), hoverBox = $('hover-box');
+const ghost = $('ghost'), guidesEl = $('guides');
+
+let bridge = null;
+let presets = new Map();   // presetId -> {id, name, html, defaultW, defaultH, intrinsicW, intrinsicH}
+let comps = [];            // model in stage px: {id, presetId, x, y, w, h, z, visible}
+let selected = -1;
+let snapOn = true, safeOn = false;
+let scale = 1, originX = 0, originY = 0;
+const nodeMap = new Map(); // comp id -> .comp element
+let drag = null;           // {mode:'move'|'resize', dir, startPt, startRect, targets}
+let dragPresetId = null;   // palette item currently being dragged
+
+for (const dir of HANDLES) {
+  const h = document.createElement('div');
+  h.className = 'handle ' + dir;
+  selBox.appendChild(h);
+}
+
+function uuid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+function fromJsonComp(o) {
+  return {
+    id: o.id || uuid(), presetId: o.presetId,
+    x: (o.x || 0) * CW, y: (o.y || 0) * CH,
+    w: (o.w || 0.35) * CW, h: (o.h || 0.2) * CH,
+    z: o.zIndex || 0, visible: o.visible !== false
+  };
+}
+function toJsonComp(c) {
+  return {
+    id: c.id, presetId: c.presetId,
+    x: c.x / CW, y: c.y / CH, w: c.w / CW, h: c.h / CH,
+    zIndex: c.z, visible: c.visible
+  };
+}
+
+// ── host communication ──────────────────────────────────────────────────────
+
+let pushQueued = false;
+function schedulePush() {
+  if (pushQueued) return;
+  pushQueued = true;
+  requestAnimationFrame(() => {
+    pushQueued = false;
+    if (bridge) bridge.workspaceChanged(JSON.stringify({
+      version: 1, canvasWidth: CW, canvasHeight: CH,
+      components: comps.map(toJsonComp)
+    }));
+  });
+}
+function notifySelection() {
+  if (bridge) bridge.selectionChanged(selected);
+}
+
+window.editor = {
+  setPresets(list) {
+    presets.clear();
+    for (const p of list) presets.set(p.id, p);
+    buildPalette();
+    renderComps();
+  },
+  setWorkspace(ws) {
+    comps = ((ws && ws.components) || []).map(fromJsonComp);
+    if (selected >= comps.length) selected = -1;
+    renderAll();
+  },
+  setSelected(i) {
+    selected = (i >= 0 && i < comps.length) ? i : -1;
+    renderChrome();
+  },
+  setSnap(b) { snapOn = !!b; },
+  setSafeAreas(b) { safeOn = !!b; renderSafe(); }
+};
+
+// ── layout & rendering ──────────────────────────────────────────────────────
+
+function layout() {
+  const vw = viewport.clientWidth, vh = viewport.clientHeight;
+  const pad = 26, bottom = 26;
+  scale = Math.max(0.05, Math.min((vw - 2 * pad) / CW, (vh - pad - bottom) / CH));
+  originX = (vw - CW * scale) / 2;
+  originY = pad + (vh - pad - bottom - CH * scale) / 2;
+  stage.style.transform = `translate(${originX}px, ${originY}px) scale(${scale})`;
+
+  const f = $('stage-frame');
+  f.style.left = (originX - 1) + 'px';
+  f.style.top = (originY - 1) + 'px';
+  f.style.width = (CW * scale + 2) + 'px';
+  f.style.height = (CH * scale + 2) + 'px';
+}
+
+function renderComps() {
+  const seen = new Set();
+  for (const c of comps) {
+    seen.add(c.id);
+    let node = nodeMap.get(c.id);
+    if (node && node.dataset.preset !== c.presetId) {
+      node.remove();
+      nodeMap.delete(c.id);
+      node = null;
+    }
+    if (!node) {
+      node = document.createElement('div');
+      node.className = 'comp';
+      node.dataset.preset = c.presetId;
+      const f = document.createElement('iframe');
+      f.setAttribute('scrolling', 'no');
+      node.appendChild(f);
+      compsEl.appendChild(node);
+      nodeMap.set(c.id, node);
+    }
+    node.style.left = c.x + 'px';
+    node.style.top = c.y + 'px';
+    node.style.width = c.w + 'px';
+    node.style.height = c.h + 'px';
+    node.style.zIndex = c.z;
+    node.classList.toggle('ghosted', !c.visible);
+
+    const p = presets.get(c.presetId);
+    const f = node.firstChild;
+    if (p) {
+      if (!f.dataset.loaded) {
+        f.srcdoc = p.html;
+        f.dataset.loaded = '1';
+      }
+      f.style.width = p.intrinsicW + 'px';
+      f.style.height = p.intrinsicH + 'px';
+      f.style.transform = `scale(${c.w / p.intrinsicW}, ${c.h / p.intrinsicH})`;
+    }
+  }
+  for (const [id, node] of nodeMap) {
+    if (!seen.has(id)) {
+      node.remove();
+      nodeMap.delete(id);
+    }
+  }
+  $('hint').style.display = comps.length ? 'none' : 'flex';
+}
+
+function toView(v, axisOrigin) { return axisOrigin + v * scale; }
+
+function renderChrome() {
+  const c = comps[selected];
+  if (!c) {
+    selBox.style.display = 'none';
+    selTag.style.display = 'none';
+    return;
+  }
+  const x = toView(c.x, originX), y = toView(c.y, originY);
+  selBox.style.display = 'block';
+  selBox.style.left = x + 'px';
+  selBox.style.top = y + 'px';
+  selBox.style.width = c.w * scale + 'px';
+  selBox.style.height = c.h * scale + 'px';
+
+  const p = presets.get(c.presetId);
+  selTag.style.display = 'block';
+  selTag.style.left = x + 'px';
+  selTag.style.top = y + 'px';
+  selTag.textContent = drag
+    ? `${Math.round(c.x)}, ${Math.round(c.y)}  ·  ${Math.round(c.w)} × ${Math.round(c.h)}`
+    : (p ? p.name : c.presetId);
+}
+
+function renderHover(idx) {
+  const c = comps[idx];
+  if (!c || idx === selected || drag) {
+    hoverBox.style.display = 'none';
+    return;
+  }
+  hoverBox.style.display = 'block';
+  hoverBox.style.left = toView(c.x, originX) + 'px';
+  hoverBox.style.top = toView(c.y, originY) + 'px';
+  hoverBox.style.width = c.w * scale + 'px';
+  hoverBox.style.height = c.h * scale + 'px';
+}
+
+function renderSafe() {
+  const areas = [['safe-action', 0.035], ['safe-title', 0.05]];
+  for (const [id, inset] of areas) {
+    const el = $(id);
+    el.style.display = safeOn ? 'block' : 'none';
+    el.style.left = toView(CW * inset, originX) + 'px';
+    el.style.top = toView(CH * inset, originY) + 'px';
+    el.style.width = CW * (1 - 2 * inset) * scale + 'px';
+    el.style.height = CH * (1 - 2 * inset) * scale + 'px';
+  }
+}
+
+function renderGuides(lines) {
+  guidesEl.textContent = '';
+  for (const g of lines) {
+    const el = document.createElement('div');
+    el.className = 'guide ' + g.axis;
+    if (g.axis === 'v') {
+      el.style.left = toView(g.at, originX) + 'px';
+      el.style.top = originY + 'px';
+      el.style.height = CH * scale + 'px';
+    } else {
+      el.style.top = toView(g.at, originY) + 'px';
+      el.style.left = originX + 'px';
+      el.style.width = CW * scale + 'px';
+    }
+    guidesEl.appendChild(el);
+  }
+}
+
+function renderAll() {
+  layout();
+  renderComps();
+  renderChrome();
+  renderSafe();
+}
+
+// ── palette ─────────────────────────────────────────────────────────────────
+
+function buildPalette() {
+  const box = $('pal-items');
+  box.textContent = '';
+  for (const p of presets.values()) {
+    const item = document.createElement('div');
+    item.className = 'pal-item';
+    item.draggable = true;
+
+    const thumb = document.createElement('div');
+    thumb.className = 'pal-thumb';
+    const f = document.createElement('iframe');
+    f.setAttribute('scrolling', 'no');
+    f.style.width = p.intrinsicW + 'px';
+    f.style.height = p.intrinsicH + 'px';
+    f.srcdoc = p.html;
+    thumb.appendChild(f);
+
+    const name = document.createElement('div');
+    name.className = 'pal-name';
+    name.textContent = p.name;
+
+    item.appendChild(thumb);
+    item.appendChild(name);
+    box.appendChild(item);
+
+    requestAnimationFrame(() => {
+      const s = Math.min((thumb.clientWidth - 8) / p.intrinsicW,
+                         (thumb.clientHeight - 8) / p.intrinsicH);
+      f.style.transform = `translate(-50%, -50%) scale(${s})`;
+    });
+
+    item.addEventListener('dragstart', e => {
+      dragPresetId = p.id;
+      e.dataTransfer.setData('text/plain', 'wx-preset:' + p.id);
+      e.dataTransfer.effectAllowed = 'copy';
+    });
+    item.addEventListener('dragend', () => {
+      dragPresetId = null;
+      ghost.style.display = 'none';
+    });
+    item.addEventListener('dblclick', () => {
+      const w = p.defaultW * CW, h = p.defaultH * CH;
+      addComponent(p.id, (CW - w) / 2, (CH - h) / 2);
+    });
+  }
+}
+
+// ── model operations ────────────────────────────────────────────────────────
+
+function maxZ() {
+  return comps.reduce((m, c) => Math.max(m, c.z), -1);
+}
+
+function addComponent(presetId, x, y) {
+  const p = presets.get(presetId);
+  if (!p) return;
+  const w = p.defaultW * CW, h = p.defaultH * CH;
+  comps.push({
+    id: uuid(), presetId,
+    x: clamp(x, 0, CW - w), y: clamp(y, 0, CH - h),
+    w, h, z: maxZ() + 1, visible: true
+  });
+  selected = comps.length - 1;
+  notifySelection();
+  renderComps();
+  renderChrome();
+  schedulePush();
+}
+
+function deleteSelected() {
+  if (selected < 0) return;
+  comps.splice(selected, 1);
+  selected = -1;
+  notifySelection();
+  renderComps();
+  renderChrome();
+  schedulePush();
+}
+
+function duplicateSelected() {
+  const c = comps[selected];
+  if (!c) return;
+  comps.push({
+    ...c, id: uuid(), z: maxZ() + 1,
+    x: clamp(c.x + 24, 0, CW - c.w),
+    y: clamp(c.y + 24, 0, CH - c.h)
+  });
+  selected = comps.length - 1;
+  notifySelection();
+  renderComps();
+  renderChrome();
+  schedulePush();
+}
+
+function nudgeSelected(dx, dy) {
+  const c = comps[selected];
+  if (!c) return;
+  c.x = clamp(c.x + dx, 0, CW - c.w);
+  c.y = clamp(c.y + dy, 0, CH - c.h);
+  renderComps();
+  renderChrome();
+  schedulePush();
+}
+
+// ── snapping ────────────────────────────────────────────────────────────────
+
+function snapTargets(excludeIdx) {
+  const xs = [0, CW / 2, CW], ys = [0, CH / 2, CH];
+  comps.forEach((c, i) => {
+    if (i === excludeIdx || !c.visible) return;
+    xs.push(c.x, c.x + c.w / 2, c.x + c.w);
+    ys.push(c.y, c.y + c.h / 2, c.y + c.h);
+  });
+  return { xs, ys };
+}
+
+// Given candidate edge positions of the moving box, return the best snap
+// adjustment (delta) within tolerance, plus the guide line it snapped to.
+function bestSnap(edges, targets) {
+  const tol = 8 / scale;
+  let best = null;
+  for (const e of edges) {
+    for (const t of targets) {
+      const d = t - e;
+      if (Math.abs(d) <= tol && (!best || Math.abs(d) < Math.abs(best.d)))
+        best = { d, at: t };
+    }
+  }
+  return best;
+}
+
+// ── pointer interaction ─────────────────────────────────────────────────────
+
+function stagePt(e) {
+  const r = viewport.getBoundingClientRect();
+  return { x: (e.clientX - r.left - originX) / scale, y: (e.clientY - r.top - originY) / scale };
+}
+
+function handleAt(pt) {
+  const c = comps[selected];
+  if (!c) return null;
+  const tol = 7 / scale;
+  const pos = {
+    nw: [c.x, c.y], n: [c.x + c.w / 2, c.y], ne: [c.x + c.w, c.y],
+    e: [c.x + c.w, c.y + c.h / 2], se: [c.x + c.w, c.y + c.h],
+    s: [c.x + c.w / 2, c.y + c.h], sw: [c.x, c.y + c.h], w: [c.x, c.y + c.h / 2]
+  };
+  for (const dir of HANDLES) {
+    if (Math.abs(pt.x - pos[dir][0]) <= tol && Math.abs(pt.y - pos[dir][1]) <= tol)
+      return dir;
+  }
+  return null;
+}
+
+function compAt(pt) {
+  const order = comps.map((c, i) => i)
+    .sort((a, b) => comps[b].z - comps[a].z || b - a);
+  for (const i of order) {
+    const c = comps[i];
+    if (pt.x >= c.x && pt.x <= c.x + c.w && pt.y >= c.y && pt.y <= c.y + c.h)
+      return i;
+  }
+  return -1;
+}
+
+viewport.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  const pt = stagePt(e);
+  const dir = handleAt(pt);
+  if (dir) {
+    startDrag('resize', dir, pt);
+    return;
+  }
+  const idx = compAt(pt);
+  if (idx !== selected) {
+    selected = idx;
+    notifySelection();
+  }
+  renderChrome();
+  if (idx >= 0) startDrag('move', null, pt);
+});
+
+function startDrag(mode, dir, pt) {
+  const c = comps[selected];
+  if (!c) return;
+  drag = {
+    mode, dir, startPt: pt,
+    startRect: { x: c.x, y: c.y, w: c.w, h: c.h },
+    targets: snapTargets(selected)
+  };
+  renderChrome();
+}
+
+window.addEventListener('mousemove', e => {
+  const pt = stagePt(e);
+  if (!drag) {
+    const dir = handleAt(pt);
+    const idx = dir ? -1 : compAt(pt);
+    viewport.style.cursor = dir ? CURSORS[dir] : (idx >= 0 ? 'move' : 'default');
+    renderHover(idx);
+    return;
+  }
+
+  const c = comps[selected];
+  if (!c) return;
+  const dx = pt.x - drag.startPt.x, dy = pt.y - drag.startPt.y;
+  const r = drag.startRect;
+  const useSnap = snapOn && !e.altKey;
+  const guides = [];
+
+  if (drag.mode === 'move') {
+    let nx = r.x + dx, ny = r.y + dy;
+    if (useSnap) {
+      const sx = bestSnap([nx, nx + r.w / 2, nx + r.w], drag.targets.xs);
+      const sy = bestSnap([ny, ny + r.h / 2, ny + r.h], drag.targets.ys);
+      if (sx) { nx += sx.d; guides.push({ axis: 'v', at: sx.at }); }
+      if (sy) { ny += sy.d; guides.push({ axis: 'h', at: sy.at }); }
+    }
+    c.x = clamp(nx, 0, CW - r.w);
+    c.y = clamp(ny, 0, CH - r.h);
+  } else {
+    let L = r.x, T = r.y, R = r.x + r.w, B = r.y + r.h;
+    const d = drag.dir;
+    if (d.includes('w')) L = r.x + dx;
+    if (d.includes('e')) R = r.x + r.w + dx;
+    if (d.includes('n')) T = r.y + dy;
+    if (d.includes('s')) B = r.y + r.h + dy;
+
+    if (useSnap) {
+      if (d.includes('w') || d.includes('e')) {
+        const s = bestSnap([d.includes('w') ? L : R], drag.targets.xs);
+        if (s) {
+          if (d.includes('w')) L += s.d; else R += s.d;
+          guides.push({ axis: 'v', at: s.at });
+        }
+      }
+      if (d.includes('n') || d.includes('s')) {
+        const s = bestSnap([d.includes('n') ? T : B], drag.targets.ys);
+        if (s) {
+          if (d.includes('n')) T += s.d; else B += s.d;
+          guides.push({ axis: 'h', at: s.at });
+        }
+      }
+    }
+
+    L = clamp(L, 0, R - MIN_W);
+    T = clamp(T, 0, B - MIN_H);
+    R = clamp(R, L + MIN_W, CW);
+    B = clamp(B, T + MIN_H, CH);
+
+    // Shift on a corner keeps the original aspect ratio, anchored opposite.
+    if (e.shiftKey && d.length === 2) {
+      const aspect = r.w / r.h;
+      let w = R - L, h = B - T;
+      if (w / h > aspect) w = h * aspect; else h = w / aspect;
+      if (d.includes('w')) L = R - w; else R = L + w;
+      if (d.includes('n')) T = B - h; else B = T + h;
+    }
+
+    c.x = L; c.y = T; c.w = R - L; c.h = B - T;
+  }
+
+  renderGuides(guides);
+  renderComps();
+  renderChrome();
+  schedulePush();
+});
+
+window.addEventListener('mouseup', e => {
+  if (e.button !== 0 || !drag) return;
+  drag = null;
+  renderGuides([]);
+  renderChrome();
+});
+
+// ── drop from palette ───────────────────────────────────────────────────────
+
+function ghostRect(e) {
+  const p = presets.get(dragPresetId);
+  if (!p) return null;
+  const w = p.defaultW * CW, h = p.defaultH * CH;
+  const pt = stagePt(e);
+  let x = clamp(pt.x - w / 2, 0, CW - w);
+  let y = clamp(pt.y - h / 2, 0, CH - h);
+  if (snapOn && !e.altKey) {
+    const targets = snapTargets(-1);
+    const sx = bestSnap([x, x + w / 2, x + w], targets.xs);
+    const sy = bestSnap([y, y + h / 2, y + h], targets.ys);
+    if (sx) x = clamp(x + sx.d, 0, CW - w);
+    if (sy) y = clamp(y + sy.d, 0, CH - h);
+  }
+  return { x, y, w, h };
+}
+
+viewport.addEventListener('dragover', e => {
+  if (!dragPresetId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+  const r = ghostRect(e);
+  if (!r) return;
+  ghost.style.display = 'block';
+  ghost.style.left = toView(r.x, originX) + 'px';
+  ghost.style.top = toView(r.y, originY) + 'px';
+  ghost.style.width = r.w * scale + 'px';
+  ghost.style.height = r.h * scale + 'px';
+});
+
+viewport.addEventListener('dragleave', () => {
+  ghost.style.display = 'none';
+});
+
+viewport.addEventListener('drop', e => {
+  e.preventDefault();
+  ghost.style.display = 'none';
+  const data = e.dataTransfer.getData('text/plain');
+  if (!data.startsWith('wx-preset:')) return;
+  const r = ghostRect(e);
+  if (r) addComponent(data.slice(10), r.x, r.y);
+  dragPresetId = null;
+});
+
+// ── keyboard ────────────────────────────────────────────────────────────────
+
+document.addEventListener('keydown', e => {
+  if (drag) return;
+  const step = e.shiftKey ? 10 : 1;
+  switch (e.key) {
+    case 'Delete':
+    case 'Backspace':
+      deleteSelected();
+      break;
+    case 'ArrowLeft':  nudgeSelected(-step, 0); e.preventDefault(); break;
+    case 'ArrowRight': nudgeSelected(step, 0);  e.preventDefault(); break;
+    case 'ArrowUp':    nudgeSelected(0, -step); e.preventDefault(); break;
+    case 'ArrowDown':  nudgeSelected(0, step);  e.preventDefault(); break;
+    case 'Escape':
+      if (selected >= 0) {
+        selected = -1;
+        notifySelection();
+        renderChrome();
+      }
+      break;
+    case 'd':
+    case 'D':
+      if (e.ctrlKey || e.metaKey) {
+        duplicateSelected();
+        e.preventDefault();
+      }
+      break;
+  }
+});
+
+window.addEventListener('resize', renderAll);
+renderAll();
+
+new QWebChannel(qt.webChannelTransport, ch => {
+  bridge = ch.objects.bridge;
+  bridge.jsReady();
+});
+</script>
+</body>
+</html>

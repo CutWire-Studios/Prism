@@ -15,6 +15,8 @@
       <layout class="QVBoxLayout" name="simpleRoot" stretch="0,1">
        <item>
         <layout class="QHBoxLayout" name="fileBar">
+         <item><widget class="QToolButton" name="codeViewBtn"><property name="text"><string>Code</string></property><property name="checkable"><bool>true</bool></property><property name="checked"><bool>true</bool></property><property name="autoExclusive"><bool>true</bool></property></widget></item>
+         <item><widget class="QToolButton" name="visualViewBtn"><property name="text"><string>Visual</string></property><property name="checkable"><bool>true</bool></property><property name="autoExclusive"><bool>true</bool></property><property name="toolTip"><string>Edit the document visually — no code needed</string></property></widget></item>
          <item><widget class="QLabel" name="fileLabel"><property name="text"><string>File:</string></property></widget></item>
          <item><widget class="QLineEdit" name="filePathEdit"><property name="placeholderText"><string>Leave empty to use inline HTML below</string></property></widget></item>
          <item><widget class="QPushButton" name="browseBtn"><property name="text"><string>Browse…</string></property><property name="maximumWidth"><number>100</number></property></widget></item>
@@ -22,73 +24,134 @@
         </layout>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="midLayout" stretch="1,2,3">
-         <item>
-          <layout class="QVBoxLayout">
-           <item><widget class="QLabel"><property name="text"><string>Presets</string></property></widget></item>
-           <item><widget class="QListWidget" name="presetList"/></item>
-          </layout>
-         </item>
-         <item>
-          <layout class="QVBoxLayout">
-           <item><widget class="QLabel"><property name="text"><string>HTML Code</string></property></widget></item>
-           <item><widget class="QPlainTextEdit" name="codeEdit"/></item>
-          </layout>
-         </item>
-         <item>
-          <layout class="QVBoxLayout">
-           <item><widget class="QLabel"><property name="text"><string>Preview</string></property></widget></item>
+        <widget class="QStackedWidget" name="simpleStack">
+         <widget class="QWidget" name="codePage">
+          <layout class="QHBoxLayout" name="midLayout" stretch="1,2,3">
+           <property name="leftMargin"><number>0</number></property>
+           <property name="rightMargin"><number>0</number></property>
+           <property name="topMargin"><number>0</number></property>
+           <property name="bottomMargin"><number>0</number></property>
            <item>
-            <widget class="HtmlPreviewWidget" name="simplePreview">
-             <property name="minimumSize"><size><width>320</width><height>180</height></size></property>
+            <layout class="QVBoxLayout">
+             <item><widget class="QLabel"><property name="text"><string>Presets</string></property></widget></item>
+             <item><widget class="QListWidget" name="presetList"/></item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QVBoxLayout">
+             <item><widget class="QLabel"><property name="text"><string>HTML Code</string></property></widget></item>
+             <item><widget class="QPlainTextEdit" name="codeEdit"/></item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QVBoxLayout">
+             <item><widget class="QLabel"><property name="text"><string>Preview</string></property></widget></item>
+             <item>
+              <widget class="HtmlPreviewWidget" name="simplePreview">
+               <property name="minimumSize"><size><width>320</width><height>180</height></size></property>
+              </widget>
+             </item>
+             <item><widget class="QPushButton" name="refreshBtn"><property name="text"><string>Refresh Preview</string></property></widget></item>
+             <item><widget class="QLabel" name="errorLabel"><property name="text"><string/></property><property name="wordWrap"><bool>true</bool></property><property name="styleSheet"><string>color: #f44336;</string></property></widget></item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="visualPage">
+          <layout class="QHBoxLayout" name="visualLayout" stretch="1,0">
+           <property name="leftMargin"><number>0</number></property>
+           <property name="rightMargin"><number>0</number></property>
+           <property name="topMargin"><number>0</number></property>
+           <property name="bottomMargin"><number>0</number></property>
+           <item><widget class="HtmlVisualEditorWidget" name="visualEditor"/></item>
+           <item>
+            <widget class="QWidget" name="inspectorPanel">
+             <property name="minimumSize"><size><width>230</width><height>0</height></size></property>
+             <property name="maximumSize"><size><width>230</width><height>16777215</height></size></property>
+             <layout class="QVBoxLayout" name="inspectorLayout">
+              <property name="leftMargin"><number>0</number></property>
+              <property name="rightMargin"><number>0</number></property>
+              <property name="topMargin"><number>0</number></property>
+              <property name="bottomMargin"><number>0</number></property>
+              <item><widget class="QLabel" name="inspElementLabel"><property name="text"><string>Nothing selected</string></property><property name="styleSheet"><string>font-weight:bold;</string></property></widget></item>
+              <item>
+               <layout class="QGridLayout" name="inspGrid">
+                <item row="0" column="0"><widget class="QLabel"><property name="text"><string>Text size</string></property></widget></item>
+                <item row="0" column="1"><widget class="QSpinBox" name="inspFontSizeSpin"><property name="suffix"><string> px</string></property><property name="minimum"><number>4</number></property><property name="maximum"><number>400</number></property></widget></item>
+                <item row="1" column="0"><widget class="QLabel"><property name="text"><string>Text color</string></property></widget></item>
+                <item row="1" column="1"><widget class="QPushButton" name="inspTextColorBtn"><property name="text"><string/></property></widget></item>
+                <item row="2" column="0"><widget class="QLabel"><property name="text"><string>Fill color</string></property></widget></item>
+                <item row="2" column="1"><widget class="QPushButton" name="inspBgColorBtn"><property name="text"><string/></property></widget></item>
+                <item row="3" column="0"><widget class="QLabel"><property name="text"><string>Opacity</string></property></widget></item>
+                <item row="3" column="1"><widget class="QSpinBox" name="inspOpacitySpin"><property name="suffix"><string> %</string></property><property name="minimum"><number>0</number></property><property name="maximum"><number>100</number></property><property name="value"><number>100</number></property></widget></item>
+               </layout>
+              </item>
+              <item><widget class="QPushButton" name="inspDeleteBtn"><property name="text"><string>Delete Element</string></property></widget></item>
+              <item><spacer><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
+              <item><widget class="QLabel" name="inspHintLabel"><property name="text"><string>Click any element to select it. Drag to move, use the handles to resize, double-click to edit text. Ctrl+Z undoes.</string></property><property name="wordWrap"><bool>true</bool></property><property name="styleSheet"><string>color:#888;font-size:11px;</string></property></widget></item>
+             </layout>
             </widget>
            </item>
-           <item><widget class="QPushButton" name="refreshBtn"><property name="text"><string>Refresh Preview</string></property></widget></item>
-           <item><widget class="QLabel" name="errorLabel"><property name="text"><string/></property><property name="wordWrap"><bool>true</bool></property><property name="styleSheet"><string>color: #f44336;</string></property></widget></item>
           </layout>
-         </item>
-        </layout>
+         </widget>
+        </widget>
        </item>
       </layout>
      </widget>
      <widget class="QWidget" name="workspaceTab">
       <attribute name="title"><string>Workspace</string></attribute>
-      <layout class="QHBoxLayout" name="workspaceLayout" stretch="1,3,1,2">
+      <layout class="QVBoxLayout" name="workspaceLayout" stretch="0,1">
        <item>
-        <layout class="QVBoxLayout" name="paletteLayout">
-         <item><widget class="QLabel"><property name="text"><string>Components</string></property></widget></item>
-         <item><widget class="QListWidget" name="componentPalette"/></item>
-         <item><widget class="QLabel" name="paletteHint"><property name="text"><string>Drag onto canvas</string></property><property name="wordWrap"><bool>true</bool></property><property name="styleSheet"><string>color:#888;font-size:11px;</string></property></widget></item>
-        </layout>
-       </item>
-       <item><widget class="HtmlWorkspaceCanvasWidget" name="workspaceCanvas"/></item>
-       <item>
-        <layout class="QVBoxLayout" name="propsLayout">
-         <item><widget class="QLabel"><property name="text"><string>Properties</string></property></widget></item>
-         <item><widget class="QLabel" name="selectedNameLabel"><property name="text"><string>No selection</string></property><property name="styleSheet"><string>font-weight:bold;</string></property></widget></item>
-         <item><widget class="QLabel"><property name="text"><string>X (%)</string></property></widget></item>
-         <item><widget class="QDoubleSpinBox" name="propXSpin"><property name="suffix"><string> %</string></property><property name="decimals"><number>1</number></property><property name="maximum"><double>99.0</double></property></widget></item>
-         <item><widget class="QLabel"><property name="text"><string>Y (%)</string></property></widget></item>
-         <item><widget class="QDoubleSpinBox" name="propYSpin"><property name="suffix"><string> %</string></property><property name="decimals"><number>1</number></property><property name="maximum"><double>99.0</double></property></widget></item>
-         <item><widget class="QLabel"><property name="text"><string>Width (%)</string></property></widget></item>
-         <item><widget class="QDoubleSpinBox" name="propWSpin"><property name="suffix"><string> %</string></property><property name="decimals"><number>1</number></property><property name="minimum"><double>2.0</double></property><property name="maximum"><double>100.0</double></property><property name="value"><double>35.0</double></property></widget></item>
-         <item><widget class="QLabel"><property name="text"><string>Height (%)</string></property></widget></item>
-         <item><widget class="QDoubleSpinBox" name="propHSpin"><property name="suffix"><string> %</string></property><property name="decimals"><number>1</number></property><property name="minimum"><double>2.0</double></property><property name="maximum"><double>100.0</double></property><property name="value"><double>20.0</double></property></widget></item>
-         <item><widget class="QPushButton" name="deleteCompBtn"><property name="text"><string>Delete</string></property></widget></item>
-         <item><widget class="QPushButton" name="duplicateCompBtn"><property name="text"><string>Duplicate</string></property></widget></item>
-         <item><spacer><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
-         <item><widget class="QPushButton" name="buildPreviewBtn"><property name="text"><string>Build Preview</string></property></widget></item>
+        <layout class="QHBoxLayout" name="wsToolBar">
+         <item><widget class="QToolButton" name="snapBtn"><property name="text"><string>Snap</string></property><property name="checkable"><bool>true</bool></property><property name="checked"><bool>true</bool></property><property name="toolTip"><string>Snap to canvas edges, centers and other widgets while dragging (hold Alt to bypass)</string></property></widget></item>
+         <item><widget class="QToolButton" name="safeAreaBtn"><property name="text"><string>Safe Areas</string></property><property name="checkable"><bool>true</bool></property><property name="toolTip"><string>Show broadcast action-safe and title-safe guides</string></property></widget></item>
+         <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property></spacer></item>
+         <item><widget class="QLabel" name="wsErrorLabel"><property name="text"><string/></property><property name="styleSheet"><string>color: #f44336;</string></property></widget></item>
         </layout>
        </item>
        <item>
-        <layout class="QVBoxLayout" name="wsPreviewLayout">
-         <item><widget class="QLabel"><property name="text"><string>Built Preview</string></property></widget></item>
+        <layout class="QHBoxLayout" name="wsMainRow" stretch="1,0">
+         <item><widget class="HtmlWorkspaceCanvasWidget" name="workspaceCanvas"/></item>
          <item>
-          <widget class="HtmlPreviewWidget" name="wsPreview">
-           <property name="minimumSize"><size><width>320</width><height>180</height></size></property>
+          <widget class="QWidget" name="wsSidePanel">
+           <property name="minimumSize"><size><width>230</width><height>0</height></size></property>
+           <property name="maximumSize"><size><width>230</width><height>16777215</height></size></property>
+           <layout class="QVBoxLayout" name="propsLayout">
+            <property name="leftMargin"><number>0</number></property>
+            <property name="rightMargin"><number>0</number></property>
+            <property name="topMargin"><number>0</number></property>
+            <property name="bottomMargin"><number>0</number></property>
+            <item><widget class="QLabel" name="selectedNameLabel"><property name="text"><string>No selection</string></property><property name="styleSheet"><string>font-weight:bold;</string></property></widget></item>
+            <item>
+             <layout class="QGridLayout" name="propGrid">
+              <item row="0" column="0"><widget class="QLabel"><property name="text"><string>X</string></property></widget></item>
+              <item row="0" column="1"><widget class="QDoubleSpinBox" name="propXSpin"><property name="suffix"><string> %</string></property><property name="decimals"><number>1</number></property><property name="maximum"><double>99.0</double></property></widget></item>
+              <item row="0" column="2"><widget class="QLabel"><property name="text"><string>Y</string></property></widget></item>
+              <item row="0" column="3"><widget class="QDoubleSpinBox" name="propYSpin"><property name="suffix"><string> %</string></property><property name="decimals"><number>1</number></property><property name="maximum"><double>99.0</double></property></widget></item>
+              <item row="1" column="0"><widget class="QLabel"><property name="text"><string>W</string></property></widget></item>
+              <item row="1" column="1"><widget class="QDoubleSpinBox" name="propWSpin"><property name="suffix"><string> %</string></property><property name="decimals"><number>1</number></property><property name="minimum"><double>2.0</double></property><property name="maximum"><double>100.0</double></property><property name="value"><double>35.0</double></property></widget></item>
+              <item row="1" column="2"><widget class="QLabel"><property name="text"><string>H</string></property></widget></item>
+              <item row="1" column="3"><widget class="QDoubleSpinBox" name="propHSpin"><property name="suffix"><string> %</string></property><property name="decimals"><number>1</number></property><property name="minimum"><double>2.0</double></property><property name="maximum"><double>100.0</double></property><property name="value"><double>20.0</double></property></widget></item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="compBtnRow">
+              <item><widget class="QPushButton" name="duplicateCompBtn"><property name="text"><string>Duplicate</string></property></widget></item>
+              <item><widget class="QPushButton" name="deleteCompBtn"><property name="text"><string>Delete</string></property></widget></item>
+             </layout>
+            </item>
+            <item><widget class="QLabel" name="layersLabel"><property name="text"><string>Layers</string></property><property name="styleSheet"><string>font-weight:bold;margin-top:8px;</string></property></widget></item>
+            <item><widget class="QListWidget" name="layerList"><property name="toolTip"><string>Top layer first — check to show, uncheck to hide</string></property></widget></item>
+            <item>
+             <layout class="QHBoxLayout" name="layerBtnRow">
+              <item><widget class="QToolButton" name="layerUpBtn"><property name="text"><string>▲</string></property><property name="toolTip"><string>Bring forward</string></property></widget></item>
+              <item><widget class="QToolButton" name="layerDownBtn"><property name="text"><string>▼</string></property><property name="toolTip"><string>Send backward</string></property></widget></item>
+              <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property></spacer></item>
+             </layout>
+            </item>
+           </layout>
           </widget>
          </item>
-         <item><widget class="QLabel" name="wsErrorLabel"><property name="text"><string/></property><property name="wordWrap"><bool>true</bool></property><property name="styleSheet"><string>color: #f44336;</string></property></widget></item>
         </layout>
        </item>
       </layout>
@@ -113,6 +176,11 @@
    <class>HtmlWorkspaceCanvasWidget</class>
    <extends>QWidget</extends>
    <header>ui/canvas/HtmlWorkspaceCanvasWidget.h</header>
+  </customwidget>
+  <customwidget>
+   <class>HtmlVisualEditorWidget</class>
+   <extends>QWidget</extends>
+   <header>ui/canvas/HtmlVisualEditorWidget.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

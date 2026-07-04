@@ -52,8 +52,15 @@ public:
     static const HtmlPresetInfo *find(const QString &presetId);
     static QString loadFragment(const QString &presetId);
     static HtmlWorkspaceComponent makeComponent(const QString &presetId);
+
+    /// Catalog + full widget HTML as a JSON array, consumed by the WYSIWYG
+    /// editor page to render live palette thumbnails and canvas previews.
+    static QString presetsAsJsonString();
 };
 
+/// Bakes a workspace into a single 1280×720 page. Each component keeps its
+/// complete document isolated in its own absolutely-positioned <iframe srcdoc>
+/// browsing context, so widget styles, ids and scripts can never collide.
 class HtmlWorkspaceBuilder {
 public:
     static QString build(const HtmlWorkspace &workspace);

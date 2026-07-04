@@ -22,6 +22,8 @@
         <file>html/widgets/countdown_timer.html</file>
         <file>html/widgets/cricket_score_bar.html</file>
         <file>html/widgets/cricket_score_table.html</file>
+        <file>html/editor/workspace_editor.html</file>
+        <file>html/editor/visual_editor.html</file>
         <file>scripts/clock.lua</file>
         <file>scripts/counter.lua</file>
         <file>scripts/greeting.lua</file>

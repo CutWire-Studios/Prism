@@ -3,22 +3,16 @@
 #include "core/sources/HtmlWorkspace.h"
 #include <algorithm>
 #include <QWebEngineView>
-#include <QVBoxLayout>
+#include <QColorDialog>
 #include <QFileDialog>
 #include <QFile>
 #include <QFont>
 #include <QUrl>
 #include <QFileInfo>
-#include <QListWidget>
-#include <QDrag>
-#include <QMimeData>
-#include <QMouseEvent>
-#include <QApplication>
+#include <QListWidgetItem>
 #include <QUuid>
 
 namespace {
-
-constexpr char kPresetMime[] = "application/x-prism-html-preset";
 
 struct LegacyPreset { const char *name; const char *resource; };
 
@@ -38,35 +32,16 @@ static QString loadResource(const char *path) {
     return QString::fromUtf8(f.readAll()).trimmed();
 }
 
-class DraggablePaletteWidget : public QListWidget {
-public:
-    using QListWidget::QListWidget;
-
-protected:
-    void mousePressEvent(QMouseEvent *e) override {
-        if (e->button() == Qt::LeftButton)
-            m_dragStart = e->position();
-        QListWidget::mousePressEvent(e);
-    }
-
-    void mouseMoveEvent(QMouseEvent *e) override {
-        if (!(e->buttons() & Qt::LeftButton) || !currentItem())
-            return;
-        if ((e->position() - m_dragStart).manhattanLength()
-            < QApplication::startDragDistance())
-            return;
-
-        auto *mime = new QMimeData;
-        mime->setData(kPresetMime,
-                      currentItem()->data(Qt::UserRole).toString().toUtf8());
-        auto *drag = new QDrag(this);
-        drag->setMimeData(mime);
-        drag->exec(Qt::CopyAction);
-    }
-
-private:
-    QPointF m_dragStart;
-};
+// Component indices ordered top layer first (highest zIndex first).
+static QList<int> zOrderTopFirst(const HtmlWorkspace &ws) {
+    QList<int> order;
+    for (int i = 0; i < ws.components.size(); ++i)
+        order.append(i);
+    std::sort(order.begin(), order.end(), [&ws](int a, int b) {
+        return ws.components[a].zIndex > ws.components[b].zIndex;
+    });
+    return order;
+}
 
 } // namespace
 
@@ -85,13 +60,10 @@ HtmlEditDialog::HtmlEditDialog(const QString &initialHtml,
     ui->codeEdit->setTabStopDistance(28);
 
     m_simplePreview = ui->simplePreview->webView();
-    m_wsPreview     = ui->wsPreview->webView();
 
     for (int i = 0; i < kLegacyPresetCount; ++i)
         ui->presetList->addItem(kLegacyPresets[i].name);
     ui->presetList->addItem("Custom HTML");
-
-    setupPalette();
 
     connect(ui->presetList,  &QListWidget::currentRowChanged,
             this,            &HtmlEditDialog::onPresetSelected);
@@ -100,6 +72,7 @@ HtmlEditDialog::HtmlEditDialog(const QString &initialHtml,
     connect(ui->refreshBtn,  &QPushButton::clicked, this, &HtmlEditDialog::onRefreshSimplePreview);
     connect(ui->buttonBox,   &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(ui->buttonBox,   &QDialogButtonBox::accepted, this, [this]() {
+        syncVisualToCode();
         if (editMode() == EditMode::Workspace && currentWorkspace().isEmpty()) {
             ui->wsErrorLabel->setText(tr("Add at least one component to the canvas."));
             ui->modeTabs->setCurrentWidget(ui->workspaceTab);
@@ -107,7 +80,6 @@ HtmlEditDialog::HtmlEditDialog(const QString &initialHtml,
         }
         accept();
     });
-    connect(ui->modeTabs,    &QTabWidget::currentChanged, this, &HtmlEditDialog::onModeTabChanged);
 
     connect(ui->workspaceCanvas, &HtmlWorkspaceCanvasWidget::workspaceChanged,
             this,                &HtmlEditDialog::onWorkspaceChanged);
@@ -120,13 +92,39 @@ HtmlEditDialog::HtmlEditDialog(const QString &initialHtml,
     connect(ui->propHSpin, &QDoubleSpinBox::valueChanged, this, &HtmlEditDialog::onPropSpinChanged);
     connect(ui->deleteCompBtn,    &QPushButton::clicked, this, &HtmlEditDialog::onDeleteComponent);
     connect(ui->duplicateCompBtn, &QPushButton::clicked, this, &HtmlEditDialog::onDuplicateComponent);
-    connect(ui->buildPreviewBtn,  &QPushButton::clicked, this, &HtmlEditDialog::onBuildWorkspacePreview);
+
+    connect(ui->snapBtn,     &QToolButton::toggled,
+            ui->workspaceCanvas, &HtmlWorkspaceCanvasWidget::setSnapEnabled);
+    connect(ui->safeAreaBtn, &QToolButton::toggled,
+            ui->workspaceCanvas, &HtmlWorkspaceCanvasWidget::setSafeAreasVisible);
+
+    connect(ui->layerList, &QListWidget::currentRowChanged,
+            this,          &HtmlEditDialog::onLayerRowChanged);
+    connect(ui->layerList, &QListWidget::itemChanged,
+            this,          &HtmlEditDialog::onLayerItemChanged);
+    connect(ui->layerUpBtn,   &QToolButton::clicked, this, &HtmlEditDialog::onLayerMoveUp);
+    connect(ui->layerDownBtn, &QToolButton::clicked, this, &HtmlEditDialog::onLayerMoveDown);
+
+    connect(ui->visualViewBtn, &QToolButton::toggled,
+            this,              &HtmlEditDialog::onSimpleViewChanged);
+    connect(ui->visualEditor, &HtmlVisualEditorWidget::htmlEdited,
+            this,             &HtmlEditDialog::onVisualHtmlEdited);
+    connect(ui->visualEditor, &HtmlVisualEditorWidget::selectionChanged,
+            this,             &HtmlEditDialog::onVisualSelection);
+    connect(ui->inspFontSizeSpin, &QSpinBox::valueChanged,
+            this,                 &HtmlEditDialog::onInspFontSizeChanged);
+    connect(ui->inspOpacitySpin,  &QSpinBox::valueChanged,
+            this,                 &HtmlEditDialog::onInspOpacityChanged);
+    connect(ui->inspTextColorBtn, &QPushButton::clicked, this, &HtmlEditDialog::onInspTextColor);
+    connect(ui->inspBgColorBtn,   &QPushButton::clicked, this, &HtmlEditDialog::onInspBgColor);
+    connect(ui->inspDeleteBtn,    &QPushButton::clicked,
+            ui->visualEditor,     &HtmlVisualEditorWidget::deleteSelectedElement);
+    onVisualSelection(QJsonObject());
 
     const HtmlWorkspace initialWs = HtmlWorkspace::fromJsonString(initialWorkspaceJson);
     if (!initialWs.isEmpty()) {
         ui->workspaceCanvas->setWorkspace(initialWs);
         ui->modeTabs->setCurrentWidget(ui->workspaceTab);
-        onBuildWorkspacePreview();
     } else if (!initialHtml.isEmpty()) {
         ui->codeEdit->setPlainText(initialHtml);
         int matchRow = kLegacyPresetCount;
@@ -140,29 +138,20 @@ HtmlEditDialog::HtmlEditDialog(const QString &initialHtml,
         ui->presetList->setCurrentRow(matchRow);
         ui->presetList->blockSignals(false);
         loadSimplePreview(initialHtml);
+        ui->visualViewBtn->setChecked(true); // editing existing HTML: start visual
     } else {
         ui->presetList->setCurrentRow(0);
     }
 
+    ui->inspFontSizeSpin->setKeyboardTracking(false);
+    ui->inspOpacitySpin->setKeyboardTracking(false);
+
     syncPropsFromSelection();
+    rebuildLayerList();
 }
 
 HtmlEditDialog::~HtmlEditDialog() {
     delete ui;
-}
-
-void HtmlEditDialog::setupPalette() {
-    const int idx = ui->paletteLayout->indexOf(ui->componentPalette);
-    delete ui->componentPalette;
-
-    auto *palette = new DraggablePaletteWidget;
-    palette->setDragDropMode(QAbstractItemView::NoDragDrop);
-    for (const HtmlPresetInfo &preset : HtmlPresetRegistry::presets()) {
-        auto *item = new QListWidgetItem(preset.displayName);
-        item->setData(Qt::UserRole, preset.id);
-        palette->addItem(item);
-    }
-    ui->paletteLayout->insertWidget(idx, palette);
 }
 
 HtmlEditDialog::EditMode HtmlEditDialog::editMode() const {
@@ -236,6 +225,8 @@ void HtmlEditDialog::onBrowse() {
         ui->codeEdit->setPlainText(QString::fromUtf8(f.readAll()));
 
     loadSimplePreview({}, path);
+    if (ui->visualViewBtn->isChecked())
+        enterVisualView();
 }
 
 void HtmlEditDialog::onClearFile() {
@@ -259,20 +250,16 @@ void HtmlEditDialog::loadSimplePreview(const QString &html, const QString &fileP
         m_simplePreview->setHtml(html, QUrl("qrc:/"));
 }
 
-void HtmlEditDialog::loadWorkspacePreview(const QString &html) {
-    ui->wsErrorLabel->clear();
-    m_wsPreview->setHtml(html, QUrl("qrc:/"));
-}
-
 void HtmlEditDialog::onWorkspaceChanged() {
+    ui->wsErrorLabel->clear();
     syncPropsFromSelection();
-    if (editMode() == EditMode::Workspace && !currentWorkspace().isEmpty())
-        loadWorkspacePreview(HtmlWorkspaceBuilder::build(currentWorkspace()));
+    rebuildLayerList();
 }
 
 void HtmlEditDialog::onComponentSelected(int index) {
     Q_UNUSED(index);
     syncPropsFromSelection();
+    rebuildLayerList();
 }
 
 void HtmlEditDialog::syncPropsFromSelection() {
@@ -282,6 +269,8 @@ void HtmlEditDialog::syncPropsFromSelection() {
 
     ui->deleteCompBtn->setEnabled(hasSel);
     ui->duplicateCompBtn->setEnabled(hasSel);
+    ui->layerUpBtn->setEnabled(hasSel);
+    ui->layerDownBtn->setEnabled(hasSel);
     ui->propXSpin->setEnabled(hasSel);
     ui->propYSpin->setEnabled(hasSel);
     ui->propWSpin->setEnabled(hasSel);
@@ -335,6 +324,7 @@ void HtmlEditDialog::onDeleteComponent() {
     ui->workspaceCanvas->setWorkspace(ws);
     ui->workspaceCanvas->setSelectedIndex(-1);
     syncPropsFromSelection();
+    rebuildLayerList();
 }
 
 void HtmlEditDialog::onDuplicateComponent() {
@@ -343,27 +333,217 @@ void HtmlEditDialog::onDuplicateComponent() {
     if (idx < 0 || idx >= ws.components.size())
         return;
 
+    int maxZ = -1;
+    for (const auto &c : ws.components)
+        maxZ = std::max(maxZ, c.zIndex);
+
     HtmlWorkspaceComponent copy = ws.components[idx];
     copy.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     copy.x = std::min(copy.x + 0.03f, 1.f - copy.w);
     copy.y = std::min(copy.y + 0.03f, 1.f - copy.h);
-    copy.zIndex = ws.components.size();
+    copy.zIndex = maxZ + 1;
     ws.components.append(copy);
     ui->workspaceCanvas->setWorkspace(ws);
     ui->workspaceCanvas->setSelectedIndex(ws.components.size() - 1);
     syncPropsFromSelection();
+    rebuildLayerList();
 }
 
-void HtmlEditDialog::onBuildWorkspacePreview() {
-    if (currentWorkspace().isEmpty()) {
-        ui->wsErrorLabel->setText(tr("Add at least one component to the canvas."));
-        return;
+void HtmlEditDialog::rebuildLayerList() {
+    const HtmlWorkspace ws = currentWorkspace();
+    const QList<int> order = zOrderTopFirst(ws);
+    const int selIdx = ui->workspaceCanvas->selectedIndex();
+
+    QString signature;
+    for (int i : order) {
+        const auto &c = ws.components[i];
+        signature += QStringLiteral("%1:%2;").arg(c.id).arg(c.visible ? 1 : 0);
     }
-    loadWorkspacePreview(HtmlWorkspaceBuilder::build(currentWorkspace()));
+    signature += QStringLiteral("|%1").arg(selIdx);
+    if (signature == m_layerSignature)
+        return;
+    m_layerSignature = signature;
+
+    m_layerSyncing = true;
+    ui->layerList->clear();
+    m_layerRowToComp = order;
+    for (int row = 0; row < order.size(); ++row) {
+        const HtmlWorkspaceComponent &c = ws.components[order[row]];
+        const HtmlPresetInfo *info = HtmlPresetRegistry::find(c.presetId);
+        auto *item = new QListWidgetItem(info ? info->displayName : c.presetId);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(c.visible ? Qt::Checked : Qt::Unchecked);
+        ui->layerList->addItem(item);
+        if (order[row] == selIdx)
+            ui->layerList->setCurrentRow(row);
+    }
+    m_layerSyncing = false;
 }
 
-void HtmlEditDialog::onModeTabChanged(int index) {
-    Q_UNUSED(index);
-    if (editMode() == EditMode::Workspace)
-        onBuildWorkspacePreview();
+void HtmlEditDialog::onLayerRowChanged(int row) {
+    if (m_layerSyncing || row < 0 || row >= m_layerRowToComp.size())
+        return;
+    ui->workspaceCanvas->setSelectedIndex(m_layerRowToComp[row]);
+    syncPropsFromSelection();
+}
+
+void HtmlEditDialog::onLayerItemChanged(QListWidgetItem *item) {
+    if (m_layerSyncing)
+        return;
+    const int row = ui->layerList->row(item);
+    if (row < 0 || row >= m_layerRowToComp.size())
+        return;
+
+    HtmlWorkspace ws = currentWorkspace();
+    ws.components[m_layerRowToComp[row]].visible = item->checkState() == Qt::Checked;
+    ui->workspaceCanvas->setWorkspace(ws);
+}
+
+void HtmlEditDialog::moveSelectedLayer(int delta) {
+    HtmlWorkspace ws = currentWorkspace();
+    const int selIdx = ui->workspaceCanvas->selectedIndex();
+    if (selIdx < 0 || selIdx >= ws.components.size())
+        return;
+
+    QList<int> order = zOrderTopFirst(ws);
+    const int row = order.indexOf(selIdx);
+    const int target = row + delta;
+    if (row < 0 || target < 0 || target >= order.size())
+        return;
+
+    order.swapItemsAt(row, target);
+    for (int r = 0; r < order.size(); ++r)
+        ws.components[order[r]].zIndex = order.size() - 1 - r;
+
+    ui->workspaceCanvas->setWorkspace(ws);
+    ui->workspaceCanvas->setSelectedIndex(selIdx);
+    m_layerSignature.clear();
+    rebuildLayerList();
+}
+
+void HtmlEditDialog::onLayerMoveUp() {
+    moveSelectedLayer(-1);
+}
+
+void HtmlEditDialog::onLayerMoveDown() {
+    moveSelectedLayer(1);
+}
+
+void HtmlEditDialog::enterVisualView() {
+    const QString fp = ui->filePathEdit->text().trimmed();
+    QString html;
+    QUrl base;
+    if (!fp.isEmpty()) {
+        QFile f(fp);
+        if (f.open(QIODevice::ReadOnly | QIODevice::Text))
+            html = QString::fromUtf8(f.readAll());
+        base = QUrl::fromLocalFile(fp);
+    } else {
+        html = ui->codeEdit->toPlainText();
+    }
+    ui->visualEditor->loadHtml(html, base);
+}
+
+void HtmlEditDialog::syncVisualToCode() {
+    if (!ui->visualEditor->isDirty())
+        return;
+    ui->codeEdit->setPlainText(ui->visualEditor->html());
+    ui->filePathEdit->clear();
+}
+
+void HtmlEditDialog::onSimpleViewChanged(bool visual) {
+    if (visual) {
+        enterVisualView();
+        ui->simpleStack->setCurrentWidget(ui->visualPage);
+    } else {
+        syncVisualToCode();
+        ui->simpleStack->setCurrentWidget(ui->codePage);
+        onRefreshSimplePreview();
+    }
+}
+
+void HtmlEditDialog::onVisualHtmlEdited() {
+    // Content diverged from the file on disk — the source is inline HTML now.
+    if (!ui->filePathEdit->text().isEmpty())
+        ui->filePathEdit->clear();
+}
+
+void HtmlEditDialog::setColorSwatch(QPushButton *btn, const QColor &color) {
+    if (color.isValid()) {
+        const QString fg = color.lightness() > 128 ? "#000000" : "#ffffff";
+        btn->setStyleSheet(QStringLiteral("background-color:%1;color:%2;")
+                               .arg(color.name(), fg));
+        btn->setText(color.name().toUpper());
+    } else {
+        btn->setStyleSheet({});
+        btn->setText(tr("None"));
+    }
+}
+
+void HtmlEditDialog::onVisualSelection(const QJsonObject &info) {
+    const bool hasSel = !info.isEmpty();
+
+    ui->inspElementLabel->setText(hasSel ? info["tag"].toString()
+                                         : tr("Nothing selected"));
+    ui->inspFontSizeSpin->setEnabled(hasSel);
+    ui->inspOpacitySpin->setEnabled(hasSel);
+    ui->inspTextColorBtn->setEnabled(hasSel);
+    ui->inspBgColorBtn->setEnabled(hasSel);
+    ui->inspDeleteBtn->setEnabled(hasSel);
+
+    m_inspChanging = true;
+    if (hasSel) {
+        ui->inspFontSizeSpin->setValue(info["fontSize"].toInt());
+        ui->inspOpacitySpin->setValue(info["opacity"].toInt());
+        m_inspTextColor = QColor(info["color"].toString());
+        m_inspBgColor   = QColor(info["background"].toString());
+    } else {
+        m_inspTextColor = QColor();
+        m_inspBgColor   = QColor();
+    }
+    setColorSwatch(ui->inspTextColorBtn, m_inspTextColor);
+    setColorSwatch(ui->inspBgColorBtn, m_inspBgColor);
+    m_inspChanging = false;
+}
+
+void HtmlEditDialog::onInspFontSizeChanged(int px) {
+    if (m_inspChanging)
+        return;
+    ui->visualEditor->applyStyle(QStringLiteral("font-size"),
+                                 QStringLiteral("%1px").arg(px));
+}
+
+void HtmlEditDialog::onInspOpacityChanged(int percent) {
+    if (m_inspChanging)
+        return;
+    ui->visualEditor->applyStyle(QStringLiteral("opacity"),
+                                 QString::number(percent / 100.0));
+}
+
+void HtmlEditDialog::onInspTextColor() {
+    const QColor c = QColorDialog::getColor(
+        m_inspTextColor.isValid() ? m_inspTextColor : QColor(Qt::white),
+        this, tr("Text Color"));
+    if (!c.isValid())
+        return;
+    m_inspTextColor = c;
+    setColorSwatch(ui->inspTextColorBtn, c);
+    ui->visualEditor->applyStyle(QStringLiteral("color"), c.name());
+}
+
+void HtmlEditDialog::onInspBgColor() {
+    const QColor c = QColorDialog::getColor(
+        m_inspBgColor.isValid() ? m_inspBgColor : QColor(Qt::black),
+        this, tr("Fill Color"), QColorDialog::ShowAlphaChannel);
+    if (!c.isValid())
+        return;
+    m_inspBgColor = c;
+    setColorSwatch(ui->inspBgColorBtn, c);
+    ui->visualEditor->applyStyle(
+        QStringLiteral("background-color"),
+        c.alpha() == 255
+            ? c.name()
+            : QStringLiteral("rgba(%1,%2,%3,%4)")
+                  .arg(c.red()).arg(c.green()).arg(c.blue())
+                  .arg(c.alphaF(), 0, 'f', 3));
 }
