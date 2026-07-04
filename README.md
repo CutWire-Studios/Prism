@@ -241,9 +241,36 @@ sudo apt install -y \
 
 #### macOS
 
+Requires macOS 11+ and the Xcode command-line tools (`xcode-select --install`).
+
 ```bash
-brew install qt@6 ffmpeg gstreamer re2 libzip lua openssl
+brew install qt ffmpeg re2 libzip lua openssl
 ```
+
+Screen and window capture use Qt Multimedia (`QScreenCapture` / `QWindowCapture`)
+— no GStreamer or DBus (those are Linux-only). Point CMake at the Homebrew Qt and
+pkg-config kegs when configuring:
+
+```bash
+export PKG_CONFIG_PATH="$(brew --prefix lua)/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH"
+cmake -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$(brew --prefix re2);$(brew --prefix openssl@3)"
+cmake --build build --parallel
+```
+
+The build produces an app bundle at `build/Prism.app`. Its `Info.plist` carries the
+camera / microphone / local-network usage strings macOS requires — the first time a
+webcam, audio input, or phone-camera source is used, macOS prompts for permission.
+
+**macOS platform notes**
+
+| Feature | macOS |
+|---------|-------|
+| Video, images, shaders, HTML, webcam, audio | Supported |
+| Screen / window capture | `QScreenCapture` / `QWindowCapture` |
+| NDI | Supported when the [NDI SDK](https://ndi.video/) is installed (`-DNDI_ROOT=…`) |
+| Virtual camera output | Not available (needs a signed Camera Extension); the menu item is disabled |
 
 #### Windows
 
@@ -319,7 +346,8 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 
 # Run
-./build/Prism                # Linux/macOS
+./build/Prism                # Linux
+open build/Prism.app         # macOS  (or: ./build/Prism.app/Contents/MacOS/Prism)
 # build\Release\Prism.exe    # Windows
 ```
 
@@ -417,10 +445,10 @@ CutWire Prism is licensed under GPLv3. See [LICENSE](LICENSE) for details.
 
 ### GStreamer not found (Linux only)
 
-GStreamer is required on **Linux** for PipeWire screen capture. It is not used on Windows.
+GStreamer is required on **Linux** for PipeWire screen capture. It is not used on
+Windows or macOS (those use Qt Multimedia's `QScreenCapture`).
 
 - **Linux**: `sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev`
-- **macOS**: `brew install gstreamer`
 
 ### RE2 or libzip not found
 

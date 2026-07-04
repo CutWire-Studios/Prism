@@ -132,3 +132,41 @@ jobs:
 
       - name: Verify application binary
         run: test -x build/Prism
+
+  macos:
+    runs-on: macos-14
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install qt ffmpeg re2 libzip lua openssl ninja
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Configure
+        run: |
+          export PKG_CONFIG_PATH="$(brew --prefix lua)/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH"
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$(brew --prefix re2);$(brew --prefix openssl@3)" \
+            -DFETCHCONTENT_BASE_DIR="${FETCHCONTENT_BASE_DIR}" \
+            -DPRISM_WITH_NDI=OFF \
+            -DPRISM_WITH_WEBRTC=OFF \
+            -DPRISM_WITH_SEGMENTATION=OFF
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure --parallel
+
+      - name: Verify application bundle
+        run: test -x build/Prism.app/Contents/MacOS/Prism

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>${MACOSX_BUNDLE_BUNDLE_NAME}</string>
+    <key>CFBundleDisplayName</key>
+    <string>CutWire Prism</string>
+    <key>CFBundleExecutable</key>
+    <string>${MACOSX_BUNDLE_EXECUTABLE_NAME}</string>
+    <key>CFBundleIdentifier</key>
+    <string>${MACOSX_BUNDLE_GUI_IDENTIFIER}</string>
+    <key>CFBundleVersion</key>
+    <string>${MACOSX_BUNDLE_BUNDLE_VERSION}</string>
+    <key>CFBundleShortVersionString</key>
+    <string>${MACOSX_BUNDLE_SHORT_VERSION_STRING}</string>
+    <key>CFBundleIconFile</key>
+    <string>${MACOSX_BUNDLE_ICON_FILE}</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>${CMAKE_OSX_DEPLOYMENT_TARGET}</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <!-- macOS refuses camera/mic/screen access (and kills the app) unless these
+         usage strings are present. Shown in the system permission prompts. -->
+    <key>NSCameraUsageDescription</key>
+    <string>CutWire Prism uses cameras to bring live webcam and capture-card video into your show.</string>
+    <!-- Opt in to iPhone Continuity Camera as a selectable video input. -->
+    <key>NSCameraUseContinuityCameraDeviceType</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>CutWire Prism uses audio input devices to capture and mix live audio into the program output.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>CutWire Prism connects to devices on your local network for phone-camera streaming, NDI, and remote control.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_ndi._tcp</string>
+    </array>
+</dict>
+</plist>

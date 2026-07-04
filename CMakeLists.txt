@@ -1,4 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
+
+# Must be set before project() to apply to the whole build. Qt 6 / Homebrew Qt
+# require macOS 11+; matches Qt's own minimum so QtMultimedia capture APIs exist.
+if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
+endif()
+
 project(Prism VERSION 0.1.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -93,6 +100,9 @@ if(PRISM_WITH_LUA)
         target_link_libraries(prism_sol2 INTERFACE ${PRISM_LUA_TARGET})
     else()
         target_include_directories(prism_sol2 INTERFACE ${LUA_INCLUDE_DIRS})
+        # Homebrew keeps Lua under a Cellar prefix that isn't on Apple clang's
+        # default link path, so the bare -llua needs pkg-config's -L dir.
+        target_link_directories(prism_sol2 INTERFACE ${LUA_LIBRARY_DIRS})
         target_link_libraries(prism_sol2 INTERFACE ${PRISM_LUA_TARGET})
     endif()
     set(PRISM_HAVE_LUA TRUE)
@@ -238,9 +248,19 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND SOURCES
         src/core/sources/ScreenSource_linux.cpp
         src/ui/output/VirtualCameraProgramSink_linux.cpp)
+elseif(WIN32)
+    list(APPEND SOURCES
+        src/core/sources/ScreenSource_qt.cpp
+        src/ui/output/VirtualCameraProgramSink_win.cpp)
+elseif(APPLE)
+    # macOS: Qt QScreenCapture/QWindowCapture for screen+window capture; no
+    # built-in virtual-camera loopback (would need a signed Camera Extension).
+    list(APPEND SOURCES
+        src/core/sources/ScreenSource_qt.cpp
+        src/ui/output/VirtualCameraProgramSink_mac.cpp)
 else()
     list(APPEND SOURCES
-        src/core/sources/ScreenSource_win.cpp
+        src/core/sources/ScreenSource_qt.cpp
         src/ui/output/VirtualCameraProgramSink_win.cpp)
 endif()
 
@@ -427,6 +447,9 @@ elseif(WIN32)
 
     target_link_libraries(prism_core PUBLIC libzip::zip opengl32 mf mfplat mfuuid ole32 softcam)
 else()
+    # macOS: Homebrew libzip lives under a Cellar prefix off the default link
+    # path, so pass pkg-config's -L dir alongside the bare -lzip.
+    target_link_directories(prism_core PUBLIC ${LIBZIP_LIBRARY_DIRS})
     target_link_libraries(prism_core PUBLIC ${LIBZIP_LIBRARIES})
 endif()
 
@@ -456,7 +479,26 @@ if(PRISM_HAVE_SEGMENTATION)
     target_link_libraries(prism_core PUBLIC onnxruntime::onnxruntime)
 endif()
 
-qt_add_executable(Prism src/main.cpp)
+if(APPLE)
+    set(_prism_icns "${CMAKE_CURRENT_SOURCE_DIR}/resources/macos/Prism.icns")
+    qt_add_executable(Prism MACOSX_BUNDLE src/main.cpp ${_prism_icns})
+
+    set(MACOSX_BUNDLE_BUNDLE_NAME "Prism")
+    set(MACOSX_BUNDLE_GUI_IDENTIFIER "org.cutwire.Prism")
+    set(MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}")
+    set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
+    set(MACOSX_BUNDLE_ICON_FILE "Prism.icns")
+
+    # Copy the icon into the bundle's Resources so CFBundleIconFile resolves.
+    set_source_files_properties(${_prism_icns} PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources")
+    set_target_properties(Prism PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/macos/Info.plist.in")
+else()
+    qt_add_executable(Prism src/main.cpp)
+endif()
+
 target_link_libraries(Prism PRIVATE prism_core)
 
 if(WIN32)
@@ -473,4 +515,7 @@ enable_testing()
 # Add test subdirectory
 add_subdirectory(tests)
 
-install(TARGETS Prism prism_core RUNTIME DESTINATION bin ARCHIVE DESTINATION lib)
+install(TARGETS Prism prism_core
+    RUNTIME DESTINATION bin
+    BUNDLE  DESTINATION .
+    ARCHIVE DESTINATION lib)

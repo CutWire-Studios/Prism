@@ -1,8 +1,8 @@
 #pragma once
 
-#include <rtc/rtpdepacketizer.hpp>
-
 #ifdef PRISM_HAVE_WEBRTC
+
+#include <rtc/rtpdepacketizer.hpp>
 
 /// VP9 RTP depacketizer (RFC 9628) with payload offset resync for mobile browsers.
 class PrismVp9RtpDepacketizer final : public rtc::VideoRtpDepacketizer {
