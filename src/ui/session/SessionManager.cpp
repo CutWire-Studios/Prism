@@ -177,7 +177,7 @@ bool SessionManager::saveAutosave(const QJsonObject &json, int backupRetention) 
 QJsonObject SessionManager::buildJson(int crossfader, int transitionMode,
                                       double transitionDuration,
                                       NodeId activeNodeA, NodeId activeNodeB,
-                                      const QMap<NodeId, Qt::Key> &nodeHotkeys,
+                                      const QJsonArray &hotkeys,
                                       const QString &sessionFilePath) const {
     QJsonObject root;
     root["version"]            = 1;
@@ -193,13 +193,6 @@ QJsonObject SessionManager::buildJson(int crossfader, int transitionMode,
     if (sessionDir.isAbsolute())
         root["sessionDir"] = sessionDir.absolutePath();
 
-    QJsonArray hotkeys;
-    for (auto it = nodeHotkeys.cbegin(); it != nodeHotkeys.cend(); ++it) {
-        QJsonObject hk;
-        hk["nodeId"] = (qint64)it.key();
-        hk["key"]    = (int)it.value();
-        hotkeys.append(hk);
-    }
     root["hotkeys"] = hotkeys;
     root["graph"]   = m_editor->saveState(sessionDir);
 
@@ -334,15 +327,9 @@ bool SessionManager::loadFromFile(const QString &path, bool showErrors) {
                 .arg(relinkReport.notes.join('\n')));
     }
 
-    // Parse restored hotkeys ─────────────────────────────────────────────────
-    m_restoredHotkeys.clear();
-    const QJsonArray hotkeys = root["hotkeys"].toArray();
-    for (const auto &hkVal : hotkeys) {
-        const QJsonObject hk  = hkVal.toObject();
-        const NodeId nodeId   = (NodeId)hk["nodeId"].toInteger();
-        const Qt::Key key     = (Qt::Key)hk["key"].toInt();
-        m_restoredHotkeys[key] = nodeId;
-    }
+    // Restored hotkeys are passed through as-is; HotkeyManager understands both
+    // the current {abNode, slot, key} entries and legacy {nodeId, key} ones.
+    m_restoredHotkeys = root["hotkeys"].toArray();
 
     // Restore UI values ───────────────────────────────────────────────────────
     m_restoredCrossfader         = root["crossfader"].toInt(50);

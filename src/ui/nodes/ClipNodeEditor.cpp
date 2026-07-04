@@ -768,7 +768,10 @@ private:
 };
 
 // ── A/B deck-select node ────────────────────────────────────────────────────
-struct AbSlot { QString name; };
+struct AbSlot {
+    QString name;
+    QString hotkey;   // transient badge label, managed by HotkeyManager
+};
 
 class AbSelectNodeItem : public NodeItemBase {
 public:
@@ -782,7 +785,8 @@ public:
     {
         setFlags(ItemIsMovable | ItemSendsGeometryChanges | ItemIsSelectable);
         setZValue(0);
-        setToolTip("Double-click an input name to rename · A/B assigns the deck");
+        setToolTip("Double-click an input name to rename · A/B assigns the deck\n"
+                   "Hotkey sends the input to Deck A · Shift+hotkey to Deck B");
         for (int i = 0; i < initialSlots; ++i)
             m_slots.push_back(AbSlot{});
         rebuildPorts();
@@ -839,7 +843,17 @@ public:
                 continue;
             }
 
-            const QRectF nr = nameRect(i);
+            QRectF nr = nameRect(i);
+            if (!m_slots[i].hotkey.isEmpty()) {
+                const QRectF badge(nr.left(), nr.top() + 5, 15, 14);
+                p->setPen(QPen(QColor(0x2a, 0x8f, 0xa0), 1));
+                p->setBrush(QColor(0x15, 0x2a, 0x30));
+                p->drawRoundedRect(badge, 3, 3);
+                p->setPen(QColor(0x2a, 0xdc, 0xf5));
+                p->setFont(QFont("Monospace", 6, QFont::Bold));
+                p->drawText(badge, Qt::AlignCenter, m_slots[i].hotkey);
+                nr.setLeft(badge.right() + 4);
+            }
             p->setPen(QColor(210, 195, 195));
             p->setFont(QFont("Monospace", 7));
             const QString nm = m_slots[i].name.isEmpty() ? QStringLiteral("in %1").arg(i + 1) : m_slots[i].name;
@@ -2765,6 +2779,53 @@ void ClipNodeEditor::assignInputToDeck(NodeId inputProducerNode, bool deckA) {
     }
     updateAbHighlights();
     emit clipChainChanged();
+}
+
+// ── A/B Select inputs (hotkey targets) ──────────────────────────────────────
+
+QVector<AbSlotInfo> ClipNodeEditor::abSelectInputs() const {
+    QVector<AbSlotInfo> out;
+    for (auto it = m_abSelectNodes.cbegin(); it != m_abSelectNodes.cend(); ++it) {
+        auto *ab = static_cast<AbSelectNodeItem *>(it.value());
+        for (int i = 0; i < ab->slotCount(); ++i) {
+            const NodeId prod = m_scene->producerForInputPort(ab->inPort(i));
+            if (!prod) continue;
+            AbSlotInfo info;
+            info.ref      = {it.key(), i};
+            info.name     = ab->slot(i).name;
+            info.producer = prod;
+            const ResolvedStream stream = evaluateVideoInput(prod);
+            if (!stream.layers.isEmpty())
+                if (auto *m = nodeAt(stream.layers.first().inputNodeId))
+                    info.sourceName = m->sourceName();
+            out.append(info);
+        }
+    }
+    return out;
+}
+
+bool ClipNodeEditor::triggerAbSlot(const AbSlotRef &ref, bool deckA) {
+    auto *ab = static_cast<AbSelectNodeItem *>(m_abSelectNodes.value(ref.abNodeId));
+    if (!ab || !ab->outputConnected()) return false;
+    const NodeId prod = m_scene->producerForInputPort(ab->inPort(ref.slot));
+    if (!prod) return false;
+    assignInputToDeck(prod, deckA);
+    return true;
+}
+
+void ClipNodeEditor::setAbSlotHotkeyLabel(const AbSlotRef &ref, const QString &label) {
+    auto *ab = static_cast<AbSelectNodeItem *>(m_abSelectNodes.value(ref.abNodeId));
+    if (!ab || ref.slot < 0 || ref.slot >= ab->slotCount()) return;
+    ab->slotsRef()[ref.slot].hotkey = label;
+    ab->update();
+}
+
+void ClipNodeEditor::clearAbSlotHotkeyLabels() {
+    for (auto it = m_abSelectNodes.cbegin(); it != m_abSelectNodes.cend(); ++it) {
+        auto *ab = static_cast<AbSelectNodeItem *>(it.value());
+        for (AbSlot &s : ab->slotsRef()) s.hotkey.clear();
+        ab->update();
+    }
 }
 
 // ── Evaluator ───────────────────────────────────────────────────────────────

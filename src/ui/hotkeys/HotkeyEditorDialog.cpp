@@ -1,7 +1,6 @@
 #include "ui/hotkeys/HotkeyEditorDialog.h"
 #include "ui/hotkeys/HotkeyManager.h"
 #include "ui/nodes/ClipNodeEditor.h"
-#include "ui/nodes/ClipNodeModel.h"
 
 #include <QTableWidget>
 #include <QHeaderView>
@@ -94,15 +93,15 @@ HotkeyEditorDialog::HotkeyEditorDialog(HotkeyManager *manager, ClipNodeEditor *e
     resize(780, 480);
 
     auto *intro = new QLabel(
-        tr("Assign trigger keys for each clip. The key sends the clip to Deck A; "
-           "Shift+the same key sends it to Deck B."),
+        tr("Assign trigger keys for each A/B switcher input. The key sends the "
+           "input to Deck A; Shift+the same key sends it to Deck B."),
         this);
     intro->setWordWrap(true);
 
     m_table = new QTableWidget(this);
     m_table->setColumnCount(4);
     m_table->setHorizontalHeaderLabels({
-        tr("Clip"),
+        tr("Switcher Input"),
         tr("Hotkey"),
         tr("Deck A"),
         tr("Deck B"),
@@ -148,27 +147,39 @@ HotkeyEditorDialog::HotkeyEditorDialog(HotkeyManager *manager, ClipNodeEditor *e
 void HotkeyEditorDialog::populateTable() {
     m_table->setRowCount(0);
 
-    const QList<ClipNodeModel *> nodes = m_editor->allNodes();
-    int row = 0;
-    for (ClipNodeModel *node : nodes) {
-        if (!node || !node->hasSource() || node->isGroupMember())
-            continue;
+    const QVector<AbSlotInfo> inputs = m_editor->abSelectInputs();
 
+    // Count distinct switchers so labels only mention the node when ambiguous.
+    QList<NodeId> abNodes;
+    for (const AbSlotInfo &info : inputs)
+        if (!abNodes.contains(info.ref.abNodeId))
+            abNodes.append(info.ref.abNodeId);
+
+    int row = 0;
+    for (const AbSlotInfo &info : inputs) {
         m_table->insertRow(row);
 
-        auto *nameItem = new QTableWidgetItem(node->sourceName());
-        nameItem->setData(Qt::UserRole, QVariant::fromValue(node->nodeId()));
+        QString label = info.name.isEmpty() ? tr("In %1").arg(info.ref.slot + 1)
+                                            : info.name;
+        if (!info.sourceName.isEmpty())
+            label += QStringLiteral(" — %1").arg(info.sourceName);
+        if (abNodes.size() > 1)
+            label = tr("A/B #%1 · %2").arg(abNodes.indexOf(info.ref.abNodeId) + 1).arg(label);
+
+        auto *nameItem = new QTableWidgetItem(label);
+        nameItem->setData(Qt::UserRole,     QVariant::fromValue<qulonglong>(info.ref.abNodeId));
+        nameItem->setData(Qt::UserRole + 1, info.ref.slot);
         nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
         m_table->setItem(row, 0, nameItem);
 
         auto *capture = new HotkeyCaptureEdit(m_table);
-        capture->setCapturedKey(m_manager->bindingForNode(node->nodeId()));
+        capture->setCapturedKey(m_manager->bindingForSlot(info.ref));
         connect(capture, &HotkeyCaptureEdit::keyChanged, this, [this](Qt::Key) {
             refreshConflictHighlights();
         });
         m_table->setCellWidget(row, 1, capture);
 
-        const Qt::Key key = m_manager->bindingForNode(node->nodeId());
+        const Qt::Key key = m_manager->bindingForSlot(info.ref);
         const QString keyText = key == Qt::Key_unknown ? tr("—") : QKeySequence(key).toString();
         auto *deckA = new QTableWidgetItem(keyText);
         auto *deckB = new QTableWidgetItem(
@@ -195,26 +206,36 @@ void HotkeyEditorDialog::populateTable() {
     refreshConflictHighlights();
 }
 
-QMap<Qt::Key, NodeId> HotkeyEditorDialog::collectBindings(bool *hasConflicts) const {
-    QMap<Qt::Key, NodeId> bindings;
+AbSlotRef HotkeyEditorDialog::slotRefForRow(int row) const {
+    const QTableWidgetItem *item = m_table->item(row, 0);
+    if (!item)
+        return {};
+    return {item->data(Qt::UserRole).toULongLong(),
+            item->data(Qt::UserRole + 1).toInt()};
+}
+
+QMap<AbSlotRef, Qt::Key> HotkeyEditorDialog::collectBindings(bool *hasConflicts) const {
+    QMap<AbSlotRef, Qt::Key> bindings;
+    QList<Qt::Key> usedKeys;
     if (hasConflicts)
         *hasConflicts = false;
 
     for (int row = 0; row < m_table->rowCount(); ++row) {
-        const NodeId nodeId = m_table->item(row, 0)->data(Qt::UserRole).value<NodeId>();
+        const AbSlotRef ref = slotRefForRow(row);
         const auto *capture = qobject_cast<const HotkeyCaptureEdit *>(m_table->cellWidget(row, 1));
-        if (!capture)
+        if (!ref.isValid() || !capture)
             continue;
 
         const Qt::Key key = capture->capturedKey();
         if (key == Qt::Key_unknown)
             continue;
 
-        if (bindings.contains(key)) {
+        if (usedKeys.contains(key)) {
             if (hasConflicts)
                 *hasConflicts = true;
         } else {
-            bindings.insert(key, nodeId);
+            usedKeys.append(key);
+            bindings.insert(ref, key);
         }
     }
     return bindings;
@@ -299,20 +320,19 @@ void HotkeyEditorDialog::onExportProfile() {
         outPath += QStringLiteral(".json");
 
     QJsonObject root;
-    root.insert(QStringLiteral("version"), 1);
+    root.insert(QStringLiteral("version"), 2);
     QJsonArray bindings;
     for (int row = 0; row < m_table->rowCount(); ++row) {
-        const NodeId nodeId = m_table->item(row, 0)->data(Qt::UserRole).value<NodeId>();
-        ClipNodeModel *node = m_editor->nodeAt(nodeId);
+        const AbSlotRef ref = slotRefForRow(row);
         const auto *capture = qobject_cast<const HotkeyCaptureEdit *>(m_table->cellWidget(row, 1));
-        if (!node || !capture)
+        if (!ref.isValid() || !capture)
             continue;
         const Qt::Key key = capture->capturedKey();
         if (key == Qt::Key_unknown)
             continue;
 
         QJsonObject entry;
-        entry.insert(QStringLiteral("clipKey"), HotkeyManager::clipBindingKey(node));
+        entry.insert(QStringLiteral("slotKey"), HotkeyManager::slotSettingsKey(ref));
         entry.insert(QStringLiteral("key"), static_cast<int>(key));
         bindings.append(entry);
     }
@@ -340,19 +360,15 @@ void HotkeyEditorDialog::onClearAll() {
 
 void HotkeyEditorDialog::onApply() {
     bool hasConflicts = false;
-    const QMap<Qt::Key, NodeId> keyToNode = collectBindings(&hasConflicts);
+    const QMap<AbSlotRef, Qt::Key> bindings = collectBindings(&hasConflicts);
     if (hasConflicts) {
         QMessageBox::warning(this, tr("Hotkey Conflict"),
-                             tr("Two or more clips use the same key. "
+                             tr("Two or more switcher inputs use the same key. "
                                 "Resolve conflicts before applying."));
         return;
     }
 
-    QMap<NodeId, Qt::Key> nodeToKey;
-    for (auto it = keyToNode.cbegin(); it != keyToNode.cend(); ++it)
-        nodeToKey.insert(it.value(), it.key());
-
-    m_manager->applyBindings(nodeToKey);
+    m_manager->applyBindings(bindings);
     QMessageBox::information(this, tr("Hotkeys Applied"),
                              tr("Hotkey bindings updated and saved."));
     accept();

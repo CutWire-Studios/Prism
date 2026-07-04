@@ -8,7 +8,7 @@
 class HotkeyManager;
 class QTableWidget;
 
-/// Visual editor for clip → hotkey bindings (Deck A / Shift+Deck B).
+/// Visual editor for A/B-switcher-input → hotkey bindings (Deck A / Shift+Deck B).
 class HotkeyEditorDialog : public QDialog {
     Q_OBJECT
 
@@ -25,7 +25,8 @@ private slots:
 
 private:
     void populateTable();
-    QMap<Qt::Key, NodeId> collectBindings(bool *hasConflicts) const;
+    QMap<AbSlotRef, Qt::Key> collectBindings(bool *hasConflicts) const;
+    AbSlotRef slotRefForRow(int row) const;
 
     HotkeyManager   *m_manager = nullptr;
     ClipNodeEditor  *m_editor  = nullptr;

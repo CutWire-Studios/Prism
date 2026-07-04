@@ -182,10 +182,6 @@ MainWindow::MainWindow(QWidget *parent)
     m_deckController = new DeckController(m_outputWindow, m_clipNodeEditor, m_outputHub, this);
 
     m_hotkeyManager = new HotkeyManager(this, m_clipNodeEditor, this);
-    connect(m_hotkeyManager, &HotkeyManager::deckARequested,
-            this, &MainWindow::onNodeAButtonClicked);
-    connect(m_hotkeyManager, &HotkeyManager::deckBRequested,
-            this, &MainWindow::onNodeBButtonClicked);
 
     m_sessionManager = new SessionManager(
         m_clipNodeEditor, m_outputWindow->videoWidget(), &clipManager, this, this);
@@ -462,7 +458,7 @@ QJsonObject MainWindow::currentSessionJson(const QString &sessionFilePath) const
         m_transitionCtrl->currentDurationSecs(),
         m_deckController->activeNodeA(),
         m_deckController->activeNodeB(),
-        m_hotkeyManager->nodeHotkeys(),
+        m_hotkeyManager->hotkeysJson(),
         sessionFilePath);
 }
 
@@ -685,8 +681,9 @@ void MainWindow::setupConnections() {
         setupAddElementMenu(&menu);
         menu.exec(QCursor::pos());
     });
-    connect(m_clipNodeEditor, &ClipNodeEditor::nodeAdded,
-            m_hotkeyManager, &HotkeyManager::assignHotkeyToNode);
+    // Hotkeys follow the A/B switcher inputs, which change with the wiring.
+    connect(m_clipNodeEditor, &ClipNodeEditor::clipChainChanged,
+            m_hotkeyManager, &HotkeyManager::syncWithGraph);
     connect(m_clipNodeEditor, &ClipNodeEditor::nodeRemoved,
             this, &MainWindow::onNodeRemoveRequested);
     connect(m_clipNodeEditor, &ClipNodeEditor::audioGraphChanged, this, [this]() {
@@ -1097,7 +1094,6 @@ void MainWindow::pushDecks() {
 }
 
 void MainWindow::onNodeRemoveRequested(NodeId nodeId) {
-    m_hotkeyManager->releaseHotkeyForNode(nodeId);
     m_clipNodeEditor->removeNode(nodeId);
     auto *out = m_outputWindow->videoWidget();
     if (m_deckController->activeNodeA() == nodeId) { m_deckController->setActiveNodeA(0); out->clearDeckA(); m_deckBaseA.clear(); m_deckOverlaysA.clear(); }
@@ -1661,18 +1657,7 @@ void MainWindow::loadFromFile(const QString &path, bool showErrors) {
     m_deckController->stopDeckAudio(true);
     m_deckController->stopDeckAudio(false);
 
-    // Block auto-hotkey assignment during restore.
-    disconnect(m_clipNodeEditor, &ClipNodeEditor::nodeAdded,
-               m_hotkeyManager, &HotkeyManager::assignHotkeyToNode);
-
-    if (!m_sessionManager->loadFromFile(path, showErrors)) {
-        connect(m_clipNodeEditor, &ClipNodeEditor::nodeAdded,
-                m_hotkeyManager, &HotkeyManager::assignHotkeyToNode);
-        return;
-    }
-
-    connect(m_clipNodeEditor, &ClipNodeEditor::nodeAdded,
-            m_hotkeyManager, &HotkeyManager::assignHotkeyToNode);
+    m_sessionManager->loadFromFile(path, showErrors);
 }
 
 void MainWindow::onSessionLoaded() {

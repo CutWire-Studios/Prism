@@ -30,6 +30,28 @@ struct MasterAudioInputSettings {
     NodeId  routedMasterOutputId = 0;
 };
 
+/// Identifies one input slot of an A/B Select node (the target of a hotkey).
+struct AbSlotRef {
+    NodeId abNodeId = 0;
+    int    slot     = -1;
+
+    bool isValid() const { return abNodeId != 0 && slot >= 0; }
+    bool operator==(const AbSlotRef &o) const {
+        return abNodeId == o.abNodeId && slot == o.slot;
+    }
+    bool operator<(const AbSlotRef &o) const {
+        return abNodeId != o.abNodeId ? abNodeId < o.abNodeId : slot < o.slot;
+    }
+};
+
+/// A connected A/B Select input, as listed for the hotkey system.
+struct AbSlotInfo {
+    AbSlotRef ref;
+    QString   name;         // user-assigned slot name (may be empty)
+    QString   sourceName;   // display name of the resolved upstream source
+    NodeId    producer = 0; // node wired into the slot
+};
+
 /// One resolved layer feeding a deck: an Input node producing pixels plus the
 /// folded crop/flip and Layer placement to apply.
 struct ResolvedLayer {
@@ -77,6 +99,15 @@ public:
     // ── A/B Deck Selection (global invariant across A/B-select nodes) ─────────
     void setActiveDeckClip(NodeId clipId, bool deckA);
     void assignInputToDeck(NodeId inputProducerNode, bool deckA);
+
+    // ── A/B Select inputs (hotkey targets) ───────────────────────────────────
+    /// All connected inputs across every A/B Select node, in stable order.
+    QVector<AbSlotInfo> abSelectInputs() const;
+    /// Same effect as clicking the slot's A/B button; false if the slot is
+    /// missing, unconnected, or its switcher isn't wired to the Output.
+    bool triggerAbSlot(const AbSlotRef &ref, bool deckA);
+    void setAbSlotHotkeyLabel(const AbSlotRef &ref, const QString &label);
+    void clearAbSlotHotkeyLabels();
     NodeId deckAInput() const { return m_deckAInput; }
     NodeId deckBInput() const { return m_deckBInput; }
     NodeId activeDeckClipA() const { return m_deckAInput; }

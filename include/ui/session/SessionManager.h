@@ -4,6 +4,7 @@
 #include <QString>
 #include <QStringList>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QMap>
 #include <Qt>
 #include "ui/nodes/ClipNodeEditor.h" // for NodeId
@@ -50,7 +51,7 @@ public:
     QJsonObject buildJson(int crossfader, int transitionMode,
                           double transitionDuration,
                           NodeId activeNodeA, NodeId activeNodeB,
-                          const QMap<NodeId, Qt::Key> &nodeHotkeys,
+                          const QJsonArray &hotkeys,
                           const QString &sessionFilePath = {}) const;
 
     int    restoredCrossfader()        const { return m_restoredCrossfader; }
@@ -59,7 +60,7 @@ public:
     NodeId restoredActiveNodeA()       const { return m_restoredActiveNodeA; }
     NodeId restoredActiveNodeB()       const { return m_restoredActiveNodeB; }
 
-    QMap<Qt::Key, NodeId> restoredHotkeys() const { return m_restoredHotkeys; }
+    QJsonArray restoredHotkeys() const { return m_restoredHotkeys; }
 
 signals:
     void sessionLoaded();
@@ -75,5 +76,5 @@ private:
     double m_restoredTransitionDuration = 1.0;
     NodeId m_restoredActiveNodeA       = 0;
     NodeId m_restoredActiveNodeB       = 0;
-    QMap<Qt::Key, NodeId> m_restoredHotkeys;
+    QJsonArray m_restoredHotkeys;
 };

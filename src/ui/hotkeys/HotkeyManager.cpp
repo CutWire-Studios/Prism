@@ -1,15 +1,13 @@
 #include "ui/hotkeys/HotkeyManager.h"
-#include "ui/nodes/ClipNodeModel.h"
-#include "core/sources/SourceDescriptor.h"
 #include <QShortcut>
 #include <QKeySequence>
 #include <QSettings>
 #include <QWidget>
-#include <QJsonArray>
 #include <QJsonDocument>
+#include <QDebug>
 
 namespace {
-constexpr int kProfileVersion = 1;
+constexpr int kProfileVersion = 2;   // v1 bound clips; v2 binds A/B switcher inputs
 }
 
 HotkeyManager::HotkeyManager(QWidget *shortcutParent, ClipNodeEditor *editor, QObject *parent)
@@ -32,15 +30,8 @@ const QList<Qt::Key> &HotkeyManager::hotkeySequence() {
     return seq;
 }
 
-QString HotkeyManager::clipBindingKey(const ClipNodeModel *node) {
-    if (!node || !node->hasSource())
-        return {};
-    const SourceDescriptor &d = node->sourceDescriptor();
-    if (!d.path.isEmpty())
-        return d.path;
-    if (!d.displayName.isEmpty())
-        return d.displayName;
-    return node->sourceName();
+QString HotkeyManager::slotSettingsKey(const AbSlotRef &slot) {
+    return QStringLiteral("%1/%2").arg(slot.abNodeId).arg(slot.slot);
 }
 
 bool HotkeyManager::isBindableKey(Qt::Key key) {
@@ -62,173 +53,225 @@ bool HotkeyManager::isBindableKey(Qt::Key key) {
     return true;
 }
 
-void HotkeyManager::assignHotkeyToNode(NodeId nodeId) {
-    ClipNodeModel *node = m_editor->nodeAt(nodeId);
-    if (!node || node->isGroupMember())
-        return;
-
-    if (const Qt::Key saved = keyFromSettingsForNode(nodeId); saved != Qt::Key_unknown) {
-        if (!m_keyToNode.contains(saved)) {
-            bindKey(nodeId, saved);
-            node->setHotkeyLabel(QKeySequence(saved).toString());
-            emit bindingsChanged();
-            return;
-        }
-    }
-
-    Qt::Key chosen = Qt::Key_unknown;
-    for (Qt::Key k : hotkeySequence()) {
-        if (!m_keyToNode.contains(k)) {
-            chosen = k;
-            break;
-        }
-    }
-    if (chosen == Qt::Key_unknown)
-        return;
-
-    bindKey(nodeId, chosen);
-    node->setHotkeyLabel(QKeySequence(chosen).toString());
-    emit bindingsChanged();
-}
-
-void HotkeyManager::unbindShortcutsForNode(NodeId nodeId) {
-    auto sit = m_nodeShortcuts.find(nodeId);
-    if (sit != m_nodeShortcuts.end()) {
-        delete sit.value().deckA;
-        delete sit.value().deckB;
-        m_nodeShortcuts.erase(sit);
-    }
-}
-
-void HotkeyManager::bindKey(NodeId nodeId, Qt::Key key) {
-    if (m_nodeHotkeys.contains(nodeId)) {
-        const Qt::Key oldKey = m_nodeHotkeys.value(nodeId);
+void HotkeyManager::bindKey(const AbSlotRef &slot, Qt::Key key) {
+    if (m_slotHotkeys.contains(slot)) {
+        const Qt::Key oldKey = m_slotHotkeys.value(slot);
         if (oldKey != key)
-            m_keyToNode.remove(oldKey);
-        unbindShortcutsForNode(nodeId);
+            m_keyToSlot.remove(oldKey);
+        auto sit = m_slotShortcuts.find(slot);
+        if (sit != m_slotShortcuts.end()) {
+            delete sit.value().deckA;
+            delete sit.value().deckB;
+            m_slotShortcuts.erase(sit);
+        }
     }
 
-    m_nodeHotkeys[nodeId] = key;
-    m_keyToNode[key]      = nodeId;
+    m_slotHotkeys[slot] = key;
+    m_keyToSlot[key]    = slot;
 
     auto *scA = new QShortcut(QKeySequence(key), m_shortcutParent);
     scA->setContext(Qt::ApplicationShortcut);
     connect(scA, &QShortcut::activated, this, [this, key]() {
-        const NodeId id = m_keyToNode.value(key, 0);
-        if (id)
-            emit deckARequested(id);
+        const AbSlotRef ref = m_keyToSlot.value(key);
+        if (ref.isValid())
+            m_editor->triggerAbSlot(ref, true);
     });
 
     auto *scB = new QShortcut(QKeySequence(Qt::SHIFT | key), m_shortcutParent);
     scB->setContext(Qt::ApplicationShortcut);
     connect(scB, &QShortcut::activated, this, [this, key]() {
-        const NodeId id = m_keyToNode.value(key, 0);
-        if (id)
-            emit deckBRequested(id);
+        const AbSlotRef ref = m_keyToSlot.value(key);
+        if (ref.isValid())
+            m_editor->triggerAbSlot(ref, false);
     });
 
-    m_nodeShortcuts[nodeId] = {scA, scB};
+    m_slotShortcuts[slot] = {scA, scB};
 }
 
-bool HotkeyManager::setBinding(NodeId nodeId, Qt::Key key) {
+void HotkeyManager::releaseSlot(const AbSlotRef &slot) {
+    auto hit = m_slotHotkeys.find(slot);
+    if (hit == m_slotHotkeys.end())
+        return;
+
+    m_keyToSlot.remove(hit.value());
+    m_slotHotkeys.erase(hit);
+
+    auto sit = m_slotShortcuts.find(slot);
+    if (sit != m_slotShortcuts.end()) {
+        delete sit.value().deckA;
+        delete sit.value().deckB;
+        m_slotShortcuts.erase(sit);
+    }
+}
+
+void HotkeyManager::refreshSlotLabels() {
+    m_editor->clearAbSlotHotkeyLabels();
+    for (auto it = m_slotHotkeys.cbegin(); it != m_slotHotkeys.cend(); ++it)
+        m_editor->setAbSlotHotkeyLabel(it.key(), QKeySequence(it.value()).toString());
+}
+
+void HotkeyManager::syncWithGraph() {
+    const QVector<AbSlotInfo> inputs = m_editor->abSelectInputs();
+
+    QList<AbSlotRef> alive;
+    alive.reserve(inputs.size());
+    for (const AbSlotInfo &info : inputs)
+        alive.append(info.ref);
+
+    bool changed = false;
+    const QList<AbSlotRef> bound = m_slotHotkeys.keys();
+    for (const AbSlotRef &ref : bound) {
+        if (!alive.contains(ref)) {
+            releaseSlot(ref);
+            changed = true;
+        }
+    }
+
+    for (const AbSlotInfo &info : inputs) {
+        if (m_slotHotkeys.contains(info.ref))
+            continue;
+
+        Qt::Key chosen = m_settingsProfile.value(slotSettingsKey(info.ref), Qt::Key_unknown);
+        if (chosen == Qt::Key_unknown || m_keyToSlot.contains(chosen)) {
+            chosen = Qt::Key_unknown;
+            for (Qt::Key k : hotkeySequence()) {
+                if (!m_keyToSlot.contains(k)) {
+                    chosen = k;
+                    break;
+                }
+            }
+        }
+        if (chosen == Qt::Key_unknown)
+            continue;
+
+        bindKey(info.ref, chosen);
+        changed = true;
+    }
+
+    refreshSlotLabels();
+    if (changed)
+        emit bindingsChanged();
+}
+
+bool HotkeyManager::setBinding(const AbSlotRef &slot, Qt::Key key) {
     if (key == Qt::Key_unknown) {
-        clearBinding(nodeId);
+        clearBinding(slot);
         return true;
     }
     if (!isBindableKey(key))
         return false;
 
-    if (m_keyToNode.contains(key) && m_keyToNode.value(key) != nodeId)
+    if (m_keyToSlot.contains(key) && !(m_keyToSlot.value(key) == slot))
         return false;
 
-    if (m_nodeHotkeys.value(nodeId) == key)
+    if (m_slotHotkeys.value(slot, Qt::Key_unknown) == key)
         return true;
 
-    bindKey(nodeId, key);
-    if (ClipNodeModel *node = m_editor->nodeAt(nodeId))
-        node->setHotkeyLabel(QKeySequence(key).toString());
-
+    bindKey(slot, key);
+    refreshSlotLabels();
     emit bindingsChanged();
     return true;
 }
 
-void HotkeyManager::clearBinding(NodeId nodeId) {
-    releaseHotkeyForNode(nodeId);
+void HotkeyManager::clearBinding(const AbSlotRef &slot) {
+    releaseSlot(slot);
+    refreshSlotLabels();
     emit bindingsChanged();
 }
 
-Qt::Key HotkeyManager::bindingForNode(NodeId nodeId) const {
-    return m_nodeHotkeys.value(nodeId, Qt::Key_unknown);
+Qt::Key HotkeyManager::bindingForSlot(const AbSlotRef &slot) const {
+    return m_slotHotkeys.value(slot, Qt::Key_unknown);
 }
 
-NodeId HotkeyManager::nodeForKey(Qt::Key key) const {
-    return m_keyToNode.value(key, 0);
+AbSlotRef HotkeyManager::slotForKey(Qt::Key key) const {
+    return m_keyToSlot.value(key);
 }
 
-void HotkeyManager::applyBindings(const QMap<NodeId, Qt::Key> &bindings) {
-    const QList<NodeId> existing = m_nodeHotkeys.keys();
-    for (NodeId id : existing)
-        releaseHotkeyForNode(id);
+void HotkeyManager::applyBindings(const QMap<AbSlotRef, Qt::Key> &bindings) {
+    const QList<AbSlotRef> existing = m_slotHotkeys.keys();
+    for (const AbSlotRef &ref : existing)
+        releaseSlot(ref);
 
-    QMap<Qt::Key, NodeId> used;
+    QList<AbSlotRef> alive;
+    for (const AbSlotInfo &info : m_editor->abSelectInputs())
+        alive.append(info.ref);
+
     for (auto it = bindings.cbegin(); it != bindings.cend(); ++it) {
-        const NodeId  nodeId = it.key();
-        const Qt::Key key    = it.value();
+        const AbSlotRef &slot = it.key();
+        const Qt::Key    key  = it.value();
         if (key == Qt::Key_unknown || !isBindableKey(key))
             continue;
-        if (used.contains(key))
+        if (m_keyToSlot.contains(key))
             continue;
-        if (!m_editor->nodeAt(nodeId))
+        if (!alive.contains(slot))
             continue;
 
-        used.insert(key, nodeId);
-        bindKey(nodeId, key);
-        if (ClipNodeModel *node = m_editor->nodeAt(nodeId))
-            node->setHotkeyLabel(QKeySequence(key).toString());
+        bindKey(slot, key);
     }
 
+    refreshSlotLabels();
     saveSettingsProfile();
     emit bindingsChanged();
 }
 
-void HotkeyManager::releaseHotkeyForNode(NodeId nodeId) {
-    auto hit = m_nodeHotkeys.find(nodeId);
-    if (hit == m_nodeHotkeys.end())
-        return;
-
-    const Qt::Key key = hit.value();
-    m_nodeHotkeys.erase(hit);
-    m_keyToNode.remove(key);
-    unbindShortcutsForNode(nodeId);
-
-    if (ClipNodeModel *node = m_editor->nodeAt(nodeId))
-        node->setHotkeyLabel({});
+QJsonArray HotkeyManager::hotkeysJson() const {
+    QJsonArray arr;
+    for (auto it = m_slotHotkeys.cbegin(); it != m_slotHotkeys.cend(); ++it) {
+        QJsonObject hk;
+        hk["abNode"] = (qint64)it.key().abNodeId;
+        hk["slot"]   = it.key().slot;
+        hk["key"]    = (int)it.value();
+        arr.append(hk);
+    }
+    return arr;
 }
 
-void HotkeyManager::restoreHotkeys(const QMap<Qt::Key, NodeId> &keyToNode) {
-    for (NodeId id : m_nodeHotkeys.keys())
-        releaseHotkeyForNode(id);
+void HotkeyManager::restoreHotkeys(const QJsonArray &hotkeys) {
+    const QList<AbSlotRef> existing = m_slotHotkeys.keys();
+    for (const AbSlotRef &ref : existing)
+        releaseSlot(ref);
+
+    const QVector<AbSlotInfo> inputs = m_editor->abSelectInputs();
 
     QStringList skipped;
-    for (auto it = keyToNode.cbegin(); it != keyToNode.cend(); ++it) {
-        const Qt::Key key    = it.key();
-        const NodeId  nodeId = it.value();
-
-        ClipNodeModel *node = m_editor->nodeAt(nodeId);
-        if (!node)
+    for (const auto &val : hotkeys) {
+        const QJsonObject obj = val.toObject();
+        const Qt::Key key = static_cast<Qt::Key>(obj["key"].toInt());
+        if (!isBindableKey(key))
             continue;
-        if (m_keyToNode.contains(key)) {
+        if (m_keyToSlot.contains(key)) {
             skipped << QKeySequence(key).toString();
             continue;
         }
 
-        bindKey(nodeId, key);
-        node->setHotkeyLabel(QKeySequence(key).toString());
+        AbSlotRef ref;
+        if (obj.contains("abNode")) {
+            ref = {(NodeId)obj["abNode"].toInteger(), obj["slot"].toInt(-1)};
+        } else {
+            // Legacy clip binding: map to the switcher input the clip feeds.
+            const NodeId clipId = (NodeId)obj["nodeId"].toInteger();
+            for (const AbSlotInfo &info : inputs) {
+                if (info.producer == clipId) {
+                    ref = info.ref;
+                    break;
+                }
+            }
+        }
+
+        bool alive = false;
+        for (const AbSlotInfo &info : inputs)
+            if (info.ref == ref) { alive = true; break; }
+        if (!alive)
+            continue;
+
+        bindKey(ref, key);
     }
 
     if (!skipped.isEmpty())
         qWarning() << "HotkeyManager: skipped duplicate keys during restore:" << skipped;
 
+    // Auto-assign whatever the session didn't cover, and repaint badges.
+    syncWithGraph();
     emit bindingsChanged();
 }
 
@@ -237,16 +280,9 @@ QJsonObject HotkeyManager::exportProfile() const {
     root.insert(QStringLiteral("version"), kProfileVersion);
 
     QJsonArray bindings;
-    for (auto it = m_nodeHotkeys.cbegin(); it != m_nodeHotkeys.cend(); ++it) {
-        ClipNodeModel *node = m_editor->nodeAt(it.key());
-        if (!node)
-            continue;
-        const QString clipKey = clipBindingKey(node);
-        if (clipKey.isEmpty())
-            continue;
-
+    for (auto it = m_slotHotkeys.cbegin(); it != m_slotHotkeys.cend(); ++it) {
         QJsonObject entry;
-        entry.insert(QStringLiteral("clipKey"), clipKey);
+        entry.insert(QStringLiteral("slotKey"), slotSettingsKey(it.key()));
         entry.insert(QStringLiteral("key"), static_cast<int>(it.value()));
         bindings.append(entry);
     }
@@ -261,30 +297,27 @@ bool HotkeyManager::importProfile(const QJsonObject &profile, QStringList *warni
         return false;
     }
 
-    QMap<NodeId, Qt::Key> desired;
+    QList<AbSlotRef> alive;
+    for (const AbSlotInfo &info : m_editor->abSelectInputs())
+        alive.append(info.ref);
+
+    QMap<AbSlotRef, Qt::Key> desired;
     const QJsonArray bindings = profile.value(QStringLiteral("bindings")).toArray();
     for (const QJsonValue &val : bindings) {
         const QJsonObject entry = val.toObject();
-        const QString clipKey   = entry.value(QStringLiteral("clipKey")).toString();
+        const QString slotKey   = entry.value(QStringLiteral("slotKey")).toString();
         const Qt::Key key       = static_cast<Qt::Key>(entry.value(QStringLiteral("key")).toInt());
-        if (clipKey.isEmpty() || !isBindableKey(key))
+        const QStringList parts = slotKey.split(QLatin1Char('/'));
+        if (parts.size() != 2 || !isBindableKey(key))
             continue;
 
-        NodeId matched = 0;
-        for (ClipNodeModel *node : m_editor->allNodes()) {
-            if (!node || !node->hasSource() || node->isGroupMember())
-                continue;
-            if (clipBindingKey(node) == clipKey) {
-                matched = node->nodeId();
-                break;
-            }
-        }
-        if (!matched) {
+        const AbSlotRef ref{parts[0].toULongLong(), parts[1].toInt()};
+        if (!alive.contains(ref)) {
             if (warnings)
-                warnings->append(QObject::tr("No clip matched: %1").arg(clipKey));
+                warnings->append(QObject::tr("No switcher input matched: %1").arg(slotKey));
             continue;
         }
-        desired.insert(matched, key);
+        desired.insert(ref, key);
     }
 
     applyBindings(desired);
@@ -312,20 +345,15 @@ void HotkeyManager::loadSettingsProfile() {
     const QJsonDocument doc = QJsonDocument::fromJson(raw, &err);
     if (err.error != QJsonParseError::NoError || !doc.isObject())
         return;
+    if (doc.object().value(QStringLiteral("version")).toInt(0) != kProfileVersion)
+        return;   // discard old clip-based profiles
 
     const QJsonArray bindings = doc.object().value(QStringLiteral("bindings")).toArray();
     for (const QJsonValue &val : bindings) {
         const QJsonObject entry = val.toObject();
-        const QString clipKey   = entry.value(QStringLiteral("clipKey")).toString();
+        const QString slotKey   = entry.value(QStringLiteral("slotKey")).toString();
         const Qt::Key key       = static_cast<Qt::Key>(entry.value(QStringLiteral("key")).toInt());
-        if (!clipKey.isEmpty() && isBindableKey(key))
-            m_settingsProfile.insert(clipKey, key);
+        if (!slotKey.isEmpty() && isBindableKey(key))
+            m_settingsProfile.insert(slotKey, key);
     }
-}
-
-Qt::Key HotkeyManager::keyFromSettingsForNode(NodeId nodeId) const {
-    ClipNodeModel *node = m_editor->nodeAt(nodeId);
-    if (!node)
-        return Qt::Key_unknown;
-    return m_settingsProfile.value(clipBindingKey(node), Qt::Key_unknown);
 }
