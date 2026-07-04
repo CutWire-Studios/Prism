@@ -12,7 +12,7 @@ Run with built-in TLS (Let's Encrypt cert paths):
         --ssl-keyfile /etc/letsencrypt/live/example.com/privkey.pem \\
         --ssl-certfile /etc/letsencrypt/live/example.com/fullchain.pem
 
-Production relay: wss://roboti.qzz.io/ws  (https://roboti.qzz.io)
+Production relay: wss://relay.cutwire.org/ws  (https://relay.cutwire.org)
 
 Point CutWire Prism at: wss://your-host/ws  (or ws://… when using plain HTTP)
 """
@@ -71,23 +71,35 @@ async def _flush_pending(room: Room, role: str) -> None:
     log.info("flushed %d pending message(s) to %s", count, role)
 
 
-async def _relay(room: Room, from_role: str, from_ws: WebSocket, raw: str, msg_type: str) -> None:
+async def _relay(
+    room: Room, from_role: str, from_ws: WebSocket, raw: str, msg_type: str
+) -> None:
     peer = _other_peer(room, from_role)
     if peer is not None:
         await peer.send_text(raw)
         if msg_type in ("offer", "answer", "candidate"):
-            log.info("relay %s -> %s", msg_type, "desktop" if from_role == "phone" else "phone")
+            log.info(
+                "relay %s -> %s",
+                msg_type,
+                "desktop" if from_role == "phone" else "phone",
+            )
         return
 
     queue = room.pending_to_desktop if from_role == "phone" else room.pending_to_phone
     if len(queue) < MAX_PENDING:
         queue.append(raw)
     if from_role == "phone" and msg_type in ("offer", "candidate"):
-        await from_ws.send_json({
-            "type": "waiting",
-            "message": "Waiting for CutWire Prism desktop — keep the pairing dialog open on your PC",
-        })
-    log.info("queued %s (no %s yet)", msg_type, "desktop" if from_role == "phone" else "phone")
+        await from_ws.send_json(
+            {
+                "type": "waiting",
+                "message": "Waiting for CutWire Prism desktop — keep the pairing dialog open on your PC",
+            }
+        )
+    log.info(
+        "queued %s (no %s yet)",
+        msg_type,
+        "desktop" if from_role == "phone" else "phone",
+    )
 
 
 CAM_PAGE_HTML = r"""<!DOCTYPE html>

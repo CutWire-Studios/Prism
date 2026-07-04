@@ -96,15 +96,15 @@ bool generateSelfSigned(const QString &bindAddress, QByteArray &certPem, QByteAr
 
     X509_NAME *subject = X509_get_subject_name(cert.get());
     X509_NAME_add_entry_by_txt(subject, "CN", MBSTRING_ASC,
-                               reinterpret_cast<const unsigned char *>("CutWire Prism Phone Camera"),
+                               reinterpret_cast<const unsigned char *>("cutwire.org"),
                                -1, -1, 0);
     X509_NAME_add_entry_by_txt(subject, "O", MBSTRING_ASC,
-                               reinterpret_cast<const unsigned char *>("Prism"),
+                               reinterpret_cast<const unsigned char *>("CutWire Studios"),
                                -1, -1, 0);
     X509_set_issuer_name(cert.get(), subject);
     X509_set_pubkey(cert.get(), pkey.get());
 
-    const QString san = QStringLiteral("DNS:localhost,DNS:prism.local,IP:127.0.0.1,IP:%1")
+    const QString san = QStringLiteral("DNS:localhost,DNS:cutwire.org,IP:127.0.0.1,IP:%1")
                             .arg(bindAddress);
     if (!addExtension(cert.get(), NID_subject_alt_name, san.toUtf8().constData())) {
         if (errorOut) *errorOut = QStringLiteral("OpenSSL: failed to add subjectAltName");
@@ -190,7 +190,7 @@ bool storeMaterial(const QByteArray &certPem, const QByteArray &keyPem, const QS
 
     QJsonObject meta;
     QJsonArray ips{ QStringLiteral("127.0.0.1"), bindAddress };
-    QJsonArray dns{ QStringLiteral("localhost"), QStringLiteral("prism.local") };
+    QJsonArray dns{ QStringLiteral("localhost"), QStringLiteral("cutwire.org") };
     meta.insert(QStringLiteral("ips"), ips);
     meta.insert(QStringLiteral("dns"), dns);
 
@@ -204,7 +204,7 @@ bool storeMaterial(const QByteArray &certPem, const QByteArray &keyPem, const QS
     g_material.cert = QSslCertificate(certPem, QSsl::Pem);
     g_material.key  = QSslKey(keyPem, QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey);
     g_material.ipAddresses = { QStringLiteral("127.0.0.1"), bindAddress };
-    g_material.dnsNames    = { QStringLiteral("localhost"), QStringLiteral("prism.local") };
+    g_material.dnsNames    = { QStringLiteral("localhost"), QStringLiteral("cutwire.org") };
     return !g_material.cert.isNull() && !g_material.key.isNull();
 }
 
@@ -214,6 +214,10 @@ bool coversAddress(const QString &bindAddress) {
     if (bindAddress == QStringLiteral("127.0.0.1"))
         return true;
     return g_material.ipAddresses.contains(bindAddress);
+}
+
+bool hasExpectedDnsNames() {
+    return g_material.dnsNames.contains(QStringLiteral("cutwire.org"));
 }
 
 #endif // QT_NO_SSL
@@ -247,7 +251,7 @@ bool WebRtcTlsStore::ensureCertificate(const QString &bindAddress, QString *erro
     }
 
     if (QFile::exists(certPath()) && QFile::exists(keyPath())) {
-        if (loadMaterialFromDisk(errorOut) && coversAddress(bindAddress))
+        if (loadMaterialFromDisk(errorOut) && coversAddress(bindAddress) && hasExpectedDnsNames())
             return true;
     }
 

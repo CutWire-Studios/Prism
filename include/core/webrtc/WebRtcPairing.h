@@ -9,8 +9,8 @@ namespace WebRtcPairing {
 constexpr quint16 kDefaultHttpPort = 38472;
 constexpr quint16 kDefaultSigPort  = 38471;
 
-/// Default public signaling relay (https://roboti.qzz.io).
-inline constexpr char kDefaultRelayUrl[] = "wss://roboti.qzz.io/ws";
+/// Default public signaling relay (https://relay.cutwire.org).
+inline constexpr char kDefaultRelayUrl[] = "wss://relay.cutwire.org/ws";
 
 /// Pairing fields stored inside the base64 `d` query parameter.
 /// When @p relayUrl is set (e.g. kDefaultRelayUrl), the phone connects via the public relay.
