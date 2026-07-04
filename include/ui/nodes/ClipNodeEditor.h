@@ -108,6 +108,7 @@ public:
     bool triggerAbSlot(const AbSlotRef &ref, bool deckA);
     void setAbSlotHotkeyLabel(const AbSlotRef &ref, const QString &label);
     void clearAbSlotHotkeyLabels();
+    QString abSlotHotkeyLabel(const AbSlotRef &ref) const;
     NodeId deckAInput() const { return m_deckAInput; }
     NodeId deckBInput() const { return m_deckBInput; }
     NodeId activeDeckClipA() const { return m_deckAInput; }

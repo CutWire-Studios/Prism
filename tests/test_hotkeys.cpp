@@ -7,6 +7,7 @@
 #include <QSignalSpy>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QKeySequence>
 
 class TestHotkeys : public QObject {
     Q_OBJECT
@@ -93,6 +94,9 @@ private slots:
         QVERIFY(k1 != k2);
         QVERIFY(mgr.slotForKey(k1) == inputs[0].ref);
 
+        QCOMPARE(m_editor->abSlotHotkeyLabel(inputs[0].ref), QKeySequence(k1).toString());
+        QCOMPARE(m_editor->abSlotHotkeyLabel(inputs[1].ref), QKeySequence(k2).toString());
+
         // A key taken by another input is rejected.
         QVERIFY(!mgr.setBinding(inputs[0].ref, k2));
 
@@ -151,6 +155,20 @@ private slots:
         QVERIFY(mgr.importProfile(profile));
         QCOMPARE(mgr.bindingForSlot(inputs[0].ref), key);
         QVERIFY(changed.count() >= 1);
+    }
+
+    void mainWindowOrderShowsLabelsOnGraphRestore() {
+        HotkeyManager mgr(m_parent, m_editor);
+        connect(m_editor, &ClipNodeEditor::clipChainChanged, &mgr, &HotkeyManager::syncWithGraph);
+        m_editor->restoreState(makeGraph());
+
+        const QVector<AbSlotInfo> inputs = m_editor->abSelectInputs();
+        QCOMPARE(inputs.size(), 2);
+        for (const AbSlotInfo &info : inputs) {
+            const Qt::Key key = mgr.bindingForSlot(info.ref);
+            QVERIFY(HotkeyManager::isBindableKey(key));
+            QCOMPARE(m_editor->abSlotHotkeyLabel(info.ref), QKeySequence(key).toString());
+        }
     }
 
     void sessionJsonRoundTrip() {

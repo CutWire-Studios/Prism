@@ -817,7 +817,8 @@ public:
 
     QRectF aBtnRect(int i) const { return QRectF(SW_W - 52, SW_HDR + i * SW_ROW + 3, 22, 18); }
     QRectF bBtnRect(int i) const { return QRectF(SW_W - 28, SW_HDR + i * SW_ROW + 3, 22, 18); }
-    QRectF nameRect(int i) const { return QRectF(6, SW_HDR + i * SW_ROW, SW_W - 62, SW_ROW); }
+    QRectF hotkeyBadgeRect(int i) const { return QRectF(SW_W - 74, SW_HDR + i * SW_ROW + 4, 16, 16); }
+    QRectF nameRect(int i) const { return QRectF(14, SW_HDR + i * SW_ROW, SW_W - 90, SW_ROW); }
 
     void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
         p->setRenderHint(QPainter::Antialiasing);
@@ -838,21 +839,20 @@ public:
             if (!connected) {
                 p->setPen(QColor(120, 100, 102));
                 p->setFont(QFont("Monospace", 7));
-                p->drawText(QRectF(8, SW_HDR + i * SW_ROW, SW_W - 12, SW_ROW),
+                p->drawText(QRectF(14, SW_HDR + i * SW_ROW, SW_W - 18, SW_ROW),
                             Qt::AlignVCenter | Qt::AlignLeft, "+ connect input");
                 continue;
             }
 
-            QRectF nr = nameRect(i);
+            const QRectF nr = nameRect(i);
             if (!m_slots[i].hotkey.isEmpty()) {
-                const QRectF badge(nr.left(), nr.top() + 5, 15, 14);
+                const QRectF badge = hotkeyBadgeRect(i);
                 p->setPen(QPen(QColor(0x2a, 0x8f, 0xa0), 1));
                 p->setBrush(QColor(0x15, 0x2a, 0x30));
                 p->drawRoundedRect(badge, 3, 3);
                 p->setPen(QColor(0x2a, 0xdc, 0xf5));
-                p->setFont(QFont("Monospace", 6, QFont::Bold));
+                p->setFont(QFont("Monospace", 7, QFont::Bold));
                 p->drawText(badge, Qt::AlignCenter, m_slots[i].hotkey);
-                nr.setLeft(badge.right() + 4);
             }
             p->setPen(QColor(210, 195, 195));
             p->setFont(QFont("Monospace", 7));
@@ -2826,6 +2826,12 @@ void ClipNodeEditor::clearAbSlotHotkeyLabels() {
         for (AbSlot &s : ab->slotsRef()) s.hotkey.clear();
         ab->update();
     }
+}
+
+QString ClipNodeEditor::abSlotHotkeyLabel(const AbSlotRef &ref) const {
+    auto *ab = static_cast<AbSelectNodeItem *>(m_abSelectNodes.value(ref.abNodeId));
+    if (!ab || ref.slot < 0 || ref.slot >= ab->slotCount()) return {};
+    return ab->slot(ref.slot).hotkey;
 }
 
 // ── Evaluator ───────────────────────────────────────────────────────────────

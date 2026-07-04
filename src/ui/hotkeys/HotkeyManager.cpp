@@ -14,6 +14,7 @@ HotkeyManager::HotkeyManager(QWidget *shortcutParent, ClipNodeEditor *editor, QO
     : QObject(parent), m_shortcutParent(shortcutParent), m_editor(editor)
 {
     loadSettingsProfile();
+    syncWithGraph();
 }
 
 const QList<Qt::Key> &HotkeyManager::hotkeySequence() {
@@ -86,6 +87,7 @@ void HotkeyManager::bindKey(const AbSlotRef &slot, Qt::Key key) {
     });
 
     m_slotShortcuts[slot] = {scA, scB};
+    m_editor->setAbSlotHotkeyLabel(slot, QKeySequence(key).toString());
 }
 
 void HotkeyManager::releaseSlot(const AbSlotRef &slot) {
@@ -102,6 +104,7 @@ void HotkeyManager::releaseSlot(const AbSlotRef &slot) {
         delete sit.value().deckB;
         m_slotShortcuts.erase(sit);
     }
+    m_editor->setAbSlotHotkeyLabel(slot, {});
 }
 
 void HotkeyManager::refreshSlotLabels() {
