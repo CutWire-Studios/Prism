@@ -534,3 +534,20 @@ install(TARGETS Prism prism_core
     RUNTIME DESTINATION bin
     BUNDLE  DESTINATION .
     ARCHIVE DESTINATION lib)
+
+if(UNIX AND NOT APPLE)
+    include(GNUInstallDirs)
+
+    install(FILES flatpak/org.cutwire.Prism.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+    install(FILES flatpak/org.cutwire.Prism.metainfo.xml
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)
+
+    # 1024px source is intentionally skipped: flatpak build-export rejects icons
+    # larger than 512x512.
+    foreach(_size 64 128 256 512)
+        install(FILES
+            flatpak/share/icons/hicolor/${_size}x${_size}/apps/org.cutwire.Prism.png
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${_size}x${_size}/apps)
+    endforeach()
+endif()
