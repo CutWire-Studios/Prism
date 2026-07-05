@@ -142,13 +142,21 @@ endif()
 
 # ML background removal (optional — ONNX Runtime + selfie-segmentation model)
 option(PRISM_WITH_SEGMENTATION "Enable ML background removal" ON)
+option(PRISM_FETCH_ONNXRUNTIME
+    "Download prebuilt ONNX Runtime when not found (see CMakeModules/FetchOnnxRuntime.cmake)"
+    ON)
 if(PRISM_WITH_SEGMENTATION)
-    find_package(OnnxRuntime)
+    find_package(OnnxRuntime QUIET)
+    if(NOT OnnxRuntime_FOUND AND PRISM_FETCH_ONNXRUNTIME)
+        include(FetchOnnxRuntime)
+        find_package(OnnxRuntime REQUIRED)
+    endif()
     if(OnnxRuntime_FOUND)
         message(STATUS "ONNX Runtime found: ${OnnxRuntime_LIBRARIES} — background removal enabled")
         set(PRISM_HAVE_SEGMENTATION TRUE)
     else()
-        message(STATUS "ONNX Runtime not found — background removal disabled (set ONNXRUNTIME_ROOT)")
+        message(STATUS "ONNX Runtime not found — background removal disabled "
+            "(set ONNXRUNTIME_ROOT or enable PRISM_FETCH_ONNXRUNTIME)")
     endif()
 endif()
 

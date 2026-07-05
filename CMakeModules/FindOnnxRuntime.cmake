@@ -13,6 +13,7 @@
 find_path(OnnxRuntime_INCLUDE_DIR
     NAMES onnxruntime_cxx_api.h
     HINTS
+        ${OnnxRuntime_ROOT}
         ${ONNXRUNTIME_ROOT}/include
         ${ONNXRUNTIME_ROOT}/include/onnxruntime
         ${ONNXRUNTIME_ROOT}/include/onnxruntime/core/session
@@ -28,6 +29,7 @@ find_path(OnnxRuntime_INCLUDE_DIR
 find_library(OnnxRuntime_LIBRARY
     NAMES onnxruntime
     HINTS
+        ${OnnxRuntime_ROOT}
         ${ONNXRUNTIME_ROOT}/lib
         ${ONNXRUNTIME_ROOT}/lib64
         $ENV{ONNXRUNTIME_ROOT}/lib
