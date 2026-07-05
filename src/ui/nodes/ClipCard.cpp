@@ -17,6 +17,7 @@
 #include <QUuid>
 #endif
 #include "core/sources/ImageSource.h"
+#include "core/project/ClipManager.h"
 #include "core/sources/SlideshowSource.h"
 #include "core/sources/ShaderSource.h"
 #include "core/sources/HtmlSource.h"
@@ -128,9 +129,14 @@ void ClipCard::loadClip(const QString &path, const QPixmap &thumbnail) {
 
     // Build source descriptor so onAButtonClicked can create the right source.
     const bool isImage = ImageSource::isStaticImageFile(path);
+    const bool isAudio = ClipManager::isAudioPath(path);
     m_sourceDesc = {};
-    m_sourceDesc.kind        = isImage ? SourceDescriptor::Kind::Image
-                                       : SourceDescriptor::Kind::VideoFile;
+    if (isAudio) {
+        m_sourceDesc.kind = SourceDescriptor::Kind::AudioFile;
+    } else {
+        m_sourceDesc.kind = isImage ? SourceDescriptor::Kind::Image
+                                    : SourceDescriptor::Kind::VideoFile;
+    }
     m_sourceDesc.path        = path;
     m_sourceDesc.displayName = QFileInfo(path).baseName();
 

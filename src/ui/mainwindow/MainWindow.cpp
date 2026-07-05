@@ -641,7 +641,7 @@ void MainWindow::setupConnections() {
 void MainWindow::onLoadFolderClicked() {
     QStringList files = QFileDialog::getOpenFileNames(
         this, tr("Add Files"), "",
-        tr("Media Files (*.mp4 *.avi *.mov *.mkv *.webm *.png *.jpg *.jpeg *.bmp *.webp *.gif)"));
+        tr("Media Files (*.mp4 *.avi *.mov *.mkv *.webm *.png *.jpg *.jpeg *.bmp *.webp *.gif *.wav *.mp3 *.flac *.aac *.m4a *.ogg *.opus *.wma *.aiff *.aif)"));
     if (files.isEmpty()) return;
     m_assetLibrary->addFiles(files);
 }
@@ -655,7 +655,7 @@ void MainWindow::onAddFolderClicked() {
 void MainWindow::onAddFilesClicked() {
     QStringList files = QFileDialog::getOpenFileNames(
         this, tr("Add Media Files"), "",
-        tr("Media Files (*.mp4 *.avi *.mov *.mkv *.webm *.png *.jpg *.jpeg *.bmp *.webp *.gif)"));
+        tr("Media Files (*.mp4 *.avi *.mov *.mkv *.webm *.png *.jpg *.jpeg *.bmp *.webp *.gif *.wav *.mp3 *.flac *.aac *.m4a *.ogg *.opus *.wma *.aiff *.aif)"));
     if (files.isEmpty()) return;
     if (!m_assetLibrary->addFiles(files))
         return;
@@ -765,6 +765,10 @@ void MainWindow::setupSourceMenu(QMenu *menu) {
                             [this]() { onAddFilesClicked(); },
                             [this]() { onAddVideoUrlClicked(); },
                             [this](SourceDescriptor::Kind kind) { addSourceOfKind(kind); },
+                            [this]() {
+                                if (m_clipNodeEditor)
+                                    m_clipNodeEditor->addMicInputAtCursor();
+                            },
                             NdiSource::isAvailable(),
 #ifdef PRISM_HAVE_WEBRTC
                             WebRtcSource::isAvailable());

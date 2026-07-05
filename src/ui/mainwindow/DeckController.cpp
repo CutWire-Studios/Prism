@@ -102,8 +102,13 @@ void DeckController::syncMasterAudioInputs() {
             continue;
 
         QString outputDeviceId;
-        if (!m_editor->masterAudioOutputDevice(settings.routedMasterOutputId, outputDeviceId))
+        if (settings.routedOutputPortIndex >= 0) {
+            if (!m_editor->masterAudioOutputDeviceForPort(
+                    settings.routedMasterOutputId, settings.routedOutputPortIndex, outputDeviceId))
+                continue;
+        } else if (!m_editor->masterAudioOutputDevice(settings.routedMasterOutputId, outputDeviceId)) {
             continue;
+        }
 
         activeInputs.insert(inputId);
         auto &capture = m_inputCaptures[inputId];
@@ -139,7 +144,8 @@ void DeckController::syncMasterAudioInputs() {
 
 void DeckController::updateDeckAudio(bool deckA, NodeId clipId, const ClipNodeModel *node,
                                      double currentTimeHint, bool forceSeek) {
-    if (!node || node->sourceDescriptor().kind != SourceDescriptor::Kind::VideoFile) {
+    if (!node || (node->sourceDescriptor().kind != SourceDescriptor::Kind::VideoFile
+                  && node->sourceDescriptor().kind != SourceDescriptor::Kind::AudioFile)) {
         stopDeckAudio(deckA);
         return;
     }
@@ -198,7 +204,8 @@ void DeckController::updateDeckAudio(bool deckA, NodeId clipId, const ClipNodeMo
 
 void DeckController::applyAudioControllerToDeck(bool deckA, NodeId clipId, bool forceSeek) {
     auto *node = m_editor->nodeAt(clipId);
-    if (!node || node->sourceDescriptor().kind != SourceDescriptor::Kind::VideoFile) {
+    if (!node || (node->sourceDescriptor().kind != SourceDescriptor::Kind::VideoFile
+                  && node->sourceDescriptor().kind != SourceDescriptor::Kind::AudioFile)) {
         stopDeckAudio(deckA);
         return;
     }

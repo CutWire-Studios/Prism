@@ -28,6 +28,7 @@ void buildMenu(QMenu *menu,
                std::function<void()> onFile,
                std::function<void()> onUrl,
                std::function<void(SourceDescriptor::Kind)> onKind,
+               std::function<void()> onMicInput,
                bool ndiAvailable = true,
                bool webrtcAvailable = true);
 

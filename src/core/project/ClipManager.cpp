@@ -12,7 +12,9 @@ QStringList ClipManager::allMediaInFolder(const QString &folderPath) const {
         return {};
 
     QStringList filters = {"*.mp4","*.avi","*.mov","*.mkv","*.webm",
-                           "*.png","*.jpg","*.jpeg","*.bmp","*.webp","*.gif"};
+                           "*.png","*.jpg","*.jpeg","*.bmp","*.webp","*.gif",
+                           "*.wav","*.mp3","*.flac","*.aac","*.m4a","*.ogg",
+                           "*.opus","*.wma","*.aiff","*.aif"};
     dir.setNameFilters(filters);
     dir.setFilter(QDir::Files | QDir::NoDotAndDotDot);
 
@@ -124,12 +126,20 @@ QString ClipManager::getClipPath(int index) const {
     return (index >= 0 && index < clips.count()) ? clips.at(index) : QString();
 }
 
+bool ClipManager::isAudioPath(const QString &path) {
+    const QString l = path.toLower();
+    return l.endsWith(".wav") || l.endsWith(".mp3")  || l.endsWith(".flac") ||
+           l.endsWith(".aac") || l.endsWith(".m4a") || l.endsWith(".ogg")  ||
+           l.endsWith(".opus") || l.endsWith(".wma") || l.endsWith(".aiff") ||
+           l.endsWith(".aif");
+}
+
 bool ClipManager::isMediaPath(const QString &path) {
     const QString l = path.toLower();
     return l.endsWith(".mp4") || l.endsWith(".avi")  || l.endsWith(".mov")  ||
            l.endsWith(".mkv") || l.endsWith(".webm") || l.endsWith(".png")  ||
            l.endsWith(".jpg") || l.endsWith(".jpeg") || l.endsWith(".bmp")  ||
-           l.endsWith(".webp") || l.endsWith(".gif");
+           l.endsWith(".webp") || l.endsWith(".gif") || isAudioPath(path);
 }
 
 bool ClipManager::isMediaFile(const QString &path) const {

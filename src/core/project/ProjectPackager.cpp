@@ -117,6 +117,7 @@ void collectFromDescriptor(const SourceDescriptor &desc,
     switch (desc.kind) {
     case Kind::VideoFile:
     case Kind::Image:
+    case Kind::AudioFile:
         collectFilePath(desc.path, files, warnings);
         break;
     case Kind::Slideshow:

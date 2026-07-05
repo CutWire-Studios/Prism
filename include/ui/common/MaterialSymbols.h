@@ -53,6 +53,7 @@ public:
         inline static constexpr const char *Inventory = "inventory_2";
         inline static constexpr const char *Language = "language";
         inline static constexpr const char *Link = "link";
+        inline static constexpr const char *Mic = "mic";
         inline static constexpr const char *Movie = "movie";
         inline static constexpr const char *Pause = "pause";
         inline static constexpr const char *PhotoCamera = "photo_camera";

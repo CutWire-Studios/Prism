@@ -24,6 +24,7 @@ class AbSelectNodeItem;
 class ScriptNodeItem;
 class MasterAudioOutputNodeItem;
 class MasterAudioInputNodeItem;
+class AudioMixerNodeItem;
 
 enum class AudioPlaybackMode {
     Always = 0,       // play while the clip is on either deck
@@ -36,6 +37,19 @@ struct MasterAudioInputSettings {
     int     volume = 100;
     bool    muted = false;
     NodeId  routedMasterOutputId = 0;
+    int     routedOutputPortIndex = -1;
+};
+
+/// Resolved route from an audio stream source to an output device port (via optional mixer).
+struct ResolvedAudioRoute {
+    NodeId  outputNodeId = 0;
+    QString outputDeviceId;
+    int     outputPortIndex = -1;
+    NodeId  mixerNodeId = 0;
+    int     mixerSlotIndex = -1;
+    int     mixerSlotVolume = 100;
+    bool    mixerSlotMuted = false;
+    bool    isValid() const { return outputNodeId != 0; }
 };
 
 /// Identifies one input slot of an A/B Select node (the target of a hotkey).
@@ -141,6 +155,7 @@ public:
     void setLayerCanvasSize(NodeId layerId, int w, int h);
 
     void populateAddNodeMenu(QMenu *menu);
+    void addMicInputAtCursor();
 
     // ── Output-node querying ─────────────────────────────────────────────────
     NodeId outputNodeId() const { return m_outputNode; }
@@ -149,9 +164,14 @@ public:
 
     // ── Audio / script queries ───────────────────────────────────────────────
     bool audioSettingsForClip(NodeId clipId, int &volume, bool &muted, bool &routedToMaster, AudioPlaybackMode &playbackMode, int &delayMs, QString &outputDeviceId) const;
+    bool resolveAudioStreamRoute(NodeId sourceNodeId, ResolvedAudioRoute &route) const;
     bool masterAudioInputSettings(NodeId inputNodeId, MasterAudioInputSettings &settings) const;
     bool masterAudioOutputDevice(NodeId masterOutputNodeId, QString &outputDeviceId) const;
+    bool masterAudioOutputDeviceForPort(NodeId masterOutputNodeId, int portIndex, QString &outputDeviceId) const;
+    NodeId audioOutputNodeId() const;
     QVector<NodeId> allMasterAudioInputNodeIds() const;
+    QVector<NodeId> allAudioMixerNodeIds() const;
+    bool mixerSlotSettings(NodeId mixerId, int slotIndex, int &volume, bool &muted, QString &name) const;
     bool audioSourceForShader(NodeId shaderNodeId, QString &filePath) const;
     std::shared_ptr<ScriptOutput> scriptOutputForDataNode(NodeId dataNodeId) const;
 
@@ -178,8 +198,11 @@ private slots:
     void onCanvasContextMenu();
     void onAddMasterAudioOutput();
     void onAddMasterAudioInput();
+    void onAddAudioMixer();
     void onAddScriptNode();
     void onEditClipAudio(NodeId clipId);
+    void onEditMicInput(NodeId micId);
+    void onEditAudioMixer(NodeId mixerId);
     void onEditScriptNode(NodeId nodeId);
     void onEditLayerCanvas(NodeId layerId);
     void onEditLayerTransform(NodeId layerId);
@@ -208,7 +231,10 @@ private:
     void addAbSelectNodeAt(const QPoint &globalPos);
     void addMasterAudioOutputTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
     void addMasterAudioInputTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
+    void addAudioMixerAt(const QPoint &globalPos);
     void addScriptNodeTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
+    void normalizeMixerInputs();
+    void migrateLegacyAudioConnections();
 
     ClipNodeScene *m_scene  = nullptr;
     QGraphicsView *m_view   = nullptr;
@@ -221,6 +247,7 @@ private:
     QMap<NodeId, ScriptNodeItem *> m_scriptNodes;
     QMap<NodeId, MasterAudioOutputNodeItem *> m_masterAudioNodes;
     QMap<NodeId, MasterAudioInputNodeItem *> m_masterAudioInputNodes;
+    QMap<NodeId, AudioMixerNodeItem *> m_audioMixerNodes;
     NodeId m_outputNode  = 0;
     NodeId m_deckAInput  = 0;
     NodeId m_deckBInput  = 0;

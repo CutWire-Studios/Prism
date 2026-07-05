@@ -27,6 +27,7 @@ struct SourceDescriptor {
         Ndi,    // network NDI source   — path = NDI source name
         WebRtc, // phone camera (WebRTC) — path = session token; webrtcRelayUrl when using public relay
         Text,   // CPU-rendered text overlay — textTemplate field
+        AudioFile, // audio-only media file — path = file path
     };
 
     Kind    kind    = Kind::VideoFile;
@@ -78,7 +79,11 @@ struct SourceDescriptor {
                kind == Kind::Text;
     }
     bool isFileSource() const {
-        return kind == Kind::VideoFile || kind == Kind::Image || kind == Kind::Slideshow;
+        return kind == Kind::VideoFile || kind == Kind::Image || kind == Kind::Slideshow
+            || kind == Kind::AudioFile;
+    }
+    bool isAudioOnlySource() const {
+        return kind == Kind::AudioFile;
     }
 
     // ── Playback capabilities ────────────────────────────────────────────────
@@ -87,11 +92,11 @@ struct SourceDescriptor {
 
     /// Can loop back to the start when it reaches the end.
     bool isRepeatable() const {
-        return kind == Kind::VideoFile || kind == Kind::Slideshow;
+        return kind == Kind::VideoFile || kind == Kind::Slideshow || kind == Kind::AudioFile;
     }
     /// Has a finite timeline that can be scrubbed.
     bool isSeekable() const {
-        return kind == Kind::VideoFile;
+        return kind == Kind::VideoFile || kind == Kind::AudioFile;
     }
     /// Play/pause is meaningful (static images and canvases have no motion;
     /// live sources freeze on the current frame).
@@ -100,6 +105,6 @@ struct SourceDescriptor {
     }
     /// Playback rate can be changed.
     bool hasSpeedControl() const {
-        return kind == Kind::VideoFile;
+        return kind == Kind::VideoFile || kind == Kind::AudioFile;
     }
 };

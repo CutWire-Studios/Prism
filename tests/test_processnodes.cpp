@@ -152,6 +152,40 @@ private slots:
         }
         QCOMPARE(ProcessEffects::byId(99), nullptr);
     }
+
+    void audioOutputSingletonOnAdd() {
+        QMetaObject::invokeMethod(m_editor, "onAddMasterAudioOutput", Qt::DirectConnection);
+        const NodeId first = m_editor->audioOutputNodeId();
+        QVERIFY(first != 0);
+        QMetaObject::invokeMethod(m_editor, "onAddMasterAudioOutput", Qt::DirectConnection);
+        QCOMPARE(m_editor->audioOutputNodeId(), first);
+    }
+
+    void audioFileRoundTripInGraph() {
+        QJsonObject src;
+        src["kind"] = (int)SourceDescriptor::Kind::AudioFile;
+        src["path"] = "/tmp/test.wav";
+        src["displayName"] = "Test Audio";
+        QJsonObject input;
+        input["id"] = 1;
+        input["source"] = src;
+        input["hasAudio"] = true;
+        input["audioOnly"] = true;
+
+        QJsonObject state;
+        state["graphVersion"] = 3;
+        state["nextId"] = 2;
+        state["inputNodes"] = QJsonArray{input};
+        state["outputNode"] = QJsonObject{{"id", 2}};
+        state["connections"] = QJsonArray{};
+
+        m_editor->restoreState(state);
+        const QJsonObject saved = m_editor->saveState();
+        const QJsonObject savedInput = saved["inputNodes"].toArray().first().toObject();
+        QCOMPARE(savedInput["source"].toObject()["kind"].toInt(),
+                 (int)SourceDescriptor::Kind::AudioFile);
+        QVERIFY(savedInput["audioOnly"].toBool());
+    }
 };
 
 QTEST_MAIN(TestProcessNodes)

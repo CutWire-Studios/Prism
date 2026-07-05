@@ -3,6 +3,7 @@
 #include "core/sources/CanvasSource.h"
 #include "core/sources/VideoFileSource.h"
 #include "core/sources/SourceDescriptor.h"
+#include "core/project/ClipManager.h"
 #include "ui/mainwindow/SourceFactory.h"
 #include "ui/canvas/VideoWidget.h"
 
@@ -73,6 +74,29 @@ private slots:
 
         while (src.nextFrame()) {}
         QVERIFY(!src.nextFrame());
+    }
+
+    void clipManager_mediaPaths() {
+        QVERIFY(ClipManager::isMediaPath(QStringLiteral("clip.mp4")));
+        QVERIFY(ClipManager::isMediaPath(QStringLiteral("photo.png")));
+        QVERIFY(ClipManager::isAudioPath(QStringLiteral("song.mp3")));
+        QVERIFY(ClipManager::isAudioPath(QStringLiteral("track.flac")));
+        QVERIFY(ClipManager::isAudioPath(QStringLiteral("voice.wav")));
+        QVERIFY(ClipManager::isMediaPath(QStringLiteral("voice.wav")));
+        QVERIFY(!ClipManager::isMediaPath(QStringLiteral("notes.txt")));
+        QVERIFY(!ClipManager::isAudioPath(QStringLiteral("video.mp4")));
+    }
+
+    void audioFileDescriptor_capabilities() {
+        SourceDescriptor audio;
+        audio.kind = SourceDescriptor::Kind::AudioFile;
+        audio.path = QStringLiteral("/tmp/test.mp3");
+        QVERIFY(audio.isAudioOnlySource());
+        QVERIFY(audio.isFileSource());
+        QVERIFY(audio.isRepeatable());
+        QVERIFY(audio.isSeekable());
+        QVERIFY(audio.hasSpeedControl());
+        QVERIFY(!audio.isLiveSource());
     }
 
     void sourceFactory_dispatch() {

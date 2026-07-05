@@ -214,6 +214,28 @@ private slots:
         }
     }
 
+    void assetPathResolver_relinkAudioFile() {
+        QTemporaryDir sessionRoot;
+        const QDir sessionDir(sessionRoot.path());
+        const QString audioPath = sessionDir.filePath(QStringLiteral("voice.wav"));
+        QFile audioFile(audioPath);
+        QVERIFY(audioFile.open(QIODevice::WriteOnly));
+        audioFile.write("RIFF");
+        audioFile.close();
+
+        AssetPathResolver::Options opts;
+        opts.sessionDir = sessionDir;
+        opts.allowUserPrompt = false;
+
+        SourceDescriptor audio;
+        audio.kind = SourceDescriptor::Kind::AudioFile;
+        audio.path = QStringLiteral("voice.wav");
+        AssetPathResolver::RelinkReport report;
+        const SourceDescriptor relinked = AssetPathResolver::relinkDescriptor(audio, opts, &report);
+        QCOMPARE(relinked.path, QFileInfo(audioPath).absoluteFilePath());
+        QCOMPARE(report.resolved, 1);
+    }
+
     void networkUtils_defaultInterfaceIndexLive() {
         const auto ifaces = NetworkUtils::listIpv4Interfaces();
         const int idx = NetworkUtils::defaultInterfaceIndex(ifaces);

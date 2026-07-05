@@ -49,6 +49,7 @@ GroupEditorDialog::GroupEditorDialog(NodeId groupId, ClipNodeEditor *editor, QWi
             [editor, groupId, view]() {
                 editor->addClipsFromFileDialog(groupId, view, true);
             },
+            []() {},
             [this, editor, groupId, view](SourceDescriptor::Kind kind) {
                 SourceDescriptor desc;
                 QPixmap thumb;
@@ -56,6 +57,9 @@ GroupEditorDialog::GroupEditorDialog(NodeId groupId, ClipNodeEditor *editor, QWi
                     ClipNodeScene *sub = editor->subSceneForGroup(groupId);
                     editor->addSourceNode(desc, thumb, sub, view, true);
                 }
+            },
+            [editor, groupId, view]() {
+                editor->addMasterAudioInputToGroup(groupId, view, true);
             },
             NdiSource::isAvailable(),
 #ifdef PRISM_HAVE_WEBRTC

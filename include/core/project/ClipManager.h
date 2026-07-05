@@ -51,6 +51,7 @@ public:
     }
 
     static bool isMediaPath(const QString &path);
+    static bool isAudioPath(const QString &path);
 
 private:
     QStringList clips;
