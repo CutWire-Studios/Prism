@@ -26,4 +26,6 @@ private:
     GLuint m_displayTex = 0;
     int    m_texW       = 0;
     int    m_texH       = 0;
+    int    m_glWidth    = 0;
+    int    m_glHeight   = 0;
 };

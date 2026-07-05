@@ -353,7 +353,7 @@ private:
     void destroyProgramFbo();
     void renderDeckToFbo(bool deckA);
     void renderCompositionGL();
-    void blitProgramToScreen();
+    void blitProgramToScreen(int surfaceW = 0, int surfaceH = 0);
     void cacheProgramFrameFromFbo();
     void cacheDeckPreviewFromFbo(bool deckA);
     void cacheDeckFrameFromFbo(bool deckA);
@@ -372,6 +372,8 @@ private:
     GLuint m_deckColorTexB   = 0;
     int    m_compW           = 0;
     int    m_compH           = 0;
+    int    m_glWidth         = 0;
+    int    m_glHeight        = 0;
     int    m_programFrameConsumers = 0;
     int    m_deckPreviewConsumers  = 0;
     int    m_deckFrameConsumers    = 0;

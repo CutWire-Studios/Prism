@@ -23,6 +23,7 @@ public:
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
     void toggleFullscreen();
@@ -32,10 +33,9 @@ private:
     void showContextMenu(const QPoint &globalPos);
 
     Ui::OutputWindow *ui;
-    // macOS: showFullScreen() on a frameless window leaves the menu-bar strip
-    // uncovered, so fullscreen is done by snapping to the screen geometry. That
-    // means isFullScreen() can't be trusted; track it and the pre-fullscreen
-    // geometry ourselves.
+    // Frameless windows don't reliably reach true fullscreen via showFullScreen()
+    // (macOS menu bar / notch, Windows taskbar gaps), so snap to screen geometry
+    // and track state ourselves — isFullScreen() can't be trusted here.
     bool  m_fullscreen = false;
     QRect m_normalGeometry;
 };

@@ -1,4 +1,5 @@
 #include "ui/canvas/VideoWidget.h"
+#include "ui/common/GlWidgetSurface.h"
 #include "core/sources/ImageSource.h"
 #include "ui/transitions/Transition.h"
 #include "core/sources/VideoFileSource.h"
@@ -25,6 +26,7 @@ VideoWidget::VideoWidget(QWidget *parent)
     : QOpenGLWidget(parent) {
     setAcceptDrops(true);
     setStyleSheet("background-color: #000;");
+    setUpdateBehavior(QOpenGLWidget::NoPartialUpdate);
 
     m_frameTimer = new QTimer(this);
     connect(m_frameTimer, &QTimer::timeout, this, &VideoWidget::updateFrame);
@@ -75,6 +77,10 @@ void VideoWidget::initializeGL() {
 }
 
 void VideoWidget::resizeGL(int w, int h) {
+    // QOpenGLWidget passes device-pixel dimensions here; on Windows HiDPI they
+    // exceed width()/height(). All default-FBO drawing must use these sizes.
+    m_glWidth  = w;
+    m_glHeight = h;
     glViewport(0, 0, w, h);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -156,15 +162,18 @@ void VideoWidget::composeProgramFrame() {
     renderCompositionGL();
     if (m_programFrameConsumers > 0)
         cacheProgramFrameFromFbo();
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
 
     m_compW = 0;
     m_compH = 0;
 }
 
 void VideoWidget::paintGL() {
+    GLint viewport[4] = {0, 0, 0, 0};
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
     composeProgramFrame();
-    blitProgramToScreen();
+    blitProgramToScreen(viewport[2], viewport[3]);
 }
 
 void VideoWidget::renderDeckToFbo(bool deckA) {
@@ -419,23 +428,36 @@ void VideoWidget::setProgramResolution(int width, int height) {
     update();
 }
 
-void VideoWidget::blitProgramToScreen() {
-    glViewport(0, 0, width(), height());
+void VideoWidget::blitProgramToScreen(int surfaceW, int surfaceH) {
+    const GLuint targetFbo = defaultFramebufferObject();
+    glBindFramebuffer(GL_FRAMEBUFFER, targetFbo);
+
+    if (surfaceW <= 0 || surfaceH <= 0) {
+        const QSize surface = GlWidgetSurface::drawSize(this, m_glWidth, m_glHeight);
+        surfaceW = surface.width();
+        surfaceH = surface.height();
+    }
+    const int w = surfaceW;
+    const int h = surfaceH;
+    glViewport(0, 0, w, h);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho(0, width(), height(), 0, -1, 1);
+    glOrtho(0, w, h, 0, -1, 1);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
+
+    glClearColor(0.f, 0.f, 0.f, 1.f);
+    glClear(GL_COLOR_BUFFER_BIT);
 
     glDisable(GL_BLEND);
     glEnable(GL_TEXTURE_2D);
     glColor4f(1.f, 1.f, 1.f, 1.f);
     glBindTexture(GL_TEXTURE_2D, m_programColorTex);
     glBegin(GL_QUADS);
-    glTexCoord2f(0.f, 0.f); glVertex2f(0.f,          0.f);
-    glTexCoord2f(1.f, 0.f); glVertex2f((float)width(), 0.f);
-    glTexCoord2f(1.f, 1.f); glVertex2f((float)width(), (float)height());
-    glTexCoord2f(0.f, 1.f); glVertex2f(0.f,          (float)height());
+    glTexCoord2f(0.f, 0.f); glVertex2f(0.f,     0.f);
+    glTexCoord2f(1.f, 0.f); glVertex2f((float)w, 0.f);
+    glTexCoord2f(1.f, 1.f); glVertex2f((float)w, (float)h);
+    glTexCoord2f(0.f, 1.f); glVertex2f(0.f,     (float)h);
     glEnd();
     glBindTexture(GL_TEXTURE_2D, 0);
 }

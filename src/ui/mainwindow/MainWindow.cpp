@@ -33,6 +33,7 @@
 #include <QFormLayout>
 #include <QDialogButtonBox>
 #include <QApplication>
+#include <QGuiApplication>
 #include <QCoreApplication>
 #include <QDir>
 #include <QShortcut>
@@ -1878,12 +1879,21 @@ void MainWindow::showOutputWindow() {
     if (!m_outputWindow)
         return;
     if (!m_outputWindowUserPlaced) {
-        m_outputWindow->move(100, 100);
-        m_outputWindow->resize(800, 600);
+        const auto screens = QGuiApplication::screens();
+        if (screens.size() >= 2) {
+            QScreen *secondary = screens.at(1);
+            m_outputWindow->setScreen(secondary);
+            m_outputWindow->setGeometry(secondary->geometry());
+        } else {
+            m_outputWindow->move(100, 100);
+            m_outputWindow->resize(800, 600);
+        }
         m_outputWindowUserPlaced = true;
     }
     m_outputWindow->show();
     m_outputWindow->raise();
     m_outputWindow->activateWindow();
+    if (VideoWidget *vw = m_outputWindow->videoWidget())
+        vw->update();
     pushDecks();
 }

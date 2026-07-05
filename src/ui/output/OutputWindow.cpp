@@ -4,6 +4,8 @@
 #include <QAction>
 #include <QKeyEvent>
 #include <QMenu>
+#include <QGuiApplication>
+#include <QResizeEvent>
 #include <QScreen>
 
 OutputWindow::OutputWindow(QWidget *parent)
@@ -43,42 +45,38 @@ VideoWidget *OutputWindow::videoWidget() const {
 }
 
 bool OutputWindow::isFullscreenActive() const {
-#ifdef Q_OS_MACOS
     return m_fullscreen;
-#else
-    return isFullScreen();
-#endif
 }
 
 void OutputWindow::enterFullscreen() {
-#ifdef Q_OS_MACOS
-    // showFullScreen() on a frameless window only fills the area below the menu
-    // bar / notch (e.g. 1080 of a 1117px display), so it never truly covers the
-    // screen. Snap to the full screen geometry instead — that does cover it —
-    // and track state ourselves since isFullScreen() stays false this way. The
-    // dynamic property lets the hosting VideoWidget disable window-drag while
+    // showFullScreen() on a frameless window does not reliably cover the full
+    // display (macOS menu bar / notch, Windows taskbar gaps). Snap to the screen
+    // geometry instead and track state ourselves since isFullScreen() stays false.
+    // The dynamic property lets the hosting VideoWidget disable window-drag while
     // fullscreen (it can't rely on isFullScreen() here).
-    if (QScreen *s = screen()) {
-        m_normalGeometry = geometry();
-        m_fullscreen = true;
-        setProperty("prismManualFullscreen", true);
-        setGeometry(s->geometry());
-        raise();
-    }
-#else
-    showFullScreen();
-#endif
+    QScreen *s = screen();
+    if (!s)
+        s = QGuiApplication::primaryScreen();
+    if (!s)
+        return;
+
+    m_normalGeometry = geometry();
+    m_fullscreen = true;
+    setProperty("prismManualFullscreen", true);
+    setWindowState(Qt::WindowNoState);
+    setGeometry(s->geometry());
+    show();
+    raise();
+    if (VideoWidget *vw = videoWidget())
+        vw->update();
 }
 
 void OutputWindow::exitFullscreen() {
-#ifdef Q_OS_MACOS
     m_fullscreen = false;
     setProperty("prismManualFullscreen", false);
+    setWindowState(Qt::WindowNoState);
     if (m_normalGeometry.isValid())
         setGeometry(m_normalGeometry);
-#else
-    showNormal();
-#endif
 }
 
 void OutputWindow::toggleFullscreen() {
@@ -98,6 +96,12 @@ void OutputWindow::showContextMenu(const QPoint &globalPos) {
     if (menu.exec(globalPos) == fullscreenAction) {
         toggleFullscreen();
     }
+}
+
+void OutputWindow::resizeEvent(QResizeEvent *event) {
+    QMainWindow::resizeEvent(event);
+    if (ui->outputWidget)
+        ui->outputWidget->update();
 }
 
 void OutputWindow::keyPressEvent(QKeyEvent *event) {

@@ -4,6 +4,7 @@
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QPushButton>
+#include <QGuiApplication>
 #include <QScreen>
 #include <QSpacerItem>
 #include <QVBoxLayout>
@@ -44,11 +45,7 @@ void MirrorOutputWindow::setFrame(const QImage &frame) {
 }
 
 bool MirrorOutputWindow::isFullscreenActive() const {
-#ifdef Q_OS_MACOS
     return m_fullscreen;
-#else
-    return isFullScreen();
-#endif
 }
 
 void MirrorOutputWindow::updateFullscreenIcon() {
@@ -58,31 +55,29 @@ void MirrorOutputWindow::updateFullscreenIcon() {
 }
 
 void MirrorOutputWindow::enterFullscreen() {
-#ifdef Q_OS_MACOS
-    // showFullScreen() only fills the area below the menu bar / notch on macOS,
-    // so snap to the full screen geometry instead. See OutputWindow.
-    if (QScreen *s = screen()) {
+    // Same geometry snap as OutputWindow — showFullScreen() is unreliable across
+    // platforms when covering an entire display for live output.
+    QScreen *s = screen();
+    if (!s)
+        s = QGuiApplication::primaryScreen();
+    if (s) {
         m_normalGeometry = geometry();
         m_fullscreen = true;
+        setWindowState(Qt::WindowNoState);
         setGeometry(s->geometry());
+        show();
         raise();
     }
-#else
-    showFullScreen();
-#endif
     // Drive the icon off the actual state so a failed entry (e.g. screen() null)
     // leaves the button showing "enter fullscreen".
     updateFullscreenIcon();
 }
 
 void MirrorOutputWindow::exitFullscreen() {
-#ifdef Q_OS_MACOS
     m_fullscreen = false;
+    setWindowState(Qt::WindowNoState);
     if (m_normalGeometry.isValid())
         setGeometry(m_normalGeometry);
-#else
-    showNormal();
-#endif
     updateFullscreenIcon();
 }
 
