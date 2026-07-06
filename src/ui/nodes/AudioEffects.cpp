@@ -5,13 +5,9 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDial>
-#include <QDoubleSpinBox>
-#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLCDNumber>
 #include <QLabel>
-#include <QSlider>
-#include <QSpinBox>
 #include <QVBoxLayout>
 
 #include <cmath>
@@ -32,43 +28,96 @@ bool runAudioEffectDialog(QWidget *parent, const QString &title,
     return dialog.exec() == QDialog::Accepted;
 }
 
-QSlider *addDbSlider(QFormLayout *form, const QString &label, double &value,
-                     double minDb, double maxDb, double step = 0.5) {
-    auto *slider = new QSlider(Qt::Horizontal);
-    const int scale = static_cast<int>(1.0 / step);
-    slider->setRange(static_cast<int>(minDb * scale), static_cast<int>(maxDb * scale));
-    slider->setValue(static_cast<int>(value * scale));
-    auto *readout = new QLabel(QString::number(value, 'f', 1) + QStringLiteral(" dB"));
-    QObject::connect(slider, &QSlider::valueChanged, readout, [readout, scale, step](int v) {
-        readout->setText(QString::number(v * step, 'f', 1) + QStringLiteral(" dB"));
-    });
-    auto *row = new QHBoxLayout;
-    row->addWidget(slider, 1);
-    row->addWidget(readout);
-    form->addRow(label, row);
-    QObject::connect(slider, &QSlider::valueChanged, [&value, step](int v) { value = v * step; });
-    return slider;
-}
-
-QSlider *addPercentSlider(QFormLayout *form, const QString &label, double &value,
-                          double minV, double maxV) {
-    auto *slider = new QSlider(Qt::Horizontal);
-    slider->setRange(static_cast<int>(minV * 10), static_cast<int>(maxV * 10));
-    slider->setValue(static_cast<int>(value * 10));
-    auto *readout = new QLabel(QString::number(value, 'f', 1));
-    QObject::connect(slider, &QSlider::valueChanged, readout, [readout](int v) {
-        readout->setText(QString::number(v / 10.0, 'f', 1));
-    });
-    auto *row = new QHBoxLayout;
-    row->addWidget(slider, 1);
-    row->addWidget(readout);
-    form->addRow(label, row);
-    QObject::connect(slider, &QSlider::valueChanged, [&value](int v) { value = v / 10.0; });
-    return slider;
-}
-
 bool bypassed(const QJsonObject &p) {
     return p.value(QStringLiteral("bypass")).toBool(false);
+}
+
+constexpr int kLinearDialSteps = 1000;
+
+double snapStep(double value, double step) {
+    if (step <= 0.0)
+        return value;
+    return std::round(value / step) * step;
+}
+
+int linearToDial(double value, double minV, double maxV) {
+    value = std::clamp(value, minV, maxV);
+    const double t = (maxV > minV) ? (value - minV) / (maxV - minV) : 0.0;
+    return static_cast<int>(std::lround(t * kLinearDialSteps));
+}
+
+double dialToLinear(int dial, double minV, double maxV, double step = 0.0) {
+    const double t = static_cast<double>(dial) / kLinearDialSteps;
+    return snapStep(minV + t * (maxV - minV), step);
+}
+
+void updateLcd(QLCDNumber *lcd, double value, int precision) {
+    if (precision <= 0)
+        lcd->display(static_cast<int>(std::lround(value)));
+    else
+        lcd->display(QString::number(value, 'f', precision));
+}
+
+void wireDial(QDial *dial, QLCDNumber *lcd, double &value,
+              double minV, double maxV, double step, int precision,
+              const std::function<void()> &notify) {
+    updateLcd(lcd, value, precision);
+    QObject::connect(dial, &QDial::valueChanged, [&value, minV, maxV, step, precision, lcd, notify](int v) {
+        value = dialToLinear(v, minV, maxV, step);
+        updateLcd(lcd, value, precision);
+        notify();
+    });
+}
+
+void addDialColumn(QHBoxLayout *row, const QString &title, double &value,
+                   double minV, double maxV, double step, const QString &unit,
+                   int dialSize, int precision, const std::function<void()> &notify) {
+    auto *col = new QVBoxLayout;
+    auto *titleLabel = new QLabel(title);
+    titleLabel->setAlignment(Qt::AlignHCenter);
+    col->addWidget(titleLabel);
+
+    auto *lcd = new QLCDNumber(5);
+    lcd->setSegmentStyle(QLCDNumber::Flat);
+    lcd->setMode(QLCDNumber::Dec);
+    lcd->setMinimumHeight(32);
+
+    auto *unitLabel = new QLabel(unit);
+    auto *readoutRow = new QHBoxLayout;
+    readoutRow->addStretch();
+    readoutRow->addWidget(lcd);
+    if (!unit.isEmpty())
+        readoutRow->addWidget(unitLabel);
+    readoutRow->addStretch();
+    col->addLayout(readoutRow);
+
+    auto *dial = new QDial;
+    dial->setRange(0, kLinearDialSteps);
+    dial->setValue(linearToDial(value, minV, maxV));
+    dial->setNotchesVisible(true);
+    dial->setMinimumSize(dialSize, dialSize);
+    col->addWidget(dial, 0, Qt::AlignHCenter);
+
+    wireDial(dial, lcd, value, minV, maxV, step, precision, notify);
+    row->addLayout(col, 1);
+}
+
+void addPrimaryDial(QVBoxLayout *layout, double &value, double minV, double maxV,
+                    double step, const QString &unit, int precision,
+                    const std::function<void()> &notify) {
+    auto *row = new QHBoxLayout;
+    addDialColumn(row, QString(), value, minV, maxV, step, unit, 140, precision, notify);
+    layout->addLayout(row);
+}
+
+void addBypassCheckbox(QVBoxLayout *layout, bool &bypass, const std::function<void()> &notify) {
+    auto *bypassBox = new QCheckBox(QStringLiteral("Bypass"));
+    bypassBox->setChecked(bypass);
+    layout->addWidget(bypassBox);
+    QObject::connect(bypassBox, &QCheckBox::toggled, [&bypass, notify](bool on) {
+        bypass = on;
+        notify();
+    });
 }
 
 constexpr double kFreqDialMinHz = 20.0;
@@ -87,43 +136,38 @@ double dialToFreq(int dial) {
 }
 
 void addFreqDial(QVBoxLayout *layout, double &freq, const std::function<void()> &notify) {
+    auto *row = new QHBoxLayout;
+    auto *col = new QVBoxLayout;
+
     auto *lcd = new QLCDNumber(5);
     lcd->setSegmentStyle(QLCDNumber::Flat);
     lcd->setMode(QLCDNumber::Dec);
     lcd->setMinimumHeight(36);
 
     auto *unitLabel = new QLabel(QStringLiteral("Hz"));
+    auto *readoutRow = new QHBoxLayout;
+    readoutRow->addStretch();
+    readoutRow->addWidget(lcd);
+    readoutRow->addWidget(unitLabel);
+    readoutRow->addStretch();
+    col->addLayout(readoutRow);
 
     auto *dial = new QDial;
     dial->setRange(0, kFreqDialSteps);
     dial->setValue(freqToDial(freq));
     dial->setNotchesVisible(true);
     dial->setMinimumSize(140, 140);
+    col->addWidget(dial, 0, Qt::AlignHCenter);
 
-    auto updateReadout = [lcd](double f) {
-        lcd->display(static_cast<int>(std::lround(f)));
-    };
-    updateReadout(freq);
-
-    QObject::connect(dial, &QDial::valueChanged, [&freq, updateReadout, notify](int v) {
+    updateLcd(lcd, freq, 0);
+    QObject::connect(dial, &QDial::valueChanged, [&freq, lcd, notify](int v) {
         freq = dialToFreq(v);
-        updateReadout(freq);
+        updateLcd(lcd, freq, 0);
         notify();
     });
 
-    auto *readoutRow = new QHBoxLayout;
-    readoutRow->addStretch();
-    readoutRow->addWidget(lcd);
-    readoutRow->addWidget(unitLabel);
-    readoutRow->addStretch();
-
-    auto *dialRow = new QHBoxLayout;
-    dialRow->addStretch();
-    dialRow->addWidget(dial);
-    dialRow->addStretch();
-
-    layout->addLayout(readoutRow);
-    layout->addLayout(dialRow);
+    row->addLayout(col, 1);
+    layout->addLayout(row);
 }
 
 AudioEffectDescriptor makeGain() {
@@ -141,18 +185,20 @@ AudioEffectDescriptor makeGain() {
     d.dynamicLabel = [](const QJsonObject &p) {
         return QStringLiteral("%1 dB").arg(p[QStringLiteral("gainDb")].toDouble(0.0), 0, 'f', 1);
     };
-    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &) {
+    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &onLiveChange) {
         double gainDb = params[QStringLiteral("gainDb")].toDouble(0.0);
         bool bypass = bypassed(params);
+        const auto notify = [&]() {
+            if (onLiveChange) {
+                onLiveChange(QJsonObject{
+                    {QStringLiteral("gainDb"), gainDb},
+                    {QStringLiteral("bypass"), bypass},
+                });
+            }
+        };
         return runAudioEffectDialog(parent, QStringLiteral("Gain"), [&](QVBoxLayout *layout) {
-            auto *form = new QFormLayout;
-            addDbSlider(form, QStringLiteral("Gain:"), gainDb, -24.0, 24.0);
-            auto *bypassBox = new QCheckBox(QStringLiteral("Bypass"));
-            bypassBox->setChecked(bypass);
-            layout->addLayout(form);
-            layout->addWidget(bypassBox);
-            layout->addStretch();
-            QObject::connect(bypassBox, &QCheckBox::toggled, [&bypass](bool on) { bypass = on; });
+            addPrimaryDial(layout, gainDb, -24.0, 24.0, 0.5, QStringLiteral("dB"), 1, notify);
+            addBypassCheckbox(layout, bypass, notify);
         }) && (params = QJsonObject{{QStringLiteral("gainDb"), gainDb},
                                      {QStringLiteral("bypass"), bypass}}, true);
     };
@@ -187,13 +233,7 @@ AudioEffectDescriptor makeHighPass() {
         };
         return runAudioEffectDialog(parent, QStringLiteral("High-Pass Filter"), [&](QVBoxLayout *layout) {
             addFreqDial(layout, freq, notify);
-            auto *bypassBox = new QCheckBox(QStringLiteral("Bypass"));
-            bypassBox->setChecked(bypass);
-            layout->addWidget(bypassBox);
-            QObject::connect(bypassBox, &QCheckBox::toggled, [&bypass, notify](bool on) {
-                bypass = on;
-                notify();
-            });
+            addBypassCheckbox(layout, bypass, notify);
         }) && (params = QJsonObject{{QStringLiteral("freq"), freq},
                                      {QStringLiteral("bypass"), bypass}}, true);
     };
@@ -228,13 +268,7 @@ AudioEffectDescriptor makeLowPass() {
         };
         return runAudioEffectDialog(parent, QStringLiteral("Low-Pass Filter"), [&](QVBoxLayout *layout) {
             addFreqDial(layout, freq, notify);
-            auto *bypassBox = new QCheckBox(QStringLiteral("Bypass"));
-            bypassBox->setChecked(bypass);
-            layout->addWidget(bypassBox);
-            QObject::connect(bypassBox, &QCheckBox::toggled, [&bypass, notify](bool on) {
-                bypass = on;
-                notify();
-            });
+            addBypassCheckbox(layout, bypass, notify);
         }) && (params = QJsonObject{{QStringLiteral("freq"), freq},
                                      {QStringLiteral("bypass"), bypass}}, true);
     };
@@ -271,21 +305,31 @@ AudioEffectDescriptor makeEq3Band() {
             .arg(p[QStringLiteral("midDb")].toDouble(0.0), 0, 'f', 0)
             .arg(p[QStringLiteral("highDb")].toDouble(0.0), 0, 'f', 0);
     };
-    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &) {
+    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &onLiveChange) {
         double low = params[QStringLiteral("lowDb")].toDouble(0.0);
         double mid = params[QStringLiteral("midDb")].toDouble(0.0);
         double high = params[QStringLiteral("highDb")].toDouble(0.0);
         bool bypass = bypassed(params);
+        const auto notify = [&]() {
+            if (onLiveChange) {
+                onLiveChange(QJsonObject{
+                    {QStringLiteral("lowDb"), low},
+                    {QStringLiteral("midDb"), mid},
+                    {QStringLiteral("highDb"), high},
+                    {QStringLiteral("bypass"), bypass},
+                });
+            }
+        };
         return runAudioEffectDialog(parent, QStringLiteral("3-Band EQ"), [&](QVBoxLayout *layout) {
-            auto *form = new QFormLayout;
-            addDbSlider(form, QStringLiteral("Low (120 Hz):"), low, -12.0, 12.0);
-            addDbSlider(form, QStringLiteral("Mid (1 kHz):"), mid, -12.0, 12.0);
-            addDbSlider(form, QStringLiteral("High (8 kHz):"), high, -12.0, 12.0);
-            auto *bypassBox = new QCheckBox(QStringLiteral("Bypass"));
-            bypassBox->setChecked(bypass);
-            layout->addLayout(form);
-            layout->addWidget(bypassBox);
-            QObject::connect(bypassBox, &QCheckBox::toggled, [&bypass](bool on) { bypass = on; });
+            auto *dialRow = new QHBoxLayout;
+            addDialColumn(dialRow, QStringLiteral("Low"), low, -12.0, 12.0, 0.5,
+                          QStringLiteral("dB"), 100, 1, notify);
+            addDialColumn(dialRow, QStringLiteral("Mid"), mid, -12.0, 12.0, 0.5,
+                          QStringLiteral("dB"), 100, 1, notify);
+            addDialColumn(dialRow, QStringLiteral("High"), high, -12.0, 12.0, 0.5,
+                          QStringLiteral("dB"), 100, 1, notify);
+            layout->addLayout(dialRow);
+            addBypassCheckbox(layout, bypass, notify);
         }) && (params = QJsonObject{
                    {QStringLiteral("lowDb"), low},
                    {QStringLiteral("midDb"), mid},
@@ -321,33 +365,37 @@ AudioEffectDescriptor makeCompressor() {
             .arg(p[QStringLiteral("threshold")].toDouble(-18.0), 0, 'f', 0)
             .arg(p[QStringLiteral("ratio")].toDouble(4.0), 0, 'f', 1);
     };
-    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &) {
+    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &onLiveChange) {
         double threshold = params[QStringLiteral("threshold")].toDouble(-18.0);
         double ratio = params[QStringLiteral("ratio")].toDouble(4.0);
         double attack = params[QStringLiteral("attack")].toDouble(20.0);
         double release = params[QStringLiteral("release")].toDouble(250.0);
         bool bypass = bypassed(params);
+        const auto notify = [&]() {
+            if (onLiveChange) {
+                onLiveChange(QJsonObject{
+                    {QStringLiteral("threshold"), threshold},
+                    {QStringLiteral("ratio"), ratio},
+                    {QStringLiteral("attack"), attack},
+                    {QStringLiteral("release"), release},
+                    {QStringLiteral("bypass"), bypass},
+                });
+            }
+        };
         return runAudioEffectDialog(parent, QStringLiteral("Compressor"), [&](QVBoxLayout *layout) {
-            auto *form = new QFormLayout;
-            addDbSlider(form, QStringLiteral("Threshold:"), threshold, -40.0, 0.0);
-            addPercentSlider(form, QStringLiteral("Ratio:"), ratio, 1.0, 20.0);
-            auto *attackSpin = new QSpinBox;
-            attackSpin->setRange(1, 200);
-            attackSpin->setSuffix(QStringLiteral(" ms"));
-            attackSpin->setValue(static_cast<int>(attack));
-            form->addRow(QStringLiteral("Attack:"), attackSpin);
-            auto *releaseSpin = new QSpinBox;
-            releaseSpin->setRange(10, 2000);
-            releaseSpin->setSuffix(QStringLiteral(" ms"));
-            releaseSpin->setValue(static_cast<int>(release));
-            form->addRow(QStringLiteral("Release:"), releaseSpin);
-            auto *bypassBox = new QCheckBox(QStringLiteral("Bypass"));
-            bypassBox->setChecked(bypass);
-            layout->addLayout(form);
-            layout->addWidget(bypassBox);
-            QObject::connect(attackSpin, QOverload<int>::of(&QSpinBox::valueChanged), [&attack](int v) { attack = v; });
-            QObject::connect(releaseSpin, QOverload<int>::of(&QSpinBox::valueChanged), [&release](int v) { release = v; });
-            QObject::connect(bypassBox, &QCheckBox::toggled, [&bypass](bool on) { bypass = on; });
+            auto *row1 = new QHBoxLayout;
+            addDialColumn(row1, QStringLiteral("Threshold"), threshold, -40.0, 0.0, 0.5,
+                          QStringLiteral("dB"), 100, 1, notify);
+            addDialColumn(row1, QStringLiteral("Ratio"), ratio, 1.0, 20.0, 0.1,
+                          QStringLiteral(":1"), 100, 1, notify);
+            layout->addLayout(row1);
+            auto *row2 = new QHBoxLayout;
+            addDialColumn(row2, QStringLiteral("Attack"), attack, 1.0, 200.0, 1.0,
+                          QStringLiteral("ms"), 100, 0, notify);
+            addDialColumn(row2, QStringLiteral("Release"), release, 10.0, 2000.0, 1.0,
+                          QStringLiteral("ms"), 100, 0, notify);
+            layout->addLayout(row2);
+            addBypassCheckbox(layout, bypass, notify);
         }) && (params = QJsonObject{
                    {QStringLiteral("threshold"), threshold},
                    {QStringLiteral("ratio"), ratio},
@@ -381,31 +429,31 @@ AudioEffectDescriptor makeLimiter() {
         return QStringLiteral("ceil %1")
             .arg(p[QStringLiteral("limit")].toDouble(0.95), 0, 'f', 2);
     };
-    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &) {
+    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &onLiveChange) {
         double limit = params[QStringLiteral("limit")].toDouble(0.95);
         double attack = params[QStringLiteral("attack")].toDouble(5.0);
         double release = params[QStringLiteral("release")].toDouble(50.0);
         bool bypass = bypassed(params);
+        const auto notify = [&]() {
+            if (onLiveChange) {
+                onLiveChange(QJsonObject{
+                    {QStringLiteral("limit"), limit},
+                    {QStringLiteral("attack"), attack},
+                    {QStringLiteral("release"), release},
+                    {QStringLiteral("bypass"), bypass},
+                });
+            }
+        };
         return runAudioEffectDialog(parent, QStringLiteral("Limiter"), [&](QVBoxLayout *layout) {
-            auto *form = new QFormLayout;
-            addPercentSlider(form, QStringLiteral("Ceiling:"), limit, 0.5, 1.0);
-            auto *attackSpin = new QSpinBox;
-            attackSpin->setRange(1, 50);
-            attackSpin->setSuffix(QStringLiteral(" ms"));
-            attackSpin->setValue(static_cast<int>(attack));
-            form->addRow(QStringLiteral("Attack:"), attackSpin);
-            auto *releaseSpin = new QSpinBox;
-            releaseSpin->setRange(10, 500);
-            releaseSpin->setSuffix(QStringLiteral(" ms"));
-            releaseSpin->setValue(static_cast<int>(release));
-            form->addRow(QStringLiteral("Release:"), releaseSpin);
-            auto *bypassBox = new QCheckBox(QStringLiteral("Bypass"));
-            bypassBox->setChecked(bypass);
-            layout->addLayout(form);
-            layout->addWidget(bypassBox);
-            QObject::connect(attackSpin, QOverload<int>::of(&QSpinBox::valueChanged), [&attack](int v) { attack = v; });
-            QObject::connect(releaseSpin, QOverload<int>::of(&QSpinBox::valueChanged), [&release](int v) { release = v; });
-            QObject::connect(bypassBox, &QCheckBox::toggled, [&bypass](bool on) { bypass = on; });
+            auto *row = new QHBoxLayout;
+            addDialColumn(row, QStringLiteral("Ceiling"), limit, 0.5, 1.0, 0.01,
+                          QString(), 100, 2, notify);
+            addDialColumn(row, QStringLiteral("Attack"), attack, 1.0, 50.0, 1.0,
+                          QStringLiteral("ms"), 100, 0, notify);
+            addDialColumn(row, QStringLiteral("Release"), release, 10.0, 500.0, 1.0,
+                          QStringLiteral("ms"), 100, 0, notify);
+            layout->addLayout(row);
+            addBypassCheckbox(layout, bypass, notify);
         }) && (params = QJsonObject{
                    {QStringLiteral("limit"), limit},
                    {QStringLiteral("attack"), attack},
@@ -440,33 +488,37 @@ AudioEffectDescriptor makeGate() {
         return QStringLiteral("%1 dB")
             .arg(p[QStringLiteral("threshold")].toDouble(-40.0), 0, 'f', 0);
     };
-    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &) {
+    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &onLiveChange) {
         double threshold = params[QStringLiteral("threshold")].toDouble(-40.0);
         double ratio = params[QStringLiteral("ratio")].toDouble(2.0);
         double attack = params[QStringLiteral("attack")].toDouble(20.0);
         double release = params[QStringLiteral("release")].toDouble(250.0);
         bool bypass = bypassed(params);
+        const auto notify = [&]() {
+            if (onLiveChange) {
+                onLiveChange(QJsonObject{
+                    {QStringLiteral("threshold"), threshold},
+                    {QStringLiteral("ratio"), ratio},
+                    {QStringLiteral("attack"), attack},
+                    {QStringLiteral("release"), release},
+                    {QStringLiteral("bypass"), bypass},
+                });
+            }
+        };
         return runAudioEffectDialog(parent, QStringLiteral("Noise Gate"), [&](QVBoxLayout *layout) {
-            auto *form = new QFormLayout;
-            addDbSlider(form, QStringLiteral("Threshold:"), threshold, -60.0, 0.0);
-            addPercentSlider(form, QStringLiteral("Ratio:"), ratio, 1.0, 10.0);
-            auto *attackSpin = new QSpinBox;
-            attackSpin->setRange(1, 200);
-            attackSpin->setSuffix(QStringLiteral(" ms"));
-            attackSpin->setValue(static_cast<int>(attack));
-            form->addRow(QStringLiteral("Attack:"), attackSpin);
-            auto *releaseSpin = new QSpinBox;
-            releaseSpin->setRange(10, 2000);
-            releaseSpin->setSuffix(QStringLiteral(" ms"));
-            releaseSpin->setValue(static_cast<int>(release));
-            form->addRow(QStringLiteral("Release:"), releaseSpin);
-            auto *bypassBox = new QCheckBox(QStringLiteral("Bypass"));
-            bypassBox->setChecked(bypass);
-            layout->addLayout(form);
-            layout->addWidget(bypassBox);
-            QObject::connect(attackSpin, QOverload<int>::of(&QSpinBox::valueChanged), [&attack](int v) { attack = v; });
-            QObject::connect(releaseSpin, QOverload<int>::of(&QSpinBox::valueChanged), [&release](int v) { release = v; });
-            QObject::connect(bypassBox, &QCheckBox::toggled, [&bypass](bool on) { bypass = on; });
+            auto *row1 = new QHBoxLayout;
+            addDialColumn(row1, QStringLiteral("Threshold"), threshold, -60.0, 0.0, 0.5,
+                          QStringLiteral("dB"), 100, 1, notify);
+            addDialColumn(row1, QStringLiteral("Ratio"), ratio, 1.0, 10.0, 0.1,
+                          QStringLiteral(":1"), 100, 1, notify);
+            layout->addLayout(row1);
+            auto *row2 = new QHBoxLayout;
+            addDialColumn(row2, QStringLiteral("Attack"), attack, 1.0, 200.0, 1.0,
+                          QStringLiteral("ms"), 100, 0, notify);
+            addDialColumn(row2, QStringLiteral("Release"), release, 10.0, 2000.0, 1.0,
+                          QStringLiteral("ms"), 100, 0, notify);
+            layout->addLayout(row2);
+            addBypassCheckbox(layout, bypass, notify);
         }) && (params = QJsonObject{
                    {QStringLiteral("threshold"), threshold},
                    {QStringLiteral("ratio"), ratio},
@@ -504,26 +556,31 @@ AudioEffectDescriptor makeDelay() {
         return QStringLiteral("%1 ms")
             .arg(p[QStringLiteral("delayMs")].toDouble(250.0), 0, 'f', 0);
     };
-    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &) {
+    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &onLiveChange) {
         double delayMs = params[QStringLiteral("delayMs")].toDouble(250.0);
         double feedback = params[QStringLiteral("feedback")].toDouble(0.35);
         double mix = params[QStringLiteral("mix")].toDouble(0.4);
         bool bypass = bypassed(params);
+        const auto notify = [&]() {
+            if (onLiveChange) {
+                onLiveChange(QJsonObject{
+                    {QStringLiteral("delayMs"), delayMs},
+                    {QStringLiteral("feedback"), feedback},
+                    {QStringLiteral("mix"), mix},
+                    {QStringLiteral("bypass"), bypass},
+                });
+            }
+        };
         return runAudioEffectDialog(parent, QStringLiteral("Delay / Echo"), [&](QVBoxLayout *layout) {
-            auto *form = new QFormLayout;
-            auto *delaySpin = new QSpinBox;
-            delaySpin->setRange(20, 2000);
-            delaySpin->setSuffix(QStringLiteral(" ms"));
-            delaySpin->setValue(static_cast<int>(delayMs));
-            form->addRow(QStringLiteral("Delay:"), delaySpin);
-            addPercentSlider(form, QStringLiteral("Feedback:"), feedback, 0.0, 0.95);
-            addPercentSlider(form, QStringLiteral("Mix:"), mix, 0.0, 1.0);
-            auto *bypassBox = new QCheckBox(QStringLiteral("Bypass"));
-            bypassBox->setChecked(bypass);
-            layout->addLayout(form);
-            layout->addWidget(bypassBox);
-            QObject::connect(delaySpin, QOverload<int>::of(&QSpinBox::valueChanged), [&delayMs](int v) { delayMs = v; });
-            QObject::connect(bypassBox, &QCheckBox::toggled, [&bypass](bool on) { bypass = on; });
+            auto *row = new QHBoxLayout;
+            addDialColumn(row, QStringLiteral("Delay"), delayMs, 20.0, 2000.0, 1.0,
+                          QStringLiteral("ms"), 100, 0, notify);
+            addDialColumn(row, QStringLiteral("Feedback"), feedback, 0.0, 0.95, 0.01,
+                          QString(), 100, 2, notify);
+            addDialColumn(row, QStringLiteral("Mix"), mix, 0.0, 1.0, 0.01,
+                          QString(), 100, 2, notify);
+            layout->addLayout(row);
+            addBypassCheckbox(layout, bypass, notify);
         }) && (params = QJsonObject{
                    {QStringLiteral("delayMs"), delayMs},
                    {QStringLiteral("feedback"), feedback},
@@ -564,19 +621,27 @@ AudioEffectDescriptor makeReverb() {
         return QStringLiteral("room %1%")
             .arg(static_cast<int>(p[QStringLiteral("room")].toDouble(0.5) * 100.0));
     };
-    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &) {
+    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &onLiveChange) {
         double room = params[QStringLiteral("room")].toDouble(0.5);
         double mix = params[QStringLiteral("mix")].toDouble(0.3);
         bool bypass = bypassed(params);
+        const auto notify = [&]() {
+            if (onLiveChange) {
+                onLiveChange(QJsonObject{
+                    {QStringLiteral("room"), room},
+                    {QStringLiteral("mix"), mix},
+                    {QStringLiteral("bypass"), bypass},
+                });
+            }
+        };
         return runAudioEffectDialog(parent, QStringLiteral("Reverb"), [&](QVBoxLayout *layout) {
-            auto *form = new QFormLayout;
-            addPercentSlider(form, QStringLiteral("Room size:"), room, 0.0, 1.0);
-            addPercentSlider(form, QStringLiteral("Mix:"), mix, 0.0, 1.0);
-            auto *bypassBox = new QCheckBox(QStringLiteral("Bypass"));
-            bypassBox->setChecked(bypass);
-            layout->addLayout(form);
-            layout->addWidget(bypassBox);
-            QObject::connect(bypassBox, &QCheckBox::toggled, [&bypass](bool on) { bypass = on; });
+            auto *row = new QHBoxLayout;
+            addDialColumn(row, QStringLiteral("Room"), room, 0.0, 1.0, 0.01,
+                          QString(), 100, 2, notify);
+            addDialColumn(row, QStringLiteral("Mix"), mix, 0.0, 1.0, 0.01,
+                          QString(), 100, 2, notify);
+            layout->addLayout(row);
+            addBypassCheckbox(layout, bypass, notify);
         }) && (params = QJsonObject{
                    {QStringLiteral("room"), room},
                    {QStringLiteral("mix"), mix},
@@ -602,17 +667,20 @@ AudioEffectDescriptor makeStereoWiden() {
         return QStringLiteral("x%1")
             .arg(p[QStringLiteral("amount")].toDouble(1.8), 0, 'f', 1);
     };
-    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &) {
+    d.editDialog = [](QWidget *parent, QJsonObject &params, const AudioEffectLiveUpdate &onLiveChange) {
         double amount = params[QStringLiteral("amount")].toDouble(1.8);
         bool bypass = bypassed(params);
+        const auto notify = [&]() {
+            if (onLiveChange) {
+                onLiveChange(QJsonObject{
+                    {QStringLiteral("amount"), amount},
+                    {QStringLiteral("bypass"), bypass},
+                });
+            }
+        };
         return runAudioEffectDialog(parent, QStringLiteral("Stereo Widen"), [&](QVBoxLayout *layout) {
-            auto *form = new QFormLayout;
-            addPercentSlider(form, QStringLiteral("Width:"), amount, 0.5, 4.0);
-            auto *bypassBox = new QCheckBox(QStringLiteral("Bypass"));
-            bypassBox->setChecked(bypass);
-            layout->addLayout(form);
-            layout->addWidget(bypassBox);
-            QObject::connect(bypassBox, &QCheckBox::toggled, [&bypass](bool on) { bypass = on; });
+            addPrimaryDial(layout, amount, 0.5, 4.0, 0.1, QStringLiteral("x"), 1, notify);
+            addBypassCheckbox(layout, bypass, notify);
         }) && (params = QJsonObject{
                    {QStringLiteral("amount"), amount},
                    {QStringLiteral("bypass"), bypass},
