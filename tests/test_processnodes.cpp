@@ -1,5 +1,6 @@
 #include "ui/nodes/ClipNodeEditor.h"
 #include "ui/nodes/ProcessEffects.h"
+#include "ui/nodes/AudioEffects.h"
 #include "core/sources/SourceDescriptor.h"
 
 #include <QtTest>
@@ -151,6 +152,27 @@ private slots:
             QCOMPARE(ProcessEffects::byId(d.id), &d);
         }
         QCOMPARE(ProcessEffects::byId(99), nullptr);
+    }
+
+    void audioEffectRegistryIsConsistent() {
+        for (const AudioEffectDescriptor &d : AudioEffects::all()) {
+            QVERIFY(d.id >= 0);
+            QVERIFY(!d.name.isEmpty());
+            QVERIFY(!d.menuLabel.isEmpty());
+            QVERIFY(d.filterSpec);
+            QCOMPARE(AudioEffects::byId(d.id), &d);
+        }
+        QCOMPARE(AudioEffects::byId(99), nullptr);
+        QCOMPARE(AudioEffects::all().size(), 10);
+        const QString chain = AudioEffects::buildFilterChain({{0, QJsonObject{{QStringLiteral("gainDb"), 3.0}}},
+                                                              {4, QJsonObject{
+                                                                  {QStringLiteral("threshold"), -18.0},
+                                                                  {QStringLiteral("ratio"), 4.0},
+                                                                  {QStringLiteral("attack"), 20.0},
+                                                                  {QStringLiteral("release"), 250.0},
+                                                              }}});
+        QVERIFY(chain.contains(QStringLiteral("volume=")));
+        QVERIFY(chain.contains(QStringLiteral("acompressor=")));
     }
 
     void audioOutputSingletonOnAdd() {

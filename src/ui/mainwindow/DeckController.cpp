@@ -123,6 +123,11 @@ void DeckController::syncMasterAudioInputs() {
         capture->setTargetOutputDeviceId(outputDeviceId);
         capture->setVolumePercent(settings.volume);
         capture->setMuted(settings.muted);
+        ResolvedAudioRoute route;
+        if (m_editor->resolveAudioStreamRoute(inputId, route))
+            capture->setEffectChain(route.effects);
+        else
+            capture->setEffectChain({});
         capture->setProgramRecordingTap([this](const QByteArray &pcm) {
             if (m_outputHub)
                 m_outputHub->submitMicProgramAudioChunk(pcm);
@@ -170,6 +175,12 @@ void DeckController::updateDeckAudio(bool deckA, NodeId clipId, const ClipNodeMo
     player->setOutputDeviceId(outputDeviceId);
     player->setDelayMs(audioDelayMs);
     player->setSpeed(deckA ? m_speedA : m_speedB);
+
+    ResolvedAudioRoute route;
+    if (m_editor->resolveAudioStreamRoute(clipId, route))
+        player->setEffectChain(route.effects);
+    else
+        player->setEffectChain({});
 
     const QString &path = node->sourceDescriptor().path;
     // A device change requires re-creating the sink, so restart at the current

@@ -5,7 +5,10 @@
 #include <QTimer>
 #include <memory>
 #include <functional>
+#include <QVector>
 #include "core/media/AudioDecoder.h"
+#include "core/media/AudioEffectChain.h"
+#include "ui/nodes/AudioEffects.h"
 
 class QAudioSink;
 class QIODevice;
@@ -42,6 +45,8 @@ public:
     void setOutputDeviceId(const QString &deviceId) { m_deviceId = deviceId; }
     QString outputDeviceId() const { return m_deviceId; }
 
+    void setEffectChain(const QVector<AudioEffectRef> &effects);
+
     using PcmTapFn = std::function<void(const QByteArray &)>;
     /// Post-crossfade PCM (for program audio mix recording).
     void setPcmTap(PcmTapFn tap) { m_pcmTap = std::move(tap); }
@@ -55,6 +60,7 @@ private:
     void applyGain(QByteArray &pcmChunk, float crossfadeFactor) const;
 
     AudioDecoder m_decoder;
+    AudioEffectChain m_effectChain;
     std::unique_ptr<QAudioSink> m_sink;
     QIODevice *m_outputDevice = nullptr;
     QTimer m_pushTimer;

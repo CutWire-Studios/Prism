@@ -5,7 +5,10 @@
 #include <QTimer>
 #include <functional>
 #include <memory>
+#include <QVector>
 #include "core/media/AudioDecoder.h"
+#include "core/media/AudioEffectChain.h"
+#include "ui/nodes/AudioEffects.h"
 
 class QAudioSource;
 class QIODevice;
@@ -33,6 +36,8 @@ public:
 
     void setProgramRecordingTap(PcmTapFn tap) { m_programRecordingTap = std::move(tap); }
 
+    void setEffectChain(const QVector<AudioEffectRef> &effects);
+
 private:
     void pullInput();
     void applyGain(QByteArray &pcmChunk) const;
@@ -45,4 +50,5 @@ private:
     int m_volumePercent = 100;
     bool m_muted = false;
     PcmTapFn m_programRecordingTap;
+    AudioEffectChain m_effectChain;
 };

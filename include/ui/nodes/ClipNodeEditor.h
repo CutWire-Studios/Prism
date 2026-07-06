@@ -14,6 +14,7 @@
 #include "core/scripting/ScriptOutput.h"
 #include "ui/nodes/ClipNodeModel.h"
 #include "ui/nodes/ProcessEffects.h"
+#include "ui/nodes/AudioEffects.h"
 
 class ClipNodeScene;
 class QGraphicsView;
@@ -25,6 +26,7 @@ class ScriptNodeItem;
 class MasterAudioOutputNodeItem;
 class MasterAudioInputNodeItem;
 class AudioMixerNodeItem;
+class AudioEffectNodeItem;
 
 enum class AudioPlaybackMode {
     Always = 0,       // play while the clip is on either deck
@@ -49,6 +51,7 @@ struct ResolvedAudioRoute {
     int     mixerSlotIndex = -1;
     int     mixerSlotVolume = 100;
     bool    mixerSlotMuted = false;
+    QVector<AudioEffectRef> effects;   // upstream → downstream on the audio stream
     bool    isValid() const { return outputNodeId != 0; }
 };
 
@@ -207,6 +210,7 @@ private slots:
     void onEditLayerCanvas(NodeId layerId);
     void onEditLayerTransform(NodeId layerId);
     void onEditProcessNode(NodeId processId);
+    void onEditAudioEffectNode(NodeId effectId);
 
 private:
     void connectNodeSignals(ClipNodeModel *model, NodeId id);
@@ -227,6 +231,7 @@ private:
     void restoreConnections(ClipNodeScene *scene, const QJsonArray &conns);
     QPointF scenePosForView(QGraphicsView *view, const QPoint &globalPos) const;
     void addProcessNodeAt(int effect, const QPoint &globalPos);
+    void addAudioEffectNodeAt(int effect, const QPoint &globalPos);
     void addLayerNodeAt(const QPoint &globalPos);
     void addAbSelectNodeAt(const QPoint &globalPos);
     void addMasterAudioOutputTo(ClipNodeScene *scene, QGraphicsView *view, const QPoint &globalPos);
@@ -248,6 +253,7 @@ private:
     QMap<NodeId, MasterAudioOutputNodeItem *> m_masterAudioNodes;
     QMap<NodeId, MasterAudioInputNodeItem *> m_masterAudioInputNodes;
     QMap<NodeId, AudioMixerNodeItem *> m_audioMixerNodes;
+    QMap<NodeId, AudioEffectNodeItem *> m_audioEffectNodes;
     NodeId m_outputNode  = 0;
     NodeId m_deckAInput  = 0;
     NodeId m_deckBInput  = 0;

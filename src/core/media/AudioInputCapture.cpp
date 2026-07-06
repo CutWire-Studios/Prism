@@ -31,6 +31,10 @@ void AudioInputCapture::setVolumePercent(int volumePercent) {
     m_volumePercent = std::clamp(volumePercent, 0, 100);
 }
 
+void AudioInputCapture::setEffectChain(const QVector<AudioEffectRef> &effects) {
+    m_effectChain.setEffects(effects);
+}
+
 bool AudioInputCapture::isRunning() const {
     return m_source != nullptr;
 }
@@ -81,6 +85,7 @@ void AudioInputCapture::stop() {
         m_source->stop();
         m_source.reset();
     }
+    m_effectChain.reset();
     AudioInputMixRegistry::clearDevice(m_targetOutputDeviceId);
 }
 
@@ -92,6 +97,15 @@ void AudioInputCapture::pullInput() {
         QByteArray chunk = m_inputIODevice->read(m_source->bytesAvailable());
         if (chunk.isEmpty())
             break;
+
+        QByteArray processed;
+        if (m_effectChain.hasFilters()) {
+            if (!m_effectChain.process(chunk, processed))
+                break;
+            if (processed.isEmpty())
+                break;
+            chunk = std::move(processed);
+        }
 
         applyGain(chunk);
         AudioInputMixRegistry::appendPcm(m_targetOutputDeviceId, chunk);

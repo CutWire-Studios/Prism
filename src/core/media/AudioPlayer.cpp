@@ -86,6 +86,7 @@ void AudioPlayer::stop() {
     m_currentFilePath.clear();
     m_decoder.close();
     m_residualBuffer.clear();
+    m_effectChain.reset();
     m_silenceBytesPending = 0;
 }
 
@@ -99,6 +100,7 @@ void AudioPlayer::resume() {
 
 bool AudioPlayer::seek(double seconds) {
     m_residualBuffer.clear();
+    m_effectChain.reset();
     // Drop the audio already queued inside the sink — otherwise up to
     // bufferSize (~200 ms) of pre-seek sound plays out first and the track
     // stays audibly behind the video from then on.
@@ -125,6 +127,10 @@ void AudioPlayer::setVolumePercent(int volumePercent) {
 
 void AudioPlayer::setMuted(bool muted) {
     m_muted = muted;
+}
+
+void AudioPlayer::setEffectChain(const QVector<AudioEffectRef> &effects) {
+    m_effectChain.setEffects(effects);
 }
 
 bool AudioPlayer::isPlaying() const {
@@ -164,6 +170,16 @@ void AudioPlayer::pushAudio() {
                 }
                 break;
             }
+
+            QByteArray processed;
+            if (m_effectChain.hasFilters()) {
+                if (!m_effectChain.process(chunk, processed))
+                    break;
+                if (processed.isEmpty())
+                    break;
+                chunk = std::move(processed);
+            }
+
             applyGain(chunk, 1.0f);
         }
 

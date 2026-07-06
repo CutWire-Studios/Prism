@@ -165,6 +165,7 @@ set(SOURCES
     src/core/media/VideoPlayer.cpp
     src/core/sources/VideoFileSource.cpp
     src/core/media/AudioDecoder.cpp
+    src/core/media/AudioEffectChain.cpp
     src/core/media/AudioAnalyzer.cpp
     src/core/media/AudioPlayer.cpp
     src/core/media/AudioInputCapture.cpp
@@ -204,6 +205,7 @@ set(SOURCES
     src/ui/nodes/ClipNodeModel.cpp
     src/ui/nodes/ClipNodeEditor.cpp
     src/ui/nodes/ProcessEffects.cpp
+    src/ui/nodes/AudioEffects.cpp
     src/ui/common/AssetLibrary.cpp
     src/ui/nodes/ClipEditDialog.cpp
     src/ui/canvas/CropSelectorWidget.cpp
@@ -286,6 +288,7 @@ set(HEADERS
     include/core/media/VideoPlayer.h
     include/core/sources/VideoFileSource.h
     include/core/media/AudioDecoder.h
+    include/core/media/AudioEffectChain.h
     include/core/media/AudioAnalyzer.h
     include/core/media/AudioPlayer.h
     include/core/media/AudioInputCapture.h
@@ -327,6 +330,7 @@ set(HEADERS
     include/ui/nodes/ClipNodeModel.h
     include/ui/nodes/ClipNodeEditor.h
     include/ui/nodes/ProcessEffects.h
+    include/ui/nodes/AudioEffects.h
     include/ui/common/AssetLibrary.h
     include/ui/nodes/ClipEditDialog.h
     include/ui/canvas/CanvasGeometry.h
