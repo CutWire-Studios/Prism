@@ -55,8 +55,9 @@ void MirrorOutputWindow::updateFullscreenIcon() {
 }
 
 void MirrorOutputWindow::enterFullscreen() {
-    // Same geometry snap as OutputWindow — showFullScreen() is unreliable across
-    // platforms when covering an entire display for live output.
+#if defined(Q_OS_MACOS) || defined(Q_OS_WIN)
+    // Geometry snap — showFullScreen() underfills frameless windows here
+    // (macOS menu bar / notch, Windows taskbar gaps). See OutputWindow.
     QScreen *s = screen();
     if (!s)
         s = QGuiApplication::primaryScreen();
@@ -68,6 +69,13 @@ void MirrorOutputWindow::enterFullscreen() {
         show();
         raise();
     }
+#else
+    // Let the WM handle fullscreen on Linux (KWin covers panels, Wayland
+    // ignores client-set positions). See OutputWindow.
+    m_fullscreen = true;
+    showFullScreen();
+    raise();
+#endif
     // Drive the icon off the actual state so a failed entry (e.g. screen() null)
     // leaves the button showing "enter fullscreen".
     updateFullscreenIcon();
@@ -75,9 +83,13 @@ void MirrorOutputWindow::enterFullscreen() {
 
 void MirrorOutputWindow::exitFullscreen() {
     m_fullscreen = false;
+#if defined(Q_OS_MACOS) || defined(Q_OS_WIN)
     setWindowState(Qt::WindowNoState);
     if (m_normalGeometry.isValid())
         setGeometry(m_normalGeometry);
+#else
+    showNormal();
+#endif
     updateFullscreenIcon();
 }
 

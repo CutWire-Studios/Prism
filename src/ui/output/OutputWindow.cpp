@@ -49,11 +49,12 @@ bool OutputWindow::isFullscreenActive() const {
 }
 
 void OutputWindow::enterFullscreen() {
+#if defined(Q_OS_MACOS) || defined(Q_OS_WIN)
     // showFullScreen() on a frameless window does not reliably cover the full
-    // display (macOS menu bar / notch, Windows taskbar gaps). Snap to the screen
-    // geometry instead and track state ourselves since isFullScreen() stays false.
-    // The dynamic property lets the hosting VideoWidget disable window-drag while
-    // fullscreen (it can't rely on isFullScreen() here).
+    // display here (macOS menu bar / notch, Windows taskbar gaps). Snap to the
+    // screen geometry instead and track state ourselves since isFullScreen()
+    // stays false. The dynamic property lets the hosting VideoWidget disable
+    // window-drag while fullscreen (it can't rely on isFullScreen() here).
     QScreen *s = screen();
     if (!s)
         s = QGuiApplication::primaryScreen();
@@ -67,16 +68,29 @@ void OutputWindow::enterFullscreen() {
     setGeometry(s->geometry());
     show();
     raise();
+#else
+    // On Linux/X11/Wayland the WM (e.g. KWin) must handle fullscreen: clients
+    // can't set their own position on Wayland, and only showFullScreen() sets
+    // _NET_WM_STATE_FULLSCREEN so panels are covered. A geometry snap leaves
+    // the window under the panels.
+    m_fullscreen = true;
+    showFullScreen();
+    raise();
+#endif
     if (VideoWidget *vw = videoWidget())
         vw->update();
 }
 
 void OutputWindow::exitFullscreen() {
     m_fullscreen = false;
+#if defined(Q_OS_MACOS) || defined(Q_OS_WIN)
     setProperty("prismManualFullscreen", false);
     setWindowState(Qt::WindowNoState);
     if (m_normalGeometry.isValid())
         setGeometry(m_normalGeometry);
+#else
+    showNormal();
+#endif
 }
 
 void OutputWindow::toggleFullscreen() {
