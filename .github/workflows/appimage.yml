@@ -1,0 +1,94 @@
+name: Build AppImage
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  appimage:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            desktop-file-utils \
+            file \
+            fuse \
+            libavcodec-dev \
+            libavfilter-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libegl1-mesa-dev \
+            libgl1-mesa-dev \
+            libgstreamer-plugins-base1.0-dev \
+            libgstreamer1.0-dev \
+            liblua5.4-dev \
+            libopengl-dev \
+            libre2-dev \
+            libssl-dev \
+            libswresample-dev \
+            libswscale-dev \
+            libzip-dev \
+            patchelf \
+            pkg-config \
+            qt6-base-dev \
+            qt6-multimedia-dev \
+            qt6-webengine-dev \
+            qt6-websockets-dev \
+            wget
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DPRISM_WITH_NDI=OFF \
+            -DPRISM_WITH_WEBRTC=OFF
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Install to AppDir
+        run: |
+          cmake --install build --prefix AppDir/usr
+          cp flatpak/org.cutwire.Prism.desktop AppDir/usr/share/applications/
+
+      - name: Download linuxdeploy
+        run: |
+          wget -O linuxdeploy-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -O linuxdeploy-plugin-qt-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
+
+      - name: Build AppImage
+        run: |
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          export QMAKE=/usr/bin/qmake6
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --desktop-file AppDir/usr/share/applications/org.cutwire.Prism.desktop \
+            --plugin qt \
+            --output appimage
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Prism-AppImage
+          path: ./*.AppImage
+
+      - name: Upload release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./*.AppImage

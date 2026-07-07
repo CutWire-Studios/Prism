@@ -1,0 +1,129 @@
+name: Build Windows Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.6.3"
+          host: "windows"
+          target: "desktop"
+          arch: "win64_msvc2019_64"
+          modules: "qtwebengine qtmultimedia qtsvg qtwebsockets"
+          cache: true
+
+      - name: Resolve Qt Prefix
+        shell: pwsh
+        run: |
+          $qmake = Get-Command qmake -ErrorAction SilentlyContinue
+          if (-not $qmake) {
+            $qmake = Get-Command qmake6 -ErrorAction Stop
+          }
+          $qmakePath = $qmake.Source
+          $qtPrefix = Split-Path (Split-Path $qmakePath -Parent) -Parent
+          "QT_PREFIX=$qtPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Qt prefix: $qtPrefix"
+
+      - name: Set App Version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.0-dev.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Install vcpkg dependencies
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          .\vcpkg\bootstrap-vcpkg.bat
+          .\vcpkg\vcpkg.exe install re2 ffmpeg libzip lua openssl --triplet x64-windows
+          "VCPKG_TOOLCHAIN=$env:GITHUB_WORKSPACE\vcpkg\scripts\buildsystems\vcpkg.cmake" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_PREFIX_PATH="$env:QT_PREFIX" `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_TOOLCHAIN" `
+            -DPRISM_WITH_NDI=OFF `
+            -DPRISM_WITH_WEBRTC=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Install to Dist
+        run: cmake --install build --config Release --prefix dist
+
+      - name: Copy vcpkg runtime DLLs
+        shell: pwsh
+        run: |
+          $vcpkgBin = Join-Path $env:GITHUB_WORKSPACE "vcpkg\installed\x64-windows\bin"
+          if (Test-Path $vcpkgBin) {
+            Copy-Item "$vcpkgBin\*.dll" -Destination "dist\bin" -ErrorAction SilentlyContinue
+          }
+
+      - name: Bundle Qt Runtime
+        shell: pwsh
+        run: |
+          $exePath = Join-Path $env:GITHUB_WORKSPACE "dist\bin\Prism.exe"
+          $windeploy = Get-Command windeployqt -ErrorAction SilentlyContinue
+          if (-not $windeploy) {
+            $windeploy = Get-Command windeployqt6 -ErrorAction Stop
+          }
+          & $windeploy.Source --release --compiler-runtime --no-translations $exePath
+
+      - name: Create Portable Zip
+        shell: pwsh
+        run: |
+          $zipName = "Prism-Windows-x64-$env:APP_VERSION.zip"
+          if (Test-Path $zipName) {
+            Remove-Item $zipName -Force
+          }
+          Compress-Archive -Path "dist\bin\*" -DestinationPath $zipName
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $iscc "installer/windows/Prism.iss" `
+            "/DMyAppVersion=$env:APP_VERSION" `
+            "/DMyAppSource=$env:GITHUB_WORKSPACE\dist\bin" `
+            "/O$env:GITHUB_WORKSPACE\output"
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Prism-Windows
+          path: |
+            Prism-Windows-x64-*.zip
+            output/*.exe
+
+      - name: Upload Release Assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            Prism-Windows-x64-*.zip
+            output/*.exe
