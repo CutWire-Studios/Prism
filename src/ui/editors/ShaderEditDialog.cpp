@@ -21,6 +21,10 @@ static const Preset kPresets[] = {
     { "Neon Particle Swarm",    ":/shaders/neon_particle_swarm.glsl"    },
     { "Cosmic Plasma Flares",   ":/shaders/cosmic_plasma_flares.glsl"   },
     { "Audio-Pulse VU Bars",    ":/shaders/audio_pulse_vu_bars.glsl"    },
+    { "Radial Spectrum Ring",   ":/shaders/audio_radial_spectrum.glsl"  },
+    { "LED Matrix Equalizer",   ":/shaders/audio_led_matrix.glsl"       },
+    { "Spectrum Mirror Skyline",":/shaders/audio_spectrum_mirror.glsl"  },
+    { "Spectral Bloom",         ":/shaders/audio_spectral_bloom.glsl"   },
 };
 static const int kPresetCount = static_cast<int>(sizeof(kPresets) / sizeof(kPresets[0]));
 

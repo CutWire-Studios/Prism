@@ -14,6 +14,10 @@
         <file>shaders/neon_particle_swarm.glsl</file>
         <file>shaders/cosmic_plasma_flares.glsl</file>
         <file>shaders/audio_pulse_vu_bars.glsl</file>
+        <file>shaders/audio_radial_spectrum.glsl</file>
+        <file>shaders/audio_led_matrix.glsl</file>
+        <file>shaders/audio_spectrum_mirror.glsl</file>
+        <file>shaders/audio_spectral_bloom.glsl</file>
         <file>html/clock.html</file>
         <file>html/countdown_timer.html</file>
         <file>html/cricket_score_bar.html</file>

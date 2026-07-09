@@ -813,10 +813,11 @@ void MainWindow::pushDecks() {
         ClipNodeModel *n = m_clipNodeEditor->nodeAt(l.inputNodeId);
         if (!n) return QStringLiteral("%1:?").arg(l.inputNodeId);
         const SourceDescriptor &d = n->sourceDescriptor();
-        return QStringLiteral("%1:%2:%3:%4:%5:%6:%7")
+        return QStringLiteral("%1:%2:%3:%4:%5:%6:%7:%8")
             .arg(l.inputNodeId).arg((int)d.kind).arg(d.path)
             .arg(n->startTime()).arg(n->endTime()).arg(d.captureId)
-            .arg(ProcessEffects::sourceEffectsKey(l.sourceEffects));
+            .arg(ProcessEffects::sourceEffectsKey(l.sourceEffects))
+            .arg(qHash(d.shaderCode));
     };
     auto keysOf = [&](const ResolvedStream &s, QString &base, QStringList &ov) {
         base.clear(); ov.clear();
