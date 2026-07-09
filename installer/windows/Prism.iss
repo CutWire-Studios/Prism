@@ -23,7 +23,7 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 OutputDir=output
-OutputBaseFilename=Prism-Setup-{#MyAppVersion}-x64
+OutputBaseFilename=Prism-Setup-x64
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

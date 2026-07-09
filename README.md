@@ -192,7 +192,7 @@ resources/
 
 flatpak/                  # Flatpak packaging (org.cutwire.Prism)
 CMakeModules/             # FindFFmpeg / FindNDI / Findre2
-.github/workflows/        # GitHub Actions CI (build.yml, flatpak.yml)
+.github/workflows/        # GitHub Actions release workflow (release.yml)
 ```
 
 ## Design Philosophy
@@ -382,6 +382,17 @@ CutWire Prism can be built and run as a Flatpak using the included manifest:
 ```
 
 Requires `flatpak` and `flatpak-builder`.
+
+### GitHub Release Workflow
+
+`release.yml` builds release artifacts for:
+
+- Linux: `AppImage`
+- Windows: Inno Setup `.exe` installer
+
+Run it manually from **Actions -> Release -> Run workflow** (`workflow_dispatch`).
+Optional inputs let you set the version string and limit the build to one platform.
+The workflow uploads the artifacts to the run; it does not create a GitHub Release.
 
 ## Quick Start
 

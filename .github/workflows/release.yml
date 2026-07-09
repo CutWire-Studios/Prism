@@ -1,0 +1,237 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (example: 0.2.0). Used for artifact names."
+        required: false
+        default: ""
+      platform:
+        description: "Which platform(s) to build (use linux or windows to test one side first)"
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - linux
+          - windows
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  QT_VERSION: "6.8.2"
+  QT_MODULES: >-
+    qtmultimedia
+    qtwebengine
+    qtwebsockets
+    qtwebchannel
+    qtpositioning
+    qtserialport
+  QT_QPA_PLATFORM: offscreen
+  FETCHCONTENT_BASE_DIR: ${{ github.workspace }}/.deps
+
+jobs:
+  meta:
+    name: Compute metadata
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Compute version
+        id: meta
+        shell: bash
+        run: |
+          raw="${{ inputs.version }}"
+          if [[ -z "${raw}" ]]; then
+            raw="0.0.0-${GITHUB_SHA::7}"
+          fi
+          echo "version=${raw#v}" >> "$GITHUB_OUTPUT"
+
+  linux:
+    name: Linux AppImage
+    runs-on: ubuntu-24.04
+    needs: meta
+    if: inputs.platform == 'all' || inputs.platform == 'linux'
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config \
+            libgl1-mesa-dev libglib2.0-dev libdbus-1-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libavfilter-dev \
+            libre2-dev libzip-dev libssl-dev liblua5.4-dev \
+            libfontconfig1-dev libfreetype6-dev libxkbcommon-dev \
+            libx11-dev libx11-xcb-dev libxext-dev libxfixes-dev libxi-dev libxrender-dev \
+            libxcb1-dev libxcb-glx0-dev libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev \
+            libxcb-icccm4-dev libxcb-sync-dev libxcb-xfixes0-dev libxcb-shape0-dev \
+            libxcb-randr0-dev libxcb-render-util0-dev libxcb-xinerama0-dev libxcb-cursor-dev
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          add-tools-to-path: true
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-linux-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Configure
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DFETCHCONTENT_BASE_DIR="${FETCHCONTENT_BASE_DIR}" \
+            -DPRISM_WITH_NDI=OFF \
+            -DPRISM_WITH_WEBRTC=OFF \
+            -DPRISM_WITH_SEGMENTATION=OFF
+
+      - name: Build
+        run: cmake --build build --target Prism --parallel
+
+      - name: Stage install tree
+        run: |
+          cmake --install build --prefix "${GITHUB_WORKSPACE}/AppDir/usr"
+          mkdir -p "${GITHUB_WORKSPACE}/dist"
+
+      - name: Build AppImage
+        shell: bash
+        run: |
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage -O linuxdeploy.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage -O linuxdeploy-plugin-qt.AppImage
+          chmod +x linuxdeploy.AppImage linuxdeploy-plugin-qt.AppImage
+          export QMAKE="${QT_ROOT_DIR}/bin/qmake"
+          export VERSION="${{ needs.meta.outputs.version }}"
+          export LD_LIBRARY_PATH="${QT_ROOT_DIR}/lib:${LD_LIBRARY_PATH:-}"
+          ./linuxdeploy.AppImage --appdir AppDir --plugin qt --output appimage \
+            -d flatpak/org.cutwire.Prism.desktop \
+            -i flatpak/share/icons/hicolor/256x256/apps/org.cutwire.Prism.png \
+            -e AppDir/usr/bin/Prism
+          appimage="$(ls ./*.AppImage | grep -iv linuxdeploy | head -n 1)"
+          mv "${appimage}" "dist/Prism-${{ needs.meta.outputs.version }}-x86_64.AppImage"
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: dist/*.AppImage
+
+  windows:
+    name: Windows installer
+    runs-on: windows-2022
+    needs: meta
+    if: inputs.platform == 'all' || inputs.platform == 'windows'
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          add-tools-to-path: true
+
+      - name: Restore vcpkg binary cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}\vcpkg_bincache
+          key: vcpkg-bincache-win-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: |
+            vcpkg-bincache-win-
+
+      - name: Install vcpkg dependencies
+        shell: pwsh
+        env:
+          VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg_bincache
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+          if (-not (Test-Path vcpkg\vcpkg.exe)) {
+            git clone --depth 1 https://github.com/microsoft/vcpkg.git vcpkg
+            .\vcpkg\bootstrap-vcpkg.bat
+          }
+          .\vcpkg\vcpkg.exe install re2 ffmpeg libzip --triplet x64-windows
+
+      # Save even when a later step fails so the ~30 min ffmpeg build is not
+      # repeated on the next run (actions/cache only saves on job success).
+      - name: Save vcpkg binary cache
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}\vcpkg_bincache
+          key: vcpkg-bincache-win-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-win-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -B build -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake `
+            -DCMAKE_PREFIX_PATH=${{ env.QT_ROOT_DIR }} `
+            -DFETCHCONTENT_BASE_DIR=${{ env.FETCHCONTENT_BASE_DIR }} `
+            -DPRISM_WITH_NDI=OFF `
+            -DPRISM_WITH_WEBRTC=OFF `
+            -DPRISM_WITH_SEGMENTATION=OFF
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --config Release --target Prism --parallel
+
+      - name: Stage runtime files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist\bin | Out-Null
+          Copy-Item build\Release\Prism.exe dist\bin -Force
+          Copy-Item build\Release\softcam.dll dist\bin -Force -ErrorAction SilentlyContinue
+          & "${{ env.QT_ROOT_DIR }}\bin\windeployqt.exe" --release --no-translations dist\bin\Prism.exe
+          Copy-Item vcpkg\installed\x64-windows\bin\*.dll dist\bin -Force
+
+      - name: Build Inno Setup installer
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.6
+        with:
+          path: installer/windows/Prism.iss
+          options: |
+            /DMyAppVersion=${{ needs.meta.outputs.version }}
+            /DMyAppSource=${{ github.workspace }}\dist\bin
+
+      - name: Collect installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item installer\windows\output\Prism-Setup-x64.exe `
+            "dist\Prism-Setup-${{ needs.meta.outputs.version }}-x64.exe" -Force
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/*.exe

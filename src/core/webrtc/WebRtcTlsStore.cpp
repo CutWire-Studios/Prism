@@ -10,7 +10,7 @@
 #include <QSslKey>
 #include <QStandardPaths>
 
-#ifndef QT_NO_SSL
+#if defined(PRISM_HAVE_WEBRTC) && !defined(QT_NO_SSL)
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
