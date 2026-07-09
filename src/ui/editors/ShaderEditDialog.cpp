@@ -25,6 +25,8 @@ static const Preset kPresets[] = {
     { "LED Matrix Equalizer",   ":/shaders/audio_led_matrix.glsl"       },
     { "Spectrum Mirror Skyline",":/shaders/audio_spectrum_mirror.glsl"  },
     { "Spectral Bloom",         ":/shaders/audio_spectral_bloom.glsl"   },
+    { "Particle Terrain",       ":/shaders/audio_particle_terrain.glsl" },
+    { "Neon Wave Curtain",      ":/shaders/audio_wave_curtain.glsl"     },
 };
 static const int kPresetCount = static_cast<int>(sizeof(kPresets) / sizeof(kPresets[0]));
 

@@ -18,6 +18,8 @@
         <file>shaders/audio_led_matrix.glsl</file>
         <file>shaders/audio_spectrum_mirror.glsl</file>
         <file>shaders/audio_spectral_bloom.glsl</file>
+        <file>shaders/audio_particle_terrain.glsl</file>
+        <file>shaders/audio_wave_curtain.glsl</file>
         <file>html/clock.html</file>
         <file>html/countdown_timer.html</file>
         <file>html/cricket_score_bar.html</file>
