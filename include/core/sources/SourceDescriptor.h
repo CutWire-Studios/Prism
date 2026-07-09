@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <QStringList>
 #include <QColor>
 
 // Lightweight description of any media source that a ClipCard can hold.
@@ -70,6 +71,43 @@ struct SourceDescriptor {
     int     textShadowDx      = 0;      // px, 0/0 = no shadow
     int     textShadowDy      = 0;
     QColor  textShadowColor   = QColor(0, 0, 0, 160);
+
+    // Descriptor-held content that defines the rendered output (as opposed to
+    // on-disk content referenced by `path`). Deck reuse keys include a hash of
+    // this so that editing e.g. shader code, HTML, canvas fill or text styling
+    // reloads any deck currently showing the source.
+    QString contentKey() const {
+        return QStringList{
+            shaderCode, htmlContent, htmlWorkspace, textTemplate, fontFamily,
+            QString::number(color.rgba()),
+            QString::number(cameraIndex),
+            QString::number(screenIndex),
+            QString::number(windowIndex),
+            QString::number(slideshowIntervalMs),
+            QString::number(slideshowEffect),
+            QString::number(slideshowTransitionMs),
+            QString::number(canvasWidth),
+            QString::number(canvasHeight),
+            QString::number(int(canvasFill)),
+            QString::number(fontSize),
+            QString::number(textAlign),
+            QString::number(int(textBgTransparent)),
+            QString::number(textBgColor.rgba()),
+            QString::number(int(textBold)),
+            QString::number(int(textItalic)),
+            QString::number(int(textUnderline)),
+            QString::number(textLetterSpacing),
+            QString::number(textLineHeight),
+            QString::number(textOutlineWidth),
+            QString::number(textOutlineColor.rgba()),
+            QString::number(int(textGradient)),
+            QString::number(textColor2.rgba()),
+            QString::number(textGradientDir),
+            QString::number(textShadowDx),
+            QString::number(textShadowDy),
+            QString::number(textShadowColor.rgba()),
+        }.join(QChar(0x1F));
+    }
 
     bool isLiveSource() const {
         return kind == Kind::Camera || kind == Kind::Screen ||

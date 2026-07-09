@@ -817,7 +817,7 @@ void MainWindow::pushDecks() {
             .arg(l.inputNodeId).arg((int)d.kind).arg(d.path)
             .arg(n->startTime()).arg(n->endTime()).arg(d.captureId)
             .arg(ProcessEffects::sourceEffectsKey(l.sourceEffects))
-            .arg(qHash(d.shaderCode));
+            .arg(qHash(d.contentKey()));
     };
     auto keysOf = [&](const ResolvedStream &s, QString &base, QStringList &ov) {
         base.clear(); ov.clear();
