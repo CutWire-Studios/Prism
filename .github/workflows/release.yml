@@ -105,7 +105,7 @@ jobs:
 
   linux:
     name: Linux AppImage
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-22.04
     needs: [verify, flatpak-check]
     timeout-minutes: 90
     steps:
