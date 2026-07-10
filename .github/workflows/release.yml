@@ -106,7 +106,7 @@ jobs:
   linux:
     name: Linux AppImage
     runs-on: ubuntu-22.04
-    needs: [verify, flatpak-check]
+    needs: verify
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -114,6 +114,11 @@ jobs:
       - name: Install native build dependencies
         run: |
           sudo apt-get update
+          # ubuntu-22.04 runner images preinstall several LLVM toolchains, each
+          # with its own libunwind-N-dev that Breaks: libunwind-dev — purge
+          # them first so libgstreamer1.0-dev's plain libunwind-dev dependency
+          # can actually resolve.
+          sudo apt-get purge -y 'libunwind-*-dev' || true
           sudo apt-get install -y \
             build-essential cmake ninja-build pkg-config \
             libgl1-mesa-dev libglib2.0-dev libdbus-1-dev \
@@ -207,7 +212,7 @@ jobs:
   windows:
     name: Windows installer
     runs-on: windows-2022
-    needs: [verify, flatpak-check]
+    needs: verify
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
@@ -323,7 +328,7 @@ jobs:
   arch:
     name: Arch package
     runs-on: ubuntu-24.04
-    needs: [verify, flatpak-check]
+    needs: verify
     timeout-minutes: 60
     container:
       image: archlinux:base-devel
