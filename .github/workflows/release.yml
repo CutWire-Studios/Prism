@@ -118,7 +118,15 @@ jobs:
             -DPRISM_WITH_SEGMENTATION=ON
 
       - name: Build
-        run: cmake --build build --target Prism --parallel
+        run: |
+          # libdatachannel and its vendored libjuice each define two static-lib
+          # targets (a plain one and a "-static"-suffixed EXCLUDE_FROM_ALL one);
+          # Prism only links the "-static" variants, so the plain `datachannel`
+          # and `juice` targets are never built as a side effect of building
+          # Prism — yet both are still unconditionally install()'d, so `cmake
+          # --install` fails looking for .a files that were never produced
+          # unless built explicitly here.
+          cmake --build build --target Prism --target juice --target datachannel --parallel
 
       - name: Stage install tree
         run: |
