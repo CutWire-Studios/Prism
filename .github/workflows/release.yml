@@ -141,7 +141,13 @@ jobs:
           chmod +x linuxdeploy.AppImage linuxdeploy-plugin-qt.AppImage
           export QMAKE="${QT_ROOT_DIR}/bin/qmake"
           export VERSION="${{ needs.meta.outputs.version }}"
-          export LD_LIBRARY_PATH="${QT_ROOT_DIR}/lib:${GITHUB_WORKSPACE}/.deps/ffmpeg/lib:${LD_LIBRARY_PATH:-}"
+          # ONNX Runtime is auto-downloaded by CMakeModules/FetchOnnxRuntime.cmake
+          # into a version-suffixed dir under build/_deps; only its Windows path
+          # gets a post-build copy-next-to-exe step (CMakeLists.txt's `if(WIN32)`
+          # block), so on Linux linuxdeploy needs it on LD_LIBRARY_PATH to find
+          # and bundle libonnxruntime.so.1 via its ldd-based dependency scan.
+          onnxruntime_lib_dir="$(find "${GITHUB_WORKSPACE}/build/_deps/onnxruntime" -maxdepth 2 -type d -name lib | head -n1)"
+          export LD_LIBRARY_PATH="${QT_ROOT_DIR}/lib:${GITHUB_WORKSPACE}/.deps/ffmpeg/lib:${onnxruntime_lib_dir}:${LD_LIBRARY_PATH:-}"
           ./linuxdeploy.AppImage --appdir AppDir --plugin qt --output appimage \
             -d flatpak/org.cutwire.Prism.desktop \
             -i flatpak/share/icons/hicolor/256x256/apps/org.cutwire.Prism.png \
