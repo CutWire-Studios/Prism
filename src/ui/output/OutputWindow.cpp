@@ -11,7 +11,7 @@
 OutputWindow::OutputWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::OutputWindow) {
     ui->setupUi(this);
-    setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
+    setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
 
     ui->outputWidget->setFramelessWindowChrome(true);
     connect(ui->outputWidget, &VideoWidget::framelessToggleFullscreenRequested,

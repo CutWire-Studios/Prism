@@ -508,7 +508,7 @@ void MainWindow::setupConnections() {
     connect(ui->actionStayOnTop, &QAction::toggled, this, [this](bool on) {
         m_outputWindow->setStayOnTop(on);
     });
-    ui->actionStayOnTop->setChecked(true);
+    ui->actionStayOnTop->setChecked(false);
 
     connect(ui->actionStartRemoteControl, &QAction::triggered, this, &MainWindow::onStartRemoteControl);
 

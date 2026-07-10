@@ -171,6 +171,7 @@ set(SOURCES
     src/core/media/AudioInputCapture.cpp
     src/core/media/AudioLoopbackCapture.cpp
     src/core/media/AudioInputMixRegistry.cpp
+    src/core/media/PcmResampler.cpp
     src/core/sources/ImageSource.cpp
     src/core/sources/SlideshowSource.cpp
     src/core/sources/CanvasSource.cpp
@@ -267,7 +268,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 elseif(WIN32)
     list(APPEND SOURCES
         src/core/sources/ScreenSource_qt.cpp
-        src/ui/output/VirtualCameraProgramSink_win.cpp)
+        src/ui/output/VirtualCameraProgramSink_win.cpp
+        src/core/media/AudioLoopbackCapture_wasapi_win.cpp)
 elseif(APPLE)
     # macOS: Qt QScreenCapture/QWindowCapture for screen+window capture; no
     # built-in virtual-camera loopback (would need a signed Camera Extension).
@@ -546,6 +548,14 @@ if(WIN32)
             $<TARGET_FILE:softcam>
             $<TARGET_FILE_DIR:Prism>
         COMMENT "Copy softcam.dll next to Prism.exe")
+
+    if(PRISM_HAVE_SEGMENTATION AND ONNXRUNTIME_RUNTIME_LIBS)
+        add_custom_command(TARGET Prism POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${ONNXRUNTIME_RUNTIME_LIBS}
+                $<TARGET_FILE_DIR:Prism>
+            COMMENT "Copy onnxruntime.dll next to Prism.exe")
+    endif()
 endif()
 
 # Enable testing

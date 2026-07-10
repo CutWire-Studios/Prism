@@ -8,6 +8,7 @@
 #include <QVector>
 #include "core/media/AudioDecoder.h"
 #include "core/media/AudioEffectChain.h"
+#include "core/media/PcmResampler.h"
 #include "ui/nodes/AudioEffects.h"
 
 class QAudioSource;
@@ -44,6 +45,8 @@ private:
 
     std::unique_ptr<QAudioSource> m_source;
     QIODevice *m_inputIODevice = nullptr;
+    PcmResampler m_inputResampler;
+    bool m_needsInputResample = false;
     QTimer m_pullTimer;
     QString m_inputDeviceId;
     QString m_targetOutputDeviceId;

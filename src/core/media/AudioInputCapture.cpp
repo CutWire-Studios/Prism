@@ -60,9 +60,20 @@ bool AudioInputCapture::start() {
         qWarning() << "AudioInputCapture: no audio input device available";
         return false;
     }
+    m_needsInputResample = false;
     if (!device.isFormatSupported(format)) {
-        qWarning() << "AudioInputCapture: input device does not support float32 stereo 44.1kHz";
-        return false;
+        const QAudioFormat preferred = device.preferredFormat();
+        if (!preferred.isValid() || preferred.sampleRate() <= 0 || preferred.channelCount() <= 0
+            || !m_inputResampler.configure(preferred.sampleRate(), preferred.channelCount(), preferred.sampleFormat(),
+                                            AudioDecoder::kOutputSampleRate, AudioDecoder::kOutputChannels, QAudioFormat::Float)) {
+            qWarning() << "AudioInputCapture: input device does not support float32 stereo 44.1kHz"
+                       << "and has no usable preferred format";
+            return false;
+        }
+        qInfo() << "AudioInputCapture: device provides" << preferred.sampleRate() << "Hz"
+                << preferred.channelCount() << "ch, resampling to 44.1kHz stereo float";
+        format = preferred;
+        m_needsInputResample = true;
     }
 
     m_source = std::make_unique<QAudioSource>(device, format, this);
@@ -86,6 +97,8 @@ void AudioInputCapture::stop() {
         m_source.reset();
     }
     m_effectChain.reset();
+    m_needsInputResample = false;
+    m_inputResampler.reset();
     AudioInputMixRegistry::clearDevice(m_targetOutputDeviceId);
 }
 
@@ -97,6 +110,12 @@ void AudioInputCapture::pullInput() {
         QByteArray chunk = m_inputIODevice->read(m_source->bytesAvailable());
         if (chunk.isEmpty())
             break;
+
+        if (m_needsInputResample) {
+            chunk = m_inputResampler.convert(chunk);
+            if (chunk.isEmpty())
+                continue;
+        }
 
         QByteArray processed;
         if (m_effectChain.hasFilters()) {

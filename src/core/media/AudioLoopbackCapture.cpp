@@ -10,6 +10,8 @@
 
 #if defined(Q_OS_LINUX)
 #include "core/media/AudioLoopbackCaptureGStreamer.h"
+#elif defined(Q_OS_WIN)
+#include "core/media/AudioLoopbackCaptureWasapi.h"
 #endif
 
 AudioLoopbackCapture::AudioLoopbackCapture(QObject *parent)
@@ -43,12 +45,29 @@ bool AudioLoopbackCapture::isRunning() const {
 #if defined(Q_OS_LINUX)
     if (m_useGStreamer)
         return AudioLoopbackGst::isRunning();
+#elif defined(Q_OS_WIN)
+    if (m_useWasapi)
+        return AudioLoopbackWasapi::isRunning();
 #endif
     return m_source != nullptr;
 }
 
 bool AudioLoopbackCapture::start() {
     stop();
+
+#if defined(Q_OS_WIN)
+    // Windows has no PulseAudio-style ".monitor" input device — capture the
+    // render endpoint directly via WASAPI loopback instead.
+    m_useWasapi = false;
+    if (AudioLoopbackWasapi::start(m_playbackDeviceId)) {
+        m_useWasapi = true;
+        m_pullTimer.start();
+        pullInput();
+        return true;
+    }
+    qWarning() << "AudioLoopbackCapture: WASAPI loopback capture failed for" << m_playbackDeviceId;
+    return false;
+#endif
 
     const QString monitorId =
         AudioLoopbackEnumerator::monitorSourceIdForPlayback(m_playbackDeviceId);
@@ -92,10 +111,18 @@ bool AudioLoopbackCapture::start() {
 
     qInfo() << "AudioLoopbackCapture: using Qt monitor" << device.description()
             << "for playback device" << m_playbackDeviceId;
+    m_needsInputResample = false;
     if (!device.isFormatSupported(format)) {
-        qWarning() << "AudioLoopbackCapture: monitor device does not support float32 stereo 44.1kHz:"
-                   << device.description();
-        return false;
+        const QAudioFormat preferred = device.preferredFormat();
+        if (!preferred.isValid() || preferred.sampleRate() <= 0 || preferred.channelCount() <= 0
+            || !m_inputResampler.configure(preferred.sampleRate(), preferred.channelCount(), preferred.sampleFormat(),
+                                            AudioDecoder::kOutputSampleRate, AudioDecoder::kOutputChannels, QAudioFormat::Float)) {
+            qWarning() << "AudioLoopbackCapture: monitor device does not support float32 stereo 44.1kHz"
+                       << "and has no usable preferred format:" << device.description();
+            return false;
+        }
+        format = preferred;
+        m_needsInputResample = true;
     }
 
     m_source = std::make_unique<QAudioSource>(device, format, this);
@@ -123,8 +150,14 @@ void AudioLoopbackCapture::stop() {
     if (m_useGStreamer)
         AudioLoopbackGst::stop();
     m_useGStreamer = false;
+#elif defined(Q_OS_WIN)
+    if (m_useWasapi)
+        AudioLoopbackWasapi::stop();
+    m_useWasapi = false;
 #endif
     m_effectChain.reset();
+    m_needsInputResample = false;
+    m_inputResampler.reset();
     AudioInputMixRegistry::clearDevice(m_targetOutputDeviceId);
 }
 
@@ -134,6 +167,11 @@ void AudioLoopbackCapture::pullInput() {
 #if defined(Q_OS_LINUX)
     if (m_useGStreamer) {
         if (!AudioLoopbackGst::pull(chunk))
+            return;
+    } else
+#elif defined(Q_OS_WIN)
+    if (m_useWasapi) {
+        if (!AudioLoopbackWasapi::pull(chunk))
             return;
     } else
 #endif
@@ -147,6 +185,12 @@ void AudioLoopbackCapture::pullInput() {
         chunk = m_inputIODevice->read(m_source->bytesAvailable());
         if (chunk.isEmpty())
             return;
+
+        if (m_needsInputResample) {
+            chunk = m_inputResampler.convert(chunk);
+            if (chunk.isEmpty())
+                return;
+        }
     }
 
     QByteArray processed;

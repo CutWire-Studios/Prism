@@ -52,14 +52,26 @@ bool AudioPlayer::start(const QString &filePath, double startTimeSeconds) {
         }
         // If the saved device is no longer present, fall back to the default.
     }
+    m_needsOutputResample = false;
     if (!device.isFormatSupported(format)) {
-        qWarning() << "AudioPlayer: output device does not support float32 stereo 44.1kHz";
-        m_decoder.close();
-        return false;
+        const QAudioFormat preferred = device.preferredFormat();
+        if (!preferred.isValid() || preferred.sampleRate() <= 0 || preferred.channelCount() <= 0
+            || !m_outputResampler.configure(AudioDecoder::kOutputSampleRate, AudioDecoder::kOutputChannels, QAudioFormat::Float,
+                                             preferred.sampleRate(), preferred.channelCount(), preferred.sampleFormat())) {
+            qWarning() << "AudioPlayer: output device does not support float32 stereo 44.1kHz"
+                       << "and has no usable preferred format";
+            m_decoder.close();
+            return false;
+        }
+        qInfo() << "AudioPlayer: device needs" << preferred.sampleRate() << "Hz"
+                << preferred.channelCount() << "ch, resampling from 44.1kHz stereo float";
+        format = preferred;
+        m_needsOutputResample = true;
     }
 
+    m_outputFormat = format;
     m_sink = std::make_unique<QAudioSink>(device, format, this);
-    const int bytesPerSecond = AudioDecoder::kOutputSampleRate * AudioDecoder::kOutputChannels * static_cast<int>(sizeof(float));
+    const int bytesPerSecond = format.sampleRate() * format.bytesPerFrame();
     m_sink->setBufferSize((bytesPerSecond * 200) / 1000);
     m_outputDevice = m_sink->start();
     if (!m_outputDevice) {
@@ -88,6 +100,8 @@ void AudioPlayer::stop() {
     m_residualBuffer.clear();
     m_effectChain.reset();
     m_silenceBytesPending = 0;
+    m_needsOutputResample = false;
+    m_outputResampler.reset();
 }
 
 void AudioPlayer::pause() {
@@ -110,6 +124,12 @@ bool AudioPlayer::seek(double seconds) {
         m_outputDevice = m_sink->start();
         if (wasSuspended)
             m_sink->suspend();
+    }
+    // Reconfiguring clears the resampler's internal FIFO so stale pre-seek
+    // samples don't bleed into the post-seek stream.
+    if (m_needsOutputResample) {
+        m_outputResampler.configure(AudioDecoder::kOutputSampleRate, AudioDecoder::kOutputChannels, QAudioFormat::Float,
+                                     m_outputFormat.sampleRate(), m_outputFormat.channelCount(), m_outputFormat.sampleFormat());
     }
     const double targetAudioTime = seconds - (m_delayMs / 1000.0);
     if (targetAudioTime < 0.0) {
@@ -152,8 +172,8 @@ void AudioPlayer::pushAudio() {
     writeFromBuffer();
 
     // 2. Decode more if sink has space
-    constexpr int bytesPerFrame = AudioDecoder::kOutputChannels * static_cast<int>(sizeof(float));
-    
+    const int bytesPerFrame = m_outputFormat.bytesPerFrame();
+
     while (m_sink && m_outputDevice
            && m_sink->bytesFree() >= bytesPerFrame
            && m_residualBuffer.size() < m_sink->bufferSize()) {
@@ -195,8 +215,13 @@ void AudioPlayer::pushAudio() {
         if (!m_sink || !m_outputDevice)
             break;
 
-        m_residualBuffer.append(chunk);
-        writeFromBuffer();
+        if (m_needsOutputResample)
+            chunk = m_outputResampler.convert(chunk);
+
+        if (!chunk.isEmpty()) {
+            m_residualBuffer.append(chunk);
+            writeFromBuffer();
+        }
     }
 }
 

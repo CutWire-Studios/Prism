@@ -101,8 +101,8 @@ jobs:
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
             -DFETCHCONTENT_BASE_DIR="${FETCHCONTENT_BASE_DIR}" \
             -DPRISM_WITH_NDI=OFF \
-            -DPRISM_WITH_WEBRTC=OFF \
-            -DPRISM_WITH_SEGMENTATION=OFF
+            -DPRISM_WITH_WEBRTC=ON \
+            -DPRISM_WITH_SEGMENTATION=ON
 
       - name: Build
         run: cmake --build build --target Prism --parallel
@@ -173,7 +173,7 @@ jobs:
             git clone --depth 1 https://github.com/microsoft/vcpkg.git vcpkg
             .\vcpkg\bootstrap-vcpkg.bat
           }
-          .\vcpkg\vcpkg.exe install re2 ffmpeg libzip --triplet x64-windows
+          .\vcpkg\vcpkg.exe install re2 ffmpeg libzip openssl --triplet x64-windows
 
       # Save even when a later step fails so the ~30 min ffmpeg build is not
       # repeated on the next run (actions/cache only saves on job success).
@@ -199,8 +199,8 @@ jobs:
             -DCMAKE_PREFIX_PATH=${{ env.QT_ROOT_DIR }} `
             -DFETCHCONTENT_BASE_DIR=${{ env.FETCHCONTENT_BASE_DIR }} `
             -DPRISM_WITH_NDI=OFF `
-            -DPRISM_WITH_WEBRTC=OFF `
-            -DPRISM_WITH_SEGMENTATION=OFF
+            -DPRISM_WITH_WEBRTC=ON `
+            -DPRISM_WITH_SEGMENTATION=ON
 
       - name: Build
         shell: pwsh
@@ -212,6 +212,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist\bin | Out-Null
           Copy-Item build\Release\Prism.exe dist\bin -Force
           Copy-Item build\Release\softcam.dll dist\bin -Force -ErrorAction SilentlyContinue
+          Copy-Item build\Release\onnxruntime*.dll dist\bin -Force -ErrorAction SilentlyContinue
           & "${{ env.QT_ROOT_DIR }}\bin\windeployqt.exe" --release --no-translations dist\bin\Prism.exe
           Copy-Item vcpkg\installed\x64-windows\bin\*.dll dist\bin -Force
 

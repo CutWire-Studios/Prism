@@ -8,7 +8,9 @@
 #include <QVector>
 #include "core/media/AudioDecoder.h"
 #include "core/media/AudioEffectChain.h"
+#include "core/media/PcmResampler.h"
 #include "ui/nodes/AudioEffects.h"
+#include <QAudioFormat>
 
 class QAudioSink;
 class QIODevice;
@@ -63,6 +65,9 @@ private:
     AudioEffectChain m_effectChain;
     std::unique_ptr<QAudioSink> m_sink;
     QIODevice *m_outputDevice = nullptr;
+    QAudioFormat m_outputFormat;
+    PcmResampler m_outputResampler;
+    bool m_needsOutputResample = false;
     QTimer m_pushTimer;
     QString m_currentFilePath;
     QByteArray m_residualBuffer;
