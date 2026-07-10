@@ -1,12 +1,8 @@
-name: Release
+name: Build
 
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: "Release version (example: 0.2.0). Used for artifact names."
-        required: false
-        default: ""
       platform:
         description: "Which platform(s) to build (use linux, windows, or arch to test one side first)"
         required: true
@@ -54,11 +50,7 @@ jobs:
         id: meta
         shell: bash
         run: |
-          raw="${{ inputs.version }}"
-          if [[ -z "${raw}" ]]; then
-            raw="0.0.0-${GITHUB_SHA::7}"
-          fi
-          echo "version=${raw#v}" >> "$GITHUB_OUTPUT"
+          echo "version=0.0.0-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
   linux:
     name: Linux AppImage
