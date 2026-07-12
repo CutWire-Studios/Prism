@@ -24,6 +24,31 @@
   <a href="LICENSE">License</a>
 </p>
 
+## Download
+
+<p align="center">
+  <a href="https://flathub.org/apps/org.cutwire.Prism">
+    <img src="https://flathub.org/api/badge?locale=en" alt="Get it on Flathub" width="240">
+  </a>
+</p>
+
+**Linux** — install from Flathub:
+
+```bash
+flatpak install flathub org.cutwire.Prism
+flatpak run org.cutwire.Prism
+```
+
+Or grab a build for your platform from the [latest release](https://github.com/CutWire-Studios/Prism/releases/latest):
+
+| Platform | Package |
+|----------|---------|
+| Linux | [Flathub](https://flathub.org/apps/org.cutwire.Prism) · [AppImage](https://github.com/CutWire-Studios/Prism/releases/latest) |
+| Windows | [Installer (.exe)](https://github.com/CutWire-Studios/Prism/releases/latest) |
+| macOS | [Build from source](#macos) |
+
+See [all releases](https://github.com/CutWire-Studios/Prism/releases) for previous versions and full changelogs.
+
 ## Features
 
 - **Node Graph Canvas**: Free-form visual pipeline — wire **Input → Process → Layer → A/B Select → Output** nodes; zoom, pan, and minimap for large shows
