@@ -257,6 +257,14 @@ set(SOURCES
     src/ui/remote/RemoteProtocol.cpp
     src/ui/mainwindow/MainWindowUtils.cpp
     src/ui/remote/RemoteServerDialog.cpp
+    src/ui/mcp/McpAccessDialog.cpp
+    src/mcp/McpSession.cpp
+    src/mcp/McpHttp.cpp
+    src/mcp/McpProtocol.cpp
+    src/mcp/McpCatalog.cpp
+    src/mcp/McpDispatcher.cpp
+    src/mcp/McpServer.cpp
+    src/mcp/McpStdio.cpp
     src/ui/common/QrCodeHelper.cpp
     src/core/platform/MacPermissions.cpp
     third_party/qrcodegen/qrcodegen.cpp
@@ -392,6 +400,15 @@ set(HEADERS
     include/ui/remote/RemoteProtocol.h
     include/ui/mainwindow/MainWindowUtils.h
     include/ui/remote/RemoteServerDialog.h
+    include/ui/mcp/McpAccessDialog.h
+    include/mcp/McpJson.h
+    include/mcp/McpSession.h
+    include/mcp/McpHttp.h
+    include/mcp/McpProtocol.h
+    include/mcp/McpCatalog.h
+    include/mcp/McpDispatcher.h
+    include/mcp/McpServer.h
+    include/mcp/McpStdio.h
     include/ui/common/QrCodeHelper.h
     include/core/platform/MacPermissions.h
 )

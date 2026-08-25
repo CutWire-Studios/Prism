@@ -484,6 +484,39 @@ const ProcessEffectDescriptor *byId(int id) {
     return nullptr;
 }
 
+static QString effectSlug(const QString &s) {
+    QString out;
+    for (QChar c : s.trimmed().toLower()) {
+        if (c.isLetterOrNumber())
+            out += c;
+        else if (!out.isEmpty() && out.back() != QLatin1Char('_'))
+            out += QLatin1Char('_');
+    }
+    while (out.endsWith(QLatin1Char('_')))
+        out.chop(1);
+    return out;
+}
+
+const ProcessEffectDescriptor *byName(const QString &name) {
+    const QString key = name.trimmed();
+    if (key.isEmpty())
+        return nullptr;
+    bool ok = false;
+    const int id = key.toInt(&ok);
+    if (ok)
+        return byId(id);
+    const QString slug = effectSlug(key);
+    for (const ProcessEffectDescriptor &d : all()) {
+        if (d.name.compare(key, Qt::CaseInsensitive) == 0)
+            return &d;
+        if (d.menuLabel.compare(key, Qt::CaseInsensitive) == 0)
+            return &d;
+        if (effectSlug(d.name) == slug || effectSlug(d.menuLabel) == slug)
+            return &d;
+    }
+    return nullptr;
+}
+
 std::unique_ptr<MediaSource> applySourceEffects(std::unique_ptr<MediaSource> source,
                                                 const QVector<SourceEffectRef> &effects) {
     for (const SourceEffectRef &ref : effects) {

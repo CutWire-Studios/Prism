@@ -23,6 +23,9 @@
 #include "ui/session/SessionRecoveryDialog.h"
 #include "ui/remote/RemoteControlServer.h"
 #include "ui/remote/RemoteServerDialog.h"
+#include "ui/mcp/McpAccessDialog.h"
+#include "mcp/McpServer.h"
+#include "mcp/McpJson.h"
 #include "ui/mainwindow/MainWindowUtils.h"
 #include "ui/common/MaterialSymbols.h"
 #include "ui/output/FrameCaptureHelper.h"
@@ -69,6 +72,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QBuffer>
+#include <QImage>
+#include <QSet>
 #include <QDesktopServices>
 #include <QUrl>
 #include <algorithm>
@@ -92,6 +98,7 @@ MainWindow::MainWindow(QWidget *parent)
     MaterialSymbols::setActionIcon(ui->actionExportProject, MaterialSymbols::Names::Inventory);
     MaterialSymbols::setActionIcon(ui->actionImportProject, MaterialSymbols::Names::Download);
     MaterialSymbols::setActionIcon(ui->actionClearAll, MaterialSymbols::Names::Delete);
+    MaterialSymbols::setActionIcon(ui->actionAgentAccess, MaterialSymbols::Names::Sensors);
     MaterialSymbols::setPlayPause(ui->aDeckPlayBtn, false, 22);
     MaterialSymbols::setPlayPause(ui->bDeckPlayBtn, false, 22);
 
@@ -199,6 +206,12 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_remoteServer = new RemoteControlServer(this, m_transitionCtrl, ui->crossfaderSlider, this);
 
+    m_mcp = new prism::mcp::McpServer(this, this);
+    connect(m_mcp, &prism::mcp::McpServer::runningChanged, this, [this]() {
+        if (m_mcpStatusLabel)
+            m_mcpStatusLabel->setVisible(m_mcp && m_mcp->running());
+    });
+
     setupConnections();
     setupAddMenu(ui->menuAddElement);
     applyTheme();
@@ -252,6 +265,8 @@ void MainWindow::shutdownLivePipeline() {
 
     if (m_remoteServer)
         m_remoteServer->stopServer();
+    if (m_mcp)
+        m_mcp->stop();
 
     if (m_transitionCtrl)
         m_transitionCtrl->shutdown();
@@ -512,6 +527,7 @@ void MainWindow::setupConnections() {
     ui->actionStayOnTop->setChecked(false);
 
     connect(ui->actionStartRemoteControl, &QAction::triggered, this, &MainWindow::onStartRemoteControl);
+    connect(ui->actionAgentAccess, &QAction::triggered, this, &MainWindow::onAgentAccess);
 
     // Help menu
     connect(ui->actionAboutPrism, &QAction::triggered, this, &MainWindow::onAboutPrism);
@@ -1842,6 +1858,19 @@ void MainWindow::onStartRemoteControl() {
     m_serverDialog->activateWindow();
 }
 
+void MainWindow::onAgentAccess() {
+    if (!m_mcpDialog) {
+        m_mcpDialog = new McpAccessDialog(this, this);
+        m_mcpDialog->setAttribute(Qt::WA_DeleteOnClose);
+        connect(m_mcpDialog, &QObject::destroyed, this, [this]() {
+            m_mcpDialog = nullptr;
+        });
+    }
+    m_mcpDialog->show();
+    m_mcpDialog->raise();
+    m_mcpDialog->activateWindow();
+}
+
 void MainWindow::selectNodeA(NodeId nodeId) {
     onNodeAButtonClicked(nodeId);
 }
@@ -1874,6 +1903,397 @@ NodeId MainWindow::activeNodeB() const {
     return m_deckController ? m_deckController->activeNodeB() : 0;
 }
 
+bool MainWindow::mcpEnabled() const {
+    return m_mcp && m_mcp->running();
+}
+
+void MainWindow::setMcpEnabled(bool on)
+{
+    if (!m_mcp)
+        return;
+    if (on)
+        m_mcp->start();
+    else
+        m_mcp->stop();
+}
+
+void MainWindow::mcpBumpRevision() {
+    ++m_mcpEditRevision;
+}
+
+void MainWindow::playDeck(bool deckA, bool play)
+{
+    if (!m_outputWindow)
+        return;
+    auto *out = m_outputWindow->videoWidget();
+    if (deckA) {
+        if (play) out->playA(); else out->pauseA();
+        if (m_deckController)
+            m_deckController->applyAudioControllerToDeck(true, m_deckController->activeNodeA());
+    } else {
+        if (play) out->playB(); else out->pauseB();
+        if (m_deckController)
+            m_deckController->applyAudioControllerToDeck(false, m_deckController->activeNodeB());
+    }
+}
+
+void MainWindow::seekDeck(bool deckA, double seconds)
+{
+    if (!m_outputWindow)
+        return;
+    auto *out = m_outputWindow->videoWidget();
+    if (deckA)
+        out->seekA(seconds);
+    else
+        out->seekB(seconds);
+}
+
+void MainWindow::setDeckSpeedValue(bool deckA, double speed)
+{
+    const int sliderVal = qBound(5, qRound(speed / 0.05), 80);
+    if (deckA)
+        ui->aDeckSpeedSlider->setValue(sliderVal);
+    else
+        ui->bDeckSpeedSlider->setValue(sliderVal);
+}
+
+void MainWindow::setFaderValue(int value)
+{
+    ui->crossfaderSlider->setValue(qBound(0, value, 100));
+}
+
+int MainWindow::faderValue() const
+{
+    return ui->crossfaderSlider->value();
+}
+
+QString MainWindow::mcpPanicMode() const
+{
+    if (!m_outputWindow)
+        return QStringLiteral("none");
+    auto *out = m_outputWindow->videoWidget();
+    if (out->isOutputFrozen())
+        return QStringLiteral("freeze");
+    switch (out->panicOverlay()) {
+    case VideoWidget::PanicOverlay::Blackout:
+        return QStringLiteral("blackout");
+    case VideoWidget::PanicOverlay::StayTuned:
+        return QStringLiteral("stay_tuned");
+    case VideoWidget::PanicOverlay::None:
+        break;
+    }
+    return QStringLiteral("none");
+}
+
+bool MainWindow::mcpSetPanic(const QString &mode)
+{
+    const QString m = mode.trimmed().toLower();
+    if (m == QLatin1String("none")) {
+        ui->panicBlackoutBtn->setChecked(false);
+        ui->panicPauseBtn->setChecked(false);
+        ui->panicStayTunedBtn->setChecked(false);
+        applyPanicFromButtons();
+        return true;
+    }
+    if (m == QLatin1String("blackout")) {
+        syncPanicButtons(ui->panicBlackoutBtn);
+        applyPanicFromButtons();
+        return true;
+    }
+    if (m == QLatin1String("freeze") || m == QLatin1String("pause")) {
+        syncPanicButtons(ui->panicPauseBtn);
+        applyPanicFromButtons();
+        return true;
+    }
+    if (m == QLatin1String("stay_tuned") || m == QLatin1String("staytuned")) {
+        syncPanicButtons(ui->panicStayTunedBtn);
+        applyPanicFromButtons();
+        return true;
+    }
+    return false;
+}
+
+ClipNodeModel *MainWindow::addSourceFromDescriptor(const SourceDescriptor &desc, const QPixmap &thumb)
+{
+    QSet<NodeId> before;
+    if (m_clipNodeEditor) {
+        for (ClipNodeModel *n : m_clipNodeEditor->allNodes()) {
+            if (n)
+                before.insert(n->nodeId());
+        }
+    }
+    addElementNode(desc, thumb);
+    mcpBumpRevision();
+    if (!m_clipNodeEditor)
+        return nullptr;
+    for (ClipNodeModel *n : m_clipNodeEditor->allNodes()) {
+        if (n && n->hasSource() && !before.contains(n->nodeId()))
+            return n;
+    }
+    return nullptr;
+}
+
+bool MainWindow::mcpUpdateSource(NodeId id, const SourceDescriptor &desc, const QPixmap &thumb)
+{
+    ClipNodeModel *node = m_clipNodeEditor ? m_clipNodeEditor->nodeAt(id) : nullptr;
+    if (!node)
+        return false;
+    node->loadSource(desc, thumb);
+    pushDecks();
+    mcpBumpRevision();
+    return true;
+}
+
+bool MainWindow::mcpRenameClip(NodeId id, const QString &name)
+{
+    ClipNodeModel *node = m_clipNodeEditor ? m_clipNodeEditor->nodeAt(id) : nullptr;
+    if (!node)
+        return false;
+    node->setDisplayName(name);
+    mcpBumpRevision();
+    return true;
+}
+
+bool MainWindow::mcpRemoveClip(NodeId id)
+{
+    if (!m_clipNodeEditor || !m_clipNodeEditor->nodeAt(id))
+        return false;
+    m_clipNodeEditor->removeNode(id);
+    mcpBumpRevision();
+    return true;
+}
+
+bool MainWindow::mcpSaveSession(const QString &path)
+{
+    const QString out = MainWindowUtils::ensureExtension(path, QString::fromUtf8(SessionManager::kSessionExtension));
+    return m_sessionManager && m_sessionManager->writeSessionFile(currentSessionJson(out), out);
+}
+
+bool MainWindow::mcpLoadSession(const QString &path)
+{
+    loadFromFile(path, false);
+    return true;
+}
+
+bool MainWindow::mcpStartRecording(const QString &dir, QString *error)
+{
+    if (!m_outputHub) {
+        if (error)
+            *error = tr("No output hub");
+        return false;
+    }
+    QString outDir = dir;
+    if (outDir.isEmpty()) {
+        if (!RecordingSettingsDialog::hasChosenOutputDir()) {
+            if (error)
+                *error = tr("No save location. Pass dir or set it in the recording panel.");
+            return false;
+        }
+        outDir = RecordingSettingsDialog::loadSavedOptions().effectiveOutputDir();
+    } else {
+        RecordingSettingsDialog::saveOutputDir(outDir);
+    }
+    m_outputHub->setOutputDir(outDir);
+    if (!m_outputHub->startProgramRecording()) {
+        if (error)
+            *error = tr("Could not start program recording");
+        return false;
+    }
+    mcpBumpRevision();
+    return true;
+}
+
+namespace {
+
+QString mcpKindName(SourceDescriptor::Kind kind)
+{
+    using K = SourceDescriptor::Kind;
+    switch (kind) {
+    case K::VideoFile: return QStringLiteral("video");
+    case K::Image:     return QStringLiteral("image");
+    case K::Slideshow: return QStringLiteral("slideshow");
+    case K::Camera:    return QStringLiteral("camera");
+    case K::Screen:    return QStringLiteral("screen");
+    case K::Canvas:    return QStringLiteral("canvas");
+    case K::Window:    return QStringLiteral("window");
+    case K::Shader:    return QStringLiteral("shader");
+    case K::Html:      return QStringLiteral("html");
+    case K::Ndi:       return QStringLiteral("ndi");
+    case K::WebRtc:    return QStringLiteral("webrtc");
+    case K::Text:      return QStringLiteral("text");
+    case K::AudioFile: return QStringLiteral("audio");
+    }
+    return QStringLiteral("unknown");
+}
+
+QJsonObject mcpDeckJson(const MainWindow *w, bool deckA)
+{
+    auto *out = w->outputWindow() ? w->outputWindow()->videoWidget() : nullptr;
+    auto *decks = w->deckController();
+    const NodeId id = decks ? (deckA ? decks->activeNodeA() : decks->activeNodeB()) : 0;
+    ClipNodeModel *node = (id && w->clipNodeEditor()) ? w->clipNodeEditor()->nodeAt(id) : nullptr;
+    QJsonObject o{
+        {QStringLiteral("clip"), id ? QString::number(id) : QJsonValue(QJsonValue::Null)},
+        {QStringLiteral("name"), node ? node->sourceName() : QString()},
+        {QStringLiteral("playing"), out && (deckA ? out->isPlayingA() : out->isPlayingB())},
+        {QStringLiteral("time"), out ? (deckA ? out->getCurrentTimeA() : out->getCurrentTimeB()) : 0.0},
+        {QStringLiteral("duration"), out ? (deckA ? out->getDurationA() : out->getDurationB()) : 0.0},
+        {QStringLiteral("speed"), decks ? decks->deckSpeed(deckA) : 1.0},
+    };
+    return o;
+}
+
+} // namespace
+
+QJsonObject MainWindow::mcpInspect(bool includeClips, bool detail, int sinceRevision,
+                                   bool includeGraph) const
+{
+    using namespace prism::mcp;
+    if (sinceRevision >= 0 && sinceRevision == m_mcpEditRevision)
+        return ok({{QStringLiteral("unchanged"), true},
+                   {QStringLiteral("revision"), m_mcpEditRevision}});
+
+    auto *t = m_transitionCtrl;
+    auto *hub = m_outputHub;
+
+    QJsonArray transitionModes;
+    if (t) {
+        for (const QString &name : t->transitionModeNames())
+            transitionModes.append(name);
+    }
+
+    QJsonObject body{
+        {QStringLiteral("revision"), m_mcpEditRevision},
+        {QStringLiteral("fader"), ui->crossfaderSlider->value()},
+        {QStringLiteral("panic"), mcpPanicMode()},
+        {QStringLiteral("decks"),
+         QJsonObject{{QStringLiteral("a"), mcpDeckJson(this, true)},
+                     {QStringLiteral("b"), mcpDeckJson(this, false)}}},
+        {QStringLiteral("transition"),
+         QJsonObject{
+             {QStringLiteral("index"), t ? t->currentModeIndex() : 0},
+             {QStringLiteral("duration"), t ? t->currentDurationSecs() : 0.0},
+             {QStringLiteral("modes"), transitionModes},
+         }},
+        {QStringLiteral("program"),
+         QJsonObject{{QStringLiteral("w"), VideoWidget::programWidth()},
+                     {QStringLiteral("h"), VideoWidget::programHeight()}}},
+        {QStringLiteral("recording"),
+         QJsonObject{
+             {QStringLiteral("active"), hub && hub->isRecording()},
+             {QStringLiteral("elapsed"), hub ? hub->longestActiveRecordingMs() / 1000.0 : 0.0},
+             {QStringLiteral("dir"), hub ? hub->outputDir() : QString()},
+         }},
+        {QStringLiteral("ndi"),
+         QJsonObject{{QStringLiteral("available"), hub && hub->ndiAvailable()},
+                     {QStringLiteral("enabled"), hub && hub->ndiOutputEnabled()},
+                     {QStringLiteral("name"), hub ? hub->ndiStreamName() : QString()}}},
+        {QStringLiteral("virtualCamera"),
+         QJsonObject{{QStringLiteral("available"), hub && hub->virtualCameraAvailable()},
+                     {QStringLiteral("enabled"), hub && hub->virtualCameraEnabled()}}},
+    };
+
+    if (includeClips && m_clipNodeEditor) {
+        QJsonArray clips;
+        for (ClipNodeModel *node : m_clipNodeEditor->allNodes()) {
+            if (!node || !node->hasSource())
+                continue;
+            const SourceDescriptor &d = node->sourceDescriptor();
+            QJsonObject row{
+                {QStringLiteral("id"), QString::number(node->nodeId())},
+                {QStringLiteral("name"), node->sourceName()},
+                {QStringLiteral("kind"), mcpKindName(d.kind)},
+                {QStringLiteral("activeA"), node->nodeId() == activeNodeA()},
+                {QStringLiteral("activeB"), node->nodeId() == activeNodeB()},
+            };
+            if (detail) {
+                if (!d.path.isEmpty())
+                    row.insert(QStringLiteral("path"), d.path);
+                if (!d.textTemplate.isEmpty())
+                    row.insert(QStringLiteral("text"), d.textTemplate);
+                if (!d.htmlContent.isEmpty())
+                    row.insert(QStringLiteral("html"), d.htmlContent);
+                if (!d.shaderCode.isEmpty())
+                    row.insert(QStringLiteral("shader"), true);
+                row.insert(QStringLiteral("live"), d.isLiveSource());
+                row.insert(QStringLiteral("seekable"), d.isSeekable());
+            }
+            clips.append(row);
+        }
+        body.insert(QStringLiteral("clips"), clips);
+    } else if (m_clipNodeEditor) {
+        int n = 0;
+        for (ClipNodeModel *node : m_clipNodeEditor->allNodes()) {
+            if (node && node->hasSource())
+                ++n;
+        }
+        body.insert(QStringLiteral("clips"), n);
+    }
+
+    if (includeGraph && m_clipNodeEditor)
+        body.insert(QStringLiteral("graph"), m_clipNodeEditor->graphSnapshot());
+
+    return ok(body);
+}
+
+QJsonObject MainWindow::mcpCaptureFrame(bool full)
+{
+    using namespace prism::mcp;
+    if (!m_outputWindow)
+        return textResult(err("capture_failed", QStringLiteral("No program output")), true);
+
+    auto *out = m_outputWindow->videoWidget();
+    QImage frame = out->captureProgramFrame();
+    if (frame.isNull())
+        frame = out->programFrame();
+    if (frame.isNull())
+        return textResult(err("capture_failed", QStringLiteral("No program frame yet")), true);
+
+    const QJsonObject meta = ok({
+        {QStringLiteral("w"), frame.width()},
+        {QStringLiteral("h"), frame.height()},
+        {QStringLiteral("full"), full},
+    });
+
+    if (full) {
+        QString baseDir = m_outputHub ? m_outputHub->outputDir() : QString();
+        if (baseDir.isEmpty())
+            baseDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+        const QString path = FrameCaptureHelper::savePng(frame, QStringLiteral("mcp"), baseDir);
+        if (path.isEmpty())
+            return textResult(err("capture_failed", QStringLiteral("Could not write PNG")), true);
+        QJsonObject withPath = meta;
+        withPath.insert(QStringLiteral("path"), path);
+        return textResult(withPath);
+    }
+
+    QImage jpegFrame = frame;
+    const int longEdge = qMax(jpegFrame.width(), jpegFrame.height());
+    if (longEdge > 1280) {
+        const double scale = 1280.0 / double(longEdge);
+        jpegFrame = jpegFrame.scaled(qRound(jpegFrame.width() * scale),
+                                     qRound(jpegFrame.height() * scale),
+                                     Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    }
+    QByteArray jpeg;
+    QBuffer buffer(&jpeg);
+    buffer.open(QIODevice::WriteOnly);
+    if (!jpegFrame.save(&buffer, "JPEG", 80))
+        return textResult(err("capture_failed", QStringLiteral("Could not encode JPEG")), true);
+
+    QJsonArray content;
+    content.append(QJsonObject{
+        {QStringLiteral("type"), QStringLiteral("text")},
+        {QStringLiteral("text"), QString::fromUtf8(QJsonDocument(meta).toJson(QJsonDocument::Compact))},
+    });
+    content.append(QJsonObject{
+        {QStringLiteral("type"), QStringLiteral("image")},
+        {QStringLiteral("mimeType"), QStringLiteral("image/jpeg")},
+        {QStringLiteral("data"), QString::fromLatin1(jpeg.toBase64())},
+    });
+    return {{QStringLiteral("content"), content}, {QStringLiteral("isError"), false}};
+}
+
 void MainWindow::setupRecordingStatusBar() {
     auto *bar = statusBar();
     bar->setSizeGripEnabled(false);
@@ -1899,6 +2319,12 @@ void MainWindow::setupRecordingStatusBar() {
     bar->addPermanentWidget(m_recTimeLabel);
     bar->addPermanentWidget(m_recTracksLabel, 1);
     bar->addPermanentWidget(m_recPathLabel);
+
+    m_mcpStatusLabel = new QLabel(tr("Agent access"), this);
+    m_mcpStatusLabel->setStyleSheet(QStringLiteral("color: #e5a93b;"));
+    m_mcpStatusLabel->setToolTip(tr("Localhost MCP is listening. Turn it off in Run → Agent Access when you are done."));
+    m_mcpStatusLabel->hide();
+    bar->addPermanentWidget(m_mcpStatusLabel);
 }
 
 void MainWindow::updateRecordingUi(qint64 elapsedMs) {

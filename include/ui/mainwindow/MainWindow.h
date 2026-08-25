@@ -24,8 +24,15 @@ namespace Ui { class MainWindow; }
 class RemoteControlServer;
 class RemoteServerDialog;
 class RecordingSettingsDialog;
-
+class McpAccessDialog;
+class OutputHub;
+class DeckController;
+class SessionManager;
+class QSlider;
+class QLabel;
 class QPushButton;
+
+namespace prism::mcp { class McpServer; }
 
 /// The application shell. Owns the decks, node editor, asset library, program
 /// output and the controllers (deck/transition/session/hotkeys/OBS/output hub),
@@ -37,7 +44,7 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-    // ── Remote API helpers ────────────────────────────────────────────────────
+    // ── Remote / MCP API helpers ─────────────────────────────────────────────
     void selectNodeA(NodeId nodeId);
     void selectNodeB(NodeId nodeId);
     void togglePlayA();
@@ -47,6 +54,36 @@ public:
     NodeId activeNodeA() const;
     NodeId activeNodeB() const;
     ClipNodeEditor* clipNodeEditor() const { return m_clipNodeEditor; }
+
+    OutputWindow *outputWindow() const { return m_outputWindow; }
+    OutputHub *outputHub() const { return m_outputHub; }
+    TransitionController *transitionController() const { return m_transitionCtrl; }
+    DeckController *deckController() const { return m_deckController; }
+    SessionManager *sessionManager() const { return m_sessionManager; }
+
+    void playDeck(bool deckA, bool play);
+    void seekDeck(bool deckA, double seconds);
+    void setDeckSpeedValue(bool deckA, double speed);
+    void setFaderValue(int value);
+    int faderValue() const;
+    QString mcpPanicMode() const;
+    bool mcpSetPanic(const QString &mode);
+    ClipNodeModel *addSourceFromDescriptor(const SourceDescriptor &desc, const QPixmap &thumb);
+    bool mcpUpdateSource(NodeId id, const SourceDescriptor &desc, const QPixmap &thumb);
+    bool mcpRenameClip(NodeId id, const QString &name);
+    bool mcpRemoveClip(NodeId id);
+    bool mcpSaveSession(const QString &path);
+    bool mcpLoadSession(const QString &path);
+    bool mcpStartRecording(const QString &dir, QString *error);
+    QJsonObject mcpInspect(bool includeClips, bool detail, int sinceRevision,
+                           bool includeGraph = false) const;
+    QJsonObject mcpCaptureFrame(bool full);
+    int mcpRevision() const { return m_mcpEditRevision; }
+    void mcpBumpRevision();
+
+    bool mcpEnabled() const;
+    void setMcpEnabled(bool on);
+    prism::mcp::McpServer *mcpServer() const { return m_mcp; }
 
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
@@ -82,6 +119,7 @@ private slots:
     void onLinkClipObsScene();
     void onEditHotkeys();
     void onStartRemoteControl();
+    void onAgentAccess();
     void rebuildObsScenesMenu(const QStringList &scenes);
 
     // ── Deck controls ─────────────────────────────────────────────────────────
@@ -127,6 +165,10 @@ private:
     RemoteControlServer *m_remoteServer      = nullptr;
     RemoteServerDialog  *m_serverDialog      = nullptr;
     RecordingSettingsDialog *m_recordingPanel = nullptr;
+    prism::mcp::McpServer *m_mcp             = nullptr;
+    McpAccessDialog     *m_mcpDialog         = nullptr;
+    QLabel              *m_mcpStatusLabel    = nullptr;
+    int                  m_mcpEditRevision   = 0;
 
     QLabel          *m_recStatusLabel  = nullptr;
     QLabel          *m_recTimeLabel    = nullptr;

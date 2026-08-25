@@ -9,7 +9,9 @@
 #include <QJsonArray>
 #include <QPixmap>
 #include <QPoint>
+#include <QPointF>
 #include <QRectF>
+#include <QtNumeric>
 #include <memory>
 #include "core/sources/SourceDescriptor.h"
 #include "core/scripting/ScriptOutput.h"
@@ -183,6 +185,20 @@ public:
     void addMicInputAtCursor();
     void addAudioCaptureAtCursor();
 
+    // ── Programmatic graph edits (MCP / tests) ───────────────────────────────
+    /// Place a process node. NaN x/y pick a staggered scene position.
+    NodeId addProcessNode(int effectId, const QJsonObject &params = {},
+                          double x = qQNaN(), double y = qQNaN());
+    NodeId addLayerNode(double x = qQNaN(), double y = qQNaN());
+    NodeId addAbSelectNode(double x = qQNaN(), double y = qQNaN());
+    /// Wire two nodes. kind -1 infers from ports (prefers video chain).
+    /// toPortIndex is the destination input slot (Layer / A/B Select / mixer).
+    bool connectNodes(NodeId from, NodeId to, int kind = -1, int toPortIndex = -1);
+    bool disconnectNodes(NodeId from, NodeId to, int toPortIndex = -1);
+    bool setProcessParams(NodeId id, const QJsonObject &params, bool merge = true);
+    bool hasGraphNode(NodeId id) const;
+    QJsonObject graphSnapshot() const;
+
     // ── Output-node querying ─────────────────────────────────────────────────
     NodeId outputNodeId() const { return m_outputNode; }
     bool   outputIsSingleStream() const;
@@ -272,6 +288,8 @@ private:
     ResolvedStream evaluateVideoInputGuarded(NodeId producerNode, QSet<NodeId> visited) const;
 
     class PortItem *findPort(NodeId nodeId, int portKindInt, int slotIndex = -1) const;
+    bool lookupConnectionPorts(NodeId from, NodeId to, int kind, int slot,
+                               class PortItem **fromPort, class PortItem **toPort) const;
     void restoreConnections(ClipNodeScene *scene, const QJsonArray &conns);
     QPointF scenePosForView(QGraphicsView *view, const QPoint &globalPos) const;
     void addProcessNodeAt(int effect, const QPoint &globalPos);
