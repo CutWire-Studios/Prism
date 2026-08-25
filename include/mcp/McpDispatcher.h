@@ -47,6 +47,15 @@ private:
     QJsonObject opSetVirtualCamera(const QJsonObject &args);
     QJsonObject opSaveSession(const QJsonObject &args);
     QJsonObject opLoadSession(const QJsonObject &args);
+    QJsonObject opListProcessEffects() const;
+    QJsonObject opListNodes() const;
+    QJsonObject opAddProcessNode(const QJsonObject &args);
+    QJsonObject opAddLayerNode(const QJsonObject &args);
+    QJsonObject opAddAbSelect(const QJsonObject &args);
+    QJsonObject opConnect(const QJsonObject &args);
+    QJsonObject opDisconnect(const QJsonObject &args);
+    QJsonObject opSetProcessParams(const QJsonObject &args);
+    QJsonObject opRemoveNode(const QJsonObject &args);
 
     MainWindow *m_window = nullptr;
 };

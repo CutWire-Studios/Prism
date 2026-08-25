@@ -77,6 +77,7 @@
 #include <QResizeEvent>
 #include <QMouseEvent>
 #include <QtMath>
+#include <QtNumeric>
 #include <algorithm>
 
 static constexpr qreal CARD_W        = 122.0;
@@ -2594,6 +2595,32 @@ public:
         createConnection(outPort, inPort, kind);
     }
 
+    void connectOrReplace(PortItem *outPort, PortItem *inPort, ConnectionItem::EdgeKind kind) {
+        connectPorts(outPort, inPort, kind);
+    }
+
+    int edgeCount() const { return m_edges.size(); }
+
+    int removeEdgesBetween(NodeId from, NodeId to, int toPortIndex) {
+        int n = 0;
+        for (int i = m_edges.size() - 1; i >= 0; --i) {
+            auto &e = m_edges[i];
+            if (e.fromNodeId != from || e.toNodeId != to)
+                continue;
+            if (toPortIndex >= 0 && destPortIndex(e.toPort->nodeItem(), e.toPort) != toPortIndex)
+                continue;
+            e.item->fromPort()->setConnected(false);
+            e.item->toPort()->setConnected(false);
+            removeItem(e.item);
+            delete e.item;
+            m_edges.removeAt(i);
+            ++n;
+        }
+        if (n > 0 && onConnectionChanged)
+            onConnectionChanged();
+        return n;
+    }
+
     NodeId masterNodeForClip(NodeId clipId) const {
         for (const auto &e : m_edges) {
             if (e.fromNodeId != clipId) continue;
@@ -2795,6 +2822,14 @@ private:
     }
 
     void connectPorts(PortItem *outPort, PortItem *inPort, ConnectionItem::EdgeKind kind) {
+        // Output is either a single video chain or A/B, never both. The UI
+        // drag path already refuses this; MCP/restore must keep the same invariant
+        // or pushDecks rebuilds two compositors on top of each other and aborts.
+        if (auto *out = dynamic_cast<OutputNodeItem *>(inPort->nodeItem())) {
+            PortItem *other = (inPort == out->chainInPort()) ? out->abInPort() : out->chainInPort();
+            if (other && portHasEdge(other))
+                return;
+        }
         if (isSingleConnection(outPort->kind()))
             disconnectPort(outPort);
         if (isSingleConnection(inPort->kind()))
@@ -3821,22 +3856,40 @@ ClipNodeModel *ClipNodeEditor::addSourceNode(const SourceDescriptor &descIn, con
 
 // ── Process / Layer / A-B node creation ─────────────────────────────────────
 
-void ClipNodeEditor::addProcessNodeAt(int effect, const QPoint &globalPos) {
+static QPointF autoNodePos(int index, qreal baseX, qreal baseY) {
+    return QPointF(baseX + index * 16.0, baseY + index * 78.0);
+}
+
+NodeId ClipNodeEditor::addProcessNode(int effect, const QJsonObject &params, double x, double y) {
     const ProcessEffectDescriptor *desc = ProcessEffects::byId(effect);
-    if (!desc) {
-        qWarning() << "addProcessNodeAt: unknown effect id" << effect;
-        return;
-    }
+    if (!desc)
+        return 0;
     const NodeId id = m_nextId++;
     auto *node = new ProcessNodeItem(id, desc);
-    node->setPos(scenePosForView(m_view, globalPos));
+    if (qIsNaN(x) || qIsNaN(y))
+        node->setPos(autoNodePos(m_processNodes.size(), 220.0, 48.0));
+    else
+        node->setPos(QPointF(x, y));
+    if (!params.isEmpty()) {
+        QJsonObject merged = desc->defaultParams;
+        for (auto it = params.begin(); it != params.end(); ++it)
+            merged.insert(it.key(), it.value());
+        node->setParams(merged);
+    }
     node->onEditRequested = [this](NodeId nid) { onEditProcessNode(nid); };
     m_scene->addItem(node);
     m_processNodes[id] = node;
     registerItem(node);
     wireDeleteCallback(node, [this](NodeId nid) { deleteNodeById(nid); });
     ensureOutputNode();
+    emit nodeAdded(id);
     emit clipChainChanged();
+    return id;
+}
+
+void ClipNodeEditor::addProcessNodeAt(int effect, const QPoint &globalPos) {
+    const QPointF p = scenePosForView(m_view, globalPos);
+    addProcessNode(effect, {}, p.x(), p.y());
 }
 
 void ClipNodeEditor::addAudioEffectNodeAt(int effect, const QPoint &globalPos) {
@@ -3857,10 +3910,13 @@ void ClipNodeEditor::addAudioEffectNodeAt(int effect, const QPoint &globalPos) {
     emit audioGraphChanged();
 }
 
-void ClipNodeEditor::addLayerNodeAt(const QPoint &globalPos) {
+NodeId ClipNodeEditor::addLayerNode(double x, double y) {
     const NodeId id = m_nextId++;
     auto *node = new LayerNodeItem(id);
-    node->setPos(scenePosForView(m_view, globalPos));
+    if (qIsNaN(x) || qIsNaN(y))
+        node->setPos(autoNodePos(m_layerNodes.size(), 280.0, 48.0));
+    else
+        node->setPos(QPointF(x, y));
     node->onEditRequested = [this](NodeId nid) { onEditLayerTransform(nid); };
     node->onEditCanvasRequested = [this](NodeId nid) { onEditLayerCanvas(nid); };
     node->onChanged = [this]() { emit clipChainChanged(); };
@@ -3869,7 +3925,14 @@ void ClipNodeEditor::addLayerNodeAt(const QPoint &globalPos) {
     registerItem(node);
     wireDeleteCallback(node, [this](NodeId nid) { deleteNodeById(nid); });
     ensureOutputNode();
+    emit nodeAdded(id);
     emit clipChainChanged();
+    return id;
+}
+
+void ClipNodeEditor::addLayerNodeAt(const QPoint &globalPos) {
+    const QPointF p = scenePosForView(m_view, globalPos);
+    addLayerNode(p.x(), p.y());
 }
 
 void ClipNodeEditor::updateAbHighlights() {
@@ -3886,10 +3949,13 @@ void ClipNodeEditor::updateAbHighlights() {
     }
 }
 
-void ClipNodeEditor::addAbSelectNodeAt(const QPoint &globalPos) {
+NodeId ClipNodeEditor::addAbSelectNode(double x, double y) {
     const NodeId id = m_nextId++;
     auto *node = new AbSelectNodeItem(id);
-    node->setPos(scenePosForView(m_view, globalPos));
+    if (qIsNaN(x) || qIsNaN(y))
+        node->setPos(autoNodePos(m_abSelectNodes.size(), 320.0, 48.0));
+    else
+        node->setPos(QPointF(x, y));
     node->onChanged = [this]() { emit clipChainChanged(); };
     node->onAssignDeck = [this](NodeId abId, int slot, bool deckA) {
         auto *ab = m_abSelectNodes.value(abId);
@@ -3903,7 +3969,226 @@ void ClipNodeEditor::addAbSelectNodeAt(const QPoint &globalPos) {
     registerItem(node);
     wireDeleteCallback(node, [this](NodeId nid) { deleteNodeById(nid); });
     ensureOutputNode();
+    emit nodeAdded(id);
     emit clipChainChanged();
+    return id;
+}
+
+void ClipNodeEditor::addAbSelectNodeAt(const QPoint &globalPos) {
+    const QPointF p = scenePosForView(m_view, globalPos);
+    addAbSelectNode(p.x(), p.y());
+}
+
+static QString connectionKindName(int kind) {
+    switch (kind) {
+    case ConnectionItem::Chain:               return QStringLiteral("chain");
+    case ConnectionItem::AbToOutput:          return QStringLiteral("ab_to_output");
+    case ConnectionItem::ScriptToData:        return QStringLiteral("script_to_data");
+    case ConnectionItem::ClipToShaderAudio:   return QStringLiteral("clip_to_shader_audio");
+    case ConnectionItem::ClipToAudioScript:   return QStringLiteral("clip_to_audio_script");
+    case ConnectionItem::ControllerToMaster:  return QStringLiteral("controller_to_master");
+    case ConnectionItem::InputToMaster:       return QStringLiteral("input_to_master");
+    case ConnectionItem::StreamToMixer:       return QStringLiteral("stream_to_mixer");
+    case ConnectionItem::MixerToOutput:       return QStringLiteral("mixer_to_output");
+    case ConnectionItem::AudioEffectChain:    return QStringLiteral("audio_effect");
+    default:                                  return QStringLiteral("kind_%1").arg(kind);
+    }
+}
+
+bool ClipNodeEditor::hasGraphNode(NodeId id) const {
+    return m_itemMap.contains(id);
+}
+
+bool ClipNodeEditor::setProcessParams(NodeId id, const QJsonObject &params, bool merge) {
+    auto *pr = m_processNodes.value(id);
+    if (!pr)
+        return false;
+    QJsonObject next = merge ? pr->params() : QJsonObject{};
+    for (auto it = params.begin(); it != params.end(); ++it)
+        next.insert(it.key(), it.value());
+    pr->setParams(next);
+    emit clipChainChanged();
+    return true;
+}
+
+bool ClipNodeEditor::lookupConnectionPorts(NodeId from, NodeId to, int kind, int slot,
+                                           PortItem **fromPort, PortItem **toPort) const {
+    if (!fromPort || !toPort)
+        return false;
+    *fromPort = nullptr;
+    *toPort = nullptr;
+    if (kind == ConnectionItem::Chain) {
+        *fromPort = findPort(from, (int)PortKind::ChainOut);
+        *toPort   = findPort(to,   (int)PortKind::ChainIn, slot);
+    } else if (kind == ConnectionItem::AbToOutput) {
+        *fromPort = findPort(from, (int)PortKind::AbOut);
+        *toPort   = findPort(to,   (int)PortKind::AbIn);
+    } else if (kind == ConnectionItem::ClipToShaderAudio) {
+        *fromPort = findPort(from, (int)PortKind::AudioControllerOut);
+        *toPort   = findPort(to,   (int)PortKind::ShaderAudioIn);
+    } else if (kind == ConnectionItem::ClipToAudioScript) {
+        *fromPort = findPort(from, (int)PortKind::AudioControllerOut);
+        if (!*fromPort) *fromPort = findPort(from, (int)PortKind::MasterAudioInputOut);
+        *toPort   = findPort(to,   (int)PortKind::AudioIn);
+    } else if (kind == ConnectionItem::ControllerToMaster) {
+        *fromPort = findPort(from, (int)PortKind::AudioControllerOut);
+        if (!*fromPort) *fromPort = findPort(from, (int)PortKind::AudioEffectOut);
+        *toPort   = findPort(to,   (int)PortKind::MasterAudioIn, slot >= 0 ? slot : 0);
+    } else if (kind == ConnectionItem::InputToMaster) {
+        *fromPort = findPort(from, (int)PortKind::MasterAudioInputOut);
+        if (!*fromPort) *fromPort = findPort(from, (int)PortKind::AudioEffectOut);
+        *toPort   = findPort(to,   (int)PortKind::MasterAudioIn, slot >= 0 ? slot : 0);
+    } else if (kind == ConnectionItem::StreamToMixer) {
+        *fromPort = findPort(from, (int)PortKind::AudioControllerOut);
+        if (!*fromPort) *fromPort = findPort(from, (int)PortKind::MasterAudioInputOut);
+        if (!*fromPort) *fromPort = findPort(from, (int)PortKind::AudioEffectOut);
+        *toPort   = findPort(to,   (int)PortKind::AudioMixerIn, slot);
+    } else if (kind == ConnectionItem::AudioEffectChain) {
+        *fromPort = findPort(from, (int)PortKind::AudioControllerOut);
+        if (!*fromPort) *fromPort = findPort(from, (int)PortKind::MasterAudioInputOut);
+        if (!*fromPort) *fromPort = findPort(from, (int)PortKind::AudioEffectOut);
+        *toPort   = findPort(to,   (int)PortKind::AudioEffectIn);
+    } else if (kind == ConnectionItem::MixerToOutput) {
+        *fromPort = findPort(from, (int)PortKind::AudioMixerOut);
+        *toPort   = findPort(to,   (int)PortKind::MasterAudioIn, slot >= 0 ? slot : 0);
+    } else if (kind == ConnectionItem::ScriptToData) {
+        *fromPort = findPort(from, (int)PortKind::ScriptOut);
+        *toPort   = findPort(to,   (int)PortKind::DataIn);
+    }
+    return *fromPort && *toPort;
+}
+
+bool ClipNodeEditor::connectNodes(NodeId from, NodeId to, int kind, int toPortIndex) {
+    if (!m_scene || from == 0 || to == 0 || from == to)
+        return false;
+    if (!m_itemMap.contains(from) || !m_itemMap.contains(to))
+        return false;
+
+    static const int kTryOrder[] = {
+        ConnectionItem::Chain,
+        ConnectionItem::AbToOutput,
+        ConnectionItem::ScriptToData,
+        ConnectionItem::ClipToShaderAudio,
+        ConnectionItem::AudioEffectChain,
+        ConnectionItem::StreamToMixer,
+        ConnectionItem::MixerToOutput,
+        ConnectionItem::ControllerToMaster,
+        ConnectionItem::InputToMaster,
+        ConnectionItem::ClipToAudioScript,
+    };
+
+    QVector<int> kinds;
+    if (kind >= 0)
+        kinds.append(kind);
+    else {
+        for (int k : kTryOrder)
+            kinds.append(k);
+    }
+
+    for (int k : kinds) {
+        PortItem *fromPort = nullptr;
+        PortItem *toPort = nullptr;
+        if (!lookupConnectionPorts(from, to, k, toPortIndex, &fromPort, &toPort))
+            continue;
+        if (auto *out = dynamic_cast<OutputNodeItem *>(toPort->nodeItem())) {
+            PortItem *other = (toPort == out->chainInPort()) ? out->abInPort() : out->chainInPort();
+            if (other && m_scene->portHasEdge(other))
+                return false;
+        }
+        m_scene->connectOrReplace(fromPort, toPort, (ConnectionItem::EdgeKind)k);
+        return true;
+    }
+    return false;
+}
+
+bool ClipNodeEditor::disconnectNodes(NodeId from, NodeId to, int toPortIndex) {
+    if (!m_scene)
+        return false;
+    return m_scene->removeEdgesBetween(from, to, toPortIndex) > 0;
+}
+
+QJsonObject ClipNodeEditor::graphSnapshot() const {
+    QJsonArray nodes;
+    auto appendNode = [&](NodeId id, const QString &type, const QPointF &pos,
+                          QJsonObject extra = {}) {
+        extra.insert(QStringLiteral("id"), QString::number(id));
+        extra.insert(QStringLiteral("type"), type);
+        extra.insert(QStringLiteral("x"), pos.x());
+        extra.insert(QStringLiteral("y"), pos.y());
+        nodes.append(extra);
+    };
+
+    for (auto it = m_nodeMap.cbegin(); it != m_nodeMap.cend(); ++it) {
+        QJsonObject extra{{QStringLiteral("name"), it.value()->sourceName()}};
+        const SourceDescriptor &d = it.value()->sourceDescriptor();
+        extra.insert(QStringLiteral("kind"), [&] {
+            using K = SourceDescriptor::Kind;
+            switch (d.kind) {
+            case K::VideoFile: return QStringLiteral("video");
+            case K::Image:     return QStringLiteral("image");
+            case K::AudioFile: return QStringLiteral("audio");
+            case K::Slideshow: return QStringLiteral("slideshow");
+            case K::Camera:    return QStringLiteral("camera");
+            case K::Screen:    return QStringLiteral("screen");
+            case K::Canvas:    return QStringLiteral("canvas");
+            case K::Window:    return QStringLiteral("window");
+            case K::Shader:    return QStringLiteral("shader");
+            case K::Html:      return QStringLiteral("html");
+            case K::Ndi:       return QStringLiteral("ndi");
+            case K::WebRtc:    return QStringLiteral("webrtc");
+            case K::Text:      return QStringLiteral("text");
+            }
+            return QStringLiteral("unknown");
+        }());
+        QPointF pos;
+        if (auto *item = m_itemMap.value(it.key()))
+            pos = item->pos();
+        appendNode(it.key(), QStringLiteral("input"), pos, extra);
+    }
+    for (auto it = m_processNodes.cbegin(); it != m_processNodes.cend(); ++it) {
+        auto *pr = it.value();
+        appendNode(pr->nodeId(), QStringLiteral("process"), pr->pos(),
+                   {{QStringLiteral("effect"), pr->effectId()},
+                    {QStringLiteral("name"), pr->descriptor()->name},
+                    {QStringLiteral("params"), pr->params()}});
+    }
+    for (auto it = m_layerNodes.cbegin(); it != m_layerNodes.cend(); ++it) {
+        auto *ly = it.value();
+        appendNode(ly->nodeId(), QStringLiteral("layer"), ly->pos(),
+                   {{QStringLiteral("slots"), ly->slotCount()}});
+    }
+    for (auto it = m_abSelectNodes.cbegin(); it != m_abSelectNodes.cend(); ++it) {
+        auto *ab = it.value();
+        appendNode(ab->nodeId(), QStringLiteral("ab_select"), ab->pos(),
+                   {{QStringLiteral("slots"), ab->slotCount()}});
+    }
+    if (m_outputNode != 0) {
+        QPointF pos;
+        if (auto *out = m_itemMap.value(m_outputNode))
+            pos = out->pos();
+        appendNode(m_outputNode, QStringLiteral("output"), pos);
+    }
+
+    QJsonArray connections;
+    if (m_scene) {
+        for (const QJsonValue &v : m_scene->edgesToJson()) {
+            QJsonObject o = v.toObject();
+            const int kind = o.value(QStringLiteral("kind")).toInt();
+            connections.append(QJsonObject{
+                {QStringLiteral("from"), QString::number(o.value(QStringLiteral("from")).toInteger())},
+                {QStringLiteral("to"), QString::number(o.value(QStringLiteral("to")).toInteger())},
+                {QStringLiteral("kind"), kind},
+                {QStringLiteral("kindName"), connectionKindName(kind)},
+                {QStringLiteral("toPort"), o.value(QStringLiteral("toPortIndex")).toInt(-1)},
+            });
+        }
+    }
+
+    return QJsonObject{
+        {QStringLiteral("output"), m_outputNode ? QString::number(m_outputNode) : QString()},
+        {QStringLiteral("nodes"), nodes},
+        {QStringLiteral("connections"), connections},
+    };
 }
 
 // ── Deletion ────────────────────────────────────────────────────────────────
@@ -5669,44 +5954,8 @@ void ClipNodeEditor::restoreConnections(ClipNodeScene *scene, const QJsonArray &
         const int    slot = obj["toPortIndex"].toInt(-1);
 
         PortItem *fromPort = nullptr, *toPort = nullptr;
-        if (kind == ConnectionItem::Chain) {
-            fromPort = findPort(from, (int)PortKind::ChainOut);
-            toPort   = findPort(to,   (int)PortKind::ChainIn, slot);
-        } else if (kind == ConnectionItem::AbToOutput) {
-            fromPort = findPort(from, (int)PortKind::AbOut);
-            toPort   = findPort(to,   (int)PortKind::AbIn);
-        } else if (kind == ConnectionItem::ClipToShaderAudio) {
-            fromPort = findPort(from, (int)PortKind::AudioControllerOut);
-            toPort   = findPort(to,   (int)PortKind::ShaderAudioIn);
-        } else if (kind == ConnectionItem::ClipToAudioScript) {
-            fromPort = findPort(from, (int)PortKind::AudioControllerOut);
-            if (!fromPort) fromPort = findPort(from, (int)PortKind::MasterAudioInputOut);
-            toPort   = findPort(to,   (int)PortKind::AudioIn);
-        } else if (kind == ConnectionItem::ControllerToMaster) {
-            fromPort = findPort(from, (int)PortKind::AudioControllerOut);
-            if (!fromPort) fromPort = findPort(from, (int)PortKind::AudioEffectOut);
-            toPort   = findPort(to,   (int)PortKind::MasterAudioIn, slot >= 0 ? slot : 0);
-        } else if (kind == ConnectionItem::InputToMaster) {
-            fromPort = findPort(from, (int)PortKind::MasterAudioInputOut);
-            if (!fromPort) fromPort = findPort(from, (int)PortKind::AudioEffectOut);
-            toPort   = findPort(to,   (int)PortKind::MasterAudioIn, slot >= 0 ? slot : 0);
-        } else if (kind == ConnectionItem::StreamToMixer) {
-            fromPort = findPort(from, (int)PortKind::AudioControllerOut);
-            if (!fromPort) fromPort = findPort(from, (int)PortKind::MasterAudioInputOut);
-            if (!fromPort) fromPort = findPort(from, (int)PortKind::AudioEffectOut);
-            toPort   = findPort(to,   (int)PortKind::AudioMixerIn, slot);
-        } else if (kind == ConnectionItem::AudioEffectChain) {
-            fromPort = findPort(from, (int)PortKind::AudioControllerOut);
-            if (!fromPort) fromPort = findPort(from, (int)PortKind::MasterAudioInputOut);
-            if (!fromPort) fromPort = findPort(from, (int)PortKind::AudioEffectOut);
-            toPort   = findPort(to,   (int)PortKind::AudioEffectIn);
-        } else if (kind == ConnectionItem::MixerToOutput) {
-            fromPort = findPort(from, (int)PortKind::AudioMixerOut);
-            toPort   = findPort(to,   (int)PortKind::MasterAudioIn, slot >= 0 ? slot : 0);
-        } else if (kind == ConnectionItem::ScriptToData) {
-            fromPort = findPort(from, (int)PortKind::ScriptOut);
-            toPort   = findPort(to,   (int)PortKind::DataIn);
-        }
+        if (!lookupConnectionPorts(from, to, kind, slot, &fromPort, &toPort))
+            continue;
         if (fromPort && toPort)
             scene->createConnectionManually(fromPort, toPort, (ConnectionItem::EdgeKind)kind);
     }

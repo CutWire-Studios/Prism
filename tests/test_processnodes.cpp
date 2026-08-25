@@ -222,6 +222,44 @@ private slots:
             QCOMPARE(ProcessEffects::byId(d.id), &d);
         }
         QCOMPARE(ProcessEffects::byId(99), nullptr);
+        QVERIFY(ProcessEffects::byName(QStringLiteral("crop")));
+        QVERIFY(ProcessEffects::byName(QStringLiteral("chroma_key")));
+        QCOMPARE(ProcessEffects::byName(QStringLiteral("nope")), nullptr);
+    }
+
+    void addProcessNodeAndConnect() {
+        SourceDescriptor src;
+        src.kind = SourceDescriptor::Kind::Canvas;
+        src.displayName = QStringLiteral("Clip");
+        ClipNodeModel *input = m_editor->addSourceNode(src, QPixmap());
+        QVERIFY(input);
+        const NodeId inId = input->nodeId();
+        const NodeId cropId = m_editor->addProcessNode(0);
+        QVERIFY(cropId != 0);
+        QVERIFY(m_editor->connectNodes(inId, cropId, 0));
+        QVERIFY(m_editor->connectNodes(cropId, m_editor->outputNodeId(), 0));
+        QVERIFY(m_editor->setProcessParams(cropId, QJsonObject{{QStringLiteral("x"), 0.25}}));
+        const ResolvedStream stream = m_editor->evaluateVideoInput(cropId);
+        QCOMPARE(stream.layers.size(), 1);
+        QCOMPARE(stream.layers.first().sourceEffects.size(), 1);
+        QCOMPARE(stream.layers.first().sourceEffects.first().effectId, 0);
+        QCOMPARE(stream.layers.first().sourceEffects.first().params.value(QStringLiteral("x")).toDouble(), 0.25);
+    }
+
+    void refuseOutputWhenAbWired() {
+        SourceDescriptor src;
+        src.kind = SourceDescriptor::Kind::Canvas;
+        src.displayName = QStringLiteral("Clip");
+        ClipNodeModel *input = m_editor->addSourceNode(src, QPixmap());
+        QVERIFY(input);
+        const NodeId abId = m_editor->addAbSelectNode();
+        QVERIFY(abId != 0);
+        QVERIFY(m_editor->connectNodes(input->nodeId(), abId, 0, 0));
+        QVERIFY(m_editor->connectNodes(abId, m_editor->outputNodeId(), 8));
+
+        const NodeId cropId = m_editor->addProcessNode(0);
+        QVERIFY(m_editor->connectNodes(input->nodeId(), cropId, 0));
+        QVERIFY(!m_editor->connectNodes(cropId, m_editor->outputNodeId(), 0));
     }
 
     void audioEffectRegistryIsConsistent() {

@@ -138,8 +138,8 @@ bool ShaderSource::initGL() {
     m_context->setFormat(fmt);
     if (!m_context->create()) {
         qWarning() << "ShaderSource: failed to create GL context";
-        delete m_surface; m_surface = nullptr;
         delete m_context; m_context = nullptr;
+        delete m_surface; m_surface = nullptr;
         return false;
     }
 

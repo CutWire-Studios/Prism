@@ -12,6 +12,7 @@
 #include "ui/mainwindow/MainWindow.h"
 #include "ui/nodes/ClipNodeEditor.h"
 #include "ui/nodes/ClipNodeModel.h"
+#include "ui/nodes/ProcessEffects.h"
 #include "ui/output/OutputHub.h"
 #include "ui/output/OutputWindow.h"
 #include "ui/session/SessionManager.h"
@@ -21,6 +22,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QtNumeric>
 
 namespace prism::mcp {
 namespace {
@@ -190,8 +192,9 @@ QJsonObject McpDispatcher::inspect(const QJsonObject &args) const
         return err("not_found", QStringLiteral("No mixer window"));
     const bool clips = jsonBool(args.value(QStringLiteral("clips")));
     const bool detail = jsonBool(args.value(QStringLiteral("detail")));
+    const bool graph = jsonBool(args.value(QStringLiteral("graph")));
     const int since = jsonInt(args.value(QStringLiteral("since")), -1);
-    return m_window->mcpInspect(clips, detail, since);
+    return m_window->mcpInspect(clips, detail, since, graph);
 }
 
 QJsonObject McpDispatcher::apply(const QJsonObject &args)
@@ -296,6 +299,24 @@ QJsonObject McpDispatcher::applyOne(const QString &tool, const QJsonObject &args
         return opSaveSession(args);
     if (tool == QLatin1String("load_session"))
         return opLoadSession(args);
+    if (tool == QLatin1String("list_process_effects"))
+        return opListProcessEffects();
+    if (tool == QLatin1String("list_nodes"))
+        return opListNodes();
+    if (tool == QLatin1String("add_process_node"))
+        return opAddProcessNode(args);
+    if (tool == QLatin1String("add_layer_node"))
+        return opAddLayerNode(args);
+    if (tool == QLatin1String("add_ab_select"))
+        return opAddAbSelect(args);
+    if (tool == QLatin1String("connect"))
+        return opConnect(args);
+    if (tool == QLatin1String("disconnect"))
+        return opDisconnect(args);
+    if (tool == QLatin1String("set_process_params"))
+        return opSetProcessParams(args);
+    if (tool == QLatin1String("remove_node"))
+        return opRemoveNode(args);
     return err("unknown_op", tool);
 }
 
@@ -331,6 +352,73 @@ ClipNodeModel *resolveClip(MainWindow *w, const QJsonObject &args, QJsonObject *
         return nullptr;
     }
     return node;
+}
+
+qint64 parseNodeId(const QJsonValue &v)
+{
+    if (v.isDouble())
+        return v.toInteger();
+    if (v.isString()) {
+        bool ok = false;
+        const qint64 n = v.toString().toLongLong(&ok);
+        return ok ? n : 0;
+    }
+    return 0;
+}
+
+int parseConnectionKind(const QJsonValue &v)
+{
+    if (v.isDouble())
+        return v.toInt(-1);
+    const QString s = v.toString().trimmed().toLower();
+    if (s.isEmpty() || s == QLatin1String("auto"))
+        return -1;
+    if (s == QLatin1String("chain") || s == QLatin1String("0"))
+        return 0;
+    if (s == QLatin1String("ab_to_output") || s == QLatin1String("8"))
+        return 8;
+    if (s == QLatin1String("script_to_data") || s == QLatin1String("6"))
+        return 6;
+    if (s == QLatin1String("clip_to_shader_audio") || s == QLatin1String("5"))
+        return 5;
+    if (s == QLatin1String("clip_to_audio_script") || s == QLatin1String("12"))
+        return 12;
+    if (s == QLatin1String("controller_to_master") || s == QLatin1String("3"))
+        return 3;
+    if (s == QLatin1String("input_to_master") || s == QLatin1String("7"))
+        return 7;
+    if (s == QLatin1String("stream_to_mixer") || s == QLatin1String("9"))
+        return 9;
+    if (s == QLatin1String("mixer_to_output") || s == QLatin1String("10"))
+        return 10;
+    if (s == QLatin1String("audio_effect") || s == QLatin1String("11"))
+        return 11;
+    bool ok = false;
+    const int n = s.toInt(&ok);
+    return ok ? n : -2;
+}
+
+const ProcessEffectDescriptor *resolveEffect(const QJsonValue &v)
+{
+    if (v.isDouble())
+        return ProcessEffects::byId(v.toInt());
+    if (v.isString())
+        return ProcessEffects::byName(v.toString());
+    return nullptr;
+}
+
+static QString effectSlugOf(const ProcessEffectDescriptor &d)
+{
+    QString out;
+    for (QChar c : d.name.toLower()) {
+        if (c.isLetterOrNumber())
+            out += c;
+        else if (!out.isEmpty() && out.back() != QLatin1Char('_'))
+            out += QLatin1Char('_');
+    }
+    while (out.endsWith(QLatin1Char('_')))
+        out.chop(1);
+    return out;
 }
 
 QJsonObject McpDispatcher::opListClips() const
@@ -815,6 +903,198 @@ QJsonObject McpDispatcher::opLoadSession(const QJsonObject &args)
         return err("conflict", QStringLiteral("Could not load %1").arg(path));
     m_window->mcpBumpRevision();
     return ok({{QStringLiteral("path"), path}});
+}
+
+QJsonObject McpDispatcher::opListProcessEffects() const
+{
+    QJsonArray effects;
+    for (const ProcessEffectDescriptor &d : ProcessEffects::all()) {
+        if (!d.available)
+            continue;
+        effects.append(QJsonObject{
+            {QStringLiteral("id"), d.id},
+            {QStringLiteral("name"), d.name},
+            {QStringLiteral("slug"), effectSlugOf(d)},
+            {QStringLiteral("params"), d.defaultParams},
+        });
+    }
+    return ok({{QStringLiteral("effects"), effects}});
+}
+
+QJsonObject McpDispatcher::opListNodes() const
+{
+    auto *editor = m_window->clipNodeEditor();
+    if (!editor)
+        return err("not_found", QStringLiteral("No node editor"));
+    QJsonObject snap = editor->graphSnapshot();
+    snap.insert(QStringLiteral("ok"), true);
+    return snap;
+}
+
+QJsonObject McpDispatcher::opAddProcessNode(const QJsonObject &args)
+{
+    auto *editor = m_window->clipNodeEditor();
+    if (!editor)
+        return err("not_found", QStringLiteral("No node editor"));
+    const ProcessEffectDescriptor *desc = resolveEffect(args.value(QStringLiteral("effect")));
+    if (!desc)
+        return err("not_found", QStringLiteral("Unknown effect — call list_process_effects"));
+    const QJsonObject params = args.value(QStringLiteral("params")).toObject();
+    const bool hasX = args.contains(QStringLiteral("x"));
+    const bool hasY = args.contains(QStringLiteral("y"));
+    const double x = hasX ? jsonNumber(args.value(QStringLiteral("x")), 0) : qQNaN();
+    const double y = hasY ? jsonNumber(args.value(QStringLiteral("y")), 0) : qQNaN();
+    const NodeId id = editor->addProcessNode(desc->id, params, x, y);
+    if (!id)
+        return err("conflict", QStringLiteral("Could not add process node"));
+    m_window->mcpBumpRevision();
+    const QJsonObject snap = editor->graphSnapshot();
+    QJsonObject row;
+    for (const QJsonValue &v : snap.value(QStringLiteral("nodes")).toArray()) {
+        const QJsonObject n = v.toObject();
+        if (n.value(QStringLiteral("id")).toString() == QString::number(id)) {
+            row = n;
+            break;
+        }
+    }
+    row.insert(QStringLiteral("ok"), true);
+    row.insert(QStringLiteral("id"), QString::number(id));
+    row.insert(QStringLiteral("effect"), desc->id);
+    row.insert(QStringLiteral("name"), desc->name);
+    return row;
+}
+
+QJsonObject McpDispatcher::opAddLayerNode(const QJsonObject &args)
+{
+    auto *editor = m_window->clipNodeEditor();
+    if (!editor)
+        return err("not_found", QStringLiteral("No node editor"));
+    const double x = args.contains(QStringLiteral("x"))
+                         ? jsonNumber(args.value(QStringLiteral("x")), 0)
+                         : qQNaN();
+    const double y = args.contains(QStringLiteral("y"))
+                         ? jsonNumber(args.value(QStringLiteral("y")), 0)
+                         : qQNaN();
+    const NodeId id = editor->addLayerNode(x, y);
+    if (!id)
+        return err("conflict", QStringLiteral("Could not add layer node"));
+    m_window->mcpBumpRevision();
+    return ok({{QStringLiteral("id"), QString::number(id)},
+               {QStringLiteral("type"), QStringLiteral("layer")}});
+}
+
+QJsonObject McpDispatcher::opAddAbSelect(const QJsonObject &args)
+{
+    auto *editor = m_window->clipNodeEditor();
+    if (!editor)
+        return err("not_found", QStringLiteral("No node editor"));
+    const double x = args.contains(QStringLiteral("x"))
+                         ? jsonNumber(args.value(QStringLiteral("x")), 0)
+                         : qQNaN();
+    const double y = args.contains(QStringLiteral("y"))
+                         ? jsonNumber(args.value(QStringLiteral("y")), 0)
+                         : qQNaN();
+    const NodeId id = editor->addAbSelectNode(x, y);
+    if (!id)
+        return err("conflict", QStringLiteral("Could not add A/B select node"));
+    m_window->mcpBumpRevision();
+    return ok({{QStringLiteral("id"), QString::number(id)},
+               {QStringLiteral("type"), QStringLiteral("ab_select")}});
+}
+
+QJsonObject McpDispatcher::opConnect(const QJsonObject &args)
+{
+    auto *editor = m_window->clipNodeEditor();
+    if (!editor)
+        return err("not_found", QStringLiteral("No node editor"));
+    const NodeId from = static_cast<NodeId>(parseNodeId(args.value(QStringLiteral("from"))));
+    const NodeId to = static_cast<NodeId>(parseNodeId(args.value(QStringLiteral("to"))));
+    if (!from || !to)
+        return err("bad_args", QStringLiteral("from and to are required node ids"));
+    if (!editor->hasGraphNode(from))
+        return err("not_found", QStringLiteral("No node %1").arg(from));
+    if (!editor->hasGraphNode(to))
+        return err("not_found", QStringLiteral("No node %1").arg(to));
+    const int kind = parseConnectionKind(args.value(QStringLiteral("kind")));
+    if (kind == -2)
+        return err("bad_args", QStringLiteral("Unknown connection kind"));
+    const int toPort = jsonInt(args.value(QStringLiteral("to_port")), -1);
+    if (!editor->connectNodes(from, to, kind, toPort))
+        return err("conflict",
+                   QStringLiteral("Could not connect those ports. Output cannot take a video "
+                                  "chain and A/B at the same time — disconnect the other Output "
+                                  "input first, or splice into an existing chain."));
+    m_window->mcpBumpRevision();
+    QString kindName;
+    for (const QJsonValue &v : editor->graphSnapshot().value(QStringLiteral("connections")).toArray()) {
+        const QJsonObject c = v.toObject();
+        if (c.value(QStringLiteral("from")).toString() == QString::number(from)
+            && c.value(QStringLiteral("to")).toString() == QString::number(to)) {
+            kindName = c.value(QStringLiteral("kindName")).toString();
+            break;
+        }
+    }
+    return ok({{QStringLiteral("from"), QString::number(from)},
+               {QStringLiteral("to"), QString::number(to)},
+               {QStringLiteral("kindName"), kindName}});
+}
+
+QJsonObject McpDispatcher::opDisconnect(const QJsonObject &args)
+{
+    auto *editor = m_window->clipNodeEditor();
+    if (!editor)
+        return err("not_found", QStringLiteral("No node editor"));
+    const NodeId from = static_cast<NodeId>(parseNodeId(args.value(QStringLiteral("from"))));
+    const NodeId to = static_cast<NodeId>(parseNodeId(args.value(QStringLiteral("to"))));
+    if (!from || !to)
+        return err("bad_args", QStringLiteral("from and to are required node ids"));
+    const int toPort = jsonInt(args.value(QStringLiteral("to_port")), -1);
+    if (!editor->disconnectNodes(from, to, toPort))
+        return err("not_found", QStringLiteral("No such connection"));
+    m_window->mcpBumpRevision();
+    return ok({{QStringLiteral("from"), QString::number(from)},
+               {QStringLiteral("to"), QString::number(to)}});
+}
+
+QJsonObject McpDispatcher::opSetProcessParams(const QJsonObject &args)
+{
+    auto *editor = m_window->clipNodeEditor();
+    if (!editor)
+        return err("not_found", QStringLiteral("No node editor"));
+    const NodeId id = static_cast<NodeId>(parseNodeId(args.value(QStringLiteral("node"))));
+    if (!id)
+        return err("bad_args", QStringLiteral("node is required"));
+    if (!editor->hasGraphNode(id))
+        return err("not_found", QStringLiteral("No node %1").arg(id));
+    const QJsonObject params = args.value(QStringLiteral("params")).toObject();
+    if (params.isEmpty())
+        return err("bad_args", QStringLiteral("params is required"));
+    if (!editor->setProcessParams(id, params, true))
+        return err("type_mismatch", QStringLiteral("Node is not a process node"));
+    m_window->mcpBumpRevision();
+    return ok({{QStringLiteral("id"), QString::number(id)}, {QStringLiteral("params"), params}});
+}
+
+QJsonObject McpDispatcher::opRemoveNode(const QJsonObject &args)
+{
+    auto *editor = m_window->clipNodeEditor();
+    if (!editor)
+        return err("not_found", QStringLiteral("No node editor"));
+    QJsonValue nodeVal = args.value(QStringLiteral("node"));
+    if (nodeVal.isUndefined() || nodeVal.isNull())
+        nodeVal = args.value(QStringLiteral("clip"));
+    const NodeId id = static_cast<NodeId>(parseNodeId(nodeVal));
+    if (!id)
+        return err("bad_args", QStringLiteral("node is required"));
+    if (!editor->hasGraphNode(id))
+        return err("not_found", QStringLiteral("No node %1").arg(id));
+    if (id == editor->outputNodeId())
+        return err("conflict", QStringLiteral("Output node cannot be removed while the graph has other nodes"));
+    editor->removeNode(id);
+    if (editor->hasGraphNode(id))
+        return err("conflict", QStringLiteral("Could not remove node"));
+    m_window->mcpBumpRevision();
+    return ok({{QStringLiteral("id"), QString::number(id)}});
 }
 
 } // namespace prism::mcp

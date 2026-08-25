@@ -11,6 +11,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QStringList>
 #include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -34,6 +35,7 @@ private slots:
     void applyUnknownOp();
     void addSourceAndInspect();
     void applyBatchStops();
+    void addProcessNodeAndConnect();
 };
 
 static QJsonObject rpc(const QString &method, const QJsonObject &params = {}, int id = 1)
@@ -109,7 +111,7 @@ void TestMcp::catalogListsToolboxes()
     const QJsonObject cat = prism::mcp::catalogPayload();
     QVERIFY(cat.value(QStringLiteral("ok")).toBool());
     const QJsonArray boxes = cat.value(QStringLiteral("toolboxes")).toArray();
-    QCOMPARE(boxes.size(), 6);
+    QCOMPARE(boxes.size(), 7);
     QStringList names;
     for (const QJsonValue &v : boxes)
         names.append(v.toObject().value(QStringLiteral("name")).toString());
@@ -117,6 +119,7 @@ void TestMcp::catalogListsToolboxes()
     QVERIFY(names.contains(QStringLiteral("decks")));
     QVERIFY(names.contains(QStringLiteral("transition")));
     QVERIFY(names.contains(QStringLiteral("session")));
+    QVERIFY(names.contains(QStringLiteral("graph")));
 }
 
 void TestMcp::catalogOpsIncludeWhen()
@@ -338,6 +341,83 @@ void TestMcp::applyBatchStops()
     QCOMPARE(result.value(QStringLiteral("error")).toString(), QStringLiteral("apply_failed"));
     QCOMPARE(result.value(QStringLiteral("stopped")).toInt(), 1);
     QCOMPARE(window.faderValue(), 25);
+}
+
+void TestMcp::addProcessNodeAndConnect()
+{
+    MainWindow window;
+    prism::mcp::McpDispatcher dispatcher(&window);
+
+    const QJsonObject graphBox = prism::mcp::toolboxPayload(QStringLiteral("graph"));
+    QVERIFY(graphBox.value(QStringLiteral("ok")).toBool());
+    QStringList opNames;
+    for (const QJsonValue &v : graphBox.value(QStringLiteral("tools")).toArray())
+        opNames.append(v.toObject().value(QStringLiteral("name")).toString());
+    QVERIFY(opNames.contains(QStringLiteral("add_process_node")));
+    QVERIFY(opNames.contains(QStringLiteral("connect")));
+
+    const QJsonObject effects = dispatcher.applyOne(QStringLiteral("list_process_effects"), {});
+    QVERIFY(effects.value(QStringLiteral("ok")).toBool());
+    QVERIFY(effects.value(QStringLiteral("effects")).toArray().size() >= 4);
+
+    const QJsonObject input = dispatcher.applyOne(
+        QStringLiteral("add_source"),
+        {{QStringLiteral("kind"), QStringLiteral("canvas")},
+         {QStringLiteral("name"), QStringLiteral("MCP Canvas")},
+         {QStringLiteral("w"), 1280},
+         {QStringLiteral("h"), 720}});
+    QVERIFY2(input.value(QStringLiteral("ok")).toBool(),
+             qPrintable(input.value(QStringLiteral("detail")).toString()));
+    const QString inputId = input.value(QStringLiteral("id")).toString();
+    QVERIFY(!inputId.isEmpty());
+
+    const QJsonObject crop = dispatcher.applyOne(
+        QStringLiteral("add_process_node"),
+        {{QStringLiteral("effect"), QStringLiteral("crop")},
+         {QStringLiteral("params"), QJsonObject{{QStringLiteral("x"), 0.1},
+                                                {QStringLiteral("w"), 0.8}}}});
+    QVERIFY2(crop.value(QStringLiteral("ok")).toBool(),
+             qPrintable(crop.value(QStringLiteral("detail")).toString()));
+    const QString cropId = crop.value(QStringLiteral("id")).toString();
+    QVERIFY(!cropId.isEmpty());
+    QCOMPARE(crop.value(QStringLiteral("name")).toString(), QStringLiteral("Crop"));
+
+    const QJsonObject listed = dispatcher.applyOne(QStringLiteral("list_nodes"), {});
+    QVERIFY(listed.value(QStringLiteral("ok")).toBool());
+    const QString outputId = listed.value(QStringLiteral("output")).toString();
+    QVERIFY(!outputId.isEmpty());
+
+    const QJsonObject wireIn = dispatcher.applyOne(
+        QStringLiteral("connect"),
+        {{QStringLiteral("from"), inputId}, {QStringLiteral("to"), cropId}});
+    QVERIFY2(wireIn.value(QStringLiteral("ok")).toBool(),
+             qPrintable(wireIn.value(QStringLiteral("detail")).toString()));
+    QCOMPARE(wireIn.value(QStringLiteral("kindName")).toString(), QStringLiteral("chain"));
+
+    const QJsonObject wireOut = dispatcher.applyOne(
+        QStringLiteral("connect"),
+        {{QStringLiteral("from"), cropId}, {QStringLiteral("to"), outputId}});
+    QVERIFY(wireOut.value(QStringLiteral("ok")).toBool());
+
+    const QJsonObject inspected = dispatcher.inspect({{QStringLiteral("graph"), true}});
+    QVERIFY(inspected.value(QStringLiteral("ok")).toBool());
+    const QJsonObject graph = inspected.value(QStringLiteral("graph")).toObject();
+    QCOMPARE(graph.value(QStringLiteral("connections")).toArray().size(), 2);
+
+    const QJsonObject params = dispatcher.applyOne(
+        QStringLiteral("set_process_params"),
+        {{QStringLiteral("node"), cropId},
+         {QStringLiteral("params"), QJsonObject{{QStringLiteral("y"), 0.2}}}});
+    QVERIFY(params.value(QStringLiteral("ok")).toBool());
+
+    QVERIFY(dispatcher
+                .applyOne(QStringLiteral("disconnect"),
+                          {{QStringLiteral("from"), cropId}, {QStringLiteral("to"), outputId}})
+                .value(QStringLiteral("ok"))
+                .toBool());
+    QVERIFY(dispatcher.applyOne(QStringLiteral("remove_node"), {{QStringLiteral("node"), cropId}})
+                .value(QStringLiteral("ok"))
+                .toBool());
 }
 
 QTEST_MAIN(TestMcp)

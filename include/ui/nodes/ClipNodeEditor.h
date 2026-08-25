@@ -11,6 +11,7 @@
 #include <QPoint>
 #include <QPointF>
 #include <QRectF>
+#include <QtNumeric>
 #include <memory>
 #include "core/sources/SourceDescriptor.h"
 #include "core/scripting/ScriptOutput.h"
@@ -287,6 +288,8 @@ private:
     ResolvedStream evaluateVideoInputGuarded(NodeId producerNode, QSet<NodeId> visited) const;
 
     class PortItem *findPort(NodeId nodeId, int portKindInt, int slotIndex = -1) const;
+    bool lookupConnectionPorts(NodeId from, NodeId to, int kind, int slot,
+                               class PortItem **fromPort, class PortItem **toPort) const;
     void restoreConnections(ClipNodeScene *scene, const QJsonArray &conns);
     QPointF scenePosForView(QGraphicsView *view, const QPoint &globalPos) const;
     void addProcessNodeAt(int effect, const QPoint &globalPos);

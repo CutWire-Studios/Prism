@@ -2145,7 +2145,8 @@ QJsonObject mcpDeckJson(const MainWindow *w, bool deckA)
 
 } // namespace
 
-QJsonObject MainWindow::mcpInspect(bool includeClips, bool detail, int sinceRevision) const
+QJsonObject MainWindow::mcpInspect(bool includeClips, bool detail, int sinceRevision,
+                                   bool includeGraph) const
 {
     using namespace prism::mcp;
     if (sinceRevision >= 0 && sinceRevision == m_mcpEditRevision)
@@ -2228,6 +2229,9 @@ QJsonObject MainWindow::mcpInspect(bool includeClips, bool detail, int sinceRevi
         }
         body.insert(QStringLiteral("clips"), n);
     }
+
+    if (includeGraph && m_clipNodeEditor)
+        body.insert(QStringLiteral("graph"), m_clipNodeEditor->graphSnapshot());
 
     return ok(body);
 }

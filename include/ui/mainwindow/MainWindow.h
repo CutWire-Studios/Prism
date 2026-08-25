@@ -75,7 +75,8 @@ public:
     bool mcpSaveSession(const QString &path);
     bool mcpLoadSession(const QString &path);
     bool mcpStartRecording(const QString &dir, QString *error);
-    QJsonObject mcpInspect(bool includeClips, bool detail, int sinceRevision) const;
+    QJsonObject mcpInspect(bool includeClips, bool detail, int sinceRevision,
+                           bool includeGraph = false) const;
     QJsonObject mcpCaptureFrame(bool full);
     int mcpRevision() const { return m_mcpEditRevision; }
     void mcpBumpRevision();

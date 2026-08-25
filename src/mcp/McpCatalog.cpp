@@ -210,6 +210,70 @@ const QList<Op> &ops()
                         stringProp(QStringLiteral("Absolute .psm path"))}},
                       {QStringLiteral("path")}),
          false, true},
+
+        {"list_process_effects", "graph", "See which process nodes can be added",
+         "List video process effects. Returns {effects:[{id, name, slug, params}]} with default "
+         "params. Pass name, slug, or id to add_process_node.",
+         objectSchema({}), true, false, true},
+        {"list_nodes", "graph", "See the whole node graph",
+         "List every node (input, process, layer, ab_select, output) and connections. "
+         "Same payload as inspect({graph:true}).graph. Returns {output, nodes, connections}.",
+         objectSchema({}), true, false, true},
+        {"add_process_node", "graph", "Add a video effect on the blue chain",
+         "Place a process node (Crop, Flip, Blur, …). effect is required (name, slug, or id from "
+         "list_process_effects). Optional params merge over defaults. Optional x/y are scene "
+         "coordinates. Does not wire it — call connect. Returns {id, effect, name, params}.",
+         objectSchema({{QStringLiteral("effect"),
+                        stringProp(QStringLiteral("Effect name, slug (crop, chroma_key), or numeric id"))},
+                       {QStringLiteral("params"),
+                        objectProp(QStringLiteral("Parameter overlay; merged onto the effect defaults"))},
+                       {QStringLiteral("x"), numberProp(QStringLiteral("Scene X (auto if omitted)"))},
+                       {QStringLiteral("y"), numberProp(QStringLiteral("Scene Y (auto if omitted)"))}},
+                      {QStringLiteral("effect")})},
+        {"add_layer_node", "graph", "Add a Layer compositor",
+         "Place a Layer switching node (multi-input composite). Wire inputs with connect "
+         "(to_port is the layer slot). Returns {id, type:\"layer\"}.",
+         objectSchema({{QStringLiteral("x"), numberProp(QStringLiteral("Scene X"))},
+                       {QStringLiteral("y"), numberProp(QStringLiteral("Scene Y"))}})},
+        {"add_ab_select", "graph", "Add an A/B Select switcher",
+         "Place an A/B Deck Select node. Wire inputs with connect (to_port is the slot), then "
+         "wire its output to the Output node with kind ab_to_output. Returns {id, type:\"ab_select\"}.",
+         objectSchema({{QStringLiteral("x"), numberProp(QStringLiteral("Scene X"))},
+                       {QStringLiteral("y"), numberProp(QStringLiteral("Scene Y"))}})},
+        {"connect", "graph", "Wire two nodes",
+         "Connect from → to. kind defaults to auto (tries video chain first). to_port is the "
+         "destination slot for Layer / A/B Select (0-based). Returns {from, to, kind, kindName}.",
+         objectSchema({{QStringLiteral("from"),
+                        stringProp(QStringLiteral("Source node id"))},
+                       {QStringLiteral("to"),
+                        stringProp(QStringLiteral("Destination node id"))},
+                       {QStringLiteral("kind"),
+                        stringProp(QStringLiteral(
+                            "chain (default), ab_to_output, script_to_data, clip_to_shader_audio, "
+                            "or omit for auto"))},
+                       {QStringLiteral("to_port"),
+                        integerProp(QStringLiteral("Destination input slot (Layer / A/B Select)"))}},
+                      {QStringLiteral("from"), QStringLiteral("to")})},
+        {"disconnect", "graph", "Cut a wire",
+         "Remove the connection from → to. Optional to_port to target one slot.",
+         objectSchema({{QStringLiteral("from"), stringProp(QStringLiteral("Source node id"))},
+                       {QStringLiteral("to"), stringProp(QStringLiteral("Destination node id"))},
+                       {QStringLiteral("to_port"),
+                        integerProp(QStringLiteral("Destination slot if the dest has several"))}},
+                      {QStringLiteral("from"), QStringLiteral("to")})},
+        {"set_process_params", "graph", "Change a process node's parameters",
+         "Merge params onto a process node (e.g. Crop x/y/w/h). Decks rebuild. Fails type_mismatch "
+         "if node is not a process node.",
+         objectSchema({{QStringLiteral("node"), stringProp(QStringLiteral("Process node id"))},
+                       {QStringLiteral("params"),
+                        objectProp(QStringLiteral("Keys to merge, e.g. {\"x\":0.1,\"w\":0.8}"))}},
+                      {QStringLiteral("node"), QStringLiteral("params")})},
+        {"remove_node", "graph", "Delete any graph node",
+         "Remove an input, process, layer, or A/B node. The Output node cannot be deleted while "
+         "other nodes exist.",
+         objectSchema({{QStringLiteral("node"), stringProp(QStringLiteral("Node id"))}},
+                      {QStringLiteral("node")}),
+         false, true},
     };
     return k;
 }
@@ -236,7 +300,8 @@ QJsonArray endpointList()
 QStringList toolboxNames()
 {
     return {QStringLiteral("sources"), QStringLiteral("decks"), QStringLiteral("transition"),
-            QStringLiteral("panic"),   QStringLiteral("output"), QStringLiteral("session")};
+            QStringLiteral("panic"),   QStringLiteral("output"), QStringLiteral("session"),
+            QStringLiteral("graph")};
 }
 
 QString agentGuideText()
@@ -248,7 +313,8 @@ QString agentGuideText()
         "1. Call catalog on POST /mcp (homepage).\n"
         "2. Call toolbox({name}) for JSON schemas of ops in that toolbox.\n"
         "3. Call apply({ops:[{tool, args}, …]}) to run one or many mutations in order.\n"
-        "4. Call inspect({clips:true, detail:true}) for clip ids, decks, fader, and recording.\n"
+        "4. Call inspect({clips:true, detail:true, graph:true}) for clip ids, graph wiring, "
+        "decks, fader, and recording.\n"
         "5. Call capture() for a JPEG still of program output (use to verify a take).\n"
         "\n"
         "Pinned endpoints (/mcp/sources, /mcp/decks, …) list toolbox ops directly. "
@@ -261,6 +327,9 @@ QString agentGuideText()
         "  current deck assignment — pass clip every time.\n"
         "- add_clip / add_source only put a node on the graph. Call select_a or select_b to\n"
         "  put it on a deck, then cut / auto_transition / set_fader to take it to program.\n"
+        "- Process nodes sit on the blue video chain: Input → Process → Output (or Layer / A/B).\n"
+        "  add_process_node does not wire; call connect({from, to}). list_nodes for ids.\n"
+        "- Shader inputs are add_source({kind:\"shader\", code}). Process effects are graph ops.\n"
         "- Every op returns {ok:true, …} or {ok:false, error:<code>, detail:<text>}. Codes:\n"
         "  bad_args, not_found, type_mismatch, unknown_op, unknown_toolbox, wrong_endpoint,\n"
         "  wrong_toolbox, apply_failed, capture_failed, conflict.\n"
@@ -273,7 +342,14 @@ QString agentGuideText()
         "3. capture() to confirm the frame.\n"
         "4. cut or auto_transition to take it to program.\n"
         "\n"
-        "Toolboxes: sources, decks, transition, panic, output, session.\n");
+        "Process chain pattern:\n"
+        "1. add_source({kind:\"shader\"}) or add_clip — read input id.\n"
+        "2. add_process_node({effect:\"crop\"}) — read process id.\n"
+        "3. list_nodes — read output id.\n"
+        "4. connect({from:input, to:process}) then connect({from:process, to:output}).\n"
+        "5. Wiring to Output makes a single-stream program (T-bar disabled).\n"
+        "\n"
+        "Toolboxes: sources, decks, transition, panic, output, session, graph.\n");
 }
 
 QJsonObject catalogPayload()
@@ -289,6 +365,7 @@ QJsonObject catalogPayload()
         {"panic", "Emergency program output: blackout, freeze, stay-tuned slate."},
         {"output", "Record program, NDI, virtual camera."},
         {"session", "Save or load a .psm session file."},
+        {"graph", "Add process/layer/A/B nodes and wire the blue video chain."},
     };
 
     QJsonArray toolboxes;
@@ -320,7 +397,7 @@ QJsonObject catalogPayload()
          QStringLiteral("catalog → toolbox({name}) → apply({ops:[{tool,args}…]})")},
         {QStringLiteral("hint"),
          QStringLiteral("toolbox({name}) then apply({ops:[{tool,args}…]}) for a batch. "
-                        "inspect({clips:true,detail:true}) for clip ids and mixer state. "
+                        "inspect({clips:true,detail:true,graph:true}) for clip ids and wiring. "
                         "capture() for a program still.")},
         {QStringLiteral("limitations"),
          QJsonArray{
@@ -328,8 +405,10 @@ QJsonObject catalogPayload()
              QStringLiteral("apply cannot run catalog, toolbox, inspect, capture, or apply; call those directly on /mcp."),
              QStringLiteral("Clip ops need clip — they never fall back to the current deck assignment."),
              QStringLiteral("add_clip / add_source do not put the clip on a deck; call select_a / select_b."),
+             QStringLiteral("add_process_node / add_layer_node / add_ab_select do not wire; call connect."),
+             QStringLiteral("Wiring a chain into Output is single-stream program (T-bar disabled)."),
+             QStringLiteral("Output cannot take a video chain and A/B at the same time — disconnect the other Output input first."),
              QStringLiteral("There is no MCP undo. Live takes are immediate."),
-             QStringLiteral("Graph wiring (process nodes, layers, A/B select) is not editable over MCP yet."),
              QStringLiteral("Screen and window capture still need an interactive OS picker — they are not MCP-addable."),
          }},
         {QStringLiteral("guide"), agentGuideText()},
@@ -370,11 +449,13 @@ QJsonArray homepageTools()
         QStringLiteral(
             "When: Read mixer state. Returns revision, fader, decks, transition, panic, recording, "
             "NDI, virtual camera, program size. clips=true adds the clip list. detail=true expands "
-            "each clip with kind/path/content. since=<revision> returns {unchanged:true, revision} "
-            "when nothing changed."),
+            "each clip with kind/path/content. graph=true adds nodes and connections. "
+            "since=<revision> returns {unchanged:true, revision} when nothing changed."),
         objectSchema({{QStringLiteral("clips"), boolProp(QStringLiteral("Include the clip list"))},
                       {QStringLiteral("detail"),
                        boolProp(QStringLiteral("Expand clip rows with kind, path, and content fields"))},
+                      {QStringLiteral("graph"),
+                       boolProp(QStringLiteral("Include process/layer/A/B/output nodes and connections"))},
                       {QStringLiteral("since"),
                        integerProp(QStringLiteral("Revision from a prior inspect; returns {unchanged:true} when current"))}}),
         toolAnnotations(true, false, true)));
