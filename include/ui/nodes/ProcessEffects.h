@@ -57,6 +57,8 @@ namespace ProcessEffects {
 
 const QVector<ProcessEffectDescriptor> &all();
 const ProcessEffectDescriptor *byId(int id);
+/// Match numeric id, name, menu label, or slug ("chroma_key"). Case-insensitive.
+const ProcessEffectDescriptor *byName(const QString &name);
 
 /// Applies each decorator effect's wrapSource in order; unknown or compiled-out
 /// effects pass through unchanged.

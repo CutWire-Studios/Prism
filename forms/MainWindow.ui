@@ -943,6 +943,7 @@ Split 4-Corner: split into 4 quadrants sliding outwards
      <string>Run</string>
     </property>
     <addaction name="actionStartRemoteControl"/>
+    <addaction name="actionAgentAccess"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
@@ -1137,6 +1138,14 @@ Split 4-Corner: split into 4 quadrants sliding outwards
    </property>
    <property name="toolTip">
     <string>Start a remote control web server to manage mixing, fader, cut, and auto remotely</string>
+   </property>
+  </action>
+  <action name="actionAgentAccess">
+   <property name="text">
+    <string>Agent Access…</string>
+   </property>
+   <property name="toolTip">
+    <string>Start a localhost MCP server so an AI agent can drive this mixer</string>
    </property>
   </action>
   <action name="actionAboutPrism">

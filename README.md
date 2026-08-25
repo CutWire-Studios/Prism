@@ -75,6 +75,7 @@ See [all releases](https://github.com/CutWire-Studios/Prism/releases) for previo
 - **Program Output Hub**: Mirror windows, optional NDI program output, virtual-camera output, program video recording with markers, FLAC program-audio recording, and freeze-frame capture
 - **OBS Integration**: Optional WebSocket connection for scene switching and per-source OBS scene links
 - **Remote Control**: Built-in server for triggering sources and decks from another device on the network
+- **Agent Access**: Optional localhost MCP server so Cursor, Claude Code, or other agents can drive the mixer (off at every launch; see [docs/MCP.md](docs/MCP.md))
 - **Real-time Playback**: FFmpeg-powered video decoding with low-latency OpenGL compositing
 - **Drag & Drop**: Import media into the asset library or drop files directly onto the node canvas
 - **Dark VJ Theme**: Charcoal UI with teal accents, optimized for low-light live events

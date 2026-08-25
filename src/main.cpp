@@ -1,20 +1,32 @@
+#include "ui/mainwindow/MainWindow.h"
+#include "ui/mainwindow/GetStartedDialog.h"
+#include "ui/common/MaterialSymbols.h"
+#include "ui/mainwindow/PrismSplashScreen.h"
+#include "core/platform/MacPermissions.h"
+#include "mcp/McpStdio.h"
+
 #include <QApplication>
 #include <QByteArray>
 #include <QIcon>
 #include <QTimer>
 #include <QtGlobal>
 #include <QThread>
-#include "ui/mainwindow/MainWindow.h"
-#include "ui/mainwindow/GetStartedDialog.h"
-#include "ui/common/MaterialSymbols.h"
-#include "ui/mainwindow/PrismSplashScreen.h"
-#include "core/platform/MacPermissions.h"
+#include <QCoreApplication>
 
 extern "C" {
 #include <libavutil/log.h>
 }
 
 int main(int argc, char *argv[]) {
+    for (int i = 1; i < argc; ++i) {
+        if (qstrcmp(argv[i], "--mcp-stdio") == 0) {
+            QCoreApplication app(argc, argv);
+            QCoreApplication::setOrganizationName(QStringLiteral("Prism"));
+            QCoreApplication::setApplicationName(QStringLiteral("Prism"));
+            return prism::mcp::runStdioAttach();
+        }
+    }
+
     // Quiet libav's container quirk spam (e.g. "Referenced QT chapter track not
     // found") which is harmless; keep genuine errors visible.
     av_log_set_level(AV_LOG_ERROR);
