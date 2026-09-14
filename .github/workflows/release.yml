@@ -189,6 +189,14 @@ jobs:
           chmod +x linuxdeploy.AppImage linuxdeploy-plugin-qt.AppImage
           export QMAKE="${QT_ROOT_DIR}/bin/qmake"
           export VERSION="${{ needs.verify.outputs.version }}"
+          # Embed AppImage update information so AppImageUpdate / AppImageLauncher /
+          # AM / AppManager can do zsync delta updates (upstream Issue #2).
+          # linuxdeploy-plugin-appimage reads LDAI_UPDATE_INFORMATION, with
+          # UPDATE_INFORMATION/UPD_INFO as older fallback names; set all three so
+          # whichever plugin version linuxdeploy bundles picks one up.
+          export UPDATE_INFORMATION="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|latest|Prism-*-x86_64.AppImage.zsync"
+          export LDAI_UPDATE_INFORMATION="${UPDATE_INFORMATION}"
+          export UPD_INFO="${UPDATE_INFORMATION}"
           # ONNX Runtime is auto-downloaded by CMakeModules/FetchOnnxRuntime.cmake
           # into a version-suffixed dir under build/_deps; only its Windows path
           # gets a post-build copy-next-to-exe step (CMakeLists.txt's `if(WIN32)`
@@ -202,12 +210,23 @@ jobs:
             -e AppDir/usr/bin/Prism
           appimage="$(ls ./*.AppImage | grep -iv linuxdeploy | head -n 1)"
           mv "${appimage}" "dist/Prism-${{ needs.verify.outputs.version }}-x86_64.AppImage"
+          # appimagetool writes <AppImage>.zsync next to the AppImage when update
+          # information is set — rename it to track the final AppImage name so it
+          # matches the gh-releases-zsync pattern above.
+          if [ -f "${appimage}.zsync" ]; then
+            mv "${appimage}.zsync" "dist/Prism-${{ needs.verify.outputs.version }}-x86_64.AppImage.zsync"
+          else
+            echo "::error::Expected ${appimage}.zsync was not generated — update information was not embedded"
+            exit 1
+          fi
 
       - name: Upload AppImage artifact
         uses: actions/upload-artifact@v4
         with:
           name: linux-appimage
-          path: dist/*.AppImage
+          path: |
+            dist/*.AppImage
+            dist/*.AppImage.zsync
 
   windows:
     name: Windows installer
@@ -396,6 +415,7 @@ jobs:
             --title "Prism ${GITHUB_REF_NAME}" \
             --notes-file notes.md \
             dist/linux-appimage/*.AppImage \
+            dist/linux-appimage/*.zsync \
             dist/windows-installer/*.exe \
             dist/arch-package/*.pkg.tar.zst \
             dist/flatpak-bundle/*.flatpak
