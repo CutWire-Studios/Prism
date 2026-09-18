@@ -29,7 +29,8 @@ QImage wrapInner(MediaSource *inner) {
 bool FrameEffectSource::nextFrame() {
     if (!m_inner) return false;
 
-    const bool innerNew = m_inner->nextFrame();
+    const bool innerNew = m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
+                                             : m_inner->nextFrame();
     if (!innerNew && !m_output.isNull()) return false;
     if (!m_inner->isReady()) return false;
 
@@ -296,7 +297,8 @@ const char *kBlurFragment =
 bool GpuBlurSource::nextFrame() {
     if (!m_inner) return false;
 
-    const bool innerNew = m_inner->nextFrame();
+    const bool innerNew = m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
+                                             : m_inner->nextFrame();
     if (!innerNew && m_outTex != 0) return false;
     if (!m_inner->isReady()) return false;
 

@@ -36,8 +36,13 @@ env:
   # QT_VERSION above (check doc.qt.io/qt-6/qtmultimedia-attribution-ffmpeg.html
   # when bumping QT_VERSION) — linking a mismatched FFmpeg build alongside Qt's
   # own private copy crashes at runtime (two FFmpeg ABIs loaded in one process).
-  FFMPEG_BUILD_TAG: "autobuild-2026-07-09-14-21"
-  FFMPEG_BUILD_VERSION: "n7.1.5-1-g7d0e842004"
+  #
+  # CutWire-Studios/FFmpeg-Builds rather than BtbN: BtbN's dated autobuild tags are deleted after a
+  # few weeks, and the n7.1 release on the fork is a stable URL for this soversion. The gpl variant,
+  # not lgpl: lgpl carries no libx264 (the recorder's software H.264 encoder) and no dav1d. Prism
+  # is GPLv3, so linking them is fine. Same pin as Cutwire Drift.
+  FFMPEG_REPO: "CutWire-Studios/FFmpeg-Builds"
+  FFMPEG_TAG: "n7.1"
 
 jobs:
   meta:
@@ -101,7 +106,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p "${GITHUB_WORKSPACE}/.deps/ffmpeg"
-          curl -sL "https://github.com/BtbN/FFmpeg-Builds/releases/download/${FFMPEG_BUILD_TAG}/ffmpeg-${FFMPEG_BUILD_VERSION}-linux64-lgpl-shared-7.1.tar.xz" \
+          curl -fsSL "https://github.com/${FFMPEG_REPO}/releases/download/${FFMPEG_TAG}/ffmpeg-${FFMPEG_TAG}-linux64-gpl-shared.tar.xz" \
             | tar -xJf - --strip-components=1 -C "${GITHUB_WORKSPACE}/.deps/ffmpeg"
 
       - name: Configure
@@ -145,8 +150,18 @@ jobs:
           # block), so on Linux linuxdeploy needs it on LD_LIBRARY_PATH to find
           # and bundle libonnxruntime.so.1 via its ldd-based dependency scan.
           onnxruntime_lib_dir="$(find "${GITHUB_WORKSPACE}/build/_deps/onnxruntime" -maxdepth 2 -type d -name lib | head -n1)"
-          export LD_LIBRARY_PATH="${QT_ROOT_DIR}/lib:${GITHUB_WORKSPACE}/.deps/ffmpeg/lib:${onnxruntime_lib_dir}:${LD_LIBRARY_PATH:-}"
+          #
+          # The pinned FFmpeg must come before Qt's lib dir: QtMultimedia ships its own libavcodec
+          # under the same soname, built without dav1d or x264, and with Qt's dir first
+          # linuxdeploy bundles that copy instead of the one Prism was built against.
+          #
+          # libva is deliberately not bundled. AppRun puts usr/lib on LD_LIBRARY_PATH, so a
+          # bundled libva.so.2 would win every dlopen and cap VA-API at this runner's version,
+          # which refuses newer host drivers. A host with no libva at all is handled in code:
+          # hwaccel::deviceAvailable() dlopens libva itself before letting FFmpeg near VAAPI.
+          export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/.deps/ffmpeg/lib:${QT_ROOT_DIR}/lib:${onnxruntime_lib_dir}:${LD_LIBRARY_PATH:-}"
           ./linuxdeploy.AppImage --appdir AppDir --plugin qt --output appimage \
+            --exclude-library "libva*" \
             -d flatpak/org.cutwire.Prism.desktop \
             -i flatpak/share/icons/hicolor/256x256/apps/org.cutwire.Prism.png \
             -e AppDir/usr/bin/Prism
@@ -216,14 +231,14 @@ jobs:
           key: deps-win-${{ hashFiles('CMakeLists.txt') }}
 
       # Pinned to match the FFmpeg version QtMultimedia's ffmpeg backend bundles
-      # (see the FFMPEG_BUILD_TAG comment at the top of this file) instead of
+      # (see the FFMPEG_TAG comment at the top of this file) instead of
       # vcpkg's floating ffmpeg port, which does not track Qt's bundled version
       # and previously caused two mismatched FFmpeg ABIs to be loaded at once.
       - name: Fetch pinned FFmpeg
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path .deps\ffmpeg | Out-Null
-          Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/$env:FFMPEG_BUILD_TAG/ffmpeg-$env:FFMPEG_BUILD_VERSION-win64-lgpl-shared-7.1.zip" -OutFile ffmpeg.zip
+          Invoke-WebRequest -Uri "https://github.com/$env:FFMPEG_REPO/releases/download/$env:FFMPEG_TAG/ffmpeg-$env:FFMPEG_TAG-win64-gpl-shared.zip" -OutFile ffmpeg.zip
           Expand-Archive -Path ffmpeg.zip -DestinationPath .deps\ffmpeg_extracted -Force
           $extractedRoot = (Get-ChildItem .deps\ffmpeg_extracted)[0].FullName
           Copy-Item -Path "$extractedRoot\*" -Destination .deps\ffmpeg -Recurse -Force

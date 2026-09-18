@@ -29,6 +29,7 @@ public:
         return reinterpret_cast<const uint8_t *>(m_output.constBits());
     }
     bool    nextFrame()         override;
+    bool    presentAt(double s) override { m_presentAt = s; const bool r = nextFrame(); m_presentAt = -1.0; return r; }
     bool    hasAlpha()    const override { return true; }
 
     double  duration()    const override { return m_inner ? m_inner->duration() : 0.0; }
@@ -45,6 +46,7 @@ private:
     void compose(const QImage &frameRgb, const QImage &mask);
 
     std::unique_ptr<MediaSource> m_inner;
+    double m_presentAt = -1.0;
     std::shared_ptr<SelfieSegmenter> m_segmenter;
 
     QImage m_currentFrame;   // latest inner frame (RGB888)

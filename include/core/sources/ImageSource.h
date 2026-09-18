@@ -3,8 +3,8 @@
 #include "core/sources/MediaSource.h"
 #include <QImage>
 
-// MediaSource implementation for static images (PNG/JPG/BMP/WEBP/GIF).
-// Loaded once via Qt — no FFmpeg required.
+// MediaSource implementation for static images (see MediaFormats::imageExtensions).
+// Loaded once via StillImage (Qt first, FFmpeg for HEIC/AVIF).
 // nextFrame() always returns false; the image is uploaded once on load.
 class ImageSource : public MediaSource {
 public:

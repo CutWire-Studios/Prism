@@ -1,4 +1,6 @@
 #include "ui/canvas/VideoWidget.h"
+#include "core/media/GpuDevice.h"
+#include "core/media/HwAccel.h"
 #include "ui/common/GlWidgetSurface.h"
 #include "core/sources/ImageSource.h"
 #include "ui/transitions/Transition.h"
@@ -72,6 +74,13 @@ void VideoWidget::releaseMediaSources() {
 
 void VideoWidget::initializeGL() {
     initializeOpenGLFunctions();
+    // Hardware decode picks its device by the GPU that draws; tell it which one that is before
+    // any clip opens.
+    if (prism::hwaccel::renderVendor().isEmpty()) {
+        if (const char *vendor = reinterpret_cast<const char *>(glGetString(GL_VENDOR)))
+            prism::hwaccel::setRenderVendor(QString::fromUtf8(vendor));
+        prism::gpu::probeRenderDrmNode();
+    }
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glEnable(GL_TEXTURE_2D);
 }
@@ -1120,8 +1129,22 @@ void VideoWidget::advanceChainSources(std::vector<NodeChainSource> &chain,
             }
             continue;
         }
-        if (!chain[i].playing) continue;
-        if (src->nextFrame()) {
+        if (!chain[i].playing) {
+            chain[i].clock.invalidate();
+            continue;
+        }
+        bool advanced = false;
+        if (src->duration() > 0.0) {
+            // Timeline sources play at their native rate, not one frame per tick.
+            if (!chain[i].clock.isValid()) {
+                chain[i].anchor = src->currentTime();
+                chain[i].clock.start();
+            }
+            advanced = src->presentAt(chain[i].anchor + chain[i].clock.elapsed() / 1000.0);
+        } else {
+            advanced = src->nextFrame();
+        }
+        if (advanced) {
             makeCurrent();
             uploadSourceFrameGL(texList[i], src);
             doneCurrent();
@@ -1387,6 +1410,7 @@ bool VideoWidget::advanceDeckPaced(bool deckA) {
     const double speed = deckA ? m_speedA : m_speedB;
     double desired = anchor + clock.elapsed() / 1000.0 * speed;
     const double endLimit = (trimEnd > 0) ? trimEnd : dur;
+    bool reachedEnd = false;
 
     if (endLimit > 0 && desired >= endLimit) {
         if (repeat) {
@@ -1397,28 +1421,18 @@ bool VideoWidget::advanceDeckPaced(bool deckA) {
         } else {
             // Play out to the end, then stop once we've actually reached it.
             desired = endLimit;
+            reachedEnd = true;
         }
     }
 
-    // Decode forward until the source catches up to the wall-clock target,
-    // capping the burst so a hitch can't cause a long decode stall. If we're
-    // still far behind after the cap, re-anchor (drop the backlog) to prevent a
-    // runaway catch-up spiral — sync resumes from the current position.
-    constexpr int kMaxCatchUp = 8;
-    bool decoded = false;
-    int steps = 0;
-    while (source->currentTime() < desired && steps < kMaxCatchUp) {
-        if (!source->nextFrame())
-            break;
-        decoded = true;
-        ++steps;
-    }
-    if (steps >= kMaxCatchUp && source->currentTime() < desired - 0.25) {
-        anchor = source->currentTime();
-        clock.restart();
-    }
+    // Show whichever frame is due at the wall-clock target. Video files decode
+    // ahead on their own thread, so a slow decoder drops frames here rather than
+    // falling behind the clock (and the audio).
+    const bool decoded = source->presentAt(desired);
 
-    if (!repeat && endLimit > 0 && source->currentTime() >= endLimit - 1e-3)
+    // Frame timestamps stop short of a trim point (the last frame shown starts before it), so
+    // the clock reaching the end is what stops the deck.
+    if (!repeat && endLimit > 0 && (reachedEnd || source->currentTime() >= endLimit - 1e-3))
         playing = false;
 
     return decoded;

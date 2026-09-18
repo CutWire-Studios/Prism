@@ -76,7 +76,8 @@ See [all releases](https://github.com/CutWire-Studios/Prism/releases) for previo
 - **OBS Integration**: Optional WebSocket connection for scene switching and per-source OBS scene links
 - **Remote Control**: Built-in server for triggering sources and decks from another device on the network
 - **Agent Access**: Optional localhost MCP server so Cursor, Claude Code, or other agents can drive the mixer (off at every launch; see [docs/MCP.md](docs/MCP.md))
-- **Real-time Playback**: FFmpeg-powered video decoding with low-latency OpenGL compositing
+- **Real-time Playback**: FFmpeg decoding on a background thread with low-latency OpenGL compositing
+- **Hardware Acceleration**: NVDEC, VAAPI and Direct3D 11 decoding with zero-copy GPU import where the driver allows, plus NVENC / Quick Sync / AMF / VAAPI encoding for recordings (Tools → Playback & Hardware)
 - **Drag & Drop**: Import media into the asset library or drop files directly onto the node canvas
 - **Dark VJ Theme**: Charcoal UI with teal accents, optimized for low-light live events
 
@@ -437,8 +438,8 @@ The workflow uploads the artifacts to the run; it does not create a GitHub Relea
 
 | Type | Formats / Notes |
 |------|-----------------|
-| Video | MP4, AVI, MOV, MKV, WebM, FLV, and any FFmpeg-supported container |
-| Images | PNG, JPG/JPEG, BMP (displayed as stills) |
+| Video | MP4, M4V, MOV, 3GP, MKV, WebM, AVI, WMV, FLV, MPEG-PS/TS (MPG, TS, M2TS, MTS, VOB), OGV, MXF, DV, Y4M — any FFmpeg-demuxable file can be dropped in. Phone rotation metadata is honoured |
+| Images | PNG, JPG/JPEG, BMP, GIF, WebP, TIFF, HEIC/HEIF, AVIF (displayed as stills, EXIF orientation applied) |
 | Slideshow | Folders of images with configurable interval and GPU transition effects |
 | Live | Webcam, display capture, window capture |
 | Generator | Custom canvas (solid color, checkerboard, or transparent) |

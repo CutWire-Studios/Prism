@@ -33,6 +33,18 @@ public:
     // Static/live sources that never change return false.
     virtual bool    nextFrame()         = 0;
 
+    // Show the frame due at `seconds` on the source's own timeline, skipping any in between.
+    // Returns true if the frame changed. Sources with a real timeline override this; the default
+    // steps nextFrame() until currentTime() catches up, bounded so a stall cannot spiral.
+    virtual bool presentAt(double seconds) {
+        bool changed = false;
+        for (int steps = 0; steps < 8 && currentTime() < seconds; ++steps) {
+            if (!nextFrame()) break;
+            changed = true;
+        }
+        return changed;
+    }
+
     // Timing — return 0 for live/static sources (no meaningful duration).
     virtual double  duration()    const { return 0.0; }
     virtual double  currentTime() const { return 0.0; }

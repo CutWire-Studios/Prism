@@ -43,6 +43,7 @@ public:
     QSize   frameSize()   const override { return m_canvas; }
     const uint8_t *frameData() const override;
     bool    nextFrame()         override;
+    bool    presentAt(double s) override { m_presentAt = s; const bool r = nextFrame(); m_presentAt = -1.0; return r; }
     bool    hasAlpha()    const override { return true; }
     unsigned int glTexture() const override { return m_outTex; }
 
@@ -62,6 +63,7 @@ private:
 
     std::vector<Layer> m_layers;
     QSize              m_canvas;
+    double             m_presentAt = -1.0;
     mutable EffectPassRunner m_runner;   // readback() in const frameData()
     unsigned int       m_outTex = 0;
     mutable QImage     m_cpu;

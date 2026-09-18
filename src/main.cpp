@@ -4,6 +4,8 @@
 #include "ui/mainwindow/PrismSplashScreen.h"
 #include "core/platform/MacPermissions.h"
 #include "mcp/McpStdio.h"
+#include "core/media/GpuVideoUploader.h"
+#include "core/media/VideoDecoder.h"
 
 #include <QApplication>
 #include <QByteArray>
@@ -53,9 +55,16 @@ int main(int argc, char *argv[]) {
     // can be drawn directly without a GPU→CPU→GPU readback.
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 
+    // Settings are read before QApplication exists: VAAPI zero-copy needs Qt's xcb plugin on
+    // EGL, which has to be chosen before the platform plugin loads.
+    QCoreApplication::setOrganizationName(QStringLiteral("Prism"));
+    QCoreApplication::setApplicationName(QStringLiteral("Prism"));
+    prism::applyZeroCopyXcbEgl();
+
     QApplication app(argc, argv);
     app.setOrganizationName("Prism");
     app.setApplicationName("Prism");
+    VideoDecoder::applyModeSetting(VideoDecoder::modeSetting());
     // Resources must be registered before using :/ icons (Windows has no theme icon).
     Q_INIT_RESOURCE(resources);
     // Wayland compositors resolve the window icon by matching the surface's

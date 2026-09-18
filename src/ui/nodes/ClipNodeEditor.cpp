@@ -60,7 +60,7 @@
 #include <functional>
 #include <cmath>
 #include <QObject>
-#include "core/media/VideoPlayer.h"
+#include "core/media/MediaProbe.h"
 #include "core/media/ThumbnailExtractor.h"
 #include "core/project/ClipManager.h"
 #include <QFile>
@@ -3780,7 +3780,7 @@ ClipNodeModel *ClipNodeEditor::addClipNode(const QString &path, const QPixmap &t
     QGraphicsView *view = viewForPos ? viewForPos : m_view;
 
     const bool isAudioOnly = ClipManager::isAudioPath(path);
-    const bool hasAudio = isAudioOnly || VideoPlayer::fileHasAudio(path);
+    const bool hasAudio = isAudioOnly || hasStream(MediaProbe::probe(path), StreamInfo::Type::Audio);
 
     const NodeId id = m_nextId++;
     auto *model = new ClipNodeModel(this);

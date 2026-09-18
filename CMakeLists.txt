@@ -162,7 +162,13 @@ endif()
 
 
 set(SOURCES
-    src/core/media/VideoPlayer.cpp
+    src/core/media/MediaFormats.cpp
+    src/core/media/MediaProbe.cpp
+    src/core/media/StillImage.cpp
+    src/core/media/HwAccel.cpp
+    src/core/media/GpuDevice.cpp
+    src/core/media/GpuVideoUploader.cpp
+    src/core/media/VideoDecoder.cpp
     src/core/sources/VideoFileSource.cpp
     src/core/media/AudioDecoder.cpp
     src/core/media/AudioEffectChain.cpp
@@ -239,6 +245,7 @@ set(SOURCES
     src/ui/editors/TextEditDialog.cpp
     # Extracted helper / controller classes
     src/ui/common/ThumbHelper.cpp
+    src/ui/common/PreferencesDialog.cpp
     src/ui/common/CodeHighlighter.cpp
     src/ui/common/CameraEnumerator.cpp
     src/ui/common/AudioLoopbackEnumerator.cpp
@@ -277,6 +284,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         src/ui/output/VirtualCameraProgramSink_linux.cpp)
 elseif(WIN32)
     list(APPEND SOURCES
+        src/core/media/D3d11GlInterop.cpp
         src/core/sources/ScreenSource_qt.cpp
         src/ui/output/VirtualCameraProgramSink_win.cpp
         src/core/media/AudioLoopbackCapture_wasapi_win.cpp)
@@ -301,7 +309,14 @@ endif()
 set(HEADERS
     include/core/sources/MediaSource.h
     include/core/sources/SourceDescriptor.h
-    include/core/media/VideoPlayer.h
+    include/core/media/MediaFormats.h
+    include/core/media/MediaProbe.h
+    include/core/media/StillImage.h
+    include/core/media/HwAccel.h
+    include/core/media/GpuDevice.h
+    include/core/media/GpuVideoUploader.h
+    include/core/media/VideoDecoder.h
+    include/ui/common/PreferencesDialog.h
     include/core/sources/VideoFileSource.h
     include/core/media/AudioDecoder.h
     include/core/media/AudioEffectChain.h
@@ -480,6 +495,7 @@ target_link_libraries(prism_core PUBLIC
 )
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(prism_core PUBLIC
+        ${CMAKE_DL_LIBS}
         Qt6::DBus
         ${GSTREAMER_LIBRARIES}
         ${GSTREAMER_APP_LIBRARIES}
@@ -498,7 +514,8 @@ elseif(WIN32)
     set(SOFTCAM_SOURCE_DIR ${softcam_SOURCE_DIR} CACHE INTERNAL "")
     add_subdirectory(third_party/softcam)
 
-    target_link_libraries(prism_core PUBLIC libzip::zip opengl32 mf mfplat mfuuid ole32 softcam)
+    target_link_libraries(prism_core PUBLIC libzip::zip opengl32 mf mfplat mfuuid ole32 softcam
+        d3d11 dxgi d3dcompiler)
 else()
     # macOS: Homebrew libzip lives under a Cellar prefix off the default link
     # path, so pass pkg-config's -L dir alongside the bare -lzip.

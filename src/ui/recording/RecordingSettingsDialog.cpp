@@ -1,7 +1,7 @@
 #include "ui/recording/RecordingSettingsDialog.h"
 #include "ui/nodes/ClipNodeEditor.h"
 #include "ui/recording/ProgramRecorder.h"
-#include "core/media/VideoPlayer.h"
+#include "core/media/MediaProbe.h"
 #include "core/sources/SourceDescriptor.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -209,7 +209,7 @@ void RecordingSettingsDialog::rebuildAudioRows() {
                 continue;
             if (node->sourceDescriptor().kind != SourceDescriptor::Kind::VideoFile)
                 continue;
-            if (!VideoPlayer::fileHasAudio(node->sourceDescriptor().path))
+            if (!hasStream(MediaProbe::probe(node->sourceDescriptor().path), StreamInfo::Type::Audio))
                 continue;
             addRow(node->sourceName(), OutputHub::TrackKind::ClipAudio, node->nodeId());
         }

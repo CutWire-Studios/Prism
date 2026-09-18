@@ -86,7 +86,9 @@ public:
         float cropX = 0.f, cropY = 0.f, cropW = 1.f, cropH = 1.f;
         bool  flipH = false, flipV = false;
         float baseX = 0.f, baseY = 0.f, baseW = 1.f, baseH = 1.f;
-        bool  playing = false;   // whether to call nextFrame() each tick
+        bool  playing = false;   // whether to advance the source each tick
+        QElapsedTimer clock;     // play clock for sources with a timeline
+        double anchor = 0.0;     // source time at clock start
         bool  visible = true;    // Layer-node eye toggle (hidden layers are skipped, still advanced)
         int   canvasWidth = 0, canvasHeight = 0;  // canvas size from Layer node (0 = no canvas)
     };

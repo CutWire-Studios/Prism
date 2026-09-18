@@ -176,6 +176,7 @@ private:
     QLabel          *m_recPathLabel    = nullptr;
     QString          m_baseWindowTitle;
     bool             m_shuttingDown = false;
+    quint64 m_seenHwFallbacks = 0;
     bool             m_outputWindowUserPlaced = false;
 
     // ── Helpers ───────────────────────────────────────────────────────────────

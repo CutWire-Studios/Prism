@@ -6,6 +6,8 @@
 #include "ui/mainwindow/SourcePrompt.h"
 #include "ui/mainwindow/SourceFactory.h"
 #include "core/media/ThumbnailExtractor.h"
+#include "core/media/MediaFormats.h"
+#include "core/media/MediaProbe.h"
 #include "core/sources/VideoFileSource.h"
 #include "core/sources/SlideshowSource.h"
 #include "core/sources/CameraSource.h"
@@ -33,6 +35,8 @@
 #include "core/project/ClipManager.h"
 #include "ui/common/AssetLibrary.h"
 #include "ui/common/ThumbHelper.h"
+#include "ui/common/PreferencesDialog.h"
+#include "core/media/VideoDecoder.h"
 #include <QDialog>
 #include <QFormLayout>
 #include <QDialogButtonBox>
@@ -514,6 +518,14 @@ void MainWindow::setupConnections() {
     connect(markerShortcut, &QShortcut::activated, ui->actionDropMarker, &QAction::trigger);
     connect(ui->actionConnectObs, &QAction::triggered, this, &MainWindow::onConnectObs);
     connect(ui->actionEditHotkeys, &QAction::triggered, this, &MainWindow::onEditHotkeys);
+    {
+        auto *prefs = new QAction(tr("Playback && Hardware…"), this);
+        ui->menuTools->insertAction(ui->actionEditHotkeys, prefs);
+        connect(prefs, &QAction::triggered, this, [this] {
+            PreferencesDialog dlg(this);
+            dlg.exec();
+        });
+    }
     connect(ui->actionLinkClipObsScene, &QAction::triggered, this, &MainWindow::onLinkClipObsScene);
     connect(m_obsIntegration, &ObsIntegration::connectedChanged, this, [this](bool on) {
         m_obsScenesMenu->setEnabled(on);
@@ -659,7 +671,7 @@ void MainWindow::setupConnections() {
 void MainWindow::onLoadFolderClicked() {
     QStringList files = QFileDialog::getOpenFileNames(
         this, tr("Add Files"), "",
-        tr("Media Files (*.mp4 *.avi *.mov *.mkv *.webm *.png *.jpg *.jpeg *.bmp *.webp *.gif *.wav *.mp3 *.flac *.aac *.m4a *.ogg *.opus *.wma *.aiff *.aif)"));
+        tr("Media Files (%1)").arg(MediaFormats::globPattern(true, true, true)));
     if (files.isEmpty()) return;
     m_assetLibrary->addFiles(files);
 }
@@ -673,7 +685,7 @@ void MainWindow::onAddFolderClicked() {
 void MainWindow::onAddFilesClicked() {
     QStringList files = QFileDialog::getOpenFileNames(
         this, tr("Add Media Files"), "",
-        tr("Media Files (*.mp4 *.avi *.mov *.mkv *.webm *.png *.jpg *.jpeg *.bmp *.webp *.gif *.wav *.mp3 *.flac *.aac *.m4a *.ogg *.opus *.wma *.aiff *.aif)"));
+        tr("Media Files (%1)").arg(MediaFormats::globPattern(true, true, true)));
     if (files.isEmpty()) return;
     if (!m_assetLibrary->addFiles(files))
         return;
@@ -726,10 +738,9 @@ void MainWindow::onAddVideoUrlClicked() {
         }
     }
 
-    // Validate the URL using VideoPlayer before adding the node
+    // Validate the URL before adding the node
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    VideoPlayer testPlayer;
-    bool canOpen = testPlayer.open(url);
+    const bool canOpen = hasStream(MediaProbe::probe(url), StreamInfo::Type::Video);
     QApplication::restoreOverrideCursor();
 
     if (!canOpen) {
@@ -1155,6 +1166,15 @@ void MainWindow::onPanicStayTunedClicked(bool checked) {
 void MainWindow::onTimerUpdate() {
     if (m_shuttingDown || !m_outputWindow || !ui)
         return;
+
+    // A clip whose hardware decode failed has already switched itself to software; say so once.
+    if (const quint64 fallbacks = VideoDecoder::hardwareFallbackCount();
+        fallbacks != m_seenHwFallbacks) {
+        m_seenHwFallbacks = fallbacks;
+        statusBar()->showMessage(
+            tr("Hardware decoding failed for a clip, playing it in software: %1")
+                .arg(VideoDecoder::lastHardwareFailure()), 10000);
+    }
 
     auto *out = m_outputWindow->videoWidget();
 

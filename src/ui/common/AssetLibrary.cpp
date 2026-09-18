@@ -2,6 +2,7 @@
 #include "ui/mainwindow/MainWindowUtils.h"
 #include "core/project/ClipManager.h"
 #include "core/media/ThumbnailExtractor.h"
+#include "core/media/MediaFormats.h"
 
 #include <QFileDialog>
 #include <QFileInfo>
@@ -224,7 +225,7 @@ void AssetLibrary::removeSelectedItems() {
 void AssetLibrary::promptAddFiles() {
     const QStringList files = QFileDialog::getOpenFileNames(
         this, tr("Add Files"), QString(),
-        tr("Media Files (*.mp4 *.avi *.mov *.mkv *.webm *.png *.jpg *.jpeg *.bmp *.webp *.gif)"));
+        tr("Media Files (%1)").arg(MediaFormats::globPattern(true, true, false)));
     if (!files.isEmpty())
         addFiles(files);
 }

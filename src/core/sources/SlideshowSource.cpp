@@ -1,4 +1,5 @@
 #include "core/sources/SlideshowSource.h"
+#include "core/media/StillImage.h"
 #include "core/sources/ImageSource.h"
 #include <QDir>
 #include <QFile>
@@ -143,13 +144,12 @@ bool SlideshowSource::loadFiles(const QStringList &filePaths, int intervalMs) {
 }
 
 QImage SlideshowSource::loadSlideImage(const QString &path) const {
-    QImageReader reader(path);
-    // Decode straight to the capped size — JPEG/etc. decoders scale during
+    // Decode bounded to the capped size — JPEG/etc. decoders scale during
     // decode, so we never allocate the full native-resolution image.
-    if (!m_frameSize.isEmpty())
-        reader.setScaledSize(m_frameSize);
-    QImage img = reader.read();
+    QImage img = StillImage::decode(path, m_frameSize.width(), m_frameSize.height());
     if (img.isNull()) return {};
+    if (!m_frameSize.isEmpty() && img.size() != m_frameSize)
+        img = img.scaled(m_frameSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 
     if (img.format() != QImage::Format_RGB888)
         img = img.convertToFormat(QImage::Format_RGB888);

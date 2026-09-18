@@ -1,7 +1,7 @@
 #include "ui/nodes/ClipEditDialog.h"
 #include "ui_ClipEditDialog.h"
 #include "ui/common/MaterialSymbols.h"
-#include "core/media/VideoPlayer.h"
+#include "core/media/MediaProbe.h"
 #include <QPushButton>
 #include <QShowEvent>
 #include <cmath>
@@ -41,9 +41,9 @@ ClipEditDialog::ClipEditDialog(const QString &clipPath, const ClipSettings &sett
     setupSeekForward(ui->btn5sForward, "5s");
     setupSeekForward(ui->btn10sForward, "10s");
 
-    VideoPlayer tmp;
-    if (tmp.open(clipPath))
-        m_duration = tmp.getDuration();
+    const MediaInfo info = MediaProbe::probe(clipPath);
+    if (info.ok)
+        m_duration = info.durationUs / 1e6;
     if (m_duration <= 0.0) m_duration = 1.0;
     if (m_endTime < 0.0 || m_endTime > m_duration) m_endTime = m_duration;
     m_startTime = clampTime(m_startTime);

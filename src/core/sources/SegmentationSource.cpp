@@ -32,7 +32,8 @@ bool SegmentationSource::nextFrame() {
     if (!m_inner)
         return false;
 
-    const bool innerNew = m_inner->nextFrame();
+    const bool innerNew = m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
+                                             : m_inner->nextFrame();
 
     if (innerNew && m_inner->isReady()) {
         const QSize sz = m_inner->frameSize();

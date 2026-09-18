@@ -33,6 +33,7 @@ public:
                                   : reinterpret_cast<const uint8_t *>(m_output.constBits());
     }
     bool    nextFrame()         override;
+    bool    presentAt(double s) override { m_presentAt = s; const bool r = nextFrame(); m_presentAt = -1.0; return r; }
     bool    hasAlpha()    const override { return true; }
 
     double  duration()    const override { return m_inner ? m_inner->duration() : 0.0; }
@@ -50,6 +51,7 @@ protected:
 
     std::unique_ptr<MediaSource> m_inner;
     QImage m_output;
+    double m_presentAt = -1.0;
 };
 
 /// Crops the frame to a normalised [0,1] sub-rectangle, changing the output size.
@@ -182,6 +184,7 @@ public:
     QSize   frameSize()   const override { return m_inner ? m_inner->frameSize() : QSize(); }
     const uint8_t *frameData() const override;
     bool    nextFrame()         override;
+    bool    presentAt(double s) override { m_presentAt = s; const bool r = nextFrame(); m_presentAt = -1.0; return r; }
     bool    hasAlpha()    const override { return true; }
     unsigned int glTexture() const override { return m_outTex; }
 
@@ -195,6 +198,7 @@ public:
 private:
     std::unique_ptr<MediaSource> m_inner;
     int          m_radius = 6;
+    double       m_presentAt = -1.0;
     mutable EffectPassRunner m_runner;   // readback() in const frameData()
     unsigned int m_outTex = 0;
     mutable QImage m_cpu;        // lazy readback cache for frameData()

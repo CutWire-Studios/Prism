@@ -1,9 +1,11 @@
 #include "core/sources/ImageSource.h"
+#include "core/media/MediaFormats.h"
+#include "core/media/StillImage.h"
 #include <QFileInfo>
 
 bool ImageSource::load(const QString &filePath) {
     m_name  = QFileInfo(filePath).fileName();
-    QImage loaded(filePath);
+    QImage loaded = StillImage::decode(filePath);
     if (loaded.isNull()) return false;
 
     m_image = loaded.convertToFormat(QImage::Format_RGBA8888);
@@ -18,7 +20,5 @@ bool ImageSource::setImage(QImage image, const QString &displayName) {
 }
 
 bool ImageSource::isStaticImageFile(const QString &path) {
-    const QString l = path.toLower();
-    return l.endsWith(".png")  || l.endsWith(".jpg")  || l.endsWith(".jpeg") ||
-           l.endsWith(".bmp")  || l.endsWith(".webp") || l.endsWith(".gif");
+    return MediaFormats::isImagePath(path);
 }

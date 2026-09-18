@@ -31,14 +31,7 @@ bool LayerCompositorSource::advanceTop(Layer &l) {
         l.clock.restart();
         desired = 0.0;
     }
-    bool decoded = false;
-    int steps = 0;
-    while (l.source->currentTime() < desired && steps < 8) {
-        if (!l.source->nextFrame()) break;
-        decoded = true;
-        ++steps;
-    }
-    return decoded;
+    return l.source->presentAt(desired);
 }
 
 bool LayerCompositorSource::nextFrame() {
@@ -52,7 +45,11 @@ bool LayerCompositorSource::nextFrame() {
     for (size_t i = 0; i < m_layers.size(); ++i) {
         Layer &l = m_layers[i];
         if (!l.source) continue;
-        const bool n = (i == 0) ? l.source->nextFrame() : advanceTop(l);
+        bool n = false;
+        if (i != 0)
+            n = advanceTop(l);
+        else
+            n = m_presentAt >= 0.0 ? l.source->presentAt(m_presentAt) : l.source->nextFrame();
         if (n) anyNew = true;
         if (l.source->isReady()) anyReady = true;
     }
