@@ -4,6 +4,7 @@
 #include "mcp/McpServer.h"
 #include "mcp/McpSession.h"
 #include "ui/mainwindow/MainWindow.h"
+#include "ui/session/SessionManager.h"
 
 #include <QtTest>
 #include <QAbstractSocket>
@@ -20,6 +21,8 @@ class TestMcp : public QObject {
     Q_OBJECT
 
 private slots:
+    void initTestCase();
+    void init();
     void catalogListsToolboxes();
     void catalogOpsIncludeWhen();
     void toolboxUnknownIsError();
@@ -37,6 +40,19 @@ private slots:
     void applyBatchStops();
     void addProcessNodeAndConnect();
 };
+
+void TestMcp::initTestCase()
+{
+    // Keep MainWindow's session files out of the user's real config dir.
+    QStandardPaths::setTestModeEnabled(true);
+}
+
+void TestMcp::init()
+{
+    // A run that crashed or was killed leaves the session lock behind, and the next MainWindow
+    // would then block forever on the modal crash-recovery prompt.
+    QFile::remove(SessionManager::lockFilePath());
+}
 
 static QJsonObject rpc(const QString &method, const QJsonObject &params = {}, int id = 1)
 {

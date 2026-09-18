@@ -104,7 +104,8 @@ SourceDescriptor AssetPathResolver::relinkDescriptor(const SourceDescriptor &des
 
     switch (desc.kind) {
     case Kind::VideoFile:
-    case Kind::Image: {
+    case Kind::Image:
+    case Kind::AudioFile: {
         const QString resolved = resolvePath(desc.path, opts, false);
         out.path = resolved;
         noteRelink(report, desc.displayName.isEmpty() ? desc.path : desc.displayName,

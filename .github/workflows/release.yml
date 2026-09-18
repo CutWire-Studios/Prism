@@ -16,6 +16,7 @@ env:
   QT_VERSION: "6.10.3"
   QT_MODULES: >-
     qtmultimedia
+    qtimageformats
     qtwebengine
     qtwebsockets
     qtwebchannel
@@ -218,6 +219,12 @@ jobs:
           # which refuses newer host drivers. A host with no libva at all is handled in code:
           # hwaccel::deviceAvailable() dlopens libva itself before letting FFmpeg near VAAPI.
           export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/.deps/ffmpeg/lib:${QT_ROOT_DIR}/lib:${onnxruntime_lib_dir}:${LD_LIBRARY_PATH:-}"
+          # The Wayland platform plugin and waylandcompositor's client EGL integration: without the
+          # latter QtWayland cannot create an OpenGL context at all, and without EGL the VAAPI
+          # zero-copy import (dma-buf into EGLImages) is never available. The plugin splits
+          # EXTRA_QT_MODULES on ';'.
+          export EXTRA_PLATFORM_PLUGINS="libqwayland.so"
+          export EXTRA_QT_MODULES="waylandcompositor"
           ./linuxdeploy.AppImage --appdir AppDir --plugin qt --output appimage \
             --exclude-library "libva*" \
             -d flatpak/org.cutwire.Prism.desktop \

@@ -418,7 +418,8 @@ void ProgramRecorder::stopRecording() {
 }
 
 bool ProgramRecorder::flushEncoder() {
-    if (!m_codecCtx || !m_packet) return true;
+    // Nothing to drain, and h264_vaapi crashes when flushed before its first frame.
+    if (!m_codecCtx || !m_packet || m_frameIndex == 0) return true;
 
     avcodec_send_frame(m_codecCtx, nullptr);
     while (true) {

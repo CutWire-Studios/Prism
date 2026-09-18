@@ -25,6 +25,7 @@ env:
   QT_VERSION: "6.10.3"
   QT_MODULES: >-
     qtmultimedia
+    qtimageformats
     qtwebengine
     qtwebsockets
     qtwebchannel
@@ -129,7 +130,20 @@ jobs:
           # Prism — yet both are still unconditionally install()'d, so `cmake
           # --install` fails looking for .a files that were never produced
           # unless built explicitly here.
-          cmake --build build --target Prism --target juice --target datachannel --parallel
+          # Everything, not just Prism: the unit tests are built here too.
+          cmake --build build --parallel
+
+      # The tests set QT_QPA_PLATFORM=offscreen themselves (tests/CMakeLists.txt), so the
+      # GPU-upload and hardware-decode cases in test_media QSKIP on this runner.
+      #
+      # The pinned FFmpeg goes first on LD_LIBRARY_PATH: install-qt-action puts Qt's lib dir
+      # there, and QtMultimedia ships its own libavcodec under the same soname. The test binaries'
+      # RUNPATH covers only their own NEEDED entries, so libavfilter's libpostproc (GPL-only)
+      # would not be found through it either.
+      - name: Test
+        run: |
+          export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/.deps/ffmpeg/lib:${LD_LIBRARY_PATH:-}"
+          ctest --test-dir build --output-on-failure --timeout 300
 
       - name: Stage install tree
         run: |
@@ -160,6 +174,12 @@ jobs:
           # which refuses newer host drivers. A host with no libva at all is handled in code:
           # hwaccel::deviceAvailable() dlopens libva itself before letting FFmpeg near VAAPI.
           export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/.deps/ffmpeg/lib:${QT_ROOT_DIR}/lib:${onnxruntime_lib_dir}:${LD_LIBRARY_PATH:-}"
+          # The Wayland platform plugin and waylandcompositor's client EGL integration: without the
+          # latter QtWayland cannot create an OpenGL context at all, and without EGL the VAAPI
+          # zero-copy import (dma-buf into EGLImages) is never available. The plugin splits
+          # EXTRA_QT_MODULES on ';'.
+          export EXTRA_PLATFORM_PLUGINS="libqwayland.so"
+          export EXTRA_QT_MODULES="waylandcompositor"
           ./linuxdeploy.AppImage --appdir AppDir --plugin qt --output appimage \
             --exclude-library "libva*" \
             -d flatpak/org.cutwire.Prism.desktop \
@@ -257,7 +277,18 @@ jobs:
 
       - name: Build
         shell: pwsh
-        run: cmake --build build --config Release --target Prism --parallel
+        run: cmake --build build --config Release --parallel
+
+      # The pinned FFmpeg's bin dir goes ahead of Qt's: Qt ships its own avcodec/avformat DLLs
+      # under the same names. QT_FORCE_STDERR_LOGGING keeps QtTest output visible under ctest,
+      # which otherwise routes it to OutputDebugString.
+      - name: Test
+        shell: pwsh
+        env:
+          QT_FORCE_STDERR_LOGGING: 1
+        run: |
+          $env:PATH = "${{ github.workspace }}\.deps\ffmpeg\bin;${{ github.workspace }}\vcpkg\installed\x64-windows\bin;${{ env.QT_ROOT_DIR }}\bin;$env:PATH"
+          ctest --test-dir build -C Release --output-on-failure --timeout 300
 
       - name: Stage runtime files
         shell: pwsh

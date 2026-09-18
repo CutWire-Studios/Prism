@@ -547,6 +547,10 @@ void VideoWidget::cacheDeckPreviewFromFbo(bool deckA) {
 
 void VideoWidget::paintEvent(QPaintEvent *e) {
     QOpenGLWidget::paintEvent(e);
+    // Without a usable GL context (no driver, or a headless platform) the widget never gets its
+    // FBO, and a QPainter on it dereferences that null FBO.
+    if (!isValid() || defaultFramebufferObject() == 0)
+        return;
 
     if (m_panicOverlay == PanicOverlay::StayTuned) {
         QPainter p(this);

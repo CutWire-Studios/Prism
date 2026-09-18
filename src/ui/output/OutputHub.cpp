@@ -85,6 +85,26 @@ void OutputHub::dispatchLoop() {
     }
 }
 
+// Hands a frame still waiting in the mailbox to the sinks. Called with m_sinkMutex held before a
+// video recorder stops, so the last captured frame (or the only one, in a short take) is written
+// rather than dropped with the mailbox.
+void OutputHub::deliverPendingFrames() {
+    QImage program, deckA, deckB;
+    {
+        QMutexLocker lk(&m_mailboxMutex);
+        if (!m_frameDirty)
+            return;
+        program = std::move(m_pendingProgram);
+        deckA   = std::move(m_pendingDeckA);
+        deckB   = std::move(m_pendingDeckB);
+        m_pendingProgram = QImage();
+        m_pendingDeckA   = QImage();
+        m_pendingDeckB   = QImage();
+        m_frameDirty = false;
+    }
+    distributeFrames(program, deckA, deckB);
+}
+
 void OutputHub::distributeFrames(const QImage &programFrame,
                                  const QImage &deckAFrame,
                                  const QImage &deckBFrame) {
@@ -390,6 +410,7 @@ bool OutputHub::startProgramRecording() {
 
 void OutputHub::stopProgramRecording() {
     QMutexLocker locker(&m_sinkMutex);
+    deliverPendingFrames();
     if (!m_programRecorder->isRecording()) return;
     m_programRecorder->stopRecording();
     syncFrameConsumers();
@@ -415,6 +436,7 @@ bool OutputHub::startDeckARecording() {
 
 void OutputHub::stopDeckARecording() {
     QMutexLocker locker(&m_sinkMutex);
+    deliverPendingFrames();
     if (!m_deckARecorder->isRecording()) return;
     m_deckARecorder->stopRecording();
     syncFrameConsumers();
@@ -440,6 +462,7 @@ bool OutputHub::startDeckBRecording() {
 
 void OutputHub::stopDeckBRecording() {
     QMutexLocker locker(&m_sinkMutex);
+    deliverPendingFrames();
     if (!m_deckBRecorder->isRecording()) return;
     m_deckBRecorder->stopRecording();
     syncFrameConsumers();
@@ -472,6 +495,7 @@ bool OutputHub::startSourceRecording(NodeId nodeId, const QString &label) {
 
 void OutputHub::stopSourceRecording(NodeId nodeId) {
     QMutexLocker locker(&m_sinkMutex);
+    deliverPendingFrames();
     const auto it = m_sourceRecorders.find(nodeId);
     if (it == m_sourceRecorders.end() || !it->second->isRecording())
         return;
@@ -623,6 +647,7 @@ void OutputHub::stopClipAudioRecording(NodeId nodeId) {
 
 void OutputHub::stopAllRecording() {
     QMutexLocker locker(&m_sinkMutex);
+    deliverPendingFrames();
     if (m_programRecorder && m_programRecorder->isRecording())
         m_programRecorder->stopRecording();
     if (m_programAudioRecorder && m_programAudioRecorder->isRecording())

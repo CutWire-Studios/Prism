@@ -129,6 +129,7 @@ private:
     // frames to m_dispatchThread, which fans them out to the heavy sinks.
     void dispatchLoop();
     void distributeFrames(const QImage &program, const QImage &deckA, const QImage &deckB);
+    void deliverPendingFrames();
     void ensureProgressTimer();
     void maybeStopProgressTimer();
     void placeOnSecondaryScreen(QWidget *window);

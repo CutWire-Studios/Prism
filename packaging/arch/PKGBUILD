@@ -16,6 +16,12 @@ depends=(
     'gst-plugin-pipewire'
     're2' 'libzip' 'lua54' 'openssl' 'fontconfig' 'freetype2'
 )
+optdepends=(
+    'intel-media-driver: VAAPI hardware decode/encode on Intel GPUs'
+    'libva-mesa-driver: VAAPI hardware decode/encode on AMD GPUs'
+    'nvidia-utils: NVDEC hardware decode and NVENC recording on NVIDIA GPUs'
+    'qt6-imageformats: WebP/TIFF stills without the FFmpeg fallback'
+)
 makedepends=('cmake' 'ninja' 'git' 'pkgconf')
 # Defaults to the tagged release; CI overrides _commit (e.g. to $GITHUB_SHA)
 # to build the exact commit that triggered the workflow instead.
