@@ -47,11 +47,6 @@
        <height>65</height>
       </size>
      </property>
-     <property name="styleSheet">
-      <string notr="true">QPushButton { background-color: #18191b; border: 1px solid #2a2c30; border-radius: 4px; font-size: 9px; color: #555; }
-QPushButton:hover { border-color: #2a8fa0; }
-QPushButton:pressed { background-color: #1a3d45; }</string>
-     </property>
      <property name="text">
       <string>Empty</string>
      </property>
@@ -81,7 +76,7 @@ QPushButton:pressed { background-color: #1a3d45; }</string>
       </size>
      </property>
      <property name="styleSheet">
-      <string notr="true">font-size: 9px; color: #aaa; background: transparent;</string>
+      <string notr="true">font-size: 9px;</string>
      </property>
      <property name="text">
       <string>—</string>
@@ -169,7 +164,10 @@ QPushButton:pressed { background-color: #1a3d45; }</string>
          <string>X%</string>
         </property>
         <property name="styleSheet">
-         <string notr="true">font-size: 8px; color: #888;</string>
+         <string notr="true">font-size: 8px;</string>
+        </property>
+        <property name="role" stdset="0">
+         <string>secondary</string>
         </property>
        </widget>
       </item>
@@ -201,7 +199,10 @@ QPushButton:pressed { background-color: #1a3d45; }</string>
          <string>Y%</string>
         </property>
         <property name="styleSheet">
-         <string notr="true">font-size: 8px; color: #888;</string>
+         <string notr="true">font-size: 8px;</string>
+        </property>
+        <property name="role" stdset="0">
+         <string>secondary</string>
         </property>
        </widget>
       </item>
@@ -233,7 +234,10 @@ QPushButton:pressed { background-color: #1a3d45; }</string>
          <string>W%</string>
         </property>
         <property name="styleSheet">
-         <string notr="true">font-size: 8px; color: #888;</string>
+         <string notr="true">font-size: 8px;</string>
+        </property>
+        <property name="role" stdset="0">
+         <string>secondary</string>
         </property>
        </widget>
       </item>
@@ -271,7 +275,10 @@ QPushButton:pressed { background-color: #1a3d45; }</string>
          <string>H%</string>
         </property>
         <property name="styleSheet">
-         <string notr="true">font-size: 8px; color: #888;</string>
+         <string notr="true">font-size: 8px;</string>
+        </property>
+        <property name="role" stdset="0">
+         <string>secondary</string>
         </property>
        </widget>
       </item>
@@ -393,9 +400,7 @@ QPushButton:pressed { background-color: #1a3d45; }</string>
          </size>
         </property>
         <property name="styleSheet">
-         <string notr="true">QPushButton { font-size: 9px; min-height: 0; height: 20px; padding: 0; background-color: #2d1d3d; color: #bb88ff; border: 1px solid #5533aa; border-radius: 3px; }
-QPushButton:hover { background-color: #3d2a55; }
-QPushButton:checked { background-color: #5533aa; color: #ffffff; font-weight: bold; }</string>
+         <string notr="true">font-size: 9px; min-height: 0; height: 20px; padding: 0;</string>
         </property>
         <property name="text">
          <string>▲</string>
@@ -423,7 +428,7 @@ QPushButton:checked { background-color: #5533aa; color: #ffffff; font-weight: bo
          </size>
         </property>
         <property name="styleSheet">
-         <string notr="true">QPushButton { font-size: 10px; min-height: 0; height: 20px; padding: 0; color: #888; background: transparent; border: none; } QPushButton:hover { color: #e05555; }</string>
+         <string notr="true">font-size: 10px; min-height: 0; height: 20px; padding: 0; background: transparent; border: none;</string>
         </property>
         <property name="text">
          <string/>

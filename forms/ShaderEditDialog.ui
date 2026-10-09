@@ -109,9 +109,6 @@
          <property name="lineWrapMode">
           <enum>QPlainTextEdit::NoWrap</enum>
          </property>
-         <property name="styleSheet">
-          <string notr="true">QPlainTextEdit { background:#1a1b1d; color:#d4d4d4; border:1px solid #333; border-radius:4px; }</string>
-         </property>
         </widget>
        </item>
       </layout>
@@ -149,9 +146,7 @@
           <height>180</height>
          </size>
         </property>
-        <property name="styleSheet">
-         <string notr="true">background:#000; border:1px solid #444; border-radius:4px;</string>
-        </property>
+        <property name="role" stdset="0"><string>panel</string></property>
         <property name="text">
          <string>No preview</string>
         </property>
@@ -196,9 +191,8 @@
           <property name="wordWrap">
            <bool>true</bool>
           </property>
-          <property name="styleSheet">
-           <string notr="true">color:#ff6060; font-size:11px;</string>
-          </property>
+          <property name="styleSheet"><string notr="true">font-size:11px;</string></property>
+          <property name="role" stdset="0"><string>danger</string></property>
          </widget>
         </item>
         <item>

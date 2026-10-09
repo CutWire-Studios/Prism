@@ -169,7 +169,10 @@
           <item>
            <widget class="QLabel" name="aSelectedLabel">
             <property name="styleSheet">
-             <string notr="true">font-size: 9px; color: #2a8fa0;</string>
+             <string notr="true">font-size: 9px;</string>
+            </property>
+            <property name="role" stdset="0">
+             <string>secondary</string>
             </property>
             <property name="text">
              <string>(None selected)</string>
@@ -200,8 +203,8 @@
                <verstretch>0</verstretch>
               </sizepolicy>
              </property>
-             <property name="styleSheet">
-              <string notr="true">background-color: #18191b; border: 1px solid #2a2c30; border-radius: 4px;</string>
+             <property name="role" stdset="0">
+              <string>panel</string>
              </property>
              <property name="text">
               <string>Empty</string>
@@ -246,7 +249,10 @@
               <item>
                <widget class="QLabel" name="aTimeLabel">
                 <property name="styleSheet">
-                 <string notr="true">font-size: 9px; color: #888; font-family: monospace;</string>
+                 <string notr="true">font-size: 9px; font-family: monospace;</string>
+                </property>
+                <property name="role" stdset="0">
+                 <string>secondary</string>
                 </property>
                 <property name="text">
                  <string>0:00 / 0:00</string>
@@ -567,9 +573,6 @@ Split 4-Corner: split into 4 quadrants sliding outwards
                <property name="text">
                 <string>AUTO</string>
                </property>
-               <property name="styleSheet">
-                <string notr="true">QPushButton { font-size: 10px; font-weight: bold; background-color: #1E1E1E; color: #00FFFF; border: 1px solid #00BFFF; border-radius: 3px; padding: 4px; } QPushButton:hover { background-color: #00BFFF; color: #0F0F0F; border: 1px solid #00FFFF; } QPushButton:pressed { background-color: #FF4500; border: 1px solid #FFD700; color: #0F0F0F; }</string>
-               </property>
               </widget>
              </item>
              <item>
@@ -580,8 +583,8 @@ Split 4-Corner: split into 4 quadrants sliding outwards
                <property name="text">
                 <string>CUT</string>
                </property>
-               <property name="styleSheet">
-                <string notr="true">QPushButton { font-size: 10px; font-weight: bold; background-color: #1E1E1E; color: #FF4500; border: 1px solid #FF4500; border-radius: 3px; padding: 4px; } QPushButton:hover { background-color: #FF4500; color: #0F0F0F; border: 1px solid #FFD700; } QPushButton:pressed { background-color: #00BFFF; border: 1px solid #00FFFF; color: #0F0F0F; }</string>
+               <property name="primary" stdset="0">
+                <bool>true</bool>
                </property>
               </widget>
              </item>
@@ -718,7 +721,10 @@ Split 4-Corner: split into 4 quadrants sliding outwards
           <item>
            <widget class="QLabel" name="bSelectedLabel">
             <property name="styleSheet">
-             <string notr="true">font-size: 9px; color: #2a8fa0;</string>
+             <string notr="true">font-size: 9px;</string>
+            </property>
+            <property name="role" stdset="0">
+             <string>secondary</string>
             </property>
             <property name="text">
              <string>(None selected)</string>
@@ -749,8 +755,8 @@ Split 4-Corner: split into 4 quadrants sliding outwards
                <verstretch>0</verstretch>
               </sizepolicy>
              </property>
-             <property name="styleSheet">
-              <string notr="true">background-color: #18191b; border: 1px solid #2a2c30; border-radius: 4px;</string>
+             <property name="role" stdset="0">
+              <string>panel</string>
              </property>
              <property name="text">
               <string>Empty</string>
@@ -795,7 +801,10 @@ Split 4-Corner: split into 4 quadrants sliding outwards
               <item>
                <widget class="QLabel" name="bTimeLabel">
                 <property name="styleSheet">
-                 <string notr="true">font-size: 9px; color: #888; font-family: monospace;</string>
+                 <string notr="true">font-size: 9px; font-family: monospace;</string>
+                </property>
+                <property name="role" stdset="0">
+                 <string>secondary</string>
                 </property>
                 <property name="text">
                  <string>0:00 / 0:00</string>
@@ -923,6 +932,20 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <addaction name="actionShowPreview"/>
     <addaction name="actionStayOnTop"/>
    </widget>
+   <widget class="QMenu" name="menuView">
+    <property name="title">
+     <string>View</string>
+    </property>
+    <widget class="QMenu" name="menuAppearance">
+     <property name="title">
+      <string>Appearance</string>
+     </property>
+     <addaction name="actionAppearanceSystem"/>
+     <addaction name="actionAppearanceLight"/>
+     <addaction name="actionAppearanceDark"/>
+    </widget>
+    <addaction name="menuAppearance"/>
+   </widget>
    <widget class="QMenu" name="menuTools">
     <property name="title">
      <string>Tools</string>
@@ -957,6 +980,7 @@ Split 4-Corner: split into 4 quadrants sliding outwards
    </widget>
    <addaction name="menuMedia"/>
    <addaction name="menuOutput"/>
+   <addaction name="menuView"/>
    <addaction name="menuTools"/>
    <addaction name="menuRun"/>
    <addaction name="menuHelp"/>
@@ -1127,6 +1151,30 @@ Split 4-Corner: split into 4 quadrants sliding outwards
    </property>
    <property name="toolTip">
     <string>Keep the output window above all other windows</string>
+   </property>
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+  </action>
+  <action name="actionAppearanceSystem">
+   <property name="text">
+    <string>System</string>
+   </property>
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+  </action>
+  <action name="actionAppearanceLight">
+   <property name="text">
+    <string>Light</string>
+   </property>
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+  </action>
+  <action name="actionAppearanceDark">
+   <property name="text">
+    <string>Dark</string>
    </property>
    <property name="checkable">
     <bool>true</bool>

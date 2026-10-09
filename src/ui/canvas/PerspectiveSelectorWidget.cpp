@@ -1,5 +1,6 @@
 #include "ui/canvas/PerspectiveSelectorWidget.h"
 
+#include "ui/common/Theme.h"
 #include <QMouseEvent>
 #include <QPainter>
 #include <QWheelEvent>
@@ -16,6 +17,7 @@ PerspectiveSelectorWidget::PerspectiveSelectorWidget(QWidget *parent) : QWidget(
     setMinimumSize(320, 180);
     setMouseTracking(true);
     resetCorners();
+    connect(&Theme::instance(), &Theme::changed, this, qOverload<>(&QWidget::update));
 }
 
 void PerspectiveSelectorWidget::setFrame(const QImage &frame) {
@@ -96,12 +98,13 @@ void PerspectiveSelectorWidget::wheelEvent(QWheelEvent *e) {
 
 void PerspectiveSelectorWidget::paintEvent(QPaintEvent *) {
     QPainter p(this);
-    p.fillRect(rect(), QColor(24, 24, 28));
+    const auto &t = Theme::instance().tokens();
+    p.fillRect(rect(), t.bgBase);
 
     const QRectF fr = frameRect();
 
     // Reference outline marking the original, undistorted video bounds.
-    p.setPen(QPen(QColor(90, 94, 102), 1, Qt::DashLine));
+    p.setPen(QPen(t.textDisabled, 1, Qt::DashLine));
     p.setBrush(Qt::NoBrush);
     p.drawRect(fr);
 
@@ -124,16 +127,18 @@ void PerspectiveSelectorWidget::paintEvent(QPaintEvent *) {
             p.restore();
         }
     } else {
-        p.setPen(QColor(90, 90, 96));
+        p.setPen(t.textDisabled);
         p.drawText(fr, Qt::AlignCenter, "No preview");
     }
 
+    QColor fill = t.accent;
+    fill.setAlpha(40);
     p.setRenderHint(QPainter::Antialiasing, true);
-    p.setPen(QPen(QColor(100, 180, 255), 2));
-    p.setBrush(QColor(100, 180, 255, 40));
+    p.setPen(QPen(t.accent, 2));
+    p.setBrush(fill);
     p.drawPolygon(poly);
 
-    p.setBrush(QColor(100, 180, 255));
+    p.setBrush(t.accent);
     for (const QPointF &pt : poly)
         p.drawEllipse(pt, kHandleR, kHandleR);
 }

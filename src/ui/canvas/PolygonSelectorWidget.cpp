@@ -1,5 +1,6 @@
 #include "ui/canvas/PolygonSelectorWidget.h"
 
+#include "ui/common/Theme.h"
 #include <QMouseEvent>
 #include <QPainter>
 #include <algorithm>
@@ -11,6 +12,7 @@ constexpr qreal kHandleR = 6.0;
 PolygonSelectorWidget::PolygonSelectorWidget(QWidget *parent) : QWidget(parent) {
     setMinimumSize(320, 180);
     setMouseTracking(true);
+    connect(&Theme::instance(), &Theme::changed, this, qOverload<>(&QWidget::update));
 }
 
 void PolygonSelectorWidget::setFrame(const QImage &frame) {
@@ -85,13 +87,14 @@ void PolygonSelectorWidget::mouseReleaseEvent(QMouseEvent *) {
 
 void PolygonSelectorWidget::paintEvent(QPaintEvent *) {
     QPainter p(this);
-    p.fillRect(rect(), QColor(24, 24, 28));
+    const auto &t = Theme::instance().tokens();
+    p.fillRect(rect(), t.bgBase);
 
     const QRectF fr = frameRect();
     if (!m_frame.isNull())
         p.drawImage(fr, m_frame);
     else {
-        p.setPen(QColor(90, 90, 96));
+        p.setPen(t.textDisabled);
         p.drawText(fr, Qt::AlignCenter, "No preview");
     }
 
@@ -101,20 +104,22 @@ void PolygonSelectorWidget::paintEvent(QPaintEvent *) {
     for (const QPointF &pt : m_points)
         poly << normToWidget(pt);
 
+    QColor fill = t.accent;
+    fill.setAlpha(40);
     if (poly.size() >= 2) {
-        p.setPen(QPen(QColor(100, 180, 255), 2));
-        p.setBrush(poly.size() >= 3 ? QColor(100, 180, 255, 40) : Qt::NoBrush);
+        p.setPen(QPen(t.accent, 2));
+        p.setBrush(poly.size() >= 3 ? fill : Qt::NoBrush);
         if (poly.size() >= 3) p.drawPolygon(poly);
         else                  p.drawPolyline(poly);
     }
 
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor(100, 180, 255));
+    p.setBrush(t.accent);
     for (const QPointF &pt : poly)
         p.drawEllipse(pt, kHandleR, kHandleR);
 
     if (m_points.isEmpty()) {
-        p.setPen(QColor(200, 200, 210));
+        p.setPen(t.textSecondary);
         p.drawText(fr.adjusted(6, 6, -6, -6), Qt::AlignTop | Qt::AlignHCenter,
                    "Click to add points · right-click a point to remove");
     }

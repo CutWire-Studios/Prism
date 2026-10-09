@@ -17,7 +17,7 @@ set(CMAKE_AUTOUIC ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 
 # Qt
-set(_prism_qt_components Core Widgets OpenGL OpenGLWidgets Gui Multimedia WebEngineWidgets WebChannel Network)
+set(_prism_qt_components Core Widgets Svg OpenGL OpenGLWidgets Gui Multimedia WebEngineWidgets WebChannel Network)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND _prism_qt_components DBus)
 endif()
@@ -250,7 +250,8 @@ set(SOURCES
     src/ui/common/CameraEnumerator.cpp
     src/ui/common/AudioLoopbackEnumerator.cpp
     src/ui/common/CapturePicker.cpp
-    src/ui/common/MaterialSymbols.cpp
+    src/ui/common/Icons.cpp
+    src/ui/common/Theme.cpp
     src/ui/hotkeys/HotkeyManager.cpp
     src/ui/hotkeys/HotkeyEditorDialog.cpp
     src/ui/session/SessionManager.cpp
@@ -401,7 +402,8 @@ set(HEADERS
     include/ui/common/CameraEnumerator.h
     include/ui/common/AudioLoopbackEnumerator.h
     include/ui/common/CapturePicker.h
-    include/ui/common/MaterialSymbols.h
+    include/ui/common/Icons.h
+    include/ui/common/Theme.h
     include/ui/hotkeys/HotkeyManager.h
     include/ui/hotkeys/HotkeyEditorDialog.h
     include/ui/session/SessionManager.h
@@ -482,6 +484,7 @@ endif()
 target_link_libraries(prism_core PUBLIC
     Qt6::Core
     Qt6::Widgets
+    Qt6::Svg
     Qt6::OpenGL
     Qt6::OpenGLWidgets
     Qt6::Gui

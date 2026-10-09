@@ -1,7 +1,8 @@
 #include "ui/nodes/ClipNodeEditor.h"
 #include "ui/nodes/ProcessEffects.h"
 #include "ui/nodes/AudioEffects.h"
-#include "ui/common/MaterialSymbols.h"
+#include "ui/common/Icons.h"
+#include "ui/common/Theme.h"
 #include "core/project/AssetPathResolver.h"
 #include "core/scripting/ScriptRuntime.h"
 #include "core/media/AudioAnalyzer.h"
@@ -94,7 +95,61 @@ static constexpr qreal SMALL_NODE_W = 100.0;
 static constexpr qreal SMALL_NODE_H = 110.0;
 static constexpr qreal AUDIO_STRIP_H = 54.0;
 
-static const QColor kSelectionAccent(0x4a, 0x9e, 0xff);
+static const Theme::Tokens &tk() { return Theme::instance().tokens(); }
+static QColor selectionAccent() { return tk().accent; }
+
+static QColor desaturated(const QColor &c, qreal keep) {
+    float h, sat, v, a;
+    c.getHsvF(&h, &sat, &v, &a);
+    return QColor::fromHsvF(h < 0 ? 0.0 : h, sat * keep, v, a);
+}
+
+static QFont uiFont(int px, bool bold = false, bool tnum = false) {
+    QFont f(QStringLiteral("Inter"));
+    f.setPixelSize(px);
+    f.setBold(bold);
+    if (tnum) f.setFeature(QFont::Tag("tnum"), 1);
+    return f;
+}
+
+static QString cssColor(const QColor &c) {
+    return QStringLiteral("rgba(%1,%2,%3,%4)").arg(c.red()).arg(c.green()).arg(c.blue()).arg(c.alpha());
+}
+
+static void paintGlassNode(QPainter *p, const QRectF &r, qreal radius, qreal headerH,
+                           const QColor &hue, qreal dotY) {
+    const Theme::Tokens &t = tk();
+    const QRectF body = r.adjusted(0.5, 0.5, -0.5, -0.5);
+    p->setPen(Qt::NoPen);
+    p->setBrush(t.glassPanel);
+    p->drawRoundedRect(body, radius, radius);
+    if (headerH > 0) {
+        QPainterPath clip;
+        clip.addRoundedRect(body, radius, radius);
+        p->save();
+        p->setClipPath(clip);
+        p->fillRect(QRectF(r.left(), r.top(), r.width(), headerH), t.glassControl);
+        p->restore();
+    }
+    p->setPen(QPen(t.stroke, 1));
+    p->setBrush(Qt::NoBrush);
+    p->drawRoundedRect(body, radius, radius);
+    p->setPen(QPen(t.strokeTop, 1));
+    p->drawLine(QPointF(r.left() + radius, r.top() + 0.5), QPointF(r.right() - radius, r.top() + 0.5));
+    p->setPen(Qt::NoPen);
+    p->setBrush(desaturated(hue, 0.65));
+    p->drawEllipse(QPointF(r.left() + 11, r.top() + dotY), 3, 3);
+}
+
+static void paintGlassButton(QPainter *p, const QRectF &r, const QString &text) {
+    const Theme::Tokens &t = tk();
+    p->setPen(QPen(t.stroke, 1));
+    p->setBrush(t.glassControl);
+    p->drawRoundedRect(r, 5, 5);
+    p->setPen(t.text);
+    p->setFont(uiFont(9));
+    p->drawText(r, Qt::AlignCenter, text);
+}
 
 class PortItem;
 class NodeItemBase;
@@ -152,7 +207,7 @@ static bool isAudioMixerInKind(PortKind kind) {
     return kind == PortKind::AudioMixerIn;
 }
 
-QColor portKindColor(PortKind kind) {
+static QColor portKindHue(PortKind kind) {
     switch (kind) {
     case PortKind::ChainIn:            return QColor(0x50, 0xa8, 0xd8);
     case PortKind::ChainOut:           return QColor(0x50, 0xa8, 0xd8);
@@ -172,6 +227,10 @@ QColor portKindColor(PortKind kind) {
     case PortKind::DataIn:             return QColor(0x70, 0xc0, 0xa8);
     }
     return QColor(128, 128, 128);
+}
+
+QColor portKindColor(PortKind kind) {
+    return desaturated(portKindHue(kind), 0.8);
 }
 
 bool portsCompatible(PortKind a, PortKind b) {
@@ -278,6 +337,7 @@ public:
         else if (kind == ScriptToData) color = QColor(0x70, 0xc8, 0xa0);
         else if (kind == InputToMaster || kind == ControllerToMaster) color = kMixedAudioPortColor;
         else color = QColor(0xf0, 0xc0, 0x50);
+        color = desaturated(color, 0.8);
         m_basePen = QPen(color, 2.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
         setPen(m_basePen);
         updatePath();
@@ -305,14 +365,16 @@ public:
 
     void paint(QPainter *p, const QStyleOptionGraphicsItem *opt, QWidget *w) override {
         if (m_highlighted) {
-            QPen glow(QColor(255, 255, 255, 170), 7.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+            QColor glowColor = tk().text;
+            glowColor.setAlpha(90);
+            QPen glow(glowColor, 7.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
             p->setPen(glow);
             p->drawPath(path());
         }
         if (isSelected()) {
             QPen pen = m_basePen;
             pen.setWidthF(4.0);
-            pen.setColor(kSelectionAccent);
+            pen.setColor(selectionAccent());
             p->setPen(pen);
             p->drawPath(path());
         }
@@ -437,36 +499,22 @@ public:
     void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
         p->setRenderHint(QPainter::Antialiasing);
         const QRectF bounds(0, 0, NODE_W, nodeHeight());
-        p->setPen(QPen(QColor(55, 56, 62), 1));
-        p->setBrush(QColor(30, 31, 34));
-        p->drawRoundedRect(bounds, 6, 6);
+        paintGlassNode(p, bounds, 10, PROXY_Y, QColor(120, 170, 210), 2 + HEADER_H / 2);
 
-        QPainterPath hdr;
-        hdr.moveTo(6, 0);
-        hdr.arcTo(QRectF(0, 0, 12, 12), 90, 90);
-        hdr.lineTo(0, PROXY_Y);
-        hdr.lineTo(NODE_W, PROXY_Y);
-        hdr.lineTo(NODE_W, 6);
-        hdr.arcTo(QRectF(NODE_W - 12, 0, 12, 12), 0, 90);
-        hdr.closeSubpath();
-        p->setPen(Qt::NoPen);
-        p->setBrush(QColor(42, 44, 52));
-        p->drawPath(hdr);
-
-        p->setPen(QColor(120, 170, 210));
-        p->setFont(QFont("Monospace", 7));
+        p->setPen(tk().text);
+        p->setFont(uiFont(9));
         p->drawText(QRectF(4, 2, NODE_W - 8, HEADER_H),
                     Qt::AlignCenter, m_audioOnly ? QStringLiteral("AUDIO") : QStringLiteral("INPUT"));
 
         if (m_hasAudio) {
             const qreal stripTop = PROXY_Y + bodyHeight();
             const QRectF stripRect(2, stripTop, NODE_W - 4, AUDIO_STRIP_H - 2);
-            p->setPen(QPen(QColor(62, 55, 45), 1));
-            p->setBrush(QColor(34, 28, 22));
-            p->drawRoundedRect(stripRect, 3, 3);
+            p->setPen(QPen(tk().stroke, 1));
+            p->setBrush(tk().glassControl);
+            p->drawRoundedRect(stripRect, 6, 6);
 
-            p->setPen(QColor(230, 140, 60));
-            p->setFont(QFont("Monospace", 7));
+            p->setPen(desaturated(QColor(230, 140, 60), 0.65));
+            p->setFont(uiFont(9, false, true));
             QString modeStr;
             switch (m_playbackMode) {
             case AudioPlaybackMode::Always:     modeStr = "Always"; break;
@@ -479,17 +527,13 @@ public:
                         Qt::AlignCenter, label);
 
             const QRectF buttonRect = getAudioEditButtonRect();
-            p->setPen(QPen(QColor(230, 140, 60), 1));
-            p->setBrush(QColor(90, 45, 10));
-            p->drawRoundedRect(buttonRect, 3, 3);
-            p->setPen(QColor(255, 185, 120));
-            p->drawText(buttonRect, Qt::AlignCenter, "Edit Audio");
+            paintGlassButton(p, buttonRect, QStringLiteral("Edit Audio"));
         }
 
         if (isSelected()) {
-            p->setPen(QPen(kSelectionAccent, 2));
+            p->setPen(QPen(selectionAccent(), 2));
             p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(bounds.adjusted(1, 1, -1, -1), 6, 6);
+            p->drawRoundedRect(bounds.adjusted(1, 1, -1, -1), 10, 10);
         }
     }
 
@@ -578,30 +622,23 @@ public:
 
     void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
         p->setRenderHint(QPainter::Antialiasing);
-        p->setPen(QPen(QColor(55, 56, 62), 1));
-        p->setBrush(QColor(28, 30, 36));
-        p->drawRoundedRect(QRectF(0, 0, PROC_W, PROC_H), 4, 4);
+        paintGlassNode(p, QRectF(0, 0, PROC_W, PROC_H), 10, 0, QColor(120, 170, 210), 13);
 
-        p->setPen(QColor(120, 170, 210));
-        p->setFont(QFont("Monospace", 8, QFont::Bold));
+        p->setPen(tk().text);
+        p->setFont(uiFont(11, true));
         p->drawText(QRectF(4, 6, PROC_W - 8, 28), Qt::AlignCenter,
                     QStringLiteral("PROCESS\n%1").arg(m_desc->name));
 
         if (m_desc->editDialog) {
             const QRectF r = getEditButtonRect();
-            p->setPen(QPen(QColor(100, 180, 255), 1));
-            p->setBrush(QColor(20, 80, 150));
-            p->drawRoundedRect(r, 3, 3);
-            p->setPen(QColor(200, 220, 255));
-            p->setFont(QFont("Monospace", 7));
             const QString label = m_desc->dynamicLabel ? m_desc->dynamicLabel(m_params) : m_desc->editLabel;
-            p->drawText(r, Qt::AlignCenter, label);
+            paintGlassButton(p, r, label);
         }
 
         if (isSelected()) {
-            p->setPen(QPen(kSelectionAccent, 2));
+            p->setPen(QPen(selectionAccent(), 2));
             p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(QRectF(0, 0, PROC_W, PROC_H).adjusted(1, 1, -1, -1), 4, 4);
+            p->drawRoundedRect(QRectF(0, 0, PROC_W, PROC_H).adjusted(1, 1, -1, -1), 10, 10);
         }
     }
 
@@ -675,30 +712,23 @@ public:
 
     void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
         p->setRenderHint(QPainter::Antialiasing);
-        p->setPen(QPen(QColor(72, 58, 32), 1));
-        p->setBrush(QColor(32, 26, 18));
-        p->drawRoundedRect(QRectF(0, 0, AE_W, AE_H), 4, 4);
+        paintGlassNode(p, QRectF(0, 0, AE_W, AE_H), 10, 0, kAudioStreamPortColor, 13);
 
-        p->setPen(kAudioStreamPortColor);
-        p->setFont(QFont("Monospace", 8, QFont::Bold));
+        p->setPen(tk().text);
+        p->setFont(uiFont(11, true));
         p->drawText(QRectF(4, 6, AE_W - 8, 28), Qt::AlignCenter,
                     QStringLiteral("AUDIO FX\n%1").arg(m_desc->name));
 
         if (m_desc->editDialog) {
             const QRectF r = getEditButtonRect();
-            p->setPen(QPen(QColor(220, 175, 80), 1));
-            p->setBrush(QColor(90, 60, 20));
-            p->drawRoundedRect(r, 3, 3);
-            p->setPen(QColor(255, 220, 150));
-            p->setFont(QFont("Monospace", 7));
             const QString label = m_desc->dynamicLabel ? m_desc->dynamicLabel(m_params) : m_desc->editLabel;
-            p->drawText(r, Qt::AlignCenter, label);
+            paintGlassButton(p, r, label);
         }
 
         if (isSelected()) {
-            p->setPen(QPen(kSelectionAccent, 2));
+            p->setPen(QPen(selectionAccent(), 2));
             p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(QRectF(0, 0, AE_W, AE_H).adjusted(1, 1, -1, -1), 4, 4);
+            p->drawRoundedRect(QRectF(0, 0, AE_W, AE_H).adjusted(1, 1, -1, -1), 10, 10);
         }
     }
 
@@ -794,64 +824,57 @@ public:
     void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
         p->setRenderHint(QPainter::Antialiasing);
         const QRectF bounds(0, 0, SW_W, nodeHeight());
-        p->setPen(QPen(QColor(55, 56, 62), 1));
-        p->setBrush(QColor(28, 32, 40));
-        p->drawRoundedRect(bounds, 5, 5);
+        paintGlassNode(p, bounds, 10, SW_HDR, QColor(120, 170, 210), SW_HDR / 2);
 
-        p->setPen(QColor(120, 170, 210));
-        p->setFont(QFont("Monospace", 8, QFont::Bold));
+        p->setPen(tk().text);
+        p->setFont(uiFont(11, true, true));
         p->drawText(QRectF(4, 3, SW_W - 8, SW_HDR - 4), Qt::AlignCenter,
                     QStringLiteral("LAYER  %1×%2").arg(m_canvasW).arg(m_canvasH));
 
         for (int i = 0; i < m_slots.size(); ++i) {
             const LayerSlot &s = m_slots[i];
             const bool connected = i < m_inPorts.size() && m_inPorts[i]->isConnected();
-            p->setPen(QColor(60, 62, 70));
+            p->setPen(tk().stroke);
             p->drawLine(QPointF(4, SW_HDR + i * SW_ROW), QPointF(SW_W - 4, SW_HDR + i * SW_ROW));
 
             if (!connected) {
                 // Trailing empty input slot — placeholder, no controls.
-                p->setPen(QColor(110, 115, 125));
-                p->setFont(QFont("Monospace", 7));
+                p->setPen(tk().textDisabled);
+                p->setFont(uiFont(9));
                 p->drawText(QRectF(26, SW_HDR + i * SW_ROW, SW_W - 32, SW_ROW),
                             Qt::AlignVCenter | Qt::AlignLeft, "+ connect input");
                 continue;
             }
 
             // eye toggle (show/hide layer)
-            MaterialSymbols::drawCentered(*p, eyeRect(i),
-                                          s.visible ? "visibility" : "visibility_off", 14,
-                                          s.visible ? QColor(120, 200, 160) : QColor(90, 90, 96));
+            Icons::drawCentered(*p, eyeRect(i),
+                                          s.visible ? Icons::Names::Visibility : Icons::Names::VisibilityOff, 14,
+                                          s.visible ? tk().text : tk().textDisabled);
 
             // editable name (double-click to rename)
             const QRectF nr = nameRect(i);
-            p->setPen(QColor(190, 195, 205));
-            p->setFont(QFont("Monospace", 7));
+            p->setPen(tk().text);
+            p->setFont(uiFont(9));
             const QString nm = s.name.isEmpty() ? QStringLiteral("in %1").arg(i + 1) : s.name;
             p->drawText(nr, Qt::AlignVCenter | Qt::AlignLeft,
                         p->fontMetrics().elidedText(nm, Qt::ElideRight, nr.width()));
-            p->setPen(QColor(70, 74, 82));
+            p->setPen(tk().stroke);
             p->drawLine(QPointF(nr.left(), nr.bottom() - 2), QPointF(nr.right(), nr.bottom() - 2));
 
             // up / down
-            p->setPen(QColor(150, 160, 175));
-            p->setFont(QFont("Monospace", 9));
+            p->setPen(tk().textSecondary);
+            p->setFont(uiFont(12));
             if (i > 0)                     p->drawText(upRect(i),   Qt::AlignCenter, "▲");
             if (i < connectedCount() - 1)  p->drawText(downRect(i), Qt::AlignCenter, "▼");
         }
 
         const QRectF er = editButtonRect();
-        p->setPen(QPen(QColor(100, 180, 255), 1));
-        p->setBrush(QColor(20, 80, 150));
-        p->drawRoundedRect(er, 3, 3);
-        p->setPen(QColor(200, 220, 255));
-        p->setFont(QFont("Monospace", 7));
-        p->drawText(er, Qt::AlignCenter, "Edit Layout");
+        paintGlassButton(p, er, QStringLiteral("Edit Layout"));
 
         if (isSelected()) {
-            p->setPen(QPen(kSelectionAccent, 2));
+            p->setPen(QPen(selectionAccent(), 2));
             p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(bounds.adjusted(1, 1, -1, -1), 5, 5);
+            p->drawRoundedRect(bounds.adjusted(1, 1, -1, -1), 10, 10);
         }
     }
 
@@ -1003,22 +1026,20 @@ public:
     void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
         p->setRenderHint(QPainter::Antialiasing);
         const QRectF bounds(0, 0, SW_W, nodeHeight());
-        p->setPen(QPen(QColor(72, 46, 46), 1));
-        p->setBrush(QColor(40, 28, 30));
-        p->drawRoundedRect(bounds, 5, 5);
+        paintGlassNode(p, bounds, 10, SW_HDR, QColor(230, 120, 120), SW_HDR / 2);
 
-        p->setPen(QColor(230, 120, 120));
-        p->setFont(QFont("Monospace", 8, QFont::Bold));
+        p->setPen(tk().text);
+        p->setFont(uiFont(11, true));
         p->drawText(QRectF(4, 3, SW_W - 8, SW_HDR - 4), Qt::AlignCenter, "A/B SELECT");
 
         for (int i = 0; i < m_slots.size(); ++i) {
             const bool connected = i < m_inPorts.size() && m_inPorts[i]->isConnected();
-            p->setPen(QColor(70, 50, 52));
+            p->setPen(tk().stroke);
             p->drawLine(QPointF(4, SW_HDR + i * SW_ROW), QPointF(SW_W - 4, SW_HDR + i * SW_ROW));
 
             if (!connected) {
-                p->setPen(QColor(120, 100, 102));
-                p->setFont(QFont("Monospace", 7));
+                p->setPen(tk().textDisabled);
+                p->setFont(uiFont(9));
                 p->drawText(QRectF(14, SW_HDR + i * SW_ROW, SW_W - 18, SW_ROW),
                             Qt::AlignVCenter | Qt::AlignLeft, "+ connect input");
                 continue;
@@ -1027,36 +1048,36 @@ public:
             const QRectF nr = nameRect(i);
             if (!m_slots[i].hotkey.isEmpty()) {
                 const QRectF badge = hotkeyBadgeRect(i);
-                p->setPen(QPen(QColor(0x2a, 0x8f, 0xa0), 1));
-                p->setBrush(QColor(0x15, 0x2a, 0x30));
-                p->drawRoundedRect(badge, 3, 3);
-                p->setPen(QColor(0x2a, 0xdc, 0xf5));
-                p->setFont(QFont("Monospace", 7, QFont::Bold));
+                p->setPen(QPen(tk().stroke, 1));
+                p->setBrush(tk().glassHover);
+                p->drawRoundedRect(badge, 4, 4);
+                p->setPen(tk().text);
+                p->setFont(uiFont(9, true));
                 p->drawText(badge, Qt::AlignCenter, m_slots[i].hotkey);
             }
-            p->setPen(QColor(210, 195, 195));
-            p->setFont(QFont("Monospace", 7));
+            p->setPen(tk().text);
+            p->setFont(uiFont(9));
             const QString nm = m_slots[i].name.isEmpty() ? QStringLiteral("in %1").arg(i + 1) : m_slots[i].name;
             p->drawText(nr, Qt::AlignVCenter | Qt::AlignLeft,
                         p->fontMetrics().elidedText(nm, Qt::ElideRight, nr.width()));
-            p->setPen(QColor(86, 62, 64));
+            p->setPen(tk().stroke);
             p->drawLine(QPointF(nr.left(), nr.bottom() - 2), QPointF(nr.right(), nr.bottom() - 2));
 
             auto drawBtn = [&](const QRectF &r, const QString &t, bool active) {
                 if (!m_outputConnected) {
-                    p->setPen(QPen(QColor(70, 58, 60), 1));
-                    p->setBrush(QColor(36, 30, 32));
-                    p->drawRoundedRect(r, 3, 3);
-                    p->setPen(QColor(96, 84, 86));
-                    p->setFont(QFont("Monospace", 8, QFont::Bold));
+                    p->setPen(QPen(tk().stroke, 1));
+                    p->setBrush(tk().glassControl);
+                    p->drawRoundedRect(r, 4, 4);
+                    p->setPen(tk().textDisabled);
+                    p->setFont(uiFont(11, true));
                     p->drawText(r, Qt::AlignCenter, t);
                     return;
                 }
-                p->setPen(QPen(active ? QColor(0xe0, 0x50, 0x50) : QColor(90, 70, 72), 1));
-                p->setBrush(active ? QColor(0x80, 0x2a, 0x2a) : QColor(46, 34, 36));
-                p->drawRoundedRect(r, 3, 3);
-                p->setPen(active ? Qt::white : QColor(180, 160, 162));
-                p->setFont(QFont("Monospace", 8, QFont::Bold));
+                p->setPen(QPen(active ? tk().accent : tk().stroke, 1));
+                p->setBrush(active ? tk().glassHover : tk().glassControl);
+                p->drawRoundedRect(r, 4, 4);
+                p->setPen(active ? tk().text : tk().textSecondary);
+                p->setFont(uiFont(11, true));
                 p->drawText(r, Qt::AlignCenter, t);
             };
             drawBtn(aBtnRect(i), "A", i == m_aSlot);
@@ -1064,9 +1085,9 @@ public:
         }
 
         if (isSelected()) {
-            p->setPen(QPen(kSelectionAccent, 2));
+            p->setPen(QPen(selectionAccent(), 2));
             p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(bounds.adjusted(1, 1, -1, -1), 5, 5);
+            p->drawRoundedRect(bounds.adjusted(1, 1, -1, -1), 10, 10);
         }
     }
 
@@ -1163,32 +1184,24 @@ public:
 
     void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
         p->setRenderHint(QPainter::Antialiasing);
-        p->setPen(QPen(QColor(70, 90, 110), 1));
-        p->setBrush(QColor(26, 34, 42));
-        p->drawRoundedRect(QRectF(0, 0, OUT_W, OUT_H), 5, 5);
+        paintGlassNode(p, QRectF(0, 0, OUT_W, OUT_H), 10, 20, QColor(150, 200, 240), 10);
 
-        p->setPen(QColor(150, 200, 240));
-        p->setFont(QFont("Monospace", 9, QFont::Bold));
+        p->setPen(tk().text);
+        p->setFont(uiFont(12, true));
         p->drawText(QRectF(0, 2, OUT_W, 16), Qt::AlignCenter, "OUTPUT");
 
-        p->setPen(QColor(90, 150, 200));
-        p->setFont(QFont("Monospace", 6));
+        p->setPen(tk().textSecondary);
+        p->setFont(uiFont(8));
         p->drawText(QRectF(14, OUT_BODY_H * 0.33 - 6, 60, 12), Qt::AlignVCenter | Qt::AlignLeft, "video");
-        p->setPen(QColor(220, 110, 110));
         p->drawText(QRectF(14, OUT_BODY_H * 0.67 - 6, 60, 12), Qt::AlignVCenter | Qt::AlignLeft, "A/B");
 
         const QRectF btnRect = openWindowButtonRect();
-        p->setPen(QPen(QColor(90, 150, 200), 1));
-        p->setBrush(QColor(35, 50, 65));
-        p->drawRoundedRect(btnRect, 3, 3);
-        p->setPen(QColor(150, 200, 240));
-        p->setFont(QFont("Monospace", 7));
-        p->drawText(btnRect, Qt::AlignCenter, "Open");
+        paintGlassButton(p, btnRect, QStringLiteral("Open"));
 
         if (isSelected()) {
-            p->setPen(QPen(kSelectionAccent, 2));
+            p->setPen(QPen(selectionAccent(), 2));
             p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(QRectF(0, 0, OUT_W, OUT_H).adjusted(1, 1, -1, -1), 5, 5);
+            p->drawRoundedRect(QRectF(0, 0, OUT_W, OUT_H).adjusted(1, 1, -1, -1), 10, 10);
         }
     }
 
@@ -1264,28 +1277,26 @@ public:
     void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
         p->setRenderHint(QPainter::Antialiasing);
         const QRectF bounds(0, 0, MX_W, nodeHeight());
-        p->setPen(QPen(QColor(62, 55, 45), 1));
-        p->setBrush(QColor(34, 28, 22));
-        p->drawRoundedRect(bounds, 5, 5);
+        paintGlassNode(p, bounds, 10, MX_HDR, kAudioStreamPortColor, MX_HDR / 2);
 
-        p->setPen(kAudioStreamPortColor);
-        p->setFont(QFont("Monospace", 8, QFont::Bold));
+        p->setPen(tk().text);
+        p->setFont(uiFont(11, true));
         p->drawText(QRectF(4, 3, MX_W - 8, MX_HDR - 4), Qt::AlignCenter,
                     QStringLiteral("AUDIO MIXER"));
 
         for (int i = 0; i < m_slots.size(); ++i) {
             const bool connected = i < m_inPorts.size() && m_inPorts[i]->isConnected();
-            p->setPen(QColor(60, 62, 70));
+            p->setPen(tk().stroke);
             p->drawLine(QPointF(4, MX_HDR + i * MX_ROW), QPointF(MX_W - 4, MX_HDR + i * MX_ROW));
             if (!connected) {
-                p->setPen(QColor(110, 115, 125));
-                p->setFont(QFont("Monospace", 7));
+                p->setPen(tk().textDisabled);
+                p->setFont(uiFont(9));
                 p->drawText(QRectF(26, MX_HDR + i * MX_ROW, MX_W - 32, MX_ROW),
                             Qt::AlignVCenter | Qt::AlignLeft, "+ connect stream");
                 continue;
             }
-            p->setPen(QColor(210, 190, 140));
-            p->setFont(QFont("Monospace", 7));
+            p->setPen(tk().text);
+            p->setFont(uiFont(9, false, true));
             const QString nm = m_slots[i].name.isEmpty()
                 ? QStringLiteral("in %1").arg(i + 1) : m_slots[i].name;
             const QString level = m_slots[i].muted
@@ -1298,16 +1309,12 @@ public:
         }
 
         const QRectF er = editButtonRect();
-        p->setPen(QPen(kAudioStreamPortColor, 1));
-        p->setBrush(QColor(70, 52, 16));
-        p->drawRoundedRect(er, 3, 3);
-        p->setPen(QColor(255, 224, 140));
-        p->drawText(er, Qt::AlignCenter, "Edit Mix");
+        paintGlassButton(p, er, QStringLiteral("Edit Mix"));
 
         if (isSelected()) {
-            p->setPen(QPen(kSelectionAccent, 2));
+            p->setPen(QPen(selectionAccent(), 2));
             p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(bounds.adjusted(1, 1, -1, -1), 5, 5);
+            p->drawRoundedRect(bounds.adjusted(1, 1, -1, -1), 10, 10);
         }
     }
 
@@ -1453,32 +1460,30 @@ public:
     void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
         p->setRenderHint(QPainter::Antialiasing);
         const QRectF bounds(0, 0, AO_W, nodeHeight());
-        p->setPen(QPen(QColor(86, 65, 18), 1));
-        p->setBrush(QColor(45, 34, 12));
-        p->drawRoundedRect(bounds, 4, 4);
+        paintGlassNode(p, bounds, 10, AO_HDR, kMixedAudioPortColor, AO_HDR / 2);
 
-        p->setPen(kMixedAudioPortColor);
-        p->setFont(QFont("Monospace", 8, QFont::Bold));
+        p->setPen(tk().text);
+        p->setFont(uiFont(11, true));
         p->drawText(QRectF(6, 4, AO_W - 12, AO_HDR - 6), Qt::AlignCenter,
                     QStringLiteral("AUDIO OUTPUT"));
 
-        p->setFont(QFont("Monospace", 7));
+        p->setFont(uiFont(9));
         for (int i = 0; i < m_devicePorts.size(); ++i) {
             const DevicePort &dp = m_devicePorts[i];
             const QRectF row(22, AO_HDR + i * AO_ROW, AO_W - 26, AO_ROW);
-            p->setPen(QColor(60, 62, 70));
+            p->setPen(tk().stroke);
             if (i > 0)
                 p->drawLine(QPointF(4, AO_HDR + i * AO_ROW), QPointF(AO_W - 4, AO_HDR + i * AO_ROW));
-            p->setPen(QColor(255, 210, 150));
+            p->setPen(tk().textSecondary);
             const QString label = dp.deviceLabel.isEmpty() ? QStringLiteral("Default") : dp.deviceLabel;
             p->drawText(row, Qt::AlignVCenter | Qt::AlignLeft,
                         p->fontMetrics().elidedText(label, Qt::ElideRight, row.width()));
         }
 
         if (isSelected()) {
-            p->setPen(QPen(kSelectionAccent, 2));
+            p->setPen(QPen(selectionAccent(), 2));
             p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(bounds.adjusted(1, 1, -1, -1), 4, 4);
+            p->drawRoundedRect(bounds.adjusted(1, 1, -1, -1), 10, 10);
         }
     }
 
@@ -1581,32 +1586,26 @@ public:
 
     void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
         p->setRenderHint(QPainter::Antialiasing);
-        p->setPen(QPen(QColor(24, 72, 58), 1));
-        p->setBrush(QColor(18, 40, 34));
-        p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H), 4, 4);
+        paintGlassNode(p, QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H), 10, 0, kAudioStreamPortColor, 26);
 
-        p->setPen(kAudioStreamPortColor);
-        p->setFont(QFont("Monospace", 8, QFont::Bold));
+        p->setPen(tk().text);
+        p->setFont(uiFont(11, true));
         p->drawText(QRectF(6, 8, SMALL_NODE_W - 12, 36), Qt::AlignCenter,
                     QStringLiteral("Mic Input"));
 
-        p->setPen(QColor(180, 230, 200));
-        p->setFont(QFont("Monospace", 7));
+        p->setPen(tk().textSecondary);
+        p->setFont(uiFont(9));
         const QString devText = m_deviceId.isEmpty() ? QStringLiteral("Default Mic") : m_deviceLabel;
         p->drawText(QRectF(6, 38, SMALL_NODE_W - 12, 18), Qt::AlignCenter,
                     p->fontMetrics().elidedText(devText, Qt::ElideRight, SMALL_NODE_W - 12));
 
         const QRectF er = editButtonRect();
-        p->setPen(QPen(kAudioStreamPortColor, 1));
-        p->setBrush(QColor(28, 64, 52));
-        p->drawRoundedRect(er, 3, 3);
-        p->setPen(QColor(210, 245, 225));
-        p->drawText(er, Qt::AlignCenter, "Edit Mic");
+        paintGlassButton(p, er, QStringLiteral("Edit Mic"));
 
         if (isSelected()) {
-            p->setPen(QPen(kSelectionAccent, 2));
+            p->setPen(QPen(selectionAccent(), 2));
             p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H).adjusted(1, 1, -1, -1), 4, 4);
+            p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H).adjusted(1, 1, -1, -1), 10, 10);
         }
     }
 
@@ -1685,17 +1684,15 @@ public:
 
     void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
         p->setRenderHint(QPainter::Antialiasing);
-        p->setPen(QPen(QColor(72, 58, 24), 1));
-        p->setBrush(QColor(40, 34, 18));
-        p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H), 4, 4);
+        paintGlassNode(p, QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H), 10, 0, kAudioStreamPortColor, 26);
 
-        p->setPen(kAudioStreamPortColor);
-        p->setFont(QFont("Monospace", 8, QFont::Bold));
+        p->setPen(tk().text);
+        p->setFont(uiFont(11, true));
         p->drawText(QRectF(6, 8, SMALL_NODE_W - 12, 36), Qt::AlignCenter,
                     QStringLiteral("Audio Capture"));
 
-        p->setPen(QColor(230, 210, 180));
-        p->setFont(QFont("Monospace", 7));
+        p->setPen(tk().textSecondary);
+        p->setFont(uiFont(9));
         const QString devText = m_deviceId.isEmpty()
             ? QStringLiteral("Default Output")
             : m_deviceLabel;
@@ -1703,16 +1700,12 @@ public:
                     p->fontMetrics().elidedText(devText, Qt::ElideRight, SMALL_NODE_W - 12));
 
         const QRectF er = editButtonRect();
-        p->setPen(QPen(kAudioStreamPortColor, 1));
-        p->setBrush(QColor(64, 52, 28));
-        p->drawRoundedRect(er, 3, 3);
-        p->setPen(QColor(245, 235, 210));
-        p->drawText(er, Qt::AlignCenter, "Edit");
+        paintGlassButton(p, er, QStringLiteral("Edit"));
 
         if (isSelected()) {
-            p->setPen(QPen(kSelectionAccent, 2));
+            p->setPen(QPen(selectionAccent(), 2));
             p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H).adjusted(1, 1, -1, -1), 4, 4);
+            p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H).adjusted(1, 1, -1, -1), 10, 10);
         }
     }
 
@@ -1848,12 +1841,10 @@ public:
 
     void paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget *) override {
         p->setRenderHint(QPainter::Antialiasing);
-        p->setPen(QPen(QColor(45, 62, 55), 1));
-        p->setBrush(QColor(22, 34, 30));
-        p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H), 4, 4);
+        paintGlassNode(p, QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H), 10, 0, QColor(120, 220, 170), 22);
 
-        p->setPen(QColor(120, 220, 170));
-        p->setFont(QFont("Monospace", 8));
+        p->setPen(tk().text);
+        p->setFont(uiFont(11, false, true));
         QString triggerStr;
         switch (m_triggerMode) {
         case ScriptTriggerMode::Periodic: triggerStr = QString("Every %1ms").arg(m_intervalMs); break;
@@ -1865,17 +1856,12 @@ public:
                     QString("Lua Script\n%1").arg(triggerStr));
 
         QRectF buttonRect(4, 78, SMALL_NODE_W - 8, 24);
-        p->setPen(QPen(QColor(120, 220, 170), 1));
-        p->setBrush(QColor(20, 70, 50));
-        p->drawRoundedRect(buttonRect, 3, 3);
-        p->setPen(QColor(180, 255, 210));
-        p->setFont(QFont("Monospace", 7));
-        p->drawText(buttonRect, Qt::AlignCenter, "Edit");
+        paintGlassButton(p, buttonRect, QStringLiteral("Edit"));
 
         if (isSelected()) {
-            p->setPen(QPen(kSelectionAccent, 2));
+            p->setPen(QPen(selectionAccent(), 2));
             p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H).adjusted(1, 1, -1, -1), 4, 4);
+            p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H).adjusted(1, 1, -1, -1), 10, 10);
         }
     }
 
@@ -2101,33 +2087,26 @@ public:
         Q_UNUSED(opt);
         Q_UNUSED(w);
         p->setRenderHint(QPainter::Antialiasing);
-        p->setPen(QPen(QColor(62, 52, 35), 1));
-        p->setBrush(QColor(34, 30, 22));
-        p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H), 4, 4);
+        paintGlassNode(p, QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H), 10, 0, QColor(230, 190, 90), 20);
 
-        p->setPen(QColor(230, 190, 90));
-        p->setFont(QFont("Monospace", 8, QFont::Bold));
+        p->setPen(tk().text);
+        p->setFont(uiFont(11, true));
         p->drawText(QRectF(4, 6, SMALL_NODE_W - 8, 28), Qt::AlignCenter,
                     QStringLiteral("Audio Script"));
 
-        p->setPen(QColor(160, 200, 180));
-        p->setFont(QFont("Monospace", 7));
+        p->setPen(tk().textSecondary);
+        p->setFont(uiFont(9, false, true));
         p->drawText(QRectF(4, 34, SMALL_NODE_W - 8, 40), Qt::AlignCenter,
                     QString("FFT %1 · %2 bins\nlow/mid/high · beat")
                         .arg(m_config.fftSize).arg(m_config.binCount));
 
         const QRectF buttonRect = getEditButtonRect();
-        p->setPen(QPen(QColor(230, 190, 90), 1));
-        p->setBrush(QColor(70, 55, 20));
-        p->drawRoundedRect(buttonRect, 3, 3);
-        p->setPen(QColor(255, 220, 140));
-        p->setFont(QFont("Monospace", 7));
-        p->drawText(buttonRect, Qt::AlignCenter, "Edit FFT");
+        paintGlassButton(p, buttonRect, QStringLiteral("Edit FFT"));
 
         if (isSelected()) {
-            p->setPen(QPen(kSelectionAccent, 2));
+            p->setPen(QPen(selectionAccent(), 2));
             p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H).adjusted(1, 1, -1, -1), 4, 4);
+            p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H).adjusted(1, 1, -1, -1), 10, 10);
         }
     }
 
@@ -2198,12 +2177,10 @@ public:
     void paint(QPainter *p, const QStyleOptionGraphicsItem *opt, QWidget *w) override {
         Q_UNUSED(opt); Q_UNUSED(w);
         p->setRenderHint(QPainter::Antialiasing);
-        p->setPen(QPen(QColor(50, 60, 70), 1));
-        p->setBrush(QColor(24, 30, 38));
-        p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H), 4, 4);
+        paintGlassNode(p, QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H), 10, 0, QColor(120, 190, 230), 20);
 
-        p->setPen(QColor(120, 190, 230));
-        p->setFont(QFont("Monospace", 8, QFont::Bold));
+        p->setPen(tk().text);
+        p->setFont(uiFont(11, true));
         p->drawText(QRectF(4, 6, SMALL_NODE_W - 8, 28), Qt::AlignCenter, QStringLiteral("Trigger"));
 
         QString sub;
@@ -2212,22 +2189,17 @@ public:
         case Mode::TimeOfDay: sub = QString("At\n%1").arg(m_timeOfDay.toString("HH:mm")); break;
         case Mode::Manual:    sub = QStringLiteral("Manual\npulse"); break;
         }
-        p->setPen(QColor(160, 200, 220));
-        p->setFont(QFont("Monospace", 7));
+        p->setPen(tk().textSecondary);
+        p->setFont(uiFont(9, false, true));
         p->drawText(QRectF(4, 34, SMALL_NODE_W - 8, 40), Qt::AlignCenter, sub);
 
         const QRectF buttonRect = getEditButtonRect();
-        p->setPen(QPen(QColor(120, 190, 230), 1));
-        p->setBrush(QColor(24, 50, 70));
-        p->drawRoundedRect(buttonRect, 3, 3);
-        p->setPen(QColor(180, 220, 250));
-        p->setFont(QFont("Monospace", 7));
-        p->drawText(buttonRect, Qt::AlignCenter, "Edit");
+        paintGlassButton(p, buttonRect, QStringLiteral("Edit"));
 
         if (isSelected()) {
-            p->setPen(QPen(kSelectionAccent, 2));
+            p->setPen(QPen(selectionAccent(), 2));
             p->setBrush(Qt::NoBrush);
-            p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H).adjusted(1, 1, -1, -1), 4, 4);
+            p->drawRoundedRect(QRectF(0, 0, SMALL_NODE_W, SMALL_NODE_H).adjusted(1, 1, -1, -1), 10, 10);
         }
     }
 
@@ -2309,53 +2281,44 @@ public:
     explicit ClipNodeScene(QObject *parent = nullptr)
         : QGraphicsScene(parent)
     {
-        setBackgroundBrush(QColor(20, 21, 23));
+        setBackgroundBrush(Qt::NoBrush);
     }
 
 protected:
     void drawBackground(QPainter *painter, const QRectF &rect) override {
-        // Fill base background
-        painter->fillRect(rect, QColor(20, 21, 23));
-
-        // Use cosmetic pens so line widths are constant regardless of zoom level
-        QPen minorPen(QColor(26, 27, 30), 0);
-        minorPen.setCosmetic(true);
-
-        QPen majorPen(QColor(33, 35, 38), 0);
-        majorPen.setCosmetic(true);
+        QColor minor = tk().text;
+        minor.setAlphaF(0.06);
+        QColor major = tk().text;
+        major.setAlphaF(0.10);
 
         const int gridSize = 20;
         const int majorGridSize = 100;
 
-        qreal left = std::floor(rect.left() / gridSize) * gridSize;
-        qreal top = std::floor(rect.top() / gridSize) * gridSize;
+        const qreal left = std::floor(rect.left() / gridSize) * gridSize;
+        const qreal top = std::floor(rect.top() / gridSize) * gridSize;
 
-        QVector<QLineF> minorLines;
-        QVector<QLineF> majorLines;
-
+        QVector<QPointF> minorDots;
+        QVector<QPointF> majorDots;
         for (qreal x = left; x < rect.right(); x += gridSize) {
-            long long ix = std::llround(x);
-            if (ix % majorGridSize == 0) {
-                majorLines.append(QLineF(x, rect.top(), x, rect.bottom()));
-            } else {
-                minorLines.append(QLineF(x, rect.top(), x, rect.bottom()));
+            const bool xMajor = std::llround(x) % majorGridSize == 0;
+            for (qreal y = top; y < rect.bottom(); y += gridSize) {
+                if (xMajor && std::llround(y) % majorGridSize == 0)
+                    majorDots.append(QPointF(x, y));
+                else
+                    minorDots.append(QPointF(x, y));
             }
         }
 
-        for (qreal y = top; y < rect.bottom(); y += gridSize) {
-            long long iy = std::llround(y);
-            if (iy % majorGridSize == 0) {
-                majorLines.append(QLineF(rect.left(), y, rect.right(), y));
-            } else {
-                minorLines.append(QLineF(rect.left(), y, rect.right(), y));
-            }
-        }
+        QPen dotPen(minor, 2.0);
+        dotPen.setCosmetic(true);
+        dotPen.setCapStyle(Qt::RoundCap);
+        painter->setPen(dotPen);
+        painter->drawPoints(minorDots.constData(), minorDots.size());
 
-        painter->setPen(minorPen);
-        painter->drawLines(minorLines);
-
-        painter->setPen(majorPen);
-        painter->drawLines(majorLines);
+        dotPen.setColor(major);
+        dotPen.setWidthF(3.0);
+        painter->setPen(dotPen);
+        painter->drawPoints(majorDots.constData(), majorDots.size());
     }
 
 public:
@@ -2365,7 +2328,7 @@ public:
     void onPortPressed(PortItem *port, const QPointF &scenePos) {
         m_dragPort = port;
         m_tempLine = addLine(QLineF(port->sceneCenter(), scenePos),
-                             QPen(QColor(130, 175, 230), 2, Qt::DashLine));
+                             QPen(tk().textSecondary, 2, Qt::DashLine));
         m_tempLine->setZValue(10);
     }
 
@@ -2942,7 +2905,7 @@ void PortItem::paint(QPainter *p, const QStyleOptionGraphicsItem *opt, QWidget *
         p->drawEllipse(QPointF(0, 0), PORT_R + 2.5, PORT_R + 2.5);
     }
 
-    p->setPen(QPen(QColor(12, 13, 15), 1.0));
+    p->setPen(QPen(tk().bgBase, 1.0));
     p->setBrush(base);
     p->drawEllipse(QPointF(0, 0), PORT_R, PORT_R);
 
@@ -3172,6 +3135,9 @@ public:
         : QGraphicsView(scene, parent)
     {
         setRenderHint(QPainter::Antialiasing);
+        setFrameShape(QFrame::NoFrame);
+        setStyleSheet(QStringLiteral("QGraphicsView { background: transparent; border: none; }"));
+        viewport()->setAutoFillBackground(false);
         setViewportUpdateMode(FullViewportUpdate);
         setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -3352,26 +3318,28 @@ protected:
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
 
-        p.fillRect(rect(), QColor(20, 22, 26, 230));
-        p.setPen(QColor(48, 52, 58));
-        p.drawRect(rect().adjusted(0, 0, -1, -1));
+        QColor bg = tk().surfacePopup;
+        bg.setAlphaF(bg.alphaF() * 0.85);
+        p.setPen(QPen(tk().stroke, 1));
+        p.setBrush(bg);
+        p.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 6, 6);
 
         if (!m_view || !m_view->scene()) {
-            p.setPen(QColor(120, 120, 120));
+            p.setPen(tk().textDisabled);
             p.drawText(rect(), Qt::AlignCenter, tr("—"));
             return;
         }
 
         const QRectF bounds = contentBounds();
         if (!bounds.isValid() || bounds.isEmpty()) {
-            p.setPen(QColor(120, 120, 120));
+            p.setPen(tk().textDisabled);
             p.drawText(rect(), Qt::AlignCenter, tr("Empty"));
             return;
         }
 
         const QRectF mini = innerRect();
 
-        p.setBrush(QColor(74, 158, 255, 100));
+        p.setBrush(tk().textSecondary);
         p.setPen(Qt::NoPen);
         for (QGraphicsItem *item : m_view->scene()->items()) {
             if (!item->isVisible() || !dynamic_cast<NodeItemBase *>(item))
@@ -3386,8 +3354,10 @@ protected:
                                           bounds, mini);
         const QRectF vpMini(QPointF(std::min(tl.x(), br.x()), std::min(tl.y(), br.y())),
                             QPointF(std::max(tl.x(), br.x()), std::max(tl.y(), br.y())));
-        p.setPen(QPen(QColor(74, 158, 255), 1.5));
-        p.setBrush(QColor(74, 158, 255, 35));
+        QColor vpFill = tk().accent;
+        vpFill.setAlpha(40);
+        p.setPen(QPen(tk().accent, 1.5));
+        p.setBrush(vpFill);
         p.drawRect(vpMini);
     }
 
@@ -3457,43 +3427,32 @@ public:
         m_view->setParent(this);
 
         m_minimap = new ClipNodeMinimap(m_view, this);
-        m_minimap->setStyleSheet(QStringLiteral("border-radius: 6px;"));
 
         m_zoomBar = new QWidget(this);
-        m_zoomBar->setStyleSheet(QStringLiteral(
-            "background: rgba(20, 22, 26, 0.9); border: 1px solid #2a2d32; border-radius: 6px;"));
+        m_zoomBar->setObjectName(QStringLiteral("zoomBar"));
         auto *zLayout = new QHBoxLayout(m_zoomBar);
         zLayout->setContentsMargins(4, 4, 4, 4);
         zLayout->setSpacing(2);
 
-        const QString btnStyle = QStringLiteral(
-            "QToolButton { background: transparent; border: none; border-radius: 4px; color: #ccc; }"
-            "QToolButton:hover { background: #2a5c66; }"
-            "QToolButton:disabled { color: #555; }");
-
         auto *zoomOutBtn = new QToolButton(m_zoomBar);
-        MaterialSymbols::setIconText(zoomOutBtn, MaterialSymbols::Names::ZoomOut, 18);
+        Icons::setIconText(zoomOutBtn, Icons::Names::ZoomOut, 18);
         zoomOutBtn->setToolTip(tr("Zoom out (Ctrl+-)"));
         zoomOutBtn->setFixedSize(28, 28);
-        zoomOutBtn->setStyleSheet(btnStyle);
 
         m_zoomLabel = new QLabel(m_zoomBar);
         m_zoomLabel->setAlignment(Qt::AlignCenter);
         m_zoomLabel->setFixedWidth(44);
-        m_zoomLabel->setStyleSheet(QStringLiteral("color: #aaa; font-size: 11px;"));
         m_zoomLabel->setText(QStringLiteral("100%"));
 
         auto *zoomResetBtn = new QToolButton(m_zoomBar);
-        MaterialSymbols::setIconText(zoomResetBtn, MaterialSymbols::Names::ZoomReset, 18);
+        Icons::setIconText(zoomResetBtn, Icons::Names::ZoomReset, 18);
         zoomResetBtn->setToolTip(tr("Reset zoom to 100% (Ctrl+0)"));
         zoomResetBtn->setFixedSize(28, 28);
-        zoomResetBtn->setStyleSheet(btnStyle);
 
         auto *zoomInBtn = new QToolButton(m_zoomBar);
-        MaterialSymbols::setIconText(zoomInBtn, MaterialSymbols::Names::ZoomIn, 18);
+        Icons::setIconText(zoomInBtn, Icons::Names::ZoomIn, 18);
         zoomInBtn->setToolTip(tr("Zoom in (Ctrl++)"));
         zoomInBtn->setFixedSize(28, 28);
-        zoomInBtn->setStyleSheet(btnStyle);
 
         zLayout->addWidget(zoomOutBtn);
         zLayout->addWidget(m_zoomLabel);
@@ -3506,6 +3465,15 @@ public:
 
         m_zoomOutBtn = zoomOutBtn;
         m_zoomInBtn  = zoomInBtn;
+
+        m_zoomLabel->setFont(uiFont(11, false, true));
+        applyZoomBarStyle();
+        connect(&Theme::instance(), &Theme::changed, this, [this]() {
+            applyZoomBarStyle();
+            m_view->viewport()->update();
+            if (m_minimap)
+                m_minimap->update();
+        });
 
         m_view->onZoomChanged = [this](qreal scale) {
             syncZoomUi(scale);
@@ -3536,6 +3504,21 @@ protected:
     }
 
 private:
+    void applyZoomBarStyle() {
+        const Theme::Tokens &t = tk();
+        m_zoomBar->setStyleSheet(QStringLiteral(
+            "#zoomBar { background: %1; border: 1px solid %2; border-radius: 10px; }"
+            "#zoomBar QToolButton { background: transparent; border: none; border-radius: 8px;"
+            " padding: 0; min-height: 0; color: %3; }"
+            "#zoomBar QToolButton:hover { background: %4; }"
+            "#zoomBar QToolButton:pressed { background: %5; }"
+            "#zoomBar QToolButton:disabled { color: %6; }"
+            "#zoomBar QLabel { background: transparent; border: none; color: %7; }")
+            .arg(cssColor(t.glassControl), cssColor(t.stroke), cssColor(t.text),
+                 cssColor(t.glassHover), cssColor(t.glassPressed), cssColor(t.textDisabled),
+                 cssColor(t.textSecondary)));
+    }
+
     void syncZoomUi(qreal scale) {
         const int pct = qRound(scale * 100.0);
         m_zoomLabel->setText(QStringLiteral("%1%").arg(pct));
@@ -3582,6 +3565,10 @@ ClipNodeEditor::ClipNodeEditor(QWidget *parent)
 
     m_view = new ClipNodeView(m_scene);
     auto *nodeView = static_cast<ClipNodeView *>(m_view);
+    connect(&Theme::instance(), &Theme::changed, this, [this]() {
+        m_scene->update();
+        m_view->viewport()->update();
+    });
     nodeView->onDeleteSelection = [this]() { deleteSelection(m_view); };
     nodeView->onFileDrop = [this](const QStringList &paths, const QPoint &viewPos) {
         const QPoint globalPos = m_view->mapToGlobal(viewPos);
@@ -5328,12 +5315,12 @@ protected:
         const qreal fillW = track.width() * (m_value / 100.0);
 
         // Ruler: dB ticks along the top edge of the track.
-        p.setFont(QFont("Monospace", 6));
+        p.setFont(uiFont(8, false, true));
         static const int dbTicks[] = {-60, -48, -36, -24, -12, -6, 0};
         for (int db : dbTicks) {
             const qreal frac = dbToFrac(db);
             const qreal x = track.left() + track.width() * frac;
-            p.setPen(QColor(120, 124, 132));
+            p.setPen(tk().textSecondary);
             p.drawLine(QPointF(x, track.top() - 5), QPointF(x, track.top() - 2));
             const QString lbl = db == 0 ? QStringLiteral("0") : QString::number(db);
             const QRectF tr(x - 14, track.top() - 15, 28, 10);
@@ -5345,7 +5332,7 @@ protected:
         clip.addRoundedRect(track, 3, 3);
         p.save();
         p.setClipPath(clip);
-        p.fillRect(track, QColor(20, 22, 26));
+        p.fillRect(track, tk().glassControl);
 
         // Colored meter gradient, revealed up to the current fill.
         QLinearGradient grad(track.left(), 0, track.right(), 0);
@@ -5356,10 +5343,10 @@ protected:
         grad.setColorAt(0.90, QColor(0xd8, 0x38, 0x30));
         grad.setColorAt(1.00, QColor(0xb0, 0x22, 0x1c));
         p.fillRect(QRectF(track.left(), track.top(), fillW, track.height()),
-                   m_muted ? QBrush(QColor(70, 72, 78)) : QBrush(grad));
+                   m_muted ? QBrush(tk().textDisabled) : QBrush(grad));
         p.restore();
 
-        p.setPen(QPen(QColor(52, 55, 62), 1));
+        p.setPen(QPen(tk().stroke, 1));
         p.setBrush(Qt::NoBrush);
         p.drawRoundedRect(track, 3, 3);
 
@@ -5367,7 +5354,7 @@ protected:
         const qreal hx = track.left() + fillW;
         const QRectF handle(hx - 3, track.top() - 3, 6, track.height() + 6);
         p.setPen(Qt::NoPen);
-        p.setBrush(m_muted ? QColor(150, 152, 158) : QColor(235, 238, 244));
+        p.setBrush(m_muted ? tk().textSecondary : tk().primaryBg);
         p.drawRoundedRect(handle, 2, 2);
     }
 
@@ -5444,7 +5431,8 @@ void ClipNodeEditor::onEditAudioMixer(NodeId mixerId) {
         auto *dbLabel = new QLabel(dbText(s.muted ? 0 : s.volume), strip);
         dbLabel->setMinimumWidth(64);
         dbLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        dbLabel->setStyleSheet(QStringLiteral("color:#9aa0a8; font-family:Monospace;"));
+        dbLabel->setFont(uiFont(12, false, true));
+        dbLabel->setStyleSheet(QStringLiteral("color:%1;").arg(cssColor(tk().textSecondary)));
 
         top->addWidget(muteBtn);
         top->addWidget(nameEdit, 1);
@@ -5455,9 +5443,9 @@ void ClipNodeEditor::onEditAudioMixer(NodeId mixerId) {
         sv->addWidget(fader);
 
         auto refreshMuteIcon = [muteBtn](bool muted) {
-            muteBtn->setIcon(MaterialSymbols::icon(muted ? "volume_off" : "volume_up",
-                                                   20, muted ? QColor(0xe0, 0x6a, 0x5a)
-                                                             : QColor(0xcc, 0xcc, 0xcc)));
+            muteBtn->setIcon(Icons::icon(muted ? Icons::Names::VolumeOff : Icons::Names::VolumeUp,
+                                                   20, muted ? tk().danger
+                                                             : tk().textSecondary));
         };
         refreshMuteIcon(s.muted);
 
@@ -5474,7 +5462,7 @@ void ClipNodeEditor::onEditAudioMixer(NodeId mixerId) {
         if (i > 0) {
             auto *sep = new QFrame(&dialog);
             sep->setFrameShape(QFrame::HLine);
-            sep->setStyleSheet(QStringLiteral("color:#2a2d34;"));
+            sep->setStyleSheet(QStringLiteral("color:%1;").arg(cssColor(tk().stroke)));
             layout->addWidget(sep);
         }
         layout->addWidget(strip);

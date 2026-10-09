@@ -65,7 +65,8 @@ AssetLibrary::AssetLibrary(ClipManager *clipManager, QWidget *parent)
     m_emptyLabel->setAlignment(Qt::AlignCenter);
     m_emptyLabel->setWordWrap(true);
     m_emptyLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    m_emptyLabel->setStyleSheet(QStringLiteral("color: #888; font-size: 12px; padding: 12px;"));
+    m_emptyLabel->setProperty("role", "secondary");
+    m_emptyLabel->setStyleSheet(QStringLiteral("font-size: 12px; padding: 12px;"));
     m_emptyLabel->installEventFilter(this);
 
     auto *listHost = new QWidget(this);
@@ -75,8 +76,8 @@ AssetLibrary::AssetLibrary(ClipManager *clipManager, QWidget *parent)
     listGrid->addWidget(m_emptyLabel, 0, 0);
 
     m_hintBanner = new QWidget(this);
-    m_hintBanner->setStyleSheet(
-        QStringLiteral("background-color: #2a2c30; border-radius: 6px;"));
+    m_hintBanner->setObjectName(QStringLiteral("card"));
+    m_hintBanner->setProperty("role", "panel");
     auto *hintLayout = new QHBoxLayout(m_hintBanner);
     hintLayout->setContentsMargins(8, 6, 4, 6);
     hintLayout->setSpacing(6);
@@ -84,13 +85,14 @@ AssetLibrary::AssetLibrary(ClipManager *clipManager, QWidget *parent)
     auto *hintLabel = new QLabel(
         tr("Drag and drop any clip to the canvas to get started"), m_hintBanner);
     hintLabel->setWordWrap(true);
-    hintLabel->setStyleSheet(QStringLiteral("color: #aaa; font-size: 11px;"));
+    hintLabel->setProperty("role", "secondary");
+    hintLabel->setStyleSheet(QStringLiteral("font-size: 11px;"));
 
     auto *dismissBtn = new QPushButton(QStringLiteral("\u00d7"), m_hintBanner);
     dismissBtn->setFlat(true);
     dismissBtn->setFixedSize(20, 20);
     dismissBtn->setStyleSheet(
-        QStringLiteral("color: #888; font-size: 14px; font-weight: bold; border: none;"));
+        QStringLiteral("font-size: 14px; font-weight: bold; border: none;"));
     dismissBtn->setToolTip(tr("Dismiss"));
 
     hintLayout->addWidget(hintLabel, 1);

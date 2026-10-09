@@ -2,7 +2,7 @@
 #include "ui/nodes/ClipNodeEditor.h"
 #include "ui/canvas/VideoWidget.h"
 #include "ui/common/ThumbHelper.h"
-#include "ui/common/MaterialSymbols.h"
+#include "ui/common/Icons.h"
 #include "core/project/AssetPathResolver.h"
 #include "core/project/ClipManager.h"
 #include "core/media/ThumbnailExtractor.h"
@@ -285,12 +285,12 @@ bool SessionManager::loadFromFile(const QString &path, bool showErrors) {
                                               QDir::Files, QDir::Name);
             if (!imgs.isEmpty())
                 thumb = ThumbnailExtractor::extract(dir.absoluteFilePath(imgs.first()), 110, 65);
-            if (thumb.isNull()) thumb = ThumbHelper::makeIconThumb(MaterialSymbols::Names::Folder);
+            if (thumb.isNull()) thumb = ThumbHelper::makeIconThumb(Icons::Names::Folder);
             break;
         }
-        case Kind::Camera: thumb = ThumbHelper::makeIconThumb(MaterialSymbols::Names::PhotoCamera); break;
-        case Kind::Screen: thumb = ThumbHelper::makeIconThumb(MaterialSymbols::Names::DesktopWindows); break;
-        case Kind::Window: thumb = ThumbHelper::makeIconThumb(MaterialSymbols::Names::SelectWindow); break;
+        case Kind::Camera: thumb = ThumbHelper::makeIconThumb(Icons::Names::PhotoCamera); break;
+        case Kind::Screen: thumb = ThumbHelper::makeIconThumb(Icons::Names::DesktopWindows); break;
+        case Kind::Window: thumb = ThumbHelper::makeIconThumb(Icons::Names::SelectWindow); break;
         case Kind::Canvas:
             thumb = ThumbHelper::makeCanvasThumb(
                 QString("%1x%2").arg(desc.canvasWidth).arg(desc.canvasHeight),
@@ -308,8 +308,8 @@ bool SessionManager::loadFromFile(const QString &path, bool showErrors) {
             break;
         }
         case Kind::Text:   thumb = ThumbHelper::makeTextThumb(desc.textTemplate, desc.color); break;
-        case Kind::Ndi:    thumb = ThumbHelper::makeIconThumb(MaterialSymbols::Names::Sensors); break;
-        case Kind::WebRtc: thumb = ThumbHelper::makeIconThumb(MaterialSymbols::Names::Smartphone); break;
+        case Kind::Ndi:    thumb = ThumbHelper::makeIconThumb(Icons::Names::Sensors); break;
+        case Kind::WebRtc: thumb = ThumbHelper::makeIconThumb(Icons::Names::Smartphone); break;
         }
         if (!thumb.isNull()) {
             if (desc.kind == Kind::VideoFile || desc.kind == Kind::Image)

@@ -186,7 +186,6 @@ private:
     void refreshPreviewPixmaps();
     void rebuildActiveDeckChains();
     void pushDecks();
-    void applyTheme();
 
     void loadFromFile(const QString &path, bool showErrors);
     void handleStartupRecovery();

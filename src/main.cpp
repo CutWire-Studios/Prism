@@ -1,6 +1,7 @@
 #include "ui/mainwindow/MainWindow.h"
 #include "ui/mainwindow/GetStartedDialog.h"
-#include "ui/common/MaterialSymbols.h"
+#include "ui/common/Icons.h"
+#include "ui/common/Theme.h"
 #include "ui/mainwindow/PrismSplashScreen.h"
 #include "core/platform/MacPermissions.h"
 #include "mcp/McpStdio.h"
@@ -78,7 +79,9 @@ int main(int argc, char *argv[]) {
             appIcon = QIcon(QStringLiteral(":/Prism_icon.png"));
         app.setWindowIcon(appIcon);
     }
-    app.setStyle("fusion");
+    Icons::init();
+    Theme::loadFonts();
+    Theme::instance().apply();
 
     // Initialize and show custom splash screen
     PrismSplashScreen splash;
@@ -89,9 +92,8 @@ int main(int argc, char *argv[]) {
 
     // Resources are compiled into prism_core (static lib); register them here so
     // :/… paths (shaders, HTML presets, Lua examples, etc.) resolve at runtime.
-    splash.setProgress(45, "Loading Material Symbols & resources...");
+    splash.setProgress(45, "Loading icons & resources...");
     app.processEvents();
-    MaterialSymbols::init();
     QThread::msleep(150);
 
     splash.setProgress(75, "Constructing live media engine...");

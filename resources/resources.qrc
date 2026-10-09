@@ -2,8 +2,50 @@
 <RCC>
     <qresource prefix="/">
         <file>Prism_icon.png</file>
-        <file>fonts/MaterialSymbolsRounded-Regular.ttf</file>
-        <file>styles/dark.qss</file>
+        <file>icons/app-window.svg</file>
+        <file>icons/camera.svg</file>
+        <file>icons/check.svg</file>
+        <file>icons/chevron-down.svg</file>
+        <file>icons/chevron-up.svg</file>
+        <file>icons/clapperboard.svg</file>
+        <file>icons/download.svg</file>
+        <file>icons/eye-off.svg</file>
+        <file>icons/eye.svg</file>
+        <file>icons/file-text.svg</file>
+        <file>icons/folder-open.svg</file>
+        <file>icons/folder.svg</file>
+        <file>icons/globe.svg</file>
+        <file>icons/link.svg</file>
+        <file>icons/maximize-2.svg</file>
+        <file>icons/mic.svg</file>
+        <file>icons/minimize-2.svg</file>
+        <file>icons/minus.svg</file>
+        <file>icons/monitor.svg</file>
+        <file>icons/package.svg</file>
+        <file>icons/pause.svg</file>
+        <file>icons/play.svg</file>
+        <file>icons/plus.svg</file>
+        <file>icons/radio.svg</file>
+        <file>icons/repeat.svg</file>
+        <file>icons/rotate-ccw.svg</file>
+        <file>icons/save.svg</file>
+        <file>icons/scissors.svg</file>
+        <file>icons/skip-back.svg</file>
+        <file>icons/skip-forward.svg</file>
+        <file>icons/smartphone.svg</file>
+        <file>icons/sparkles.svg</file>
+        <file>icons/speaker.svg</file>
+        <file>icons/square.svg</file>
+        <file>icons/trash-2.svg</file>
+        <file>icons/triangle-alert.svg</file>
+        <file>icons/type.svg</file>
+        <file>icons/volume-2.svg</file>
+        <file>icons/volume-x.svg</file>
+        <file>icons/x.svg</file>
+        <file>icons/zoom-in.svg</file>
+        <file>icons/zoom-out.svg</file>
+        <file>fonts/InterVariable.ttf</file>
+        <file>styles/prism.qss</file>
         <file>shaders/neon_kaleidoscope.glsl</file>
         <file>shaders/cyberpunk_horizon_grid.glsl</file>
         <file>shaders/audio_reactive_wave.glsl</file>

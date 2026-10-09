@@ -39,7 +39,7 @@ McpAccessDialog::McpAccessDialog(MainWindow *window, QWidget *parent)
     m_error = new QLabel(this);
     m_error->setWordWrap(true);
     m_error->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
-    m_error->setStyleSheet(QStringLiteral("color: #e04545;"));
+    m_error->setProperty("role", "danger");
     m_error->hide();
     layout->addWidget(m_error);
 
@@ -84,7 +84,7 @@ McpAccessDialog::McpAccessDialog(MainWindow *window, QWidget *parent)
         m_runningBox);
     hint->setWordWrap(true);
     hint->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
-    hint->setStyleSheet(QStringLiteral("color: #888;"));
+    hint->setProperty("role", "secondary");
     runLayout->addWidget(hint);
 
     m_runningBox->hide();

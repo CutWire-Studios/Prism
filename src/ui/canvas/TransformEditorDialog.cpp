@@ -1,7 +1,8 @@
 #include "ui/canvas/TransformEditorDialog.h"
 #include "ui/canvas/TransformCanvasWidget.h"
 #include "ui/nodes/ClipNodeEditor.h"
-#include "ui/common/MaterialSymbols.h"
+#include "ui/common/Icons.h"
+#include "ui/common/Theme.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -32,16 +33,18 @@ TransformEditorDialog::TransformEditorDialog(int contextId, ClipNodeEditor *edit
     auto *titleCol = new QVBoxLayout();
     titleCol->setSpacing(1);
     auto *title = new QLabel("Layer Layout");
-    title->setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff;");
+    title->setStyleSheet("font-size: 15px; font-weight: bold;");
     auto *subtitle = new QLabel("Changes apply to the output in real time");
-    subtitle->setStyleSheet("font-size: 11px; color: #8b919b;");
+    subtitle->setProperty("role", "secondary");
+    subtitle->setStyleSheet("font-size: 11px;");
     titleCol->addWidget(title);
     titleCol->addWidget(subtitle);
     header->addLayout(titleCol);
     header->addStretch();
 
     auto *canvasLabel = new QLabel("Canvas");
-    canvasLabel->setStyleSheet("color: #8b919b; font-size: 11px; font-weight: bold;");
+    canvasLabel->setProperty("role", "secondary");
+    canvasLabel->setStyleSheet("font-size: 11px; font-weight: bold;");
     m_canvasWSpin = new QSpinBox();
     m_canvasHSpin = new QSpinBox();
     for (QSpinBox *s : { m_canvasWSpin, m_canvasHSpin }) {
@@ -81,7 +84,8 @@ TransformEditorDialog::TransformEditorDialog(int contextId, ClipNodeEditor *edit
     auto *footer = new QHBoxLayout();
     auto *hint = new QLabel("Drag to move · handles resize · Shift keeps aspect · "
                             "Alt disables snapping · Arrow keys nudge · Double-click fills canvas");
-    hint->setStyleSheet("color: #6f747d; font-size: 10px;");
+    hint->setProperty("role", "secondary");
+    hint->setStyleSheet("font-size: 10px;");
     footer->addWidget(hint);
     footer->addStretch();
     auto *cancelBtn = new QPushButton("Cancel");
@@ -127,7 +131,8 @@ QWidget *TransformEditorDialog::buildSidebar() {
     v->setSpacing(8);
 
     auto *layersLabel = new QLabel("LAYERS   (top → bottom)");
-    layersLabel->setStyleSheet("color: #2a8fa0; font-size: 10px; font-weight: bold; letter-spacing: 1px;");
+    layersLabel->setProperty("role", "secondary");
+    layersLabel->setStyleSheet("font-size: 10px; font-weight: bold; letter-spacing: 1px;");
     v->addWidget(layersLabel);
 
     m_layerList = new QListWidget();
@@ -152,7 +157,8 @@ QWidget *TransformEditorDialog::buildSidebar() {
     };
     auto dimLabel = [](const char *t) {
         auto *l = new QLabel(t);
-        l->setStyleSheet("color: #8b919b; font-size: 11px;");
+        l->setProperty("role", "secondary");
+        l->setStyleSheet("font-size: 11px;");
         return l;
     };
     m_xSpin = makeSpin(); m_ySpin = makeSpin();
@@ -236,14 +242,14 @@ void TransformEditorDialog::populate() {
         eye->setChecked(clip.visible);
         eye->setFixedSize(22, 22);
         eye->setToolTip("Show / hide this layer");
-        eye->setIcon(MaterialSymbols::icon(clip.visible ? "visibility" : "visibility_off",
-                                           16, clip.visible ? QColor(120, 200, 160)
-                                                            : QColor(90, 90, 96)));
+        eye->setIcon(Icons::icon(clip.visible ? Icons::Names::Visibility : Icons::Names::VisibilityOff,
+                                           16, clip.visible ? Theme::instance().tokens().text
+                                                            : Theme::instance().tokens().textDisabled));
         m_eyeButtons.push_back(eye);
         connect(eye, &QToolButton::toggled, this, [this, eye, row](bool on) {
-            eye->setIcon(MaterialSymbols::icon(on ? "visibility" : "visibility_off",
-                                               16, on ? QColor(120, 200, 160)
-                                                      : QColor(90, 90, 96)));
+            eye->setIcon(Icons::icon(on ? Icons::Names::Visibility : Icons::Names::VisibilityOff,
+                                               16, on ? Theme::instance().tokens().text
+                                                      : Theme::instance().tokens().textDisabled));
             const int canvasIdx = canvasIndexForRow(row);
             m_canvas->setClipVisible(canvasIdx, on);
             m_editor->setLayerSlotVisible((NodeId)m_contextId,
@@ -252,7 +258,6 @@ void TransformEditorDialog::populate() {
 
         auto *thumbLabel = new QLabel();
         thumbLabel->setFixedSize(38, 22);
-        thumbLabel->setStyleSheet("background-color: #101113; border-radius: 2px;");
         thumbLabel->setAlignment(Qt::AlignCenter);
         if (!clip.thumbnail.isNull())
             thumbLabel->setPixmap(clip.thumbnail.scaled(38, 22, Qt::KeepAspectRatio,

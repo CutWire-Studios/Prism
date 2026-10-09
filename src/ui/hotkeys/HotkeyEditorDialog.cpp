@@ -1,6 +1,7 @@
 #include "ui/hotkeys/HotkeyEditorDialog.h"
 #include "ui/hotkeys/HotkeyManager.h"
 #include "ui/nodes/ClipNodeEditor.h"
+#include "ui/common/Theme.h"
 
 #include <QTableWidget>
 #include <QHeaderView>
@@ -40,7 +41,6 @@ public:
 protected:
     void focusInEvent(QFocusEvent *event) override {
         QLineEdit::focusInEvent(event);
-        setStyleSheet(QStringLiteral("background-color: #2a3a55;"));
         setPlaceholderText(QObject::tr("Press a key… (Esc to cancel, Del to clear)"));
     }
 
@@ -253,7 +253,9 @@ void HotkeyEditorDialog::refreshConflictHighlights() {
     }
 
     const QBrush okBrush;
-    const QBrush conflictBrush(QColor(120, 32, 32));
+    QColor conflictColor = Theme::instance().tokens().danger;
+    conflictColor.setAlpha(60);
+    const QBrush conflictBrush(conflictColor);
 
     for (int row = 0; row < m_table->rowCount(); ++row) {
         auto *capture = qobject_cast<HotkeyCaptureEdit *>(m_table->cellWidget(row, 1));
@@ -263,8 +265,8 @@ void HotkeyEditorDialog::refreshConflictHighlights() {
         const Qt::Key key = capture->capturedKey();
         const bool conflict = key != Qt::Key_unknown && keyCounts.value(key) > 1;
         capture->setStyleSheet(conflict
-            ? QStringLiteral("background-color: #5a2020; color: #fff;")
-            : (capture->hasFocus() ? QStringLiteral("background-color: #2a3a55;") : QString()));
+            ? QStringLiteral("background-color: %1;").arg(conflictColor.name(QColor::HexArgb))
+            : QString());
         for (int col = 0; col < 4; ++col) {
             if (QTableWidgetItem *item = m_table->item(row, col))
                 item->setBackground(conflict ? conflictBrush : okBrush);

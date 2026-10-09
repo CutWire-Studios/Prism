@@ -2,6 +2,7 @@
 #include "ui_TextEditDialog.h"
 
 #include "core/sources/TextSource.h"
+#include "ui/common/Theme.h"
 
 #include <QApplication>
 #include <QButtonGroup>
@@ -27,18 +28,12 @@
 
 namespace {
 
-// Accent shared with the ScriptOut/DataIn port color in the node editor, so
-// variable blocks visually match the wire that feeds them.
-const QColor kVarAccent(0x70, 0xc0, 0xa8);
-const QColor kUnknownAccent(0xe0, 0xa0, 0x50);
-const QColor kNeutralAccent(0x6e, 0xa8, 0xd8);
-
 QIcon makeHAlignIcon(Qt::Alignment align) {
     QPixmap pm(20, 20);
     pm.fill(Qt::transparent);
     QPainter p(&pm);
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0xd0, 0xd4, 0xda));
+    p.setBrush(Theme::instance().tokens().text);
     static const int widths[4] = { 14, 9, 12, 7 };
     for (int i = 0; i < 4; ++i) {
         int w = widths[i];
@@ -57,7 +52,7 @@ QIcon makeVAlignIcon(Qt::Alignment align) {
     pm.fill(Qt::transparent);
     QPainter p(&pm);
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0xd0, 0xd4, 0xda));
+    p.setBrush(Theme::instance().tokens().text);
     int top;
     if (align & Qt::AlignBottom)       top = 11;
     else if (align & Qt::AlignVCenter) top = 7;
@@ -187,20 +182,25 @@ public:
     {
         setObjectName(QStringLiteral("varChip"));
         setCursor(Qt::OpenHandCursor);
+        const auto &t = Theme::instance().tokens();
         setStyleSheet(QStringLiteral(
-            "QFrame#varChip { background:#16221e; border:1px solid #2d3e37; border-radius:9px; }"
-            "QFrame#varChip:hover { border-color:#70c0a8; }"));
+            "QFrame#varChip { background:%1; border:1px solid %2; border-radius:9px; }"
+            "QFrame#varChip:hover { border-color:%3; }")
+            .arg(t.glassControl.name(QColor::HexArgb), t.stroke.name(QColor::HexArgb),
+                 t.textSecondary.name(QColor::HexArgb)));
 
         auto *lay = new QHBoxLayout(this);
         lay->setContentsMargins(9, 4, 9, 4);
         lay->setSpacing(6);
 
         auto *nameLabel = new QLabel(QStringLiteral("{%1}").arg(name), this);
-        nameLabel->setStyleSheet(QStringLiteral("color:#70c0a8; font-weight:600;"));
+        nameLabel->setProperty("role", "secondary");
+        nameLabel->setStyleSheet(QStringLiteral("font-weight:600;"));
         lay->addWidget(nameLabel);
 
         m_valueLabel = new QLabel(QStringLiteral("—"), this);
-        m_valueLabel->setStyleSheet(QStringLiteral("color:#8b93a3; font-size:11px;"));
+        m_valueLabel->setProperty("role", "secondary");
+        m_valueLabel->setStyleSheet(QStringLiteral("font-size:11px;"));
         lay->addWidget(m_valueLabel);
     }
 
@@ -276,11 +276,11 @@ protected:
             QTextCharFormat fmt;
             fmt.setFontWeight(QFont::DemiBold);
             if (!m_connected)
-                fmt.setForeground(kNeutralAccent);
+                fmt.setForeground(Theme::instance().tokens().textSecondary);
             else if (m_known.contains(m.captured(1)))
-                fmt.setForeground(kVarAccent);
+                fmt.setForeground(Theme::instance().tokens().accent);
             else
-                fmt.setForeground(kUnknownAccent);
+                fmt.setForeground(Theme::instance().tokens().warning);
             setFormat(m.capturedStart(), m.capturedLength(), fmt);
         }
     }
@@ -602,9 +602,10 @@ void TextEditDialog::pickColor(QColor &target, const QString &title) {
 void TextEditDialog::updateColorButtons() {
     auto styleColorBtn = [](QPushButton *btn, const QColor &c) {
         btn->setStyleSheet(QStringLiteral(
-            "background-color:%1; color:%2; border:1px solid #555; border-radius:3px; padding:4px 10px;")
+            "background-color:%1; color:%2; border:1px solid %3; border-radius:3px; padding:4px 10px;")
             .arg(c.name(QColor::HexArgb),
-                 c.lightness() > 128 ? QStringLiteral("#111") : QStringLiteral("#eee")));
+                 c.lightness() > 128 ? QStringLiteral("#111") : QStringLiteral("#eee"),
+                 Theme::instance().tokens().textSecondary.name(QColor::HexArgb)));
         btn->setText(c.name(QColor::HexArgb).toUpper());
     };
     styleColorBtn(ui->textColorBtn, m_textColor);

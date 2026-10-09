@@ -52,7 +52,7 @@
               </widget>
              </item>
              <item><widget class="QPushButton" name="refreshBtn"><property name="text"><string>Refresh Preview</string></property></widget></item>
-             <item><widget class="QLabel" name="errorLabel"><property name="text"><string/></property><property name="wordWrap"><bool>true</bool></property><property name="styleSheet"><string>color: #f44336;</string></property></widget></item>
+             <item><widget class="QLabel" name="errorLabel"><property name="text"><string/></property><property name="wordWrap"><bool>true</bool></property><property name="role" stdset="0"><string>danger</string></property></widget></item>
             </layout>
            </item>
           </layout>
@@ -88,7 +88,7 @@
               </item>
               <item><widget class="QPushButton" name="inspDeleteBtn"><property name="text"><string>Delete Element</string></property></widget></item>
               <item><spacer><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
-              <item><widget class="QLabel" name="inspHintLabel"><property name="text"><string>Click any element to select it. Drag to move, use the handles to resize, double-click to edit text. Ctrl+Z undoes.</string></property><property name="wordWrap"><bool>true</bool></property><property name="styleSheet"><string>color:#888;font-size:11px;</string></property></widget></item>
+              <item><widget class="QLabel" name="inspHintLabel"><property name="text"><string>Click any element to select it. Drag to move, use the handles to resize, double-click to edit text. Ctrl+Z undoes.</string></property><property name="wordWrap"><bool>true</bool></property><property name="styleSheet"><string notr="true">font-size:11px;</string></property><property name="role" stdset="0"><string>secondary</string></property></widget></item>
              </layout>
             </widget>
            </item>
@@ -106,7 +106,7 @@
          <item><widget class="QToolButton" name="snapBtn"><property name="text"><string>Snap</string></property><property name="checkable"><bool>true</bool></property><property name="checked"><bool>true</bool></property><property name="toolTip"><string>Snap to canvas edges, centers and other widgets while dragging (hold Alt to bypass)</string></property></widget></item>
          <item><widget class="QToolButton" name="safeAreaBtn"><property name="text"><string>Safe Areas</string></property><property name="checkable"><bool>true</bool></property><property name="toolTip"><string>Show broadcast action-safe and title-safe guides</string></property></widget></item>
          <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property></spacer></item>
-         <item><widget class="QLabel" name="wsErrorLabel"><property name="text"><string/></property><property name="styleSheet"><string>color: #f44336;</string></property></widget></item>
+         <item><widget class="QLabel" name="wsErrorLabel"><property name="text"><string/></property><property name="role" stdset="0"><string>danger</string></property></widget></item>
         </layout>
        </item>
        <item>

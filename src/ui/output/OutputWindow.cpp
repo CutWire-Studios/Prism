@@ -1,6 +1,7 @@
 #include "ui/output/OutputWindow.h"
 #include "ui_OutputWindow.h"
 #include "ui/canvas/VideoWidget.h"
+#include "ui/common/Theme.h"
 #include <QAction>
 #include <QKeyEvent>
 #include <QMenu>
@@ -26,7 +27,8 @@ OutputWindow::~OutputWindow() {
 
 void OutputWindow::setRecordingActive(bool active) {
     ui->outputWidget->setStyleSheet(active
-        ? QStringLiteral("background-color: #000; border: 3px solid #e04545;")
+        ? QStringLiteral("background-color: #000; border: 3px solid %1;")
+              .arg(Theme::instance().tokens().danger.name())
         : QStringLiteral("background-color: #000;"));
 }
 

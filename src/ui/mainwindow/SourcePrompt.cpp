@@ -1,6 +1,6 @@
 #include "ui/mainwindow/SourcePrompt.h"
 #include "ui/common/ThumbHelper.h"
-#include "ui/common/MaterialSymbols.h"
+#include "ui/common/Icons.h"
 #include "ui/common/CameraEnumerator.h"
 #ifndef Q_OS_LINUX
 #include "ui/common/CapturePicker.h"
@@ -69,7 +69,7 @@ bool promptSlideshow(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
                                      QDir::Files, QDir::Name);
     if (!imgs.isEmpty())
         thumb = ThumbnailExtractor::extract(dir.absoluteFilePath(imgs.first()), 110, 65);
-    if (thumb.isNull()) thumb = ThumbHelper::makeIconThumb(MaterialSymbols::Names::Folder);
+    if (thumb.isNull()) thumb = ThumbHelper::makeIconThumb(Icons::Names::Folder);
 
     desc.kind                = SourceDescriptor::Kind::Slideshow;
     desc.path                = folder;
@@ -114,7 +114,7 @@ bool promptCamera(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
         }
     }
 
-    thumb = ThumbHelper::makeIconThumb(MaterialSymbols::Names::PhotoCamera);
+    thumb = ThumbHelper::makeIconThumb(Icons::Names::PhotoCamera);
     return true;
 }
 
@@ -124,8 +124,8 @@ bool promptScreen(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
         return false;
     thumb = ThumbHelper::makeIconThumb(
         desc.kind == SourceDescriptor::Kind::Window
-            ? MaterialSymbols::Names::SelectWindow
-            : MaterialSymbols::Names::DesktopWindows);
+            ? Icons::Names::SelectWindow
+            : Icons::Names::DesktopWindows);
     return true;
 #else
     Q_UNUSED(parent);
@@ -134,7 +134,7 @@ bool promptScreen(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     desc.screenIndex = 0;
     // Stable id so the portal selection is remembered across recreations.
     desc.captureId   = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    thumb = ThumbHelper::makeIconThumb(MaterialSymbols::Names::DesktopWindows);
+    thumb = ThumbHelper::makeIconThumb(Icons::Names::DesktopWindows);
     return true;
 #endif
 }
@@ -145,8 +145,8 @@ bool promptWindow(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
         return false;
     thumb = ThumbHelper::makeIconThumb(
         desc.kind == SourceDescriptor::Kind::Window
-            ? MaterialSymbols::Names::SelectWindow
-            : MaterialSymbols::Names::DesktopWindows);
+            ? Icons::Names::SelectWindow
+            : Icons::Names::DesktopWindows);
     return true;
 #else
     Q_UNUSED(parent);
@@ -155,7 +155,7 @@ bool promptWindow(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     desc.windowIndex = 0;
     // Stable id so the portal selection is remembered across recreations.
     desc.captureId   = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    thumb = ThumbHelper::makeIconThumb(MaterialSymbols::Names::SelectWindow);
+    thumb = ThumbHelper::makeIconThumb(Icons::Names::SelectWindow);
     return true;
 #endif
 }
@@ -288,7 +288,7 @@ bool promptNdi(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     desc.kind        = SourceDescriptor::Kind::Ndi;
     desc.path        = chosen;
     desc.displayName = chosen;
-    thumb = ThumbHelper::makeIconThumb(MaterialSymbols::Names::Sensors);
+    thumb = ThumbHelper::makeIconThumb(Icons::Names::Sensors);
     return true;
 }
 
@@ -621,40 +621,40 @@ void buildMenu(QMenu *menu,
 
     auto addIconAction = [&](const char *iconName, const QString &text, auto slot) {
         QAction *action = menu->addAction(text, std::move(slot));
-        MaterialSymbols::setActionIcon(action, iconName);
+        Icons::setActionIcon(action, iconName);
         return action;
     };
 
-    addIconAction(MaterialSymbols::Names::Movie, QObject::tr("Media File…"), std::move(onFile));
-    addIconAction(MaterialSymbols::Names::Link, QObject::tr("Video URL…"), std::move(onUrl));
-    addIconAction(MaterialSymbols::Names::Folder, QObject::tr("Slideshow…"),
+    addIconAction(Icons::Names::Movie, QObject::tr("Media File…"), std::move(onFile));
+    addIconAction(Icons::Names::Link, QObject::tr("Video URL…"), std::move(onUrl));
+    addIconAction(Icons::Names::Folder, QObject::tr("Slideshow…"),
                   [onKind]() { onKind(SourceDescriptor::Kind::Slideshow); });
     menu->addSeparator();
-    addIconAction(MaterialSymbols::Names::PhotoCamera, QObject::tr("Camera…"),
+    addIconAction(Icons::Names::PhotoCamera, QObject::tr("Camera…"),
                   [onKind]() { onKind(SourceDescriptor::Kind::Camera); });
-    addIconAction(MaterialSymbols::Names::Mic, QObject::tr("Mic Input…"), std::move(onMicInput));
-    addIconAction(MaterialSymbols::Names::Speaker, QObject::tr("Audio Capture…"), std::move(onAudioCapture));
-    addIconAction(MaterialSymbols::Names::DesktopWindows, QObject::tr("Screen Capture…"),
+    addIconAction(Icons::Names::Mic, QObject::tr("Mic Input…"), std::move(onMicInput));
+    addIconAction(Icons::Names::Speaker, QObject::tr("Audio Capture…"), std::move(onAudioCapture));
+    addIconAction(Icons::Names::DesktopWindows, QObject::tr("Screen Capture…"),
                   [onKind]() { onKind(SourceDescriptor::Kind::Screen); });
-    addIconAction(MaterialSymbols::Names::SelectWindow, QObject::tr("Window / Tab…"),
+    addIconAction(Icons::Names::SelectWindow, QObject::tr("Window / Tab…"),
                   [onKind]() { onKind(SourceDescriptor::Kind::Window); });
     menu->addSeparator();
-    addIconAction(MaterialSymbols::Names::CropSquare, QObject::tr("Canvas…"),
+    addIconAction(Icons::Names::CropSquare, QObject::tr("Canvas…"),
                   [onKind]() { onKind(SourceDescriptor::Kind::Canvas); });
-    addIconAction(MaterialSymbols::Names::Grain, QObject::tr("Shader…"),
+    addIconAction(Icons::Names::Grain, QObject::tr("Shader…"),
                   [onKind]() { onKind(SourceDescriptor::Kind::Shader); });
-    addIconAction(MaterialSymbols::Names::Language, QObject::tr("HTML Overlay…"),
+    addIconAction(Icons::Names::Language, QObject::tr("HTML Overlay…"),
                   [onKind]() { onKind(SourceDescriptor::Kind::Html); });
-    addIconAction(MaterialSymbols::Names::TextFields, QObject::tr("Text…"),
+    addIconAction(Icons::Names::TextFields, QObject::tr("Text…"),
                   [onKind]() { onKind(SourceDescriptor::Kind::Text); });
-    QAction *ndiAction = addIconAction(MaterialSymbols::Names::Sensors, QObject::tr("NDI Source…"),
+    QAction *ndiAction = addIconAction(Icons::Names::Sensors, QObject::tr("NDI Source…"),
                                        [onKind]() { onKind(SourceDescriptor::Kind::Ndi); });
     ndiAction->setEnabled(ndiAvailable);
     if (!ndiAvailable) {
         ndiAction->setToolTip(QObject::tr(
             "NDI SDK not found at build time. Install the NDI SDK and rebuild with -DNDI_ROOT=…"));
     }
-    QAction *webrtcAction = addIconAction(MaterialSymbols::Names::Smartphone,
+    QAction *webrtcAction = addIconAction(Icons::Names::Smartphone,
                                           QObject::tr("Phone Camera (WebRTC)…"),
                                           [onKind]() { onKind(SourceDescriptor::Kind::WebRtc); });
     webrtcAction->setEnabled(webrtcAvailable);

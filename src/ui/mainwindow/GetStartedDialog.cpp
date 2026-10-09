@@ -8,6 +8,8 @@
 #include <QTimer>
 #include <QPixmap>
 
+#include "ui/common/Theme.h"
+
 namespace {
 
 constexpr auto kSettingsKey = "onboarding/getStartedShown";
@@ -32,7 +34,7 @@ GetStartedDialog::GetStartedDialog(QWidget *parent)
 
     auto *title = new QLabel(tr("Welcome to CutWire Prism"), this);
     title->setAlignment(Qt::AlignCenter);
-    title->setStyleSheet(QStringLiteral("font-size: 16px; font-weight: bold; color: #E0E0E0;"));
+    title->setStyleSheet(QStringLiteral("font-size: 16px; font-weight: bold;"));
 
     auto *subtitle = new QLabel(
         tr("Build live media shows by connecting sources on the node canvas. "
@@ -40,31 +42,36 @@ GetStartedDialog::GetStartedDialog(QWidget *parent)
         this);
     subtitle->setWordWrap(true);
     subtitle->setAlignment(Qt::AlignCenter);
-    subtitle->setStyleSheet(QStringLiteral("color: #aaaaaa; font-size: 12px;"));
+    subtitle->setProperty("role", "secondary");
+    subtitle->setStyleSheet(QStringLiteral("font-size: 12px;"));
 
     auto *divider = new QFrame(this);
     divider->setFrameShape(QFrame::HLine);
     divider->setFixedHeight(1);
-    divider->setStyleSheet(QStringLiteral("background-color: #33363b; border: none;"));
+    divider->setStyleSheet(QStringLiteral("background-color: %1; border: none;")
+                               .arg(Theme::instance().tokens().stroke.name(QColor::HexArgb)));
 
     auto *quickStartLabel = new QLabel(tr("Quick Start"), this);
-    quickStartLabel->setStyleSheet(QStringLiteral("font-size: 12px; font-weight: bold; color: #2a8fa0;"));
+    quickStartLabel->setProperty("role", "secondary");
+    quickStartLabel->setStyleSheet(QStringLiteral("font-size: 12px; font-weight: bold;"));
+
+    const QString accent = Theme::instance().tokens().accent.name();
 
     auto *docsLink = new QLabel(this);
     docsLink->setTextInteractionFlags(Qt::TextBrowserInteraction);
     docsLink->setOpenExternalLinks(true);
     docsLink->setWordWrap(true);
     docsLink->setText(
-        QStringLiteral("<a href=\"https://docs.cutwire.org/prism\" style=\"color: #4a9fb0;\">%1</a>")
-            .arg(tr("CutWire Prism documentation")));
+        QStringLiteral("<a href=\"https://docs.cutwire.org/prism\" style=\"color: %2;\">%1</a>")
+            .arg(tr("CutWire Prism documentation"), accent));
 
     auto *issuesLink = new QLabel(this);
     issuesLink->setTextInteractionFlags(Qt::TextBrowserInteraction);
     issuesLink->setOpenExternalLinks(true);
     issuesLink->setWordWrap(true);
     issuesLink->setText(
-        QStringLiteral("<a href=\"https://github.com/CutWire-Studios/Prism/issues\" style=\"color: #4a9fb0;\">%1</a>")
-            .arg(tr("Report an issue on GitHub")));
+        QStringLiteral("<a href=\"https://github.com/CutWire-Studios/Prism/issues\" style=\"color: %2;\">%1</a>")
+            .arg(tr("Report an issue on GitHub"), accent));
 
     auto *closeBtn = new QPushButton(tr("Get Started"), this);
     closeBtn->setDefault(true);

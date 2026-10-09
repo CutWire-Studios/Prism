@@ -1,5 +1,6 @@
 #include "ui/canvas/HtmlPreviewWidget.h"
 #include "core/sources/HtmlWorkspace.h"
+#include "ui/common/Theme.h"
 #include <QWebEngineView>
 
 HtmlPreviewWidget::HtmlPreviewWidget(QWidget *parent)
@@ -7,9 +8,13 @@ HtmlPreviewWidget::HtmlPreviewWidget(QWidget *parent)
 {
     setMinimumSize(160, 90);
     setAutoFillBackground(true);
-    QPalette pal = palette();
-    pal.setColor(QPalette::Window, QColor(0x18, 0x19, 0x1b));
-    setPalette(pal);
+    auto applyPalette = [this] {
+        QPalette pal = palette();
+        pal.setColor(QPalette::Window, Theme::instance().tokens().bgBase);
+        setPalette(pal);
+    };
+    applyPalette();
+    connect(&Theme::instance(), &Theme::changed, this, applyPalette);
 
     m_webView = new QWebEngineView(this);
     m_webView->resize(HtmlWorkspace::kCanvasWidth, HtmlWorkspace::kCanvasHeight);

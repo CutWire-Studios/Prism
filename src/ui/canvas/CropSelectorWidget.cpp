@@ -1,5 +1,6 @@
 #include "ui/canvas/CropSelectorWidget.h"
 #include "ui/canvas/CanvasGeometry.h"
+#include "ui/common/Theme.h"
 #include <QBrush>
 #include <QPainter>
 #include <QPixmap>
@@ -13,21 +14,23 @@ static double clampRange(double value, double lo, double hi) {
     return std::clamp(value, lo, hi);
 }
 
-static const QBrush &checkerBrush() {
-    static const QBrush brush = [] {
-        QPixmap pm(16, 16);
-        pm.fill(QColor(0x2b, 0x2d, 0x31));
-        QPainter tp(&pm);
-        tp.fillRect(0, 0, 8, 8, QColor(0x37, 0x3a, 0x3f));
-        tp.fillRect(8, 8, 8, 8, QColor(0x37, 0x3a, 0x3f));
-        return QBrush(pm);
-    }();
-    return brush;
+static QBrush checkerBrush() {
+    const auto &t = Theme::instance().tokens();
+    const bool dark = Theme::instance().isDark();
+    const QColor a = dark ? t.bgBase.lighter(130) : t.bgBase.darker(105);
+    const QColor b = dark ? t.bgBase.lighter(150) : t.bgBase.darker(110);
+    QPixmap pm(16, 16);
+    pm.fill(a);
+    QPainter tp(&pm);
+    tp.fillRect(0, 0, 8, 8, b);
+    tp.fillRect(8, 8, 8, 8, b);
+    return QBrush(pm);
 }
 
 CropSelectorWidget::CropSelectorWidget(QWidget *parent) : QWidget(parent) {
     setMouseTracking(true);
     setMinimumSize(200, 112);
+    connect(&Theme::instance(), &Theme::changed, this, qOverload<>(&QWidget::update));
 }
 
 void CropSelectorWidget::setFrame(const QImage &frame) {
@@ -221,7 +224,8 @@ void CropSelectorWidget::mouseDoubleClickEvent(QMouseEvent *e) {
 
 void CropSelectorWidget::paintEvent(QPaintEvent *) {
     QPainter p(this);
-    p.fillRect(rect(), QColor(0x18, 0x19, 0x1b));
+    const auto &t = Theme::instance().tokens();
+    p.fillRect(rect(), t.bgBase);
 
     QRectF fr = frameRect();
     p.fillRect(fr, checkerBrush());
@@ -230,9 +234,9 @@ void CropSelectorWidget::paintEvent(QPaintEvent *) {
     if (!m_frame.isNull())
         p.drawImage(fr, m_frame);
     else {
-        p.setPen(QColor(0x33, 0x36, 0x3b));
+        p.setPen(t.stroke);
         p.drawRect(fr);
-        p.setPen(QColor(0x88, 0x88, 0x88));
+        p.setPen(t.textSecondary);
         p.drawText(fr, Qt::AlignCenter, "No frame — press Play then switch here");
     }
 
@@ -249,19 +253,21 @@ void CropSelectorWidget::paintEvent(QPaintEvent *) {
     }
 
     // Crop border
-    p.setPen(QPen(QColor(0x2a, 0x8f, 0xa0), 1.5, Qt::SolidLine));
+    p.setPen(QPen(t.accent, 1.5, Qt::SolidLine));
     p.setBrush(Qt::NoBrush);
     p.drawRect(cr);
 
     // Corner handles
-    p.setBrush(QColor(0x4f, 0xc3, 0xd0));
+    p.setBrush(t.accent.lighter(115));
     p.setPen(Qt::NoPen);
     for (const QRectF &h : handles(cr))
         p.drawRect(h);
 
     // Hint text
-    p.setPen(QColor(0x55, 0x55, 0x55));
-    p.setFont(QFont("Segoe UI", 9));
+    p.setPen(t.textDisabled);
+    QFont hintFont(QStringLiteral("Inter"));
+    hintFont.setPixelSize(12);
+    p.setFont(hintFont);
     p.drawText(QRectF(0, height() - 18, width(), 18),
                Qt::AlignCenter, "Drag inside to move  ·  Drag corners to resize  ·  Double-click to reset");
 }

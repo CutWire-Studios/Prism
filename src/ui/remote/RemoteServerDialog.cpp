@@ -1,5 +1,6 @@
 #include "ui/remote/RemoteServerDialog.h"
 #include "ui/common/QrCodeHelper.h"
+#include "ui/common/Theme.h"
 #include "core/webrtc/FirewallUtils.h"
 #include "core/webrtc/NetworkUtils.h"
 #include <QVBoxLayout>
@@ -175,25 +176,27 @@ void RemoteServerDialog::updateUiState() {
         QString urlList;
         QHostAddress addr = m_server->serverAddress();
 
+        const QString warning = Theme::instance().tokens().warning.name();
         if (addr == QHostAddress::Any) {
             QList<QHostAddress> ipAddressesList = QNetworkInterface::allAddresses();
             for (const QHostAddress &ip : ipAddressesList) {
                 if (ip.protocol() == QAbstractSocket::IPv4Protocol && ip != QHostAddress::LocalHost) {
-                    urlList += QString("<br>• <a href=\"http://%1:%2\" style=\"color: #e5a93b;\">http://%1:%2</a>")
-                                  .arg(ip.toString()).arg(port);
+                    urlList += QString("<br>• <a href=\"http://%1:%2\" style=\"color: %3;\">http://%1:%2</a>")
+                                  .arg(ip.toString()).arg(port).arg(warning);
                 }
             }
-            urlList += QString("<br>• <a href=\"http://127.0.0.1:%1\" style=\"color: #e5a93b;\">http://127.0.0.1:%1</a>")
-                          .arg(port);
+            urlList += QString("<br>• <a href=\"http://127.0.0.1:%1\" style=\"color: %2;\">http://127.0.0.1:%1</a>")
+                          .arg(port).arg(warning);
         } else {
-            urlList += QString("<br>• <a href=\"http://%1:%2\" style=\"color: #e5a93b;\">http://%1:%2</a>")
-                          .arg(addr.toString()).arg(port);
+            urlList += QString("<br>• <a href=\"http://%1:%2\" style=\"color: %3;\">http://%1:%2</a>")
+                          .arg(addr.toString()).arg(port).arg(warning);
         }
 
         m_lblStatus->setText(tr("<b>Server is RUNNING!</b> Access remotely at:%1").arg(urlList));
         m_lblStatus->setOpenExternalLinks(true);
         m_btnStartStop->setText(tr("Stop Server"));
-        m_btnStartStop->setStyleSheet("background-color: #aa3333; color: white; padding: 6px 12px;");
+        m_btnStartStop->setStyleSheet(QStringLiteral("background-color: %1; color: white; padding: 6px 12px;")
+                                          .arg(Theme::instance().tokens().danger.name()));
     } else {
         m_rbLocalhost->setEnabled(true);
         m_rbNetwork->setEnabled(true);
@@ -201,7 +204,8 @@ void RemoteServerDialog::updateUiState() {
 
         m_lblStatus->setText(tr("<b>Server is stopped.</b>"));
         m_btnStartStop->setText(tr("Start Server"));
-        m_btnStartStop->setStyleSheet("background-color: #33aa33; color: white; padding: 6px 12px;");
+        m_btnStartStop->setStyleSheet(QStringLiteral("background-color: %1; color: white; padding: 6px 12px;")
+                                          .arg(Theme::instance().tokens().success.name()));
     }
 
     updateQrCode();

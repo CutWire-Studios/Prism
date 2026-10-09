@@ -29,7 +29,8 @@
 #include "mcp/McpServer.h"
 #include "mcp/McpJson.h"
 #include "ui/mainwindow/MainWindowUtils.h"
-#include "ui/common/MaterialSymbols.h"
+#include "ui/common/Icons.h"
+#include "ui/common/Theme.h"
 #include "ui/output/FrameCaptureHelper.h"
 #include "ui/recording/RecordingSettingsDialog.h"
 #include "core/project/ClipManager.h"
@@ -37,6 +38,7 @@
 #include "ui/common/ThumbHelper.h"
 #include "ui/common/PreferencesDialog.h"
 #include "core/media/VideoDecoder.h"
+#include <QActionGroup>
 #include <QDialog>
 #include <QFormLayout>
 #include <QDialogButtonBox>
@@ -95,16 +97,18 @@ MainWindow::MainWindow(QWidget *parent)
     setAcceptDrops(true);
     m_baseWindowTitle = windowTitle();
 
-    MaterialSymbols::setActionIcon(ui->actionLoadFolder, MaterialSymbols::Names::Description);
-    MaterialSymbols::setActionIcon(ui->actionAddFolder, MaterialSymbols::Names::FolderOpen);
-    MaterialSymbols::setActionIcon(ui->actionSaveSession, MaterialSymbols::Names::Save);
-    MaterialSymbols::setActionIcon(ui->actionLoadSession, MaterialSymbols::Names::FolderOpen);
-    MaterialSymbols::setActionIcon(ui->actionExportProject, MaterialSymbols::Names::Inventory);
-    MaterialSymbols::setActionIcon(ui->actionImportProject, MaterialSymbols::Names::Download);
-    MaterialSymbols::setActionIcon(ui->actionClearAll, MaterialSymbols::Names::Delete);
-    MaterialSymbols::setActionIcon(ui->actionAgentAccess, MaterialSymbols::Names::Sensors);
-    MaterialSymbols::setPlayPause(ui->aDeckPlayBtn, false, 22);
-    MaterialSymbols::setPlayPause(ui->bDeckPlayBtn, false, 22);
+    Icons::setActionIcon(ui->actionLoadFolder, Icons::Names::Description);
+    Icons::setActionIcon(ui->actionAddFolder, Icons::Names::FolderOpen);
+    Icons::setActionIcon(ui->actionSaveSession, Icons::Names::Save);
+    Icons::setActionIcon(ui->actionLoadSession, Icons::Names::FolderOpen);
+    Icons::setActionIcon(ui->actionExportProject, Icons::Names::Inventory);
+    Icons::setActionIcon(ui->actionImportProject, Icons::Names::Download);
+    Icons::setActionIcon(ui->actionClearAll, Icons::Names::Delete);
+    Icons::setActionIcon(ui->actionAgentAccess, Icons::Names::Sensors);
+    ui->aDeckPlayBtn->setProperty("primary", true);
+    ui->bDeckPlayBtn->setProperty("primary", true);
+    Icons::setPlayPause(ui->aDeckPlayBtn, false, 22);
+    Icons::setPlayPause(ui->bDeckPlayBtn, false, 22);
 
     // Deck transport controls stay hidden until a clip that supports them is
     // assigned (pushDecks / assignNodeToDeck toggle them per capability).
@@ -218,7 +222,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     setupConnections();
     setupAddMenu(ui->menuAddElement);
-    applyTheme();
 
     // Prime Qt Multimedia backend.
     QTimer::singleShot(0, []() {
@@ -538,6 +541,18 @@ void MainWindow::setupConnections() {
     });
     ui->actionStayOnTop->setChecked(false);
 
+    auto *appearanceGroup = new QActionGroup(this);
+    const std::pair<QAction *, Theme::Mode> appearanceModes[] = {
+        {ui->actionAppearanceSystem, Theme::Mode::System},
+        {ui->actionAppearanceLight, Theme::Mode::Light},
+        {ui->actionAppearanceDark, Theme::Mode::Dark},
+    };
+    for (const auto &[action, mode] : appearanceModes) {
+        appearanceGroup->addAction(action);
+        action->setChecked(Theme::instance().mode() == mode);
+        connect(action, &QAction::triggered, this, [mode] { Theme::instance().setMode(mode); });
+    }
+
     connect(ui->actionStartRemoteControl, &QAction::triggered, this, &MainWindow::onStartRemoteControl);
     connect(ui->actionAgentAccess, &QAction::triggered, this, &MainWindow::onAgentAccess);
 
@@ -751,7 +766,7 @@ void MainWindow::onAddVideoUrlClicked() {
     }
 
     // Create the Clip Node
-    QPixmap thumb = ThumbHelper::makeIconThumb(MaterialSymbols::Names::Link);
+    QPixmap thumb = ThumbHelper::makeIconThumb(Icons::Names::Link);
     ClipNodeModel *node = m_clipNodeEditor->addClipNode(url, thumb);
     if (node) {
         node->setDisplayName(name);
@@ -1199,7 +1214,7 @@ void MainWindow::onTimerUpdate() {
         }
         m_deckController->setLastTimeA(timeA);
     }
-    MaterialSymbols::setPlayPause(ui->aDeckPlayBtn, out->isPlayingA(), 22);
+    Icons::setPlayPause(ui->aDeckPlayBtn, out->isPlayingA(), 22);
 
     // B deck
     double durB  = out->getDurationB();
@@ -1221,7 +1236,7 @@ void MainWindow::onTimerUpdate() {
         }
         m_deckController->setLastTimeB(timeB);
     }
-    MaterialSymbols::setPlayPause(ui->bDeckPlayBtn, out->isPlayingB(), 22);
+    Icons::setPlayPause(ui->bDeckPlayBtn, out->isPlayingB(), 22);
 
     // Keep shader audio analysis phase-locked to the live deck clocks.
     m_deckController->refreshShaderAudioForActiveDecks();
@@ -1259,289 +1274,6 @@ void MainWindow::dropEvent(QDropEvent *event) {
 
 void MainWindow::resizeEvent(QResizeEvent *event) {
     QMainWindow::resizeEvent(event);
-}
-
-// ── Theme ─────────────────────────────────────────────────────────────────────
-
-void MainWindow::applyTheme() {
-    qApp->setStyle("fusion");
-    qApp->setStyleSheet(R"(
-        QMainWindow, QDialog, QWidget {
-            background-color: #242528;
-            color: #E0E0E0;
-            font-family: "Segoe UI", Arial, sans-serif;
-            font-size: 13px;
-        }
-        QGroupBox {
-            background-color: #242528;
-            border: 1px solid #1c1d1f;
-            border-radius: 12px;
-            padding-top: 10px;
-            margin-top: 10px;
-            color: #E0E0E0;
-            font-weight: bold;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            left: 10px;
-            padding: 0 5px 0 5px;
-            color: #2a8fa0;
-            font-weight: bold;
-            font-size: 12px;
-        }
-        QPushButton {
-            background-color: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #2a2c30,stop:1 #1e1f22);
-            color: #E0E0E0;
-            border-top: 1px solid #33363b;
-            border-left: 1px solid #33363b;
-            border-bottom: 1px solid #151618;
-            border-right: 1px solid #151618;
-            border-radius: 6px;
-            padding: 4px 10px;
-            font-weight: bold;
-            font-size: 11px;
-            min-height: 22px; height: 22px;
-        }
-        QPushButton:hover {
-            background-color: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #2e3136,stop:1 #222326);
-            color: #FFFFFF;
-        }
-        QPushButton:pressed {
-            background-color: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #191a1c,stop:1 #2b2d32);
-            border-top: 1px solid #121314; border-left: 1px solid #121314;
-            border-bottom: 1px solid #3a3d43; border-right: 1px solid #3a3d43;
-            color: #aaaaaa;
-        }
-        QPushButton#accentButton, QPushButton[text*="Load"], QPushButton[text*="Play"], QPushButton[text*="Fullscreen"] {
-            background-color: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #3a6670,stop:1 #1f3d45);
-            color: #FFFFFF;
-            border-top: 1px solid #4a7f8c; border-left: 1px solid #4a7f8c;
-            border-bottom: 1px solid #112226; border-right: 1px solid #112226;
-            padding: 4px 12px; font-size: 11px; min-height: 22px; height: 22px;
-        }
-        QPushButton#accentButton:pressed, QPushButton[text*="Play"]:pressed {
-            background-color: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #15292e,stop:1 #2f545c);
-            border-top: 1px solid #0f1d21; border-left: 1px solid #0f1d21;
-        }
-        QScrollBar:vertical { background-color: #1c1d1f; width: 12px; border-radius: 6px; }
-        QScrollBar::handle:vertical { background-color: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #32353a,stop:1 #242528); min-height: 20px; border-radius: 6px; border: 1px solid #151618; }
-        QScrollBar::handle:vertical:hover { background-color: #3d4147; }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { background: none; height: 0px; }
-        QScrollBar:horizontal { background-color: #1c1d1f; height: 12px; border-radius: 6px; }
-        QScrollBar::handle:horizontal { background-color: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #32353a,stop:1 #242528); min-width: 20px; border-radius: 6px; border: 1px solid #151618; }
-        QScrollBar::handle:horizontal:hover { background-color: #3d4147; }
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { background: none; width: 0px; }
-        QSlider::groove:horizontal { border: 1px solid #1c1d1f; height: 6px; background: #18191b; border-radius: 3px; }
-        QSlider::sub-page:horizontal { background: #2a5c66; border-radius: 3px; }
-        QSlider::handle:horizontal { background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #3a3d43,stop:1 #1c1d1f); border: 1px solid #4a4e56; width: 14px; margin-top: -5px; margin-bottom: -5px; border-radius: 7px; }
-        QSlider::handle:horizontal:hover { background: #4a4e56; }
-        QSlider::groove:vertical { border: 1px solid #1c1d1f; width: 6px; background: #18191b; border-radius: 3px; }
-        QSlider::handle:vertical { background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #3a3d43,stop:1 #1c1d1f); border: 1px solid #4a4e56; height: 14px; margin-left: -5px; margin-right: -5px; border-radius: 7px; }
-        QLabel { color: #E0E0E0; background-color: transparent; font-size: 12px; }
-        QSpinBox, QDoubleSpinBox {
-            background-color: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #2a2c30,stop:1 #1e1f22);
-            color: #E0E0E0;
-            border-top: 1px solid #33363b; border-left: 1px solid #33363b;
-            border-bottom: 1px solid #151618; border-right: 1px solid #151618;
-            border-radius: 6px; padding: 4px;
-            selection-background-color: #2a5c66;
-        }
-        QSpinBox:hover, QDoubleSpinBox:hover {
-            background-color: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #2e3136,stop:1 #222326);
-        }
-        QSpinBox::up-button, QSpinBox::down-button,
-        QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
-            background-color: #1e1f22; border: 1px solid #151618; border-radius: 3px; width: 16px;
-        }
-        QSpinBox::up-button:pressed, QSpinBox::down-button:pressed,
-        QDoubleSpinBox::up-button:pressed, QDoubleSpinBox::down-button:pressed {
-            background-color: #151618;
-        }
-        QListWidget { background-color: #1c1d1f; border: 1px solid #151618; border-radius: 8px; color: #E0E0E0; }
-        QListWidget::item { padding: 4px; }
-        QListWidget::item:selected { background-color: #2a5c66; color: #FFFFFF; }
-        QListWidget::item:hover { background-color: #2a2c30; }
-        QMenuBar {
-            background-color: #1c1d1f;
-            color: #E0E0E0;
-            border-bottom: 1px solid #151618;
-            padding: 2px 0;
-        }
-        QMenuBar::item {
-            background: transparent;
-            padding: 6px 12px;
-            border-radius: 4px;
-            margin: 2px 2px;
-        }
-        QMenuBar::item:selected {
-            background-color: #2a2c30;
-            color: #FFFFFF;
-        }
-        QMenuBar::item:pressed {
-            background-color: #2a5c66;
-            color: #FFFFFF;
-        }
-        QMenu {
-            background-color: #1e1f22;
-            color: #E0E0E0;
-            border: 1px solid #33363b;
-            border-radius: 8px;
-            padding: 4px;
-        }
-        QMenu::item {
-            padding: 7px 32px 7px 16px;
-            border-radius: 4px;
-            margin: 1px 2px;
-        }
-        QMenu::item:selected {
-            background-color: #2a5c66;
-            color: #FFFFFF;
-        }
-        QMenu::item:disabled {
-            color: #666666;
-        }
-        QMenu::separator {
-            height: 1px;
-            background: #33363b;
-            margin: 4px 8px;
-        }
-        QComboBox {
-            background-color: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #2a2c30,stop:1 #1e1f22);
-            color: #E0E0E0;
-            border-top: 1px solid #33363b; border-left: 1px solid #33363b;
-            border-bottom: 1px solid #151618; border-right: 1px solid #151618;
-            border-radius: 6px;
-            padding: 4px 8px;
-            min-height: 22px;
-        }
-        QComboBox:hover {
-            background-color: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #2e3136,stop:1 #222326);
-            border-top: 1px solid #3a3d43; border-left: 1px solid #3a3d43;
-        }
-        QComboBox:focus, QComboBox:on {
-            border: 1px solid #2a8fa0;
-        }
-        QComboBox::drop-down {
-            subcontrol-origin: padding;
-            subcontrol-position: top right;
-            width: 22px;
-            border-left: 1px solid #151618;
-            border-top-right-radius: 6px;
-            border-bottom-right-radius: 6px;
-            background-color: #1e1f22;
-        }
-        QComboBox::drop-down:hover {
-            background-color: #2a2c30;
-        }
-        QComboBox::down-arrow {
-            width: 0; height: 0;
-            border-left: 4px solid transparent;
-            border-right: 4px solid transparent;
-            border-top: 5px solid #888888;
-        }
-        QComboBox::down-arrow:hover {
-            border-top-color: #E0E0E0;
-        }
-        QComboBox QAbstractItemView {
-            background-color: #1e1f22;
-            color: #E0E0E0;
-            border: 1px solid #33363b;
-            border-radius: 6px;
-            padding: 4px;
-            selection-background-color: #2a5c66;
-            selection-color: #FFFFFF;
-            outline: none;
-        }
-        QComboBox QAbstractItemView::item {
-            padding: 6px 12px;
-            min-height: 24px;
-            border-radius: 4px;
-        }
-        QComboBox QAbstractItemView::item:hover {
-            background-color: #2a2c30;
-            color: #FFFFFF;
-        }
-        QComboBox QAbstractItemView::item:selected {
-            background-color: #2a5c66;
-            color: #FFFFFF;
-        }
-        QCheckBox {
-            spacing: 6px;
-            color: #E0E0E0;
-        }
-        QCheckBox::indicator {
-            width: 16px; height: 16px;
-            border: 1px solid #33363b;
-            border-radius: 3px;
-            background-color: #1e1f22;
-        }
-        QCheckBox::indicator:hover {
-            border: 1px solid #2a8fa0;
-            background-color: #2a2c30;
-        }
-        QCheckBox::indicator:checked {
-            background-color: #2a5c66;
-            border: 1px solid #2a8fa0;
-        }
-        QLineEdit, QTextEdit {
-            background-color: #1e1f22;
-            color: #E0E0E0;
-            border: 1px solid #33363b;
-            border-radius: 6px;
-            padding: 4px 8px;
-            selection-background-color: #2a5c66;
-        }
-        QLineEdit:hover, QTextEdit:hover {
-            border: 1px solid #3a3d43;
-            background-color: #222326;
-        }
-        QLineEdit:focus, QTextEdit:focus {
-            border: 1px solid #2a8fa0;
-            background-color: #242528;
-        }
-        QPushButton#accentButton:hover, QPushButton[text*="Load"]:hover,
-        QPushButton[text*="Play"]:hover, QPushButton[text*="Fullscreen"]:hover {
-            background-color: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #4a7f8c,stop:1 #2a5c66);
-            color: #FFFFFF;
-        }
-        QPushButton#panicBlackoutBtn, QPushButton#panicPauseBtn, QPushButton#panicStayTunedBtn {
-            font-size: 10px;
-            font-weight: bold;
-            padding: 6px 4px;
-            min-height: 26px;
-            border-radius: 4px;
-            color: #ffc8bc;
-            background-color: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #3a2422,stop:1 #2a1816);
-            border-top: 1px solid #6a3830;
-            border-left: 1px solid #6a3830;
-            border-bottom: 1px solid #1a0e0c;
-            border-right: 1px solid #1a0e0c;
-        }
-        QPushButton#panicBlackoutBtn:hover, QPushButton#panicPauseBtn:hover, QPushButton#panicStayTunedBtn:hover {
-            background-color: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #4a2c28,stop:1 #3a201c);
-            color: #ffe8e0;
-        }
-        QPushButton#panicBlackoutBtn:checked, QPushButton#panicPauseBtn:checked, QPushButton#panicStayTunedBtn:checked {
-            background-color: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #8b2820,stop:1 #5a1814);
-            color: #FFFFFF;
-            border-top: 1px solid #c04030;
-            border-left: 1px solid #c04030;
-            border-bottom: 1px solid #3a100c;
-            border-right: 1px solid #3a100c;
-        }
-        QSplitter::handle {
-            background-color: #2a2c30;
-        }
-        QSplitter::handle:hover {
-            background-color: #2a8fa0;
-        }
-        QSplitter::handle:horizontal {
-            width: 5px;
-        }
-        QSplitter::handle:vertical {
-            height: 5px;
-        }
-    )");
 }
 
 // ── Session save / load ───────────────────────────────────────────────────────
@@ -2322,7 +2054,7 @@ void MainWindow::setupRecordingStatusBar() {
     QFont recFont = m_recStatusLabel->font();
     recFont.setBold(true);
     m_recStatusLabel->setFont(recFont);
-    m_recStatusLabel->setStyleSheet(QStringLiteral("color: #e04545;"));
+    m_recStatusLabel->setProperty("role", "danger");
     m_recStatusLabel->hide();
 
     m_recTimeLabel = new QLabel(this);
@@ -2332,7 +2064,7 @@ void MainWindow::setupRecordingStatusBar() {
     m_recTracksLabel->hide();
 
     m_recPathLabel = new QLabel(this);
-    m_recPathLabel->setStyleSheet(QStringLiteral("color: #888;"));
+    m_recPathLabel->setProperty("role", "secondary");
     m_recPathLabel->hide();
 
     bar->addPermanentWidget(m_recStatusLabel);
@@ -2341,7 +2073,7 @@ void MainWindow::setupRecordingStatusBar() {
     bar->addPermanentWidget(m_recPathLabel);
 
     m_mcpStatusLabel = new QLabel(tr("Agent access"), this);
-    m_mcpStatusLabel->setStyleSheet(QStringLiteral("color: #e5a93b;"));
+    m_mcpStatusLabel->setProperty("role", "warning");
     m_mcpStatusLabel->setToolTip(tr("Localhost MCP is listening. Turn it off in Run → Agent Access when you are done."));
     m_mcpStatusLabel->hide();
     bar->addPermanentWidget(m_mcpStatusLabel);

@@ -53,7 +53,8 @@ SessionRecoveryDialog::SessionRecoveryDialog(const QString &autosavePath,
 
     auto *autosaveDetail = new QLabel(this);
     autosaveDetail->setWordWrap(true);
-    autosaveDetail->setStyleSheet(QStringLiteral("color: #888; margin-left: 24px;"));
+    autosaveDetail->setProperty("role", "secondary");
+    autosaveDetail->setStyleSheet(QStringLiteral("margin-left: 24px;"));
     if (QFile::exists(autosavePath)) {
         autosaveDetail->setText(tr("Last saved: %1").arg(formatSessionTimestamp(autosavePath)));
         autosaveRadio->setEnabled(true);

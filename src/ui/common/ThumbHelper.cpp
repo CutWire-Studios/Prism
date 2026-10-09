@@ -1,6 +1,7 @@
 #include "ui/common/ThumbHelper.h"
-#include "ui/common/MaterialSymbols.h"
+#include "ui/common/Icons.h"
 #include "core/sources/ShaderSource.h"
+#include "ui/common/Theme.h"
 #include <QPainter>
 #include <QFont>
 #include <QWebEngineView>
@@ -8,13 +9,21 @@
 #include <QTimer>
 #include <QUrl>
 
+namespace {
+QColor placeholderFill() {
+    const QColor &bg = Theme::instance().tokens().bgBase;
+    return Theme::instance().isDark() ? bg.lighter(115) : bg.darker(104);
+}
+}
+
 QPixmap ThumbHelper::makeIconThumb(const QString &symbolName, int w, int h) {
+    const auto &t = Theme::instance().tokens();
     QPixmap pix(w, h);
-    pix.fill(QColor("#1c1d1f"));
+    pix.fill(placeholderFill());
     QPainter p(&pix);
-    p.setPen(QColor("#888888"));
-    MaterialSymbols::drawCentered(p, pix.rect(), symbolName.toUtf8().constData(), 32,
-                                  QColor("#888888"));
+    p.setPen(t.textSecondary);
+    Icons::drawCentered(p, pix.rect(), symbolName.toUtf8().constData(), 32,
+                                  t.textSecondary);
     return pix;
 }
 
@@ -28,13 +37,14 @@ QPixmap ThumbHelper::makeCanvasThumb(const QString &label,
         return pix;
     }
 
-    pix.fill(QColor("#1c1d1f"));
+    const auto &t = Theme::instance().tokens();
+    pix.fill(placeholderFill());
     QPainter p(&pix);
     p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QColor("#8b93a1"));
+    p.setPen(t.textSecondary);
     p.setBrush(Qt::NoBrush);
     p.drawRect(8, 8, w - 16, h - 16);
-    p.setPen(QColor("#c8ccd4"));
+    p.setPen(t.text);
     p.drawText(pix.rect(), Qt::AlignCenter,
                fill == SourceDescriptor::CanvasFill::Transparent ? "TR" : label);
     return pix;
@@ -43,7 +53,7 @@ QPixmap ThumbHelper::makeCanvasThumb(const QString &label,
 QPixmap ThumbHelper::makeShaderThumb(const QString &code, int w, int h) {
     ShaderSource src(code, QSize(w, h));
     if (!src.nextFrame() || !src.isReady())
-        return makeIconThumb(MaterialSymbols::Names::Grain, w, h);
+        return makeIconThumb(Icons::Names::Grain, w, h);
     const uint8_t *data = src.frameData();
     QImage img(data, w, h, w * 3, QImage::Format_RGB888);
     return QPixmap::fromImage(img.copy());
@@ -70,13 +80,13 @@ QPixmap ThumbHelper::makeHtmlThumb(const QString &html, const QString &filePath,
 
     QPixmap grab = view.grab();
     if (grab.isNull())
-        return makeIconThumb(MaterialSymbols::Names::Language, w, h);
+        return makeIconThumb(Icons::Names::Language, w, h);
     return grab.scaled(w, h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 }
 
 QPixmap ThumbHelper::makeTextThumb(const QString &textTemplate, const QColor &color, int w, int h) {
     QPixmap pix(w, h);
-    pix.fill(QColor("#1c1d1f"));
+    pix.fill(placeholderFill());
     QPainter p(&pix);
     p.setRenderHint(QPainter::Antialiasing);
     p.setPen(color);

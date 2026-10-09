@@ -5,7 +5,8 @@
 #include "ui/editors/HtmlEditDialog.h"
 #include "ui/editors/TextEditDialog.h"
 #include "ui/common/ThumbHelper.h"
-#include "ui/common/MaterialSymbols.h"
+#include "ui/common/Icons.h"
+#include "ui/common/Theme.h"
 #include "ui/common/CameraEnumerator.h"
 #ifndef Q_OS_LINUX
 #include "ui/common/CapturePicker.h"
@@ -65,11 +66,12 @@ static QWidget *dialogParent(QWidget *w) {
 ClipCard::ClipCard(int index, QWidget *parent)
     : QFrame(parent), m_index(index), ui(new Ui::ClipCard) {
     ui->setupUi(this);
+    setAttribute(Qt::WA_StyledBackground, true);
 
-    ui->removeBtn->setIcon(MaterialSymbols::icon(MaterialSymbols::Names::Close, 14, QColor("#888888")));
+    ui->removeBtn->setIcon(Icons::icon(Icons::Names::Close, 14));
     ui->removeBtn->setText({});
     ui->removeBtn->setIconSize(QSize(14, 14));
-    ui->repeatBtn->setIcon(MaterialSymbols::icon(MaterialSymbols::Names::Repeat, 12));
+    ui->repeatBtn->setIcon(Icons::icon(Icons::Names::Repeat, 12));
     ui->repeatBtn->setText(tr(" Off"));
 
     // Hotkey badge — floats over the top-left corner of the thumbnail area.
@@ -78,10 +80,7 @@ ClipCard::ClipCard(int index, QWidget *parent)
     m_hotkeyBadge->setAlignment(Qt::AlignCenter);
     m_hotkeyBadge->setFixedSize(20, 15);
     m_hotkeyBadge->move(6, 6);
-    m_hotkeyBadge->setStyleSheet(
-        "QLabel { background-color: #152a30; color: #2adcf5; "
-        "border: 1px solid #2a8fa0; border-radius: 3px; "
-        "font-size: 8px; font-weight: bold; padding: 0 2px; }");
+    m_hotkeyBadge->setProperty("role", "badge");
     m_hotkeyBadge->hide();
     m_hotkeyBadge->raise();
 
@@ -232,29 +231,23 @@ void ClipCard::clearClip() {
 }
 
 void ClipCard::setActive(bool active) {
-    if (active) {
-        setStyleSheet("ClipCard { background-color: #1a3d45; border: 2px solid #2a8fa0; border-radius: 8px; }");
-    } else {
-        setStyleSheet("ClipCard { background-color: #242528; border: 1px solid #1c1d1f; border-radius: 8px; }");
-    }
+    setProperty("selected", active);
+    style()->unpolish(this);
+    style()->polish(this);
 }
 
 void ClipCard::setASelected(bool selected) {
     m_aSelected = selected;
-    if (selected) {
-        ui->aBtn->setStyleSheet("QPushButton { background-color: #2a5c66; color: #FFFFFF; font-weight: bold; font-size: 9px; min-height: 0; height: 20px; border-radius: 4px; }");
-    } else {
-        ui->aBtn->setStyleSheet("font-size: 9px; min-height: 0; height: 20px;");
-    }
+    ui->aBtn->setProperty("selected", selected);
+    ui->aBtn->style()->unpolish(ui->aBtn);
+    ui->aBtn->style()->polish(ui->aBtn);
 }
 
 void ClipCard::setBSelected(bool selected) {
     m_bSelected = selected;
-    if (selected) {
-        ui->bBtn->setStyleSheet("QPushButton { background-color: #2a5c66; color: #FFFFFF; font-weight: bold; font-size: 9px; min-height: 0; height: 20px; border-radius: 4px; }");
-    } else {
-        ui->bBtn->setStyleSheet("font-size: 9px; min-height: 0; height: 20px;");
-    }
+    ui->bBtn->setProperty("selected", selected);
+    ui->bBtn->style()->unpolish(ui->bBtn);
+    ui->bBtn->style()->polish(ui->bBtn);
 }
 
 void ClipCard::setRepeat(bool r) {
@@ -537,22 +530,22 @@ void ClipCard::onEditClicked() {
             if (m_sourceDesc.canvasFill == SourceDescriptor::CanvasFill::Color) {
                 px.fill(m_sourceDesc.color);
             } else if (m_sourceDesc.canvasFill == SourceDescriptor::CanvasFill::Checkered) {
-                px.fill(QColor("#1c1d1f"));
+                px.fill(Theme::instance().isDark() ? Theme::instance().tokens().bgBase.lighter(115) : Theme::instance().tokens().bgBase.darker(104));
                 QPainter p(&px);
                 p.setRenderHint(QPainter::Antialiasing);
-                p.setPen(QColor("#8b93a1"));
+                p.setPen(Theme::instance().tokens().textSecondary);
                 p.setBrush(Qt::NoBrush);
                 p.drawRect(8, 8, 94, 49);
-                p.setPen(QColor("#c8ccd4"));
+                p.setPen(Theme::instance().tokens().text);
                 p.drawText(px.rect(), Qt::AlignCenter, "CHK");
             } else {
-                px.fill(QColor("#1c1d1f"));
+                px.fill(Theme::instance().isDark() ? Theme::instance().tokens().bgBase.lighter(115) : Theme::instance().tokens().bgBase.darker(104));
                 QPainter p(&px);
                 p.setRenderHint(QPainter::Antialiasing);
-                p.setPen(QColor("#8b93a1"));
+                p.setPen(Theme::instance().tokens().textSecondary);
                 p.setBrush(Qt::NoBrush);
                 p.drawRect(8, 8, 94, 49);
-                p.setPen(QColor("#c8ccd4"));
+                p.setPen(Theme::instance().tokens().text);
                 p.drawText(px.rect(), Qt::AlignCenter, "TR");
             }
             ui->thumbnailBtn->setIcon(QIcon(px));
@@ -726,13 +719,9 @@ void ClipCard::setCardMode(CardMode mode) {
 
 void ClipCard::setOutputSelected(bool selected) {
     m_outputSelected = selected;
-    if (selected) {
-        ui->setOutputBtn->setStyleSheet(
-            "QPushButton { background-color: #2a5c66; color: #FFFFFF; font-weight: bold; "
-            "font-size: 9px; min-height: 0; height: 20px; border-radius: 4px; }");
-    } else {
-        ui->setOutputBtn->setStyleSheet("font-size: 9px; min-height: 0; height: 20px;");
-    }
+    ui->setOutputBtn->setProperty("selected", selected);
+    ui->setOutputBtn->style()->unpolish(ui->setOutputBtn);
+    ui->setOutputBtn->style()->polish(ui->setOutputBtn);
 }
 
 void ClipCard::setTransform(float x, float y, float w, float h) {

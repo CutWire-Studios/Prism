@@ -1,9 +1,11 @@
 #include "ui/nodes/ClipEditDialog.h"
 #include "ui_ClipEditDialog.h"
-#include "ui/common/MaterialSymbols.h"
+#include "ui/common/Icons.h"
+#include "ui/common/Theme.h"
 #include "core/media/MediaProbe.h"
 #include <QPushButton>
 #include <QShowEvent>
+#include <QStyle>
 #include <cmath>
 
 ClipEditDialog::ClipEditDialog(const QString &clipPath, const ClipSettings &settings,
@@ -20,16 +22,16 @@ ClipEditDialog::ClipEditDialog(const QString &clipPath, const ClipSettings &sett
     ui->preview->addDeckPreviewConsumer();
     setWindowTitle("Edit Clip — " + clipPath.section('/', -1));
 
-    ui->tabWidget->setTabIcon(0, MaterialSymbols::icon(MaterialSymbols::Names::ContentCut, 16));
-    MaterialSymbols::setPlayPause(ui->playPauseBtn, false, 18);
+    ui->tabWidget->setTabIcon(0, Icons::icon(Icons::Names::ContentCut, 16));
+    Icons::setPlayPause(ui->playPauseBtn, false, 18);
 
     auto setupSeekBack = [](QPushButton *btn, const QString &label) {
         btn->setText(label);
-        btn->setIcon(MaterialSymbols::icon(MaterialSymbols::Names::SkipPrevious, 12));
+        btn->setIcon(Icons::icon(Icons::Names::SkipPrevious, 12));
     };
     auto setupSeekForward = [](QPushButton *btn, const QString &label) {
         btn->setText(label);
-        btn->setIcon(MaterialSymbols::icon(MaterialSymbols::Names::SkipNext, 12));
+        btn->setIcon(Icons::icon(Icons::Names::SkipNext, 12));
         btn->setLayoutDirection(Qt::RightToLeft);
     };
     setupSeekBack(ui->btn10sBack, "10s");
@@ -135,7 +137,7 @@ void ClipEditDialog::showEvent(QShowEvent *event) {
             }
             seekTo(m_startTime);
             ui->preview->play();
-            MaterialSymbols::setPlayPause(ui->playPauseBtn, true, 18);
+            Icons::setPlayPause(ui->playPauseBtn, true, 18);
             pollTimer->start();
         });
     }
@@ -145,10 +147,10 @@ void ClipEditDialog::onPlayPauseClicked() {
     if (!m_videoLoaded) return;
     if (ui->preview->isPlaying()) {
         ui->preview->pause();
-        MaterialSymbols::setPlayPause(ui->playPauseBtn, false, 18);
+        Icons::setPlayPause(ui->playPauseBtn, false, 18);
     } else {
         ui->preview->play();
-        MaterialSymbols::setPlayPause(ui->playPauseBtn, true, 18);
+        Icons::setPlayPause(ui->playPauseBtn, true, 18);
     }
 }
 
@@ -203,7 +205,7 @@ void ClipEditDialog::onSetEnd() {
 
 void ClipEditDialog::onPollTimer() {
     if (!m_videoLoaded) return;
-    MaterialSymbols::setPlayPause(ui->playPauseBtn, ui->preview->isPlaying(), 18);
+    Icons::setPlayPause(ui->playPauseBtn, ui->preview->isPlaying(), 18);
     double t = ui->preview->getCurrentTime();
     if (!m_sliderDragging) {
         ui->progressSlider->blockSignals(true);
@@ -315,10 +317,10 @@ void ClipEditDialog::updateSelectionLabels() {
 
 void ClipEditDialog::setStatus(const QString &msg, bool error) {
     ui->statusLabel->setText(msg);
-    ui->statusLabel->setStyleSheet(
-        msg.isEmpty() ? "font-size: 11px;"
-        : error       ? "font-size: 11px; color: #e05050;"
-                      : "font-size: 11px; color: #50c050;");
+    ui->statusLabel->setStyleSheet("font-size: 11px;");
+    ui->statusLabel->setProperty("role", msg.isEmpty() ? "" : error ? "danger" : "success");
+    ui->statusLabel->style()->unpolish(ui->statusLabel);
+    ui->statusLabel->style()->polish(ui->statusLabel);
 }
 
 QString ClipEditDialog::formatTime(double secs) const {

@@ -6,6 +6,7 @@
 #include "ui/transitions/Transition.h"
 #include "core/sources/VideoFileSource.h"
 #include "core/sources/ImageSource.h"
+#include "ui/common/Theme.h"
 #include <QTimer>
 #include <QCoreApplication>
 #include <QEvent>
@@ -33,6 +34,7 @@ VideoWidget::VideoWidget(QWidget *parent)
     m_frameTimer = new QTimer(this);
     connect(m_frameTimer, &QTimer::timeout, this, &VideoWidget::updateFrame);
     m_frameTimer->start(33); // ~30 FPS
+    connect(&Theme::instance(), &Theme::changed, this, qOverload<>(&QWidget::update));
 }
 
 VideoWidget::~VideoWidget() {
@@ -558,12 +560,14 @@ void VideoWidget::paintEvent(QPaintEvent *e) {
         p.setRenderHint(QPainter::TextAntialiasing);
 
         const QRect r = rect();
-        p.setPen(QPen(QColor(42, 140, 160, 120), 2));
+        QColor frameColor = Theme::instance().tokens().accent;
+        frameColor.setAlpha(120);
+        p.setPen(QPen(frameColor, 2));
         p.setBrush(Qt::NoBrush);
         p.drawRoundedRect(r.adjusted(24, 24, -24, -24), 12, 12);
 
-        p.setPen(QColor(230, 230, 235));
-        QFont titleFont(QStringLiteral("Segoe UI"), 42, QFont::Bold);
+        p.setPen(QColor(242, 241, 246));
+        QFont titleFont(QStringLiteral("Inter"), 42, QFont::Bold);
         titleFont.setLetterSpacing(QFont::AbsoluteSpacing, 2);
         p.setFont(titleFont);
         p.drawText(r.adjusted(0, -20, 0, 0), Qt::AlignCenter, QStringLiteral("Stay Tuned"));

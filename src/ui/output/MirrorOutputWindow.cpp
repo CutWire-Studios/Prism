@@ -1,6 +1,6 @@
 #include "ui/output/MirrorOutputWindow.h"
 #include "ui/output/ProgramMirrorWidget.h"
-#include "ui/common/MaterialSymbols.h"
+#include "ui/common/Icons.h"
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QPushButton>
@@ -30,7 +30,7 @@ MirrorOutputWindow::MirrorOutputWindow(QWidget *parent)
     controls->addStretch();
 
     m_fullscreenBtn = new QPushButton(central);
-    MaterialSymbols::setIconText(m_fullscreenBtn, MaterialSymbols::Names::Fullscreen, 22);
+    Icons::setIconText(m_fullscreenBtn, Icons::Names::Fullscreen, 22);
     m_fullscreenBtn->setMaximumWidth(50);
     connect(m_fullscreenBtn, &QPushButton::clicked, this, &MirrorOutputWindow::onFullscreenClicked);
     controls->addWidget(m_fullscreenBtn);
@@ -49,9 +49,9 @@ bool MirrorOutputWindow::isFullscreenActive() const {
 }
 
 void MirrorOutputWindow::updateFullscreenIcon() {
-    MaterialSymbols::setIconText(m_fullscreenBtn,
-        isFullscreenActive() ? MaterialSymbols::Names::CloseFullscreen
-                             : MaterialSymbols::Names::Fullscreen, 22);
+    Icons::setIconText(m_fullscreenBtn,
+        isFullscreenActive() ? Icons::Names::CloseFullscreen
+                             : Icons::Names::Fullscreen, 22);
 }
 
 void MirrorOutputWindow::enterFullscreen() {

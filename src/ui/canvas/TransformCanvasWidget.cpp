@@ -1,5 +1,6 @@
 #include "ui/canvas/TransformCanvasWidget.h"
 #include "ui/canvas/CanvasGeometry.h"
+#include "ui/common/Theme.h"
 #include <QPainter>
 #include <QMouseEvent>
 #include <QKeyEvent>
@@ -8,8 +9,6 @@
 namespace {
 constexpr qreal kMinSize = 0.02;      // minimum clip extent, normalized
 constexpr qreal kSnapPx  = 6.0;       // snap threshold in screen pixels
-const QColor kAccent(63, 193, 221);
-const QColor kGuide(255, 176, 66);
 }
 
 TransformCanvasWidget::TransformCanvasWidget(QWidget *parent)
@@ -18,6 +17,7 @@ TransformCanvasWidget::TransformCanvasWidget(QWidget *parent)
     setMinimumSize(480, 300);
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
+    connect(&Theme::instance(), &Theme::changed, this, qOverload<>(&QWidget::update));
 }
 
 void TransformCanvasWidget::setCanvasSize(int w, int h) {
@@ -176,19 +176,24 @@ void TransformCanvasWidget::paintEvent(QPaintEvent *) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
 
-    p.fillRect(rect(), QColor(23, 24, 26));
+    const auto &t = Theme::instance().tokens();
+    const bool dark = Theme::instance().isDark();
+
+    p.fillRect(rect(), t.bgBase);
 
     const QRectF cr = canvasRect();
 
     // Checkerboard (transparent region) clipped to the canvas.
+    const QColor checkA = dark ? t.bgBase.lighter(130) : t.bgBase.darker(105);
+    const QColor checkB = dark ? t.bgBase.lighter(150) : t.bgBase.darker(110);
     p.save();
     p.setClipRect(cr);
     const int sq = 16;
     const int x0 = (int)std::floor(cr.left()), y0 = (int)std::floor(cr.top());
     for (int y = y0; y < cr.bottom(); y += sq)
         for (int x = x0; x < cr.right(); x += sq) {
-            const bool dark = (((x - x0) / sq + (y - y0) / sq) % 2) == 0;
-            p.fillRect(QRect(x, y, sq, sq), dark ? QColor(33, 34, 38) : QColor(40, 41, 46));
+            const bool even = (((x - x0) / sq + (y - y0) / sq) % 2) == 0;
+            p.fillRect(QRect(x, y, sq, sq), even ? checkA : checkB);
         }
     p.restore();
 
@@ -200,14 +205,14 @@ void TransformCanvasWidget::paintEvent(QPaintEvent *) {
         if (!clip.thumbnail.isNull())
             p.drawPixmap(sr.toRect(), clip.thumbnail);
         else
-            p.fillRect(sr, QColor(48, 51, 58));
+            p.fillRect(sr, t.glassControl);
         p.setOpacity(1.0);
 
         p.setBrush(Qt::NoBrush);
         if (clip.selected) {
-            p.setPen(QPen(kAccent, 2));
+            p.setPen(QPen(t.accent, 2));
         } else {
-            QPen pen(clip.visible ? QColor(116, 121, 130) : QColor(90, 92, 98), 1);
+            QPen pen(clip.visible ? t.textSecondary : t.textDisabled, 1);
             if (!clip.visible) pen.setStyle(Qt::DashLine);
             p.setPen(pen);
         }
@@ -223,9 +228,11 @@ void TransformCanvasWidget::paintEvent(QPaintEvent *) {
             const qreal tw = qMin(QFontMetricsF(f).horizontalAdvance(label) + 12.0, sr.width() - 8.0);
             const QRectF chip(sr.left() + 4, sr.top() + 4, tw, 17);
             p.setPen(Qt::NoPen);
-            p.setBrush(QColor(10, 11, 13, 200));
+            QColor chipBg = t.surfacePopup;
+            chipBg.setAlpha(220);
+            p.setBrush(chipBg);
             p.drawRoundedRect(chip, 3, 3);
-            p.setPen(clip.selected ? kAccent : QColor(200, 204, 212));
+            p.setPen(clip.selected ? t.accent : t.text);
             p.drawText(chip.adjusted(6, 0, -4, 0), Qt::AlignVCenter | Qt::AlignLeft,
                        QFontMetricsF(f).elidedText(label, Qt::ElideRight, chip.width() - 10));
         }
@@ -233,12 +240,12 @@ void TransformCanvasWidget::paintEvent(QPaintEvent *) {
 
     // Canvas frame above the clips so edges stay crisp.
     p.setBrush(Qt::NoBrush);
-    p.setPen(QPen(QColor(70, 74, 82), 1));
+    p.setPen(QPen(t.stroke, 1));
     p.drawRect(cr);
 
     // Snap guides.
     if (!m_guidesX.isEmpty() || !m_guidesY.isEmpty()) {
-        QPen gp(kGuide, 1, Qt::DashLine);
+        QPen gp(t.warning, 1, Qt::DashLine);
         p.setPen(gp);
         for (qreal gx : m_guidesX) {
             const qreal x = cr.left() + gx * cr.width();
@@ -254,8 +261,8 @@ void TransformCanvasWidget::paintEvent(QPaintEvent *) {
     const int sel = selectedIndex();
     if (sel >= 0) {
         const QRectF sr = itemToScreen(m_clips[sel].rect);
-        p.setPen(QPen(QColor(14, 40, 46), 1));
-        p.setBrush(kAccent);
+        p.setPen(QPen(t.bgBase, 1));
+        p.setBrush(t.accent);
         for (const QRectF &h : handleRects(sr, 8.0))
             p.drawRect(h);
     }
@@ -272,9 +279,11 @@ void TransformCanvasWidget::paintEvent(QPaintEvent *) {
         const qreal tw = QFontMetricsF(f).horizontalAdvance(txt) + 20;
         const QRectF chip(cr.center().x() - tw / 2, cr.bottom() - 26, tw, 20);
         p.setPen(Qt::NoPen);
-        p.setBrush(QColor(10, 11, 13, 210));
+        QColor readoutBg = t.surfacePopup;
+        readoutBg.setAlpha(220);
+        p.setBrush(readoutBg);
         p.drawRoundedRect(chip, 4, 4);
-        p.setPen(QColor(220, 224, 230));
+        p.setPen(t.text);
         p.drawText(chip, Qt::AlignCenter, txt);
     }
 }

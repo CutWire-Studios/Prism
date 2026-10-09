@@ -12,11 +12,18 @@
 #include <QScrollArea>
 #include <QFileDialog>
 #include <QSettings>
+#include <QStyle>
 #include <QTimer>
 
 namespace {
 constexpr char kSettingsGroup[] = "Recording";
 constexpr char kOutputDirKey[] = "outputDir";
+
+void setRole(QWidget *w, const char *role) {
+    w->setProperty("role", role);
+    w->style()->unpolish(w);
+    w->style()->polish(w);
+}
 
 QString formatElapsed(qint64 ms) {
     const qint64 totalSecs = ms / 1000;
@@ -39,7 +46,8 @@ QWidget *makeStreamRowWidget(const QString &title, QLabel *&timeLabel, QPushButt
     nameLabel->setMinimumWidth(160);
     timeLabel = new QLabel(QStringLiteral("00:00:00"), row);
     timeLabel->setMinimumWidth(64);
-    timeLabel->setStyleSheet(QStringLiteral("color: #888; font-family: monospace;"));
+    timeLabel->setProperty("role", "secondary");
+    timeLabel->setStyleSheet(QStringLiteral("font-family: monospace;"));
 
     toggleBtn = new QPushButton(QObject::tr("Record"), row);
     toggleBtn->setCheckable(true);
@@ -69,7 +77,8 @@ RecordingSettingsDialog::RecordingSettingsDialog(OutputHub *hub, ClipNodeEditor 
            "at the same time so the files are easy to match in your editor."),
         this);
     hint->setWordWrap(true);
-    hint->setStyleSheet(QStringLiteral("color: #888; font-size: 11px;"));
+    hint->setProperty("role", "secondary");
+    hint->setStyleSheet(QStringLiteral("font-size: 11px;"));
     mainLayout->addWidget(hint);
 
     auto *streamsGroup = new QGroupBox(tr("Recording streams"), this);
@@ -80,7 +89,8 @@ RecordingSettingsDialog::RecordingSettingsDialog(OutputHub *hub, ClipNodeEditor 
            "is loaded on Deck A or B."),
         this);
     streamsHint->setWordWrap(true);
-    streamsHint->setStyleSheet(QStringLiteral("color: #888; font-size: 11px;"));
+    streamsHint->setProperty("role", "secondary");
+    streamsHint->setStyleSheet(QStringLiteral("font-size: 11px;"));
     streamsOuter->addWidget(streamsHint);
 
     auto *scroll = new QScrollArea(this);
@@ -102,7 +112,8 @@ RecordingSettingsDialog::RecordingSettingsDialog(OutputHub *hub, ClipNodeEditor 
            "records only while that clip is loaded on Deck A or B."),
         this);
     audioHint->setWordWrap(true);
-    audioHint->setStyleSheet(QStringLiteral("color: #888; font-size: 11px;"));
+    audioHint->setProperty("role", "secondary");
+    audioHint->setStyleSheet(QStringLiteral("font-size: 11px;"));
     audioOuter->addWidget(audioHint);
     auto *audioWidget = new QWidget(this);
     m_audioListLayout = new QVBoxLayout(audioWidget);
@@ -318,10 +329,10 @@ void RecordingSettingsDialog::refreshTrackUi() {
         if (active) {
             const qint64 ms = m_hub->trackRecordingDurationMs(row.kind, row.nodeId);
             row.timeLabel->setText(formatElapsed(ms));
-            row.timeLabel->setStyleSheet(QStringLiteral("color: #e04545; font-family: monospace;"));
+            setRole(row.timeLabel, "danger");
         } else {
             row.timeLabel->setText(QStringLiteral("00:00:00"));
-            row.timeLabel->setStyleSheet(QStringLiteral("color: #888; font-family: monospace;"));
+            setRole(row.timeLabel, "secondary");
         }
     }
     for (StreamRow &row : m_audioRows) {
@@ -330,10 +341,10 @@ void RecordingSettingsDialog::refreshTrackUi() {
         if (active) {
             const qint64 ms = m_hub->trackRecordingDurationMs(row.kind, row.nodeId);
             row.timeLabel->setText(formatElapsed(ms));
-            row.timeLabel->setStyleSheet(QStringLiteral("color: #e04545; font-family: monospace;"));
+            setRole(row.timeLabel, "danger");
         } else {
             row.timeLabel->setText(QStringLiteral("00:00:00"));
-            row.timeLabel->setStyleSheet(QStringLiteral("color: #888; font-family: monospace;"));
+            setRole(row.timeLabel, "secondary");
         }
     }
 }

@@ -44,9 +44,7 @@
      <property name="alignment">
       <set>Qt::AlignCenter</set>
      </property>
-     <property name="styleSheet">
-      <string notr="true">background:#141414; border:1px solid #333; border-radius:4px;</string>
-     </property>
+     <property name="role" stdset="0"><string>panel</string></property>
     </widget>
    </item>
    <item>
@@ -64,9 +62,8 @@
          <property name="text">
           <string>TEMPLATE</string>
          </property>
-         <property name="styleSheet">
-          <string notr="true">color:#8b93a3; font-size:10px; font-weight:600; letter-spacing:1px;</string>
-         </property>
+         <property name="styleSheet"><string notr="true">font-size:10px; font-weight:600; letter-spacing:1px;</string></property>
+         <property name="role" stdset="0"><string>secondary</string></property>
         </widget>
        </item>
        <item>
@@ -98,9 +95,8 @@
            <property name="text">
             <string>SCRIPT VARIABLES</string>
            </property>
-           <property name="styleSheet">
-            <string notr="true">color:#8b93a3; font-size:10px; font-weight:600; letter-spacing:1px;</string>
-           </property>
+           <property name="styleSheet"><string notr="true">font-size:10px; font-weight:600; letter-spacing:1px;</string></property>
+           <property name="role" stdset="0"><string>secondary</string></property>
           </widget>
          </item>
          <item>
@@ -139,9 +135,8 @@
          <property name="wordWrap">
           <bool>true</bool>
          </property>
-         <property name="styleSheet">
-          <string notr="true">color:#9aa3b2; font-size:11px; padding:8px; background:#1a1b1d; border:1px solid #333; border-radius:4px;</string>
-         </property>
+         <property name="styleSheet"><string notr="true">font-size:11px; padding:8px;</string></property>
+         <property name="role" stdset="0"><string>secondary</string></property>
         </widget>
        </item>
        <item>

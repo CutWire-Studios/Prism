@@ -200,7 +200,7 @@ src/
       ├── hotkeys/        # VJ hotkey grid + editor
       ├── remote/         # Remote control server + protocol
       ├── session/        # Session save/load, autosave, recovery dialog
-      └── common/         # AssetLibrary, ThumbHelper, MaterialSymbols, QrCodeHelper
+      └── common/         # AssetLibrary, ThumbHelper, Icons, QrCodeHelper
 
 include/                  # Public headers, mirroring the src/ subtree
 forms/                    # Qt Designer .ui files
@@ -210,8 +210,8 @@ scripts/                  # webrtc_signaling_server.py (relay), build-windows.ps
 tests/                    # Qt Test unit tests (linked against prism_core)
 docs/                     # webrtc-phone-camera.md and other notes
 resources/
-  ├── styles/dark.qss     # Dark VJ theme stylesheet
-  ├── fonts/              # Material Symbols icon font
+  ├── styles/prism.qss    # Theme stylesheet template
+  ├── fonts/              # Lucide SVG icons (ISC)
   ├── shaders/            # Built-in GLSL presets + slideshow transitions
   ├── scripts/            # Sample Lua scripts (clock, counter, …)
   ├── html/               # HTML overlay templates
@@ -259,7 +259,7 @@ CutWire Prism prioritizes **simplicity over features**. Every button should feel
 
 ```bash
 sudo apt install -y \
-  qt6-base-dev qt6-tools-dev qt6-multimedia-dev qt6-webengine-dev qt6-websockets-dev \
+  qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-multimedia-dev qt6-webengine-dev qt6-websockets-dev \
   libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev \
   libre2-dev libzip-dev libssl-dev liblua5.4-dev libgl1-mesa-dev \
