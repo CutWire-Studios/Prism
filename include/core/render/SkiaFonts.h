@@ -7,8 +7,9 @@
 
 namespace prism::skia {
 
-// The platform's font manager: fontconfig on Linux, an empty
-// manager where no port is compiled in. Created once, shared, thread-safe.
+// The platform's font manager (fontconfig on Linux, DirectWrite on Windows, CoreText on macOS; an
+// empty manager where no port is compiled in) with the fonts bundled in :/fonts in front.
+// Created once, shared, thread-safe.
 sk_sp<SkFontMgr> systemFontMgr();
 
 } // namespace prism::skia

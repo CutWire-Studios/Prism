@@ -8,13 +8,16 @@ url="https://github.com/CutWire-Studios/Prism"
 license=('GPL-3.0-or-later')
 depends=(
     'qt6-base' 'qt6-svg' 'qt6-multimedia' 'qt6-multimedia-ffmpeg'
-    'qt6-positioning' 'qt6-serialport' 'qt6-websockets'
+    'qt6-serialport' 'qt6-websockets'
     'ffmpeg' 'gstreamer' 'gst-plugins-base'
     # Screen capture (ScreenSource_linux.cpp) and audio loopback capture
     # (AudioLoopbackCapture_gst_linux.cpp) both need the pipewiresrc GStreamer
     # element at runtime; nothing else in this list pulls it in transitively.
     'gst-plugin-pipewire'
-    're2' 'libzip' 'soundtouch' 'lua54' 'openssl' 'fontconfig' 'freetype2'
+    're2' 'libzip' 'soundtouch' 'lua54' 'openssl'
+    # What the Skia archives built in build() link against at runtime; most are already pulled
+    # in by qt6-base, they are listed so the ABI pin is explicit.
+    'harfbuzz' 'icu' 'expat' 'libpng' 'fontconfig' 'freetype2'
 )
 optdepends=(
     'intel-media-driver: VAAPI hardware decode/encode on Intel GPUs'
@@ -22,12 +25,19 @@ optdepends=(
     'nvidia-utils: NVDEC hardware decode and NVENC recording on NVIDIA GPUs'
     'qt6-imageformats: WebP/TIFF stills without the FFmpeg fallback'
 )
-makedepends=('cmake' 'ninja' 'git' 'pkgconf')
+# clang, gn and python drive third_party/build-skia.sh; Skia's GN toolchain files are written
+# for clang, so gcc is not an option there even though it builds Prism itself.
+makedepends=('cmake' 'ninja' 'git' 'pkgconf' 'clang' 'gn' 'python')
 # Defaults to the tagged release; CI overrides _commit (e.g. to $GITHUB_SHA)
 # to build the exact commit that triggered the workflow instead.
 _commit="${_commit:-v$pkgver}"
-source=("$pkgname::git+https://github.com/CutWire-Studios/Prism.git#commit=$_commit")
-sha256sums=('SKIP')
+# Must match SKIA_COMMIT / SKIA_SHA256 in third_party/build-skia.sh; the script is handed this
+# extracted tree so it never downloads anything during build().
+_skia_commit=e7c90ecca9444fe09598f1630ab7cee2c0ee027a
+source=("$pkgname::git+https://github.com/CutWire-Studios/Prism.git#commit=$_commit"
+        "skia-$_skia_commit.tar.gz::https://github.com/google/skia/archive/$_skia_commit.tar.gz")
+sha256sums=('SKIP'
+            '7b5158952ebc4e2ce8de19f036b7613e266705003469579d9e98070ead62fc3b')
 
 pkgver() {
     cd "$pkgname"
@@ -44,6 +54,8 @@ _onnxruntime_libdir_glob="onnxruntime/onnxruntime-linux-x64-*/lib"
 
 build() {
     cd "$pkgname"
+    CC=clang CXX=clang++ JOBS="$(nproc)" SKIA_SRC_DIR="$srcdir/skia-$_skia_commit" \
+        third_party/build-skia.sh linux-x64
     cmake -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr \

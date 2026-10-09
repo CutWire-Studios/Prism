@@ -2,6 +2,10 @@ app-id: org.cutwire.Prism
 runtime: org.kde.Platform
 runtime-version: "6.10"
 sdk: org.kde.Sdk
+# clang for the Skia build: org.kde.Sdk ships gcc only, and Skia's GN toolchain files are written
+# for clang. The extension is build-time only; nothing from it ends up in /app.
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.llvm20
 command: Prism
 rename-icon: org.cutwire.Prism
 
@@ -108,25 +112,50 @@ modules:
         only-arches:
           - aarch64
 
+  # Skia's build generator. Not in the SDK and has no release tarballs, so it is built from source
+  # with the SDK's gcc. --allow-warnings: gn builds with -Werror and trips over gcc's newer
+  # warnings; the commit-position header is hand-written because there is no git metadata to
+  # derive it from inside the sandbox.
+  - name: gn
+    buildsystem: simple
+    build-commands:
+      - CC=gcc CXX=g++ python3 build/gen.py --no-last-commit-position --allow-warnings --out-path=out
+      - printf '#ifndef OUT_LAST_COMMIT_POSITION_H_\n#define OUT_LAST_COMMIT_POSITION_H_\n#define LAST_COMMIT_POSITION_NUM 0\n#define LAST_COMMIT_POSITION "0 (prism)"\n#endif\n' > out/last_commit_position.h
+      - ninja -C out -j${FLATPAK_BUILDER_N_JOBS} gn
+      - install -Dm755 out/gn ${FLATPAK_DEST}/bin/gn
+    sources:
+      - type: git
+        url: https://gn.googlesource.com/gn
+        commit: 0625da07ece7b1a374ec0719b6f40ebe3d0950c1
+
+  # buildsystem: simple rather than cmake-ninja because Skia has to be compiled first, from the
+  # script inside this very source tree (third_party/build-skia.sh), against the Skia tarball
+  # declared below — flatpak-builder has no hook for a pre-configure step.
   - name: Prism
-    buildsystem: cmake-ninja
-    builddir: true
-    config-opts:
-      - -DCMAKE_BUILD_TYPE=Release
-      - -DPRISM_WITH_NDI=OFF
-      - -DPRISM_WITH_LUA=ON
-      - -DPRISM_WITH_WEBRTC=ON
-      - -DPRISM_WITH_SEGMENTATION=ON
-      - -DONNXRUNTIME_ROOT=/app
-      - -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-      # sol2 and libdatachannel are still consumed via CMake FetchContent, but
-      # their sources are vendored below and pointed at with FETCHCONTENT_SOURCE_DIR
-      # so the build never touches the network. FULLY_DISCONNECTED enforces that.
-      - -DFETCHCONTENT_FULLY_DISCONNECTED=ON
-      - -DFETCHCONTENT_SOURCE_DIR_SOL2=/run/build/Prism/vendor/sol2
-      - -DFETCHCONTENT_SOURCE_DIR_LIBDATACHANNEL=/run/build/Prism/vendor/libdatachannel
+    buildsystem: simple
     build-options:
       prepend-pkg-config-path: /app/lib/pkgconfig
+      append-path: /usr/lib/sdk/llvm20/bin
+    build-commands:
+      - case "$FLATPAK_ARCH" in x86_64) t=linux-x64 ;; aarch64) t=linux-arm64 ;; *) echo "no Skia target for $FLATPAK_ARCH" >&2; exit 1 ;; esac;
+        CC=clang CXX=clang++ JOBS=${FLATPAK_BUILDER_N_JOBS} third_party/build-skia.sh "$t"
+      - cmake -S . -B build -G Ninja -DCMAKE_INSTALL_PREFIX=/app -DCMAKE_INSTALL_LIBDIR=lib
+        -DCMAKE_BUILD_TYPE=Release
+        -DPRISM_WITH_NDI=OFF
+        -DPRISM_WITH_LUA=ON
+        -DPRISM_WITH_WEBRTC=ON
+        -DPRISM_WITH_SEGMENTATION=ON
+        -DONNXRUNTIME_ROOT=/app
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+        -DFETCHCONTENT_FULLY_DISCONNECTED=ON
+        -DFETCHCONTENT_SOURCE_DIR_SOL2=/run/build/Prism/vendor/sol2
+        -DFETCHCONTENT_SOURCE_DIR_LIBDATACHANNEL=/run/build/Prism/vendor/libdatachannel
+      - cmake --build build -j${FLATPAK_BUILDER_N_JOBS}
+      - cmake --install build
+    # sol2 and libdatachannel are still consumed via CMake FetchContent, but their sources are
+    # vendored below and pointed at with FETCHCONTENT_SOURCE_DIR so the build never touches the
+    # network. FULLY_DISCONNECTED enforces that. Skia is found in-tree under
+    # third_party/prebuilt/skia/<target>, where build-skia.sh installs it.
     sources:
       - type: dir
         path: ..
@@ -135,6 +164,16 @@ modules:
           - flatpak/build-dir
           - flatpak/repo
           - build
+          # Local Skia checkouts and prebuilts (gitignored); the sandbox builds its own.
+          - third_party/src
+          - third_party/prebuilt
+
+      # Skia at the commit third_party/build-skia.sh pins, unpacked where the script looks for it so
+      # it never reaches for the network. Keep url, sha256 and dest in step with the script.
+      - type: archive
+        url: https://github.com/google/skia/archive/e7c90ecca9444fe09598f1630ab7cee2c0ee027a.tar.gz
+        sha256: 7b5158952ebc4e2ce8de19f036b7613e266705003469579d9e98070ead62fc3b
+        dest: third_party/src/skia-e7c90ecca9444fe09598f1630ab7cee2c0ee027a
 
       # Header-only Lua binding, matches the FetchContent tag in CMakeLists.txt.
       - type: archive

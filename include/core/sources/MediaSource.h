@@ -64,6 +64,15 @@ public:
     // wait for). The caller delays taking the source off air by that long.
     virtual double requestOut() { return 0.0; }
 
+    // Wrapped source for decorators (null otherwise). type() on a decorator reports the inner
+    // type, so downcasts must go through innermost() rather than static_cast on the outer.
+    virtual MediaSource *inner() const { return nullptr; }
+    MediaSource *innermost() {
+        MediaSource *s = this;
+        while (MediaSource *i = s->inner()) s = i;
+        return s;
+    }
+
     // True if frameData() is RGBA32 rather than RGB24.
     // Affects GL texture format selection in VideoWidget.
     virtual bool hasAlpha() const { return false; }

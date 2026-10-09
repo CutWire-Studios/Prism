@@ -10,5 +10,5 @@
   <rect width="640" height="220" rx="18" fill="{panelColor}" fill-opacity="0.88"/>
   <rect x="1" y="1" width="638" height="218" rx="17" fill="none" stroke="{countdownColor}" stroke-opacity="0.35" stroke-width="2"/>
   <text x="320" y="62" text-anchor="middle" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="22" font-weight="bold" fill="{labelColor}">{label}</text>
-  <text x="320" y="164" text-anchor="middle" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="96" font-weight="bold" fill="{countdownColor}">{countdown}</text>
+  <text x="320" y="164" text-anchor="middle" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="96" font-weight="bold" fill="{countdownColor}">{countdown}</text>
 </svg>

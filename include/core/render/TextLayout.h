@@ -18,6 +18,9 @@
 
 namespace prism::text {
 
+// Registers the fonts bundled under :/fonts with Qt. Idempotent; needs a QGuiApplication.
+void registerBundledFonts();
+
 // One drawable piece of the block: a whole word, or a single character of one when the caller
 // asked for a character split. Everything is in block-local coordinates (0,0 = layout rect
 // top-left) and the piece carries the word's accent state, so painting never re-derives it.

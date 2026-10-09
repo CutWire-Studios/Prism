@@ -48,6 +48,9 @@ QImage renderSvg(const QByteArray &svg, double scale = 1.0);
 // Intrinsic size of the document in SVG user units; empty when it does not parse.
 QSizeF svgIntrinsicSize(const QByteArray &svg);
 
+// True when SVG <text> can resolve @p family to a face of that name (bundled or installed).
+bool svgFontAvailable(const QString &family);
+
 // Length in seconds of the style's In / Out slot for this text and canvas; 0 when the slot is off.
 double textAnimationInSeconds(const TextStyle &style, const QString &text, QSize canvas);
 double textAnimationOutSeconds(const TextStyle &style, const QString &text, QSize canvas);

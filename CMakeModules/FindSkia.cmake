@@ -54,6 +54,12 @@ if(_skia_config)
     target_compile_definitions(Skia::Skia INTERFACE ${SKIA_DEFINES})
     target_link_libraries(Skia::Skia INTERFACE ${SKIA_LIBRARIES} ${SKIA_SYSTEM_LIBRARIES})
 
+    # CoreText backs SkFontMgr_New_CoreText; GN lists it for the Skia targets that need it, but the
+    # font manager is created from prism_core so it is named here too.
+    if(APPLE)
+        target_link_libraries(Skia::Skia INTERFACE "-framework CoreFoundation" "-framework CoreGraphics" "-framework CoreText")
+    endif()
+
     set(Skia_FOUND TRUE)
     message(STATUS "Skia ${SKIA_MILESTONE} (${SKIA_TARGET}) from ${_skia_root}")
     return()
@@ -72,6 +78,9 @@ if(unofficial-skia_FOUND)
             target_link_libraries(Skia::Skia INTERFACE unofficial::skia::modules::${_mod})
         endif()
     endforeach()
+    if(WIN32)
+        target_link_libraries(Skia::Skia INTERFACE dwrite)
+    endif()
     set(Skia_FOUND TRUE)
     message(STATUS "Skia from vcpkg (unofficial-skia)")
     return()

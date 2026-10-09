@@ -341,8 +341,9 @@ void DeckController::refreshShaderAudioForActiveDecks() {
         if (!node || node->sourceDescriptor().kind != SourceDescriptor::Kind::Shader)
             return;
         MediaSource *src = deckA ? out->sourceA() : out->sourceB();
-        if (!src || src->type() != MediaSource::Type::Shader) return;
-        static_cast<ShaderSource *>(src)->setDataSource(m_editor->scriptOutputForDataNode(nodeId));
+        if (!src) return;
+        if (auto *shader = dynamic_cast<ShaderSource *>(src->innermost()))
+            shader->setDataSource(m_editor->scriptOutputForDataNode(nodeId));
     };
 
     refresh(true,  m_aClipNodeId);
@@ -363,10 +364,12 @@ void DeckController::refreshTextDataForActiveDecks() {
         if (!src) return;
 
         const auto data = m_editor->scriptOutputForDataNode(nodeId);
-        if (src->type() == MediaSource::Type::Text && kind == SourceDescriptor::Kind::Text)
-            static_cast<TextSource *>(src)->setDataSource(data);
-        else if (src->type() == MediaSource::Type::SvgTemplate && kind == SourceDescriptor::Kind::SvgTemplate)
-            static_cast<SvgTemplateSource *>(src)->setDataSource(data);
+        MediaSource *base = src->innermost();
+        if (kind == SourceDescriptor::Kind::Text) {
+            if (auto *text = dynamic_cast<TextSource *>(base)) text->setDataSource(data);
+        } else if (auto *svg = dynamic_cast<SvgTemplateSource *>(base)) {
+            svg->setDataSource(data);
+        }
     };
 
     refresh(true,  m_aClipNodeId);

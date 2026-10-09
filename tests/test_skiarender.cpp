@@ -29,6 +29,12 @@ class TestSkiaRender : public QObject {
     Q_OBJECT
 
 private slots:
+    void bundledFontsResolveForSvgText() {
+        for (const char *family : {"JetBrains Mono", "Inter", "Montserrat", "Bebas Neue", "Anton", "Playfair Display"})
+            QVERIFY2(prism::svgFontAvailable(QString::fromLatin1(family)), family);
+        QVERIFY(!prism::svgFontAvailable(QStringLiteral("No Such Family 12345")));
+    }
+
     void presetsLoadFromResources() {
         QVERIFY(prism::TextAnimationPresetCatalog::instance().presets().size() > 40);
     }

@@ -1,5 +1,6 @@
 #include "ui/common/Theme.h"
 
+#include "core/render/TextLayout.h"
 #include "ui/common/Icons.h"
 
 #include <QApplication>
@@ -287,7 +288,7 @@ void Theme::apply() {
 }
 
 void Theme::loadFonts() {
-    QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/InterVariable.ttf"));
+    prism::text::registerBundledFonts();
     QFont f = qApp->font();
     f.setFamily(QStringLiteral("Inter"));
     f.setPixelSize(13);

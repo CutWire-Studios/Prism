@@ -41,7 +41,7 @@ public:
     double  requestOut()       override { return m_inner ? m_inner->requestOut() : 0.0; }
     QString displayName() const override { return m_inner ? m_inner->displayName() : QString(); }
 
-    MediaSource *inner() const { return m_inner.get(); }
+    MediaSource *inner() const override { return m_inner.get(); }
 
 private:
     void workerLoop();

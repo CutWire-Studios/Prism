@@ -46,37 +46,37 @@
   <rect x="16" y="92" width="868" height="1" fill="#263238"/>
   <text x="24" y="118" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" font-weight="bold" fill="{accentColor}">{b1name}</text>
   <text x="270" y="118" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="{accentColor}">{b1status}</text>
-  <text x="640" y="118" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" font-weight="bold" fill="#ffffff">{b1r}</text>
-  <text x="710" y="118" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b1b}</text>
-  <text x="780" y="118" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b1f}</text>
-  <text x="850" y="118" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b1s}</text>
+  <text x="640" y="118" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" font-weight="bold" fill="#ffffff">{b1r}</text>
+  <text x="710" y="118" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b1b}</text>
+  <text x="780" y="118" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b1f}</text>
+  <text x="850" y="118" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b1s}</text>
   <rect x="16" y="130" width="868" height="1" fill="#1a1f27"/>
   <text x="24" y="154" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" font-weight="bold" fill="{accentColor}">{b2name}</text>
   <text x="270" y="154" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="{accentColor}">{b2status}</text>
-  <text x="640" y="154" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" font-weight="bold" fill="#ffffff">{b2r}</text>
-  <text x="710" y="154" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b2b}</text>
-  <text x="780" y="154" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b2f}</text>
-  <text x="850" y="154" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b2s}</text>
+  <text x="640" y="154" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" font-weight="bold" fill="#ffffff">{b2r}</text>
+  <text x="710" y="154" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b2b}</text>
+  <text x="780" y="154" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b2f}</text>
+  <text x="850" y="154" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b2s}</text>
   <rect x="16" y="166" width="868" height="1" fill="#1a1f27"/>
   <text x="24" y="190" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="#cfd8dc">{b3name}</text>
   <text x="270" y="190" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="#546e7a">{b3status}</text>
-  <text x="640" y="190" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b3r}</text>
-  <text x="710" y="190" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b3b}</text>
-  <text x="780" y="190" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b3f}</text>
-  <text x="850" y="190" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b3s}</text>
+  <text x="640" y="190" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b3r}</text>
+  <text x="710" y="190" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b3b}</text>
+  <text x="780" y="190" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b3f}</text>
+  <text x="850" y="190" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b3s}</text>
   <rect x="16" y="202" width="868" height="1" fill="#1a1f27"/>
   <text x="24" y="226" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="#cfd8dc">{b4name}</text>
   <text x="270" y="226" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="#546e7a">{b4status}</text>
-  <text x="640" y="226" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b4r}</text>
-  <text x="710" y="226" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b4b}</text>
-  <text x="780" y="226" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b4f}</text>
-  <text x="850" y="226" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b4s}</text>
+  <text x="640" y="226" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b4r}</text>
+  <text x="710" y="226" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b4b}</text>
+  <text x="780" y="226" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b4f}</text>
+  <text x="850" y="226" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b4s}</text>
   <rect x="16" y="238" width="868" height="1" fill="#1a1f27"/>
   <text x="24" y="262" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="#cfd8dc">{b5name}</text>
   <text x="270" y="262" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="#546e7a">{b5status}</text>
-  <text x="640" y="262" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b5r}</text>
-  <text x="710" y="262" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b5b}</text>
-  <text x="780" y="262" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b5f}</text>
-  <text x="850" y="262" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b5s}</text>
+  <text x="640" y="262" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b5r}</text>
+  <text x="710" y="262" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b5b}</text>
+  <text x="780" y="262" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b5f}</text>
+  <text x="850" y="262" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b5s}</text>
   <rect x="16" y="274" width="868" height="1" fill="#1a1f27"/>
 </svg>

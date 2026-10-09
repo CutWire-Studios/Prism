@@ -27,7 +27,6 @@ env:
     qtmultimedia
     qtimageformats
     qtwebsockets
-    qtpositioning
     qtserialport
   QT_QPA_PLATFORM: offscreen
   FETCHCONTENT_BASE_DIR: ${{ github.workspace }}/.deps
@@ -78,6 +77,7 @@ jobs:
             libgl1-mesa-dev libglib2.0-dev libdbus-1-dev \
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             libre2-dev libzip-dev libssl-dev liblua5.4-dev libsoundtouch-dev \
+            clang-15 libharfbuzz-dev libexpat1-dev libpng-dev \
             libfontconfig1-dev libfreetype6-dev libxkbcommon-dev \
             libx11-dev libx11-xcb-dev libxext-dev libxfixes-dev libxi-dev libxrender-dev \
             libxcb1-dev libxcb-glx0-dev libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev \
@@ -100,6 +100,24 @@ jobs:
         with:
           path: .deps
           key: deps-linux-${{ hashFiles('CMakeLists.txt') }}
+
+      # Skia is built once per script revision and cached: 15-20 minutes on a miss, seconds on a
+      # hit. clang-15 because Skia's GN toolchain files are written for clang and jammy's default
+      # `clang` is 14. SKIA_SYSTEM_ICU=0 compiles Skia's own ICU with embedded data instead of
+      # letting linuxdeploy bundle the distro's libicudata (~30 MB) next to the copy Qt already
+      # ships. The source tree goes straight after: ~1 GB the AppImage step has no use for.
+      - name: Restore Skia
+        id: skia-cache
+        uses: actions/cache@v4
+        with:
+          path: third_party/prebuilt/skia/linux-x64
+          key: v1-skia-linux-x64-${{ hashFiles('third_party/build-skia.sh') }}
+
+      - name: Build Skia
+        if: steps.skia-cache.outputs.cache-hit != 'true'
+        run: |
+          JOBS="$(nproc)" CC=clang-15 CXX=clang++-15 SKIA_SYSTEM_ICU=0 third_party/build-skia.sh linux-x64
+          rm -rf third_party/src
 
       - name: Fetch pinned FFmpeg
         shell: bash
@@ -197,7 +215,7 @@ jobs:
     runs-on: windows-2022
     needs: meta
     if: inputs.platform == 'all' || inputs.platform == 'windows'
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
 
@@ -217,7 +235,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}\vcpkg_bincache
-          key: vcpkg-bincache-win-${{ hashFiles('CMakeLists.txt') }}
+          key: vcpkg-bincache-win-${{ hashFiles('CMakeLists.txt', '.github/workflows/build.yml') }}
           restore-keys: |
             vcpkg-bincache-win-
 
@@ -232,6 +250,11 @@ jobs:
             .\vcpkg\bootstrap-vcpkg.bat
           }
           .\vcpkg\vcpkg.exe install re2 libzip openssl soundtouch --triplet x64-windows
+          # Skia comes from vcpkg here rather than third_party/build-skia.sh, which has no Windows target.
+          # x64-windows-static-md, not x64-windows: Skottie needs a static Skia, and -md keeps the dynamic
+          # CRT Qt uses. zlib is installed in the same triplet because Skia's archives link its static
+          # copy (zs.lib); the Configure step hands find_package(ZLIB) that copy by path.
+          .\vcpkg\vcpkg.exe install zlib "skia[gl,harfbuzz,icu,freetype,png]" --triplet x64-windows-static-md
 
       # Save even when a later step fails so the vcpkg build is not repeated on
       # the next run (actions/cache only saves on job success).
@@ -240,7 +263,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}\vcpkg_bincache
-          key: vcpkg-bincache-win-${{ hashFiles('CMakeLists.txt') }}
+          key: vcpkg-bincache-win-${{ hashFiles('CMakeLists.txt', '.github/workflows/build.yml') }}
 
       - name: Cache FetchContent dependencies
         uses: actions/cache@v4
@@ -267,8 +290,10 @@ jobs:
           cmake -B build -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake `
-            -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }};${{ github.workspace }}\.deps\ffmpeg" `
+            -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }};${{ github.workspace }}\.deps\ffmpeg;${{ github.workspace }}\vcpkg\installed\x64-windows-static-md" `
             -DFETCHCONTENT_BASE_DIR=${{ env.FETCHCONTENT_BASE_DIR }} `
+            -DZLIB_INCLUDE_DIR=${{ github.workspace }}\vcpkg\installed\x64-windows-static-md\include `
+            -DZLIB_LIBRARY=${{ github.workspace }}\vcpkg\installed\x64-windows-static-md\lib\zs.lib `
             -DPRISM_WITH_NDI=OFF `
             -DPRISM_WITH_WEBRTC=ON `
             -DPRISM_WITH_SEGMENTATION=ON

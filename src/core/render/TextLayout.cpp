@@ -1,5 +1,6 @@
 #include "core/render/TextLayout.h"
 
+#include <QDirIterator>
 #include <QFontDatabase>
 #include <QFontMetricsF>
 #include <QGlyphRun>
@@ -15,11 +16,24 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <mutex>
 
 namespace prism::text {
 
+void registerBundledFonts()
+{
+    static std::once_flag once;
+    std::call_once(once, [] {
+        QDirIterator it(QStringLiteral(":/fonts"), {QStringLiteral("*.ttf")}, QDir::Files,
+                        QDirIterator::Subdirectories);
+        while (it.hasNext())
+            QFontDatabase::addApplicationFont(it.next());
+    });
+}
+
 static QFont fontForStyle(const prism::TextStyle &style, int pixelSizePx)
 {
+    registerBundledFonts();
     QFont font(style.fontFamily);
     font.setPixelSize(qMax(4, pixelSizePx));
     font.setWeight(QFont::Weight(qBound(100, style.fontWeight, 900)));

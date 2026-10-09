@@ -583,7 +583,7 @@ private:
     AudioPlaybackMode m_playbackMode;
     int  m_delayMs;
     QGraphicsProxyWidget *m_proxy;
-    PortItem *m_chainOutPort;
+    PortItem *m_chainOutPort = nullptr;
     PortItem *m_audioPort = nullptr;
     PortItem *m_shaderAudioInPort = nullptr;
     PortItem *m_dataInPort = nullptr;

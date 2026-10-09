@@ -10,5 +10,5 @@
   <rect width="230" height="90" fill="{accentColor}"/>
   <text x="115" y="57" text-anchor="middle" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="28" font-weight="bold" fill="#ffffff">{label}</text>
   <text x="262" y="58" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="34" fill="{textColor}">{headline}</text>
-  <text x="1252" y="56" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="26" fill="#90a4ae">{time}</text>
+  <text x="1252" y="56" text-anchor="end" font-family="JetBrains Mono, DejaVu Sans Mono, Courier New, monospace" font-size="26" fill="#90a4ae">{time}</text>
 </svg>
