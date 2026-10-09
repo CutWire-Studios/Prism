@@ -17,9 +17,7 @@ env:
   QT_MODULES: >-
     qtmultimedia
     qtimageformats
-    qtwebengine
     qtwebsockets
-    qtwebchannel
     qtpositioning
     qtserialport
   QT_QPA_PLATFORM: offscreen

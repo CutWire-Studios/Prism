@@ -15,7 +15,7 @@
 
 class MediaSource {
 public:
-    enum class Type { VideoFile, Image, Slideshow, Camera, Screen, Canvas, Window, Shader, Html, Ndi, WebRtc, Text };
+    enum class Type { VideoFile, Image, Slideshow, Camera, Screen, Canvas, Window, Shader, Ndi, WebRtc, Text, Shape, SvgTemplate };
 
     virtual ~MediaSource() = default;
 
@@ -55,6 +55,14 @@ public:
     virtual void    pause()             {}
 
     virtual QString displayName() const { return {}; }
+
+    // Level-triggered: VideoWidget reports every tick whether the deck holding this source
+    // contributes to program. Animated sources restart their In phase on the false -> true edge.
+    virtual void setOnAir(bool) {}
+
+    // Starts the source's Out animation and returns its length in seconds (0 = none, nothing to
+    // wait for). The caller delays taking the source off air by that long.
+    virtual double requestOut() { return 0.0; }
 
     // True if frameData() is RGBA32 rather than RGB24.
     // Affects GL texture format selection in VideoWidget.

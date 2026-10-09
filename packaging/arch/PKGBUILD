@@ -7,8 +7,8 @@ arch=('x86_64')
 url="https://github.com/CutWire-Studios/Prism"
 license=('GPL-3.0-or-later')
 depends=(
-    'qt6-base' 'qt6-svg' 'qt6-multimedia' 'qt6-multimedia-ffmpeg' 'qt6-webengine'
-    'qt6-webchannel' 'qt6-positioning' 'qt6-serialport' 'qt6-websockets'
+    'qt6-base' 'qt6-svg' 'qt6-multimedia' 'qt6-multimedia-ffmpeg'
+    'qt6-positioning' 'qt6-serialport' 'qt6-websockets'
     'ffmpeg' 'gstreamer' 'gst-plugins-base'
     # Screen capture (ScreenSource_linux.cpp) and audio loopback capture
     # (AudioLoopbackCapture_gst_linux.cpp) both need the pipewiresrc GStreamer

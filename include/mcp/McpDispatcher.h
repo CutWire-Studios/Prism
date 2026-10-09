@@ -27,7 +27,7 @@ private:
     QJsonObject opRemoveClip(const QJsonObject &args);
     QJsonObject opRenameClip(const QJsonObject &args);
     QJsonObject opSetText(const QJsonObject &args);
-    QJsonObject opSetHtml(const QJsonObject &args);
+    QJsonObject opSetSvgParams(const QJsonObject &args);
     QJsonObject opSetShader(const QJsonObject &args);
     QJsonObject opSelectDeck(const QJsonObject &args, bool deckA);
     QJsonObject opPlayDeck(bool deckA, bool play);

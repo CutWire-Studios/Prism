@@ -41,6 +41,8 @@ public:
     void    seek(double s)      override { if (m_inner) m_inner->seek(s); }
     void    play()             override { if (m_inner) m_inner->play(); }
     void    pause()            override { if (m_inner) m_inner->pause(); }
+    void    setOnAir(bool on)  override { if (m_inner) m_inner->setOnAir(on); }
+    double  requestOut()       override { return m_inner ? m_inner->requestOut() : 0.0; }
     QString displayName() const override { return m_inner ? m_inner->displayName() : QString(); }
 
     MediaSource *inner() const { return m_inner.get(); }
@@ -193,6 +195,8 @@ public:
     void    seek(double s)      override { if (m_inner) m_inner->seek(s); }
     void    play()             override { if (m_inner) m_inner->play(); }
     void    pause()            override { if (m_inner) m_inner->pause(); }
+    void    setOnAir(bool on)  override { if (m_inner) m_inner->setOnAir(on); }
+    double  requestOut()       override { return m_inner ? m_inner->requestOut() : 0.0; }
     QString displayName() const override { return m_inner ? m_inner->displayName() : QString(); }
 
 private:

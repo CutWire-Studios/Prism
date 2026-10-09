@@ -24,11 +24,13 @@ struct SourceDescriptor {
         Canvas,      // customizable canvas — canvas fields
         Window,      // window/tab capture — windowIndex into capturableWindows()
         Shader, // GLSL fragment shader — shaderCode field
-        Html,   // HTML/CSS/JS overlay  — htmlContent field
+        RemovedHtml, // retired HTML overlay; kept so saved kind values stay stable, never created
         Ndi,    // network NDI source   — path = NDI source name
         WebRtc, // phone camera (WebRTC) — path = session token; webrtcRelayUrl when using public relay
         Text,   // CPU-rendered text overlay — textTemplate field
         AudioFile, // audio-only media file — path = file path
+        Shape,  // CPU-rendered vector shape — shapeStyleJson field
+        SvgTemplate, // SVG with {token} placeholders — svgTemplateId / svgParamsJson
     };
 
     Kind    kind    = Kind::VideoFile;
@@ -48,37 +50,21 @@ struct SourceDescriptor {
     int     canvasHeight     = 720;     // Canvas kind
     CanvasFill canvasFill    = CanvasFill::Checkered; // Canvas kind
     QString shaderCode;                 // Shader kind
-    QString htmlContent;                // Html kind (inline HTML or file path)
-    QString htmlWorkspace;              // Html workspace JSON (multi-component layout)
     QString obsSceneName;               // OBS program scene to switch when clip is triggered
     QString textTemplate;               // Text kind — may contain {parameter} placeholders
     QString webrtcRelayUrl;             // WebRtc kind — wss://…/ws when using public signaling relay
-    QString fontFamily    = QStringLiteral("Sans Serif");
-    int     fontSize      = 48;
-    int     textAlign     = 0x0084;     // Qt::AlignCenter (avoid Qt include in header)
-    bool    textBgTransparent = true;
-    QColor  textBgColor   = Qt::black;
-    bool    textBold      = false;
-    bool    textItalic    = false;
-    bool    textUnderline = false;
-    int     textLetterSpacing = 0;      // extra tracking in % of normal (0 = none)
-    int     textLineHeight    = 100;    // proportional line height %
-    int     textOutlineWidth  = 0;      // px, 0 = no outline
-    QColor  textOutlineColor  = Qt::black;
-    bool    textGradient      = false;  // fill with color → textColor2 gradient
-    QColor  textColor2        = QColor(0x00, 0xbf, 0xff);
-    int     textGradientDir   = 0;      // 0 vertical, 1 horizontal, 2 diag ↘, 3 diag ↗
-    int     textShadowDx      = 0;      // px, 0/0 = no shadow
-    int     textShadowDy      = 0;
-    QColor  textShadowColor   = QColor(0, 0, 0, 160);
+    QString textStyleJson;              // Text kind — serialized prism::TextStyle
+    QString shapeStyleJson;             // Shape kind — serialized prism::ShapeStyle
+    QString svgTemplateId;              // SvgTemplate kind — built-in id, or path of a custom SVG file
+    QString svgParamsJson;              // SvgTemplate kind — JSON object of the user's param overrides
 
     // Descriptor-held content that defines the rendered output (as opposed to
     // on-disk content referenced by `path`). Deck reuse keys include a hash of
-    // this so that editing e.g. shader code, HTML, canvas fill or text styling
+    // this so that editing e.g. shader code, canvas fill or text styling
     // reloads any deck currently showing the source.
     QString contentKey() const {
         return QStringList{
-            shaderCode, htmlContent, htmlWorkspace, textTemplate, fontFamily,
+            shaderCode, textTemplate, textStyleJson, shapeStyleJson, svgTemplateId, svgParamsJson,
             QString::number(color.rgba()),
             QString::number(cameraIndex),
             QString::number(screenIndex),
@@ -89,32 +75,15 @@ struct SourceDescriptor {
             QString::number(canvasWidth),
             QString::number(canvasHeight),
             QString::number(int(canvasFill)),
-            QString::number(fontSize),
-            QString::number(textAlign),
-            QString::number(int(textBgTransparent)),
-            QString::number(textBgColor.rgba()),
-            QString::number(int(textBold)),
-            QString::number(int(textItalic)),
-            QString::number(int(textUnderline)),
-            QString::number(textLetterSpacing),
-            QString::number(textLineHeight),
-            QString::number(textOutlineWidth),
-            QString::number(textOutlineColor.rgba()),
-            QString::number(int(textGradient)),
-            QString::number(textColor2.rgba()),
-            QString::number(textGradientDir),
-            QString::number(textShadowDx),
-            QString::number(textShadowDy),
-            QString::number(textShadowColor.rgba()),
         }.join(QChar(0x1F));
     }
 
     bool isLiveSource() const {
         return kind == Kind::Camera || kind == Kind::Screen ||
                kind == Kind::Canvas || kind == Kind::Window ||
-               kind == Kind::Shader || kind == Kind::Html ||
+               kind == Kind::Shader ||
                kind == Kind::Ndi || kind == Kind::WebRtc ||
-               kind == Kind::Text;
+               kind == Kind::Text || kind == Kind::Shape || kind == Kind::SvgTemplate;
     }
     bool isFileSource() const {
         return kind == Kind::VideoFile || kind == Kind::Image || kind == Kind::Slideshow

@@ -2,8 +2,6 @@ app-id: org.cutwire.Prism
 runtime: org.kde.Platform
 runtime-version: "6.10"
 sdk: org.kde.Sdk
-base: io.qt.qtwebengine.BaseApp
-base-version: "6.10"
 command: Prism
 rename-icon: org.cutwire.Prism
 
@@ -16,7 +14,6 @@ finish-args:
   # Webcam capture and v4l2 virtual-camera output need raw /dev/video* access,
   # which the camera portal cannot provide; --device=dri covers GPU rendering.
   - --device=all
-  - --env=QTWEBENGINEPROCESS_PATH=/app/bin/QtWebEngineProcess
 
 cleanup:
   - /include

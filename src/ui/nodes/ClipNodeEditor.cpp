@@ -1,4 +1,5 @@
 #include "ui/nodes/ClipNodeEditor.h"
+#include "core/sources/SvgTemplates.h"
 #include "ui/nodes/ProcessEffects.h"
 #include "ui/nodes/AudioEffects.h"
 #include "ui/common/Icons.h"
@@ -3674,28 +3675,13 @@ static QJsonObject descriptorToJson(const SourceDescriptor &d, const QDir &sessi
     o["canvasHeight"]       = d.canvasHeight;
     o["canvasFill"]         = (int)d.canvasFill;
     o["shaderCode"]         = d.shaderCode;
-    o["htmlContent"]        = d.htmlContent;
-    o["htmlWorkspace"]      = d.htmlWorkspace;
     o["obsSceneName"]       = d.obsSceneName;
     o["textTemplate"]       = d.textTemplate;
-    o["fontFamily"]         = d.fontFamily;
-    o["fontSize"]           = d.fontSize;
-    o["textAlign"]          = d.textAlign;
-    o["textBgTransparent"]  = d.textBgTransparent;
-    o["textBgColor"]        = d.textBgColor.name(QColor::HexArgb);
-    o["textBold"]           = d.textBold;
-    o["textItalic"]         = d.textItalic;
-    o["textUnderline"]      = d.textUnderline;
-    o["textLetterSpacing"]  = d.textLetterSpacing;
-    o["textLineHeight"]     = d.textLineHeight;
-    o["textOutlineWidth"]   = d.textOutlineWidth;
-    o["textOutlineColor"]   = d.textOutlineColor.name(QColor::HexArgb);
-    o["textGradient"]       = d.textGradient;
-    o["textColor2"]         = d.textColor2.name(QColor::HexArgb);
-    o["textGradientDir"]    = d.textGradientDir;
-    o["textShadowDx"]       = d.textShadowDx;
-    o["textShadowDy"]       = d.textShadowDy;
-    o["textShadowColor"]    = d.textShadowColor.name(QColor::HexArgb);
+    o["textStyle"]          = d.textStyleJson;
+    o["shapeStyle"]         = d.shapeStyleJson;
+    o["svgTemplateId"]      = (sessionDir.isAbsolute() && !prism::isBuiltinSvgTemplate(d.svgTemplateId))
+        ? AssetPathResolver::storePath(d.svgTemplateId, sessionDir) : d.svgTemplateId;
+    o["svgParams"]          = d.svgParamsJson;
     o["webrtcRelayUrl"]     = d.webrtcRelayUrl;
     return o;
 }
@@ -3725,28 +3711,12 @@ static SourceDescriptor descriptorFromJson(const QJsonObject &o) {
     d.canvasHeight       = o["canvasHeight"].toInt(720);
     d.canvasFill         = (SourceDescriptor::CanvasFill)o["canvasFill"].toInt();
     d.shaderCode         = o["shaderCode"].toString();
-    d.htmlContent        = o["htmlContent"].toString();
-    d.htmlWorkspace      = o["htmlWorkspace"].toString();
     d.obsSceneName       = o["obsSceneName"].toString();
     d.textTemplate       = o["textTemplate"].toString();
-    d.fontFamily         = o["fontFamily"].toString(QStringLiteral("Sans Serif"));
-    d.fontSize           = o["fontSize"].toInt(48);
-    d.textAlign          = o["textAlign"].toInt(0x0084);
-    d.textBgTransparent  = o["textBgTransparent"].toBool(true);
-    d.textBgColor        = QColor(o["textBgColor"].toString("#ff000000"));
-    d.textBold           = o["textBold"].toBool(false);
-    d.textItalic         = o["textItalic"].toBool(false);
-    d.textUnderline      = o["textUnderline"].toBool(false);
-    d.textLetterSpacing  = o["textLetterSpacing"].toInt(0);
-    d.textLineHeight     = o["textLineHeight"].toInt(100);
-    d.textOutlineWidth   = o["textOutlineWidth"].toInt(0);
-    d.textOutlineColor   = QColor(o["textOutlineColor"].toString("#ff000000"));
-    d.textGradient       = o["textGradient"].toBool(false);
-    d.textColor2         = QColor(o["textColor2"].toString("#ff00bfff"));
-    d.textGradientDir    = o["textGradientDir"].toInt(0);
-    d.textShadowDx       = o["textShadowDx"].toInt(0);
-    d.textShadowDy       = o["textShadowDy"].toInt(0);
-    d.textShadowColor    = QColor(o["textShadowColor"].toString("#a0000000"));
+    d.textStyleJson      = o["textStyle"].toString();
+    d.shapeStyleJson     = o["shapeStyle"].toString();
+    d.svgTemplateId      = o["svgTemplateId"].toString();
+    d.svgParamsJson      = o["svgParams"].toString();
     d.webrtcRelayUrl     = o["webrtcRelayUrl"].toString();
     return d;
 }
@@ -3858,6 +3828,7 @@ ClipNodeModel *ClipNodeEditor::addSourceNode(const SourceDescriptor &descIn, con
     auto *model = new ClipNodeModel(this);
     const bool hasShaderAudioIn = false;
     const bool hasDataIn = (desc.kind == SourceDescriptor::Kind::Text
+                         || desc.kind == SourceDescriptor::Kind::SvgTemplate
                          || desc.kind == SourceDescriptor::Kind::Shader);
     auto *nodeItem = new ClipNodeItem(model, id, false, false, hasShaderAudioIn, hasDataIn);
 
@@ -4164,10 +4135,12 @@ QJsonObject ClipNodeEditor::graphSnapshot() const {
             case K::Canvas:    return QStringLiteral("canvas");
             case K::Window:    return QStringLiteral("window");
             case K::Shader:    return QStringLiteral("shader");
-            case K::Html:      return QStringLiteral("html");
             case K::Ndi:       return QStringLiteral("ndi");
             case K::WebRtc:    return QStringLiteral("webrtc");
             case K::Text:      return QStringLiteral("text");
+            case K::Shape:     return QStringLiteral("shape");
+            case K::SvgTemplate: return QStringLiteral("svg_template");
+            default: break;
             }
             return QStringLiteral("unknown");
         }());
@@ -6042,10 +6015,15 @@ void ClipNodeEditor::restoreState(const QJsonObject &state) {
         const NodeId id = m_nextId++;
 
         const SourceDescriptor desc = descriptorFromJson(obj["source"].toObject());
+        if (desc.kind == SourceDescriptor::Kind::RemovedHtml) {
+            qWarning("Skipping input node %u: HTML overlays are no longer supported", (uint)clipId);
+            continue;
+        }
         const bool audioOnly = obj["audioOnly"].toBool(desc.kind == SourceDescriptor::Kind::AudioFile);
         const bool hasAudio = obj["hasAudio"].toBool(audioOnly);
         const bool hasShaderAudioIn = false;
         const bool hasDataIn = (desc.kind == SourceDescriptor::Kind::Text
+                             || desc.kind == SourceDescriptor::Kind::SvgTemplate
                              || desc.kind == SourceDescriptor::Kind::Shader);
 
         // Version 2 stored {0 = Deck A only, 1 = Deck B only, 2 = Always};

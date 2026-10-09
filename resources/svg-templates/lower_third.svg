@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="130" viewBox="0 0 820 130">
+  <metadata id="prism">{"name":"Lower third","params":[
+    {"name":"name","label":"Name","type":"text","default":"Jane Doe"},
+    {"name":"title","label":"Title","type":"text","default":"Chief Correspondent"},
+    {"name":"accentColor","label":"Accent color","type":"color","default":"#00e5ff"},
+    {"name":"panelColor","label":"Panel color","type":"color","default":"#0d1117"},
+    {"name":"nameColor","label":"Name color","type":"color","default":"#ffffff"},
+    {"name":"titleColor","label":"Title color","type":"color","default":"#b0bec5"}
+  ]}</metadata>
+  <rect x="0" y="0" width="820" height="130" fill="{panelColor}" fill-opacity="0.92"/>
+  <rect x="0" y="0" width="10" height="130" fill="{accentColor}"/>
+  <text x="40" y="64" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="46" font-weight="bold" fill="{nameColor}">{name}</text>
+  <text x="40" y="102" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="26" fill="{titleColor}">{title}</text>
+</svg>

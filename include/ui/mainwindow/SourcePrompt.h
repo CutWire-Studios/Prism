@@ -11,7 +11,7 @@ namespace SourcePrompt {
 
 // Runs kind-specific dialog(s) for a single-descriptor source.
 // Returns false if the user cancelled. Handles: Slideshow, Camera, Screen,
-// Window, Canvas, Shader, Html, Ndi, WebRtc.
+// Window, Canvas, Shader, SvgTemplate, Ndi, WebRtc.
 bool prompt(SourceDescriptor::Kind kind, QWidget *parent,
             SourceDescriptor &outDesc, QPixmap &outThumb);
 

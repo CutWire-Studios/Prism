@@ -54,7 +54,7 @@ Pinned endpoints (`/mcp/sources`, `/mcp/decks`, `/mcp/transition`, `/mcp/panic`,
 
 | Toolbox | When to use |
 |---------|-------------|
-| `sources` | Add/list/rename clips; text/HTML/shader updates; cameras and NDI |
+| `sources` | Add/list/rename clips; text/SVG template/shader updates; cameras and NDI |
 | `decks` | Assign A/B, play/pause/seek, speed |
 | `transition` | T-bar, CUT, AUTO, look and duration |
 | `panic` | Blackout, freeze, stay-tuned slate |

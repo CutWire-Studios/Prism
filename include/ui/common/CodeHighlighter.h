@@ -5,12 +5,12 @@
 #include <QTextCharFormat>
 #include <QList>
 
-/// Regex-based syntax highlighter for the code editors (shader, Lua script,
-/// HTML). Parented to the document it highlights, so no ownership management
+/// Regex-based syntax highlighter for the code editors (shader, Lua script).
+/// Parented to the document it highlights, so no ownership management
 /// is needed at the call site.
 class CodeHighlighter : public QSyntaxHighlighter {
 public:
-    enum class Language { Glsl, Lua, Html };
+    enum class Language { Glsl, Lua };
 
     CodeHighlighter(Language lang, QTextDocument *doc);
 
@@ -25,7 +25,6 @@ private:
 
     void setupGlsl();
     void setupLua();
-    void setupHtml();
 
     QList<Rule> m_rules;
     QRegularExpression m_blockCommentStart;

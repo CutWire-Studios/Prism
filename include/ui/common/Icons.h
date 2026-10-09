@@ -69,6 +69,7 @@ public:
         inline static constexpr const char *Save = "save";
         inline static constexpr const char *SelectWindow = "app-window";
         inline static constexpr const char *Sensors = "radio";
+        inline static constexpr const char *Shapes = "shapes";
         inline static constexpr const char *SkipNext = "skip-forward";
         inline static constexpr const char *SkipPrevious = "skip-back";
         inline static constexpr const char *Smartphone = "smartphone";

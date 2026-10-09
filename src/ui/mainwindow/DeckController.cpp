@@ -5,7 +5,7 @@
 #include "core/sources/ScreenSource.h"
 #include "core/sources/CanvasSource.h"
 #include "core/sources/ShaderSource.h"
-#include "core/sources/HtmlSource.h"
+#include "core/sources/SvgTemplateSource.h"
 #include "core/sources/TextSource.h"
 #include "ui/nodes/ProcessEffects.h"
 #include "core/media/AudioInputCapture.h"
@@ -353,17 +353,20 @@ void DeckController::refreshTextDataForActiveDecks() {
     auto refresh = [&](bool deckA, NodeId nodeId) {
         if (!nodeId) return;
         auto *node = m_editor->nodeAt(nodeId);
-        if (!node || node->sourceDescriptor().kind != SourceDescriptor::Kind::Text)
+        if (!node) return;
+        const auto kind = node->sourceDescriptor().kind;
+        if (kind != SourceDescriptor::Kind::Text && kind != SourceDescriptor::Kind::SvgTemplate)
             return;
 
         auto *out = m_outputWindow->videoWidget();
         MediaSource *src = deckA ? out->sourceA() : out->sourceB();
-        if (!src || src->type() != MediaSource::Type::Text) return;
+        if (!src) return;
 
-        if (auto data = m_editor->scriptOutputForDataNode(nodeId))
+        const auto data = m_editor->scriptOutputForDataNode(nodeId);
+        if (src->type() == MediaSource::Type::Text && kind == SourceDescriptor::Kind::Text)
             static_cast<TextSource *>(src)->setDataSource(data);
-        else
-            static_cast<TextSource *>(src)->setDataSource(nullptr);
+        else if (src->type() == MediaSource::Type::SvgTemplate && kind == SourceDescriptor::Kind::SvgTemplate)
+            static_cast<SvgTemplateSource *>(src)->setDataSource(data);
     };
 
     refresh(true,  m_aClipNodeId);
@@ -421,6 +424,9 @@ void DeckController::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool d
             } else if (desc.kind == Kind::Text) {
                 if (auto data = m_editor->scriptOutputForDataNode(nodeId))
                     static_cast<TextSource *>(src.get())->setDataSource(data);
+            } else if (desc.kind == Kind::SvgTemplate) {
+                if (auto data = m_editor->scriptOutputForDataNode(nodeId))
+                    static_cast<SvgTemplateSource *>(src.get())->setDataSource(data);
             } else if (desc.kind == Kind::VideoFile && node->startTime() > 0) {
                 src->seek(node->startTime());
             }
@@ -486,6 +492,10 @@ void DeckController::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool d
         if (desc.kind == Kind::Text) {
             if (auto data = m_editor->scriptOutputForDataNode(nodeId))
                 static_cast<TextSource *>(src.get())->setDataSource(data);
+        }
+        if (desc.kind == Kind::SvgTemplate && src) {
+            if (auto data = m_editor->scriptOutputForDataNode(nodeId))
+                static_cast<SvgTemplateSource *>(src.get())->setDataSource(data);
         }
         applyTransform(deckA);
         if (deckA) {

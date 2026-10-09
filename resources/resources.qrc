@@ -2,6 +2,53 @@
 <RCC>
     <qresource prefix="/">
         <file>Prism_icon.png</file>
+        <file>text-animations/blur-in-words.json</file>
+        <file>text-animations/blur-in.json</file>
+        <file>text-animations/bounce.json</file>
+        <file>text-animations/breathe.json</file>
+        <file>text-animations/color-wave.json</file>
+        <file>text-animations/colour-pulse.json</file>
+        <file>text-animations/converge.json</file>
+        <file>text-animations/drop.json</file>
+        <file>text-animations/fade-scale.json</file>
+        <file>text-animations/fade-shift.json</file>
+        <file>text-animations/fade-up-char.json</file>
+        <file>text-animations/fade.json</file>
+        <file>text-animations/fall.json</file>
+        <file>text-animations/flicker-in.json</file>
+        <file>text-animations/flicker.json</file>
+        <file>text-animations/flip.json</file>
+        <file>text-animations/float.json</file>
+        <file>text-animations/glitch-in.json</file>
+        <file>text-animations/jitter.json</file>
+        <file>text-animations/karaoke-bounce.json</file>
+        <file>text-animations/karaoke-pop.json</file>
+        <file>text-animations/pop.json</file>
+        <file>text-animations/pulse.json</file>
+        <file>text-animations/rain.json</file>
+        <file>text-animations/remove-by-word.json</file>
+        <file>text-animations/rise-by-word.json</file>
+        <file>text-animations/rise.json</file>
+        <file>text-animations/shrink.json</file>
+        <file>text-animations/skew-slide.json</file>
+        <file>text-animations/slide-down.json</file>
+        <file>text-animations/slide-left.json</file>
+        <file>text-animations/slide-right.json</file>
+        <file>text-animations/slide-up.json</file>
+        <file>text-animations/slow-zoom.json</file>
+        <file>text-animations/snap-together.json</file>
+        <file>text-animations/spin-in.json</file>
+        <file>text-animations/squash.json</file>
+        <file>text-animations/stamp.json</file>
+        <file>text-animations/sway.json</file>
+        <file>text-animations/swing.json</file>
+        <file>text-animations/tracking-drift.json</file>
+        <file>text-animations/type-on-blur.json</file>
+        <file>text-animations/typewriter.json</file>
+        <file>text-animations/wave.json</file>
+        <file>text-animations/wipe.json</file>
+        <file>text-animations/zoom-in.json</file>
+        <file>text-animations/zoom-out.json</file>
         <file>icons/app-window.svg</file>
         <file>icons/arrow-up-down.svg</file>
         <file>icons/arrow-up.svg</file>
@@ -41,6 +88,7 @@
         <file>icons/smartphone.svg</file>
         <file>icons/sparkles.svg</file>
         <file>icons/speaker.svg</file>
+        <file>icons/shapes.svg</file>
         <file>icons/square.svg</file>
         <file>icons/trash-2.svg</file>
         <file>icons/triangle-alert.svg</file>
@@ -68,16 +116,13 @@
         <file>shaders/audio_spectral_bloom.glsl</file>
         <file>shaders/audio_particle_terrain.glsl</file>
         <file>shaders/audio_wave_curtain.glsl</file>
-        <file>html/clock.html</file>
-        <file>html/countdown_timer.html</file>
-        <file>html/cricket_score_bar.html</file>
-        <file>html/cricket_score_table.html</file>
-        <file>html/widgets/clock.html</file>
-        <file>html/widgets/countdown_timer.html</file>
-        <file>html/widgets/cricket_score_bar.html</file>
-        <file>html/widgets/cricket_score_table.html</file>
-        <file>html/editor/workspace_editor.html</file>
-        <file>html/editor/visual_editor.html</file>
+        <file>svg-templates/clock.svg</file>
+        <file>svg-templates/countdown_timer.svg</file>
+        <file>svg-templates/cricket_score_bar.svg</file>
+        <file>svg-templates/cricket_score_table.svg</file>
+        <file>svg-templates/lower_third.svg</file>
+        <file>svg-templates/news_ticker.svg</file>
+        <file>svg-templates/live_bug.svg</file>
         <file>scripts/clock.lua</file>
         <file>scripts/counter.lua</file>
         <file>scripts/greeting.lua</file>

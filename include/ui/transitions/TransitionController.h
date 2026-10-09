@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <functional>
 #include "ui/canvas/VideoWidget.h"
 
 class QComboBox;
@@ -43,6 +44,14 @@ public slots:
     void onCutTransitionClicked();
 
 private:
+    /// Runs @p transition now, or once the outgoing deck's Out animations have played when the
+    /// fader rests on an end stop. A second request during that wait is ignored.
+    void startAfterOut(int currentVal, std::function<void()> transition);
+
+    void runAutoTransition();
+    void runCutTransition();
+
+    bool m_waitingForOut = false;
     VideoWidget    *m_videoWidget;
     QComboBox      *m_transitionCombo;
     QSlider        *m_durationSlider;

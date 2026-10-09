@@ -1,13 +1,8 @@
 #include "core/sources/TextSource.h"
 #include <QJsonDocument>
 #include <QJsonValue>
-#include <QLinearGradient>
-#include <QPainter>
 #include <QRegularExpression>
-#include <QTextBlockFormat>
-#include <QTextCursor>
-#include <QTextDocument>
-#include <QTextOption>
+#include <algorithm>
 
 namespace {
 
@@ -27,13 +22,9 @@ QString jsonValueToText(const QJsonValue &v) {
     }
 }
 
-void applyFormat(QTextDocument &doc, const QTextCharFormat &cf, int lineHeightPercent) {
-    QTextCursor cursor(&doc);
-    cursor.select(QTextCursor::Document);
-    cursor.mergeCharFormat(cf);
-    QTextBlockFormat bf;
-    bf.setLineHeight(lineHeightPercent, QTextBlockFormat::ProportionalHeight);
-    cursor.mergeBlockFormat(bf);
+QSize canvasFor(const SourceDescriptor &desc) {
+    return QSize(desc.canvasWidth > 0 ? desc.canvasWidth : 1280,
+                 desc.canvasHeight > 0 ? desc.canvasHeight : 720);
 }
 
 } // namespace
@@ -50,98 +41,33 @@ QString TextSource::substitutePlaceholders(const QString &tmpl, const QJsonObjec
     return out;
 }
 
+prism::TextStyle TextSource::styleFromDescriptor(const SourceDescriptor &desc) {
+    return prism::textStyleFromJson(QJsonDocument::fromJson(desc.textStyleJson.toUtf8()).object());
+}
+
+QString TextSource::styleToJson(const prism::TextStyle &style) {
+    return QString::fromUtf8(QJsonDocument(prism::textStyleToJson(style)).toJson(QJsonDocument::Compact));
+}
+
 QImage TextSource::renderDescriptor(const SourceDescriptor &desc, const QString &resolvedText) {
-    const QSize canvas(desc.canvasWidth > 0 ? desc.canvasWidth : 1280,
-                       desc.canvasHeight > 0 ? desc.canvasHeight : 720);
-
-    QImage img(canvas, QImage::Format_RGBA8888);
-    img.fill(desc.textBgTransparent ? QColor(Qt::transparent) : desc.textBgColor);
-    if (resolvedText.isEmpty())
-        return img;
-
-    QFont font(desc.fontFamily.isEmpty() ? QStringLiteral("Sans Serif") : desc.fontFamily,
-               desc.fontSize > 0 ? desc.fontSize : 48);
-    font.setBold(desc.textBold);
-    font.setItalic(desc.textItalic);
-    font.setUnderline(desc.textUnderline);
-    if (desc.textLetterSpacing != 0)
-        font.setLetterSpacing(QFont::PercentageSpacing, 100.0 + desc.textLetterSpacing);
-
-    const Qt::Alignment align(desc.textAlign);
-
-    QTextDocument doc;
-    doc.setDefaultFont(font);
-    QTextOption opt;
-    opt.setAlignment(align & Qt::AlignHorizontal_Mask);
-    opt.setWrapMode(QTextOption::WordWrap);
-    doc.setDefaultTextOption(opt);
-    doc.setDocumentMargin(16);
-    doc.setTextWidth(canvas.width());
-    doc.setPlainText(resolvedText);
-
-    const int lineHeight = desc.textLineHeight > 0 ? desc.textLineHeight : 100;
-    const qreal docH = doc.size().height();
-    qreal y = 0;
-    if (align & Qt::AlignVCenter)
-        y = (canvas.height() - docH) / 2.0;
-    else if (align & Qt::AlignBottom)
-        y = canvas.height() - docH;
-
-    QPainter p(&img);
-    p.setRenderHint(QPainter::Antialiasing);
-    p.setRenderHint(QPainter::TextAntialiasing);
-    p.translate(0, y);
-
-    const QPen noOutline(Qt::NoPen);
-    const bool hasOutline = desc.textOutlineWidth > 0;
-
-    if (desc.textShadowDx != 0 || desc.textShadowDy != 0) {
-        QTextCharFormat shadowFmt;
-        shadowFmt.setForeground(desc.textShadowColor);
-        shadowFmt.setTextOutline(hasOutline
-            ? QPen(desc.textShadowColor, desc.textOutlineWidth,
-                   Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)
-            : noOutline);
-        applyFormat(doc, shadowFmt, lineHeight);
-        p.save();
-        p.translate(desc.textShadowDx, desc.textShadowDy);
-        doc.drawContents(&p);
-        p.restore();
-    }
-
-    QBrush fill(desc.color.isValid() ? desc.color : QColor(Qt::white));
-    if (desc.textGradient) {
-        QLinearGradient g;
-        const qreal w = canvas.width();
-        switch (desc.textGradientDir) {
-        case 1:  g = QLinearGradient(0, 0, w, 0);       break; // horizontal
-        case 2:  g = QLinearGradient(0, 0, w, docH);    break; // diagonal ↘
-        case 3:  g = QLinearGradient(0, docH, w, 0);    break; // diagonal ↗
-        default: g = QLinearGradient(0, 0, 0, docH);    break; // vertical
-        }
-        g.setColorAt(0.0, desc.color.isValid() ? desc.color : QColor(Qt::white));
-        g.setColorAt(1.0, desc.textColor2.isValid() ? desc.textColor2 : QColor(Qt::white));
-        fill = QBrush(g);
-    }
-
-    QTextCharFormat mainFmt;
-    mainFmt.setForeground(fill);
-    mainFmt.setTextOutline(hasOutline
-        ? QPen(desc.textOutlineColor, desc.textOutlineWidth,
-               Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)
-        : noOutline);
-    applyFormat(doc, mainFmt, lineHeight);
-    doc.drawContents(&p);
-
-    return img;
+    const prism::TextStyle style = styleFromDescriptor(desc);
+    const QSize canvas = canvasFor(desc);
+    prism::TextAnimClock clock;
+    clock.phase = prism::TextAnimClock::Phase::Hold;
+    clock.totalSec = prism::textAnimationInSeconds(style, resolvedText, canvas);
+    return prism::renderText(style, resolvedText, canvas, clock)
+        .convertToFormat(QImage::Format_RGBA8888);
 }
 
 TextSource::TextSource(const SourceDescriptor &desc)
     : m_desc(desc)
+    , m_style(styleFromDescriptor(desc))
 {
     if (!desc.displayName.isEmpty())
         m_displayName = desc.displayName;
+    refreshDurations();
     render();
+    m_dirty = true;
 }
 
 void TextSource::setDataSource(std::shared_ptr<ScriptOutput> data) {
@@ -149,34 +75,104 @@ void TextSource::setDataSource(std::shared_ptr<ScriptOutput> data) {
     m_lastVersion = 0;
 }
 
+void TextSource::setOnAir(bool on) {
+    if (on == m_onAir)
+        return;
+    m_onAir = on;
+    m_outActive = false;
+    if (on)
+        m_clock.start();
+    m_dirty = true;
+}
+
+double TextSource::requestOut() {
+    if (!m_onAir || m_outActive || m_outSec <= 0.0)
+        return 0.0;
+    m_outStartSec = m_clock.elapsed() / 1000.0;
+    m_outActive = true;
+    m_dirty = true;
+    return m_outSec;
+}
+
+bool TextSource::outFinished() const {
+    return m_onAir && m_outActive && m_clock.elapsed() / 1000.0 - m_outStartSec >= m_outSec;
+}
+
+prism::TextAnimClock TextSource::clockNow() const {
+    using Phase = prism::TextAnimClock::Phase;
+    prism::TextAnimClock c;
+    if (!m_onAir) {
+        c.totalSec = m_inSec;
+        return c;
+    }
+    const double total = m_clock.elapsed() / 1000.0;
+    if (m_outActive) {
+        const double elapsed = std::min(total - m_outStartSec, m_outSec);
+        c.phase = Phase::Out;
+        c.phaseElapsedSec = elapsed;
+        c.totalSec = m_outStartSec + elapsed;
+        c.outWindowSec = m_outSec;
+    } else if (total < m_inSec) {
+        c.phase = Phase::In;
+        c.phaseElapsedSec = total;
+        c.totalSec = total;
+    } else {
+        c.totalSec = total;
+    }
+    return c;
+}
+
 bool TextSource::nextFrame() {
-    if (!m_data)
-        return false;
+    bool textChanged = false;
+    if (m_data) {
+        const uint ver = m_data->version.load(std::memory_order_acquire);
+        if (ver != m_lastVersion) {
+            QString json;
+            {
+                QMutexLocker lock(&m_data->mutex);
+                json = m_data->json;
+            }
+            m_lastVersion = ver;
 
-    const uint ver = m_data->version.load(std::memory_order_acquire);
-    if (ver == m_lastVersion)
-        return false;
-
-    QString json;
-    {
-        QMutexLocker lock(&m_data->mutex);
-        json = m_data->json;
+            QJsonParseError err{};
+            const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8(), &err);
+            if (doc.isObject())
+                m_resolvedText = substitutePlaceholders(m_desc.textTemplate, doc.object());
+            else
+                m_resolvedText = m_desc.textTemplate;
+            refreshDurations();
+            textChanged = true;
+        }
     }
 
-    m_lastVersion = ver;
+    const prism::TextAnimClock clk = clockNow();
+    const bool outDone = outFinished();
+    const bool continuous = m_onAir && (m_style.animation.loop.isActive() || m_style.isAnimated() ||
+                                        prism::textTimeDrivenPaint(m_style));
+    const bool moving = m_onAir && (clk.phase == prism::TextAnimClock::Phase::In ||
+                                    (clk.phase == prism::TextAnimClock::Phase::Out && !outDone));
+    if (!(textChanged || m_dirty || continuous || moving ||
+          clk.phase != m_lastPhase || outDone != m_lastOutDone))
+        return false;
 
-    QJsonParseError err{};
-    const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8(), &err);
-    if (doc.isObject())
-        m_resolvedText = substitutePlaceholders(m_desc.textTemplate, doc.object());
-    else
-        m_resolvedText = m_desc.textTemplate;
-
+    m_dirty = false;
     render();
     return true;
 }
 
+void TextSource::refreshDurations() {
+    const QString text = m_resolvedText.isEmpty() ? m_desc.textTemplate : m_resolvedText;
+    const QSize canvas = canvasFor(m_desc);
+    m_inSec = prism::textAnimationInSeconds(m_style, text, canvas);
+    m_outSec = prism::textAnimationOutSeconds(m_style, text, canvas);
+}
+
 void TextSource::render() {
-    m_image = renderDescriptor(
-        m_desc, m_resolvedText.isEmpty() ? m_desc.textTemplate : m_resolvedText);
+    const prism::TextAnimClock clk = clockNow();
+    m_lastPhase = clk.phase;
+    m_lastOutDone = outFinished();
+    m_image = prism::renderText(m_style,
+                                m_resolvedText.isEmpty() ? m_desc.textTemplate : m_resolvedText,
+                                canvasFor(m_desc), clk)
+                  .convertToFormat(QImage::Format_RGBA8888);
 }

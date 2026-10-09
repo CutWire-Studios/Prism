@@ -63,3 +63,7 @@ flatpak/repo/
 flatpak/dist/
 flatpak/.flatpak-builder/
 repo/
+
+# Prebuilt Skia (third_party/build-skia.sh)
+third_party/src/
+third_party/prebuilt/

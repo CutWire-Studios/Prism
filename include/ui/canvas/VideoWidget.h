@@ -41,10 +41,6 @@ public:
     void adoptSourceA(std::unique_ptr<MediaSource> source);
     void adoptSourceB(std::unique_ptr<MediaSource> source);
 
-    // HTML overlay composited on top of the A/B crossfade (RGBA, alpha-blended).
-    void setHtmlOverlay(std::unique_ptr<MediaSource> source);
-    void clearHtmlOverlay();
-
     void playA();
     void pauseA();
     void playB();
@@ -115,6 +111,11 @@ public:
     // Exchange all A/B deck content (sources, textures, chains, placement, playback
     // clocks) so a clip can move between decks without re-decoding from disk.
     void swapDeckContents();
+
+    // Starts the Out animation of every source on the deck (primary and overlay chain) and returns
+    // the longest one in seconds; 0 when nothing animates out. The caller keeps the deck on air
+    // for that long.
+    double requestDeckOut(bool deckA);
 
     bool   isPlayingA()      const { return m_playingA; }
     bool   isPlayingB()      const { return m_playingB; }
@@ -251,13 +252,10 @@ private:
 
     std::unique_ptr<MediaSource> m_sourceA;
     std::unique_ptr<MediaSource> m_sourceB;
-    std::unique_ptr<MediaSource> m_htmlOverlay;
     GLuint m_textureA       = 0;
     GLuint m_textureB       = 0;
-    GLuint m_textureOverlay = 0;
     bool   m_playingA       = false;
     bool   m_playingB       = false;
-    bool   m_playingOverlay = false;
     float  m_crossfadeB = 0.f;
     // Which deck is the incoming one. Committed when the fader leaves an end
     // stop so directional transitions animate correctly in both directions
@@ -346,6 +344,8 @@ private:
     // Returns {alphaA, alphaB} for the current crossfader position and mode.
     // Used by both paintGL() and paintEvent() to keep overlay rendering consistent.
     std::pair<float,float> computeDeckAlphas() const;
+
+    void syncOnAir();
 
     void clearChainTextures(std::vector<GLuint> &texList);
     void primeChainSources(std::vector<NodeChainSource> &chain,

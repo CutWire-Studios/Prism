@@ -6,11 +6,15 @@
 #include "ui/common/CapturePicker.h"
 #endif
 #include "ui/editors/ShaderEditDialog.h"
-#include "ui/editors/HtmlEditDialog.h"
+#include "ui/editors/ShapeEditDialog.h"
+#include "ui/editors/SvgTemplateDialog.h"
 #include "ui/editors/TextEditDialog.h"
 #include "ui/common/ThumbHelper.h"
 #include "core/media/ThumbnailExtractor.h"
 #include "core/sources/NdiSource.h"
+#include "core/sources/ShapeSource.h"
+#include "core/sources/SvgTemplateSource.h"
+#include "core/sources/TextSource.h"
 #ifdef PRISM_HAVE_WEBRTC
 #include "core/webrtc/WebRtcManager.h"
 #include "core/sources/WebRtcSource.h"
@@ -230,24 +234,16 @@ bool promptShader(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     return true;
 }
 
-bool promptHtml(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
-    HtmlEditDialog dlg(QString(), QString(), parent);
-    if (dlg.exec() != QDialog::Accepted) return false;
-
-    const QString workspace = dlg.resultWorkspaceJson();
-    const QString bakedHtml = dlg.resultBakedHtml().trimmed();
-    const QString filePath  = dlg.resultFilePath();
-    if (workspace.isEmpty() && filePath.isEmpty() && bakedHtml.isEmpty())
+bool promptSvgTemplate(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
+    SvgTemplateDialog dlg({}, parent);
+    if (dlg.exec() != QDialog::Accepted)
         return false;
 
-    desc.kind          = SourceDescriptor::Kind::Html;
-    desc.htmlWorkspace = workspace;
-    desc.htmlContent   = workspace.isEmpty() ? dlg.resultHtml().trimmed() : bakedHtml;
-    desc.path          = workspace.isEmpty() ? filePath : QString();
-    desc.displayName   = (!filePath.isEmpty() && workspace.isEmpty())
-                             ? QFileInfo(filePath).fileName()
-                             : QStringLiteral("HTML Overlay");
-    thumb = ThumbHelper::makeHtmlThumb(desc.htmlContent, desc.path);
+    desc = dlg.resultDescriptor();
+    if (desc.svgTemplateId.isEmpty())
+        return false;
+
+    thumb = ThumbHelper::makeSvgTemplateThumb(desc);
     return true;
 }
 
@@ -260,7 +256,21 @@ bool promptText(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
     if (desc.textTemplate.trimmed().isEmpty())
         return false;
 
-    thumb = ThumbHelper::makeTextThumb(desc.textTemplate, desc.color);
+    thumb = ThumbHelper::makeTextThumb(desc);
+    return true;
+}
+
+bool promptShape(QWidget *parent, SourceDescriptor &desc, QPixmap &thumb) {
+    SourceDescriptor initial;
+    initial.kind = SourceDescriptor::Kind::Shape;
+    initial.shapeStyleJson = ShapeSource::styleToJson(prism::ShapeStyle{});
+    initial.displayName = QObject::tr("Shape");
+    ShapeEditDialog dlg(initial, parent);
+    if (dlg.exec() != QDialog::Accepted)
+        return false;
+
+    desc = dlg.resultDescriptor();
+    thumb = ThumbHelper::makeShapeThumb(desc);
     return true;
 }
 
@@ -588,10 +598,12 @@ bool prompt(SourceDescriptor::Kind kind, QWidget *parent,
         return promptCanvas(parent, outDesc, outThumb);
     case SourceDescriptor::Kind::Shader:
         return promptShader(parent, outDesc, outThumb);
-    case SourceDescriptor::Kind::Html:
-        return promptHtml(parent, outDesc, outThumb);
+    case SourceDescriptor::Kind::SvgTemplate:
+        return promptSvgTemplate(parent, outDesc, outThumb);
     case SourceDescriptor::Kind::Text:
         return promptText(parent, outDesc, outThumb);
+    case SourceDescriptor::Kind::Shape:
+        return promptShape(parent, outDesc, outThumb);
     case SourceDescriptor::Kind::Ndi:
         return promptNdi(parent, outDesc, outThumb);
     case SourceDescriptor::Kind::WebRtc:
@@ -643,10 +655,12 @@ void buildMenu(QMenu *menu,
                   [onKind]() { onKind(SourceDescriptor::Kind::Canvas); });
     addIconAction(Icons::Names::Grain, QObject::tr("Shader…"),
                   [onKind]() { onKind(SourceDescriptor::Kind::Shader); });
-    addIconAction(Icons::Names::Language, QObject::tr("HTML Overlay…"),
-                  [onKind]() { onKind(SourceDescriptor::Kind::Html); });
+    addIconAction(Icons::Names::GridView, QObject::tr("SVG Template…"),
+                  [onKind]() { onKind(SourceDescriptor::Kind::SvgTemplate); });
     addIconAction(Icons::Names::TextFields, QObject::tr("Text…"),
                   [onKind]() { onKind(SourceDescriptor::Kind::Text); });
+    addIconAction(Icons::Names::Shapes, QObject::tr("Shape…"),
+                  [onKind]() { onKind(SourceDescriptor::Kind::Shape); });
     QAction *ndiAction = addIconAction(Icons::Names::Sensors, QObject::tr("NDI Source…"),
                                        [onKind]() { onKind(SourceDescriptor::Kind::Ndi); });
     ndiAction->setEnabled(ndiAvailable);

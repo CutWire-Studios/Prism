@@ -49,7 +49,6 @@ VideoWidget::~VideoWidget() {
         destroyProgramFbo();
         if (m_textureA)       glDeleteTextures(1, &m_textureA);
         if (m_textureB)       glDeleteTextures(1, &m_textureB);
-        if (m_textureOverlay) glDeleteTextures(1, &m_textureOverlay);
         clearChainTextures(m_chainTexA);
         clearChainTextures(m_chainTexB);
         doneCurrent();
@@ -67,10 +66,8 @@ void VideoWidget::releaseMediaSources() {
     }
     m_playingA = false;
     m_playingB = false;
-    m_playingOverlay = false;
     m_sourceA.reset();
     m_sourceB.reset();
-    m_htmlOverlay.reset();
     m_chainA.clear();
     m_chainB.clear();
 }
@@ -346,15 +343,6 @@ void VideoWidget::renderCompositionGL() {
     glEnable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    if (m_textureOverlay && m_htmlOverlay && m_htmlOverlay->isReady()) {
-        const QRectF screenBounds(0, 0, renderW(), renderH());
-        QRectF ovlRect = computeContainedRect(m_htmlOverlay->frameSize(), 1, 1, screenBounds);
-        glColor4f(1.f, 1.f, 1.f, 1.f);
-        renderTexture(m_textureOverlay, 0, 0, 1, 1,
-                      (float)ovlRect.x(),     (float)ovlRect.y(),
-                      (float)ovlRect.width(), (float)ovlRect.height());
-    }
 
     glDisable(GL_BLEND);
     glColor4f(1.f, 1.f, 1.f, 1.f);
@@ -800,7 +788,6 @@ void VideoWidget::setSourceA(std::unique_ptr<MediaSource> source) {
                   t == MediaSource::Type::Window     ||
                   t == MediaSource::Type::Slideshow  ||
                   t == MediaSource::Type::Canvas     ||
-                  t == MediaSource::Type::Html       ||
                   t == MediaSource::Type::Ndi);
     update();
 }
@@ -825,7 +812,6 @@ void VideoWidget::setSourceB(std::unique_ptr<MediaSource> source) {
                   t == MediaSource::Type::Window     ||
                   t == MediaSource::Type::Slideshow  ||
                   t == MediaSource::Type::Canvas     ||
-                  t == MediaSource::Type::Html       ||
                   t == MediaSource::Type::Ndi);
     update();
 }
@@ -848,35 +834,6 @@ void VideoWidget::adoptSourceA(std::unique_ptr<MediaSource> source) {
 void VideoWidget::adoptSourceB(std::unique_ptr<MediaSource> source) {
     m_playingB = false;
     m_sourceB  = std::move(source);
-}
-
-void VideoWidget::setHtmlOverlay(std::unique_ptr<MediaSource> source) {
-    m_playingOverlay = false;
-    m_htmlOverlay    = std::move(source);
-    if (!m_htmlOverlay) {
-        makeCurrent();
-        if (m_textureOverlay) {
-            glDeleteTextures(1, &m_textureOverlay);
-            m_textureOverlay = 0;
-        }
-        doneCurrent();
-        update();
-        return;
-    }
-    makeCurrent();
-    // Overlay textures are always RGBA so transparent HTML parts show the video underneath.
-    setupTextureGL(m_textureOverlay, m_htmlOverlay->frameSize(), true);
-    if (m_htmlOverlay->nextFrame()) {
-        makeCurrent();
-        uploadSourceFrameGL(m_textureOverlay, m_htmlOverlay.get());
-    }
-    doneCurrent();
-    m_playingOverlay = true;
-    update();
-}
-
-void VideoWidget::clearHtmlOverlay() {
-    setHtmlOverlay(nullptr);
 }
 
 // ── Playback control ──────────────────────────────────────────────────────────
@@ -1482,34 +1439,52 @@ bool VideoWidget::advanceDeckPaced(bool deckA) {
     return decoded;
 }
 
+void VideoWidget::syncOnAir() {
+    const float t = std::clamp(m_crossfadeB, 0.f, 1.f);
+    const bool cut = m_transitionMode == TransitionMode::Cut;
+    const bool onAirA = m_singleStream || (cut ? t < 0.5f : t < 0.999f);
+    const bool onAirB = !m_singleStream && (cut ? t >= 0.5f : t > 0.001f);
+    if (m_sourceA) m_sourceA->setOnAir(onAirA);
+    if (m_sourceB) m_sourceB->setOnAir(onAirB);
+    for (const NodeChainSource &c : m_chainA)
+        if (c.source) c.source->setOnAir(onAirA);
+    for (const NodeChainSource &c : m_chainB)
+        if (c.source) c.source->setOnAir(onAirB);
+}
+
+double VideoWidget::requestDeckOut(bool deckA) {
+    MediaSource *primary = deckA ? m_sourceA.get() : m_sourceB.get();
+    double longest = primary ? primary->requestOut() : 0.0;
+    for (const NodeChainSource &c : deckA ? m_chainA : m_chainB)
+        if (c.source) longest = std::max(longest, c.source->requestOut());
+    return longest;
+}
+
 void VideoWidget::updateFrame() {
+    syncOnAir();
     const bool needsCapture = m_programFrameConsumers > 0 || m_deckFrameConsumers > 0;
     if (m_outputFrozen && !needsCapture) return;
 
     const bool hasChainA = !m_chainA.empty();
     const bool hasChainB = !m_chainB.empty();
-    if (!m_playingA && !m_playingB && !m_playingOverlay && !hasChainA && !hasChainB && !needsCapture)
+    if (!m_playingA && !m_playingB && !hasChainA && !hasChainB && !needsCapture)
         return;
 
-    bool decodedA = false, decodedB = false, decodedOverlay = false;
+    bool decodedA = false, decodedB = false;
 
     if (m_playingA)
         decodedA = advanceDeckPaced(true);
     if (m_playingB)
         decodedB = advanceDeckPaced(false);
-    if (m_playingOverlay && m_htmlOverlay)
-        decodedOverlay = advanceSource(m_htmlOverlay.get(), m_playingOverlay,
-                                       false, 0.0, -1.0);
 
     bool chainADecoded = false, chainBDecoded = false;
     advanceChainSources(m_chainA, m_chainTexA, chainADecoded);
     advanceChainSources(m_chainB, m_chainTexB, chainBDecoded);
 
-    if (decodedA || decodedB || decodedOverlay || chainADecoded || chainBDecoded) {
+    if (decodedA || decodedB || chainADecoded || chainBDecoded) {
         makeCurrent();
         if (decodedA)       uploadSourceFrameGL(m_textureA,       m_sourceA.get());
         if (decodedB)       uploadSourceFrameGL(m_textureB,       m_sourceB.get());
-        if (decodedOverlay) uploadSourceFrameGL(m_textureOverlay, m_htmlOverlay.get());
         doneCurrent();
     }
 
@@ -1526,10 +1501,9 @@ void VideoWidget::updateFrame() {
 
     const bool waitingForLiveSource =
         (m_playingA       && m_sourceA    && !m_sourceA->isReady())    ||
-        (m_playingB       && m_sourceB    && !m_sourceB->isReady())    ||
-        (m_playingOverlay && m_htmlOverlay && !m_htmlOverlay->isReady());
+        (m_playingB       && m_sourceB    && !m_sourceB->isReady());
 
-    if (decodedA || decodedB || decodedOverlay || chainADecoded || chainBDecoded
+    if (decodedA || decodedB || chainADecoded || chainBDecoded
         || needsCapture || waitingForLiveSource) {
         update();
     }

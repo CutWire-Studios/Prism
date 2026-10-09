@@ -2,7 +2,8 @@
 #include "ui_ClipCard.h"
 #include "ui/nodes/ClipEditDialog.h"
 #include "ui/editors/ShaderEditDialog.h"
-#include "ui/editors/HtmlEditDialog.h"
+#include "ui/editors/ShapeEditDialog.h"
+#include "ui/editors/SvgTemplateDialog.h"
 #include "ui/editors/TextEditDialog.h"
 #include "ui/common/ThumbHelper.h"
 #include "ui/common/Icons.h"
@@ -21,7 +22,6 @@
 #include "core/project/ClipManager.h"
 #include "core/sources/SlideshowSource.h"
 #include "core/sources/ShaderSource.h"
-#include "core/sources/HtmlSource.h"
 #include "core/sources/NdiSource.h"
 #ifdef PRISM_HAVE_WEBRTC
 #include "ui/mainwindow/SourcePrompt.h"
@@ -580,26 +580,18 @@ void ClipCard::onEditClicked() {
         break;
     }
 
-    case Kind::Html: {
-        HtmlEditDialog dlg(m_sourceDesc.htmlContent, m_sourceDesc.htmlWorkspace, parent);
+    case Kind::SvgTemplate: {
+        SvgTemplateDialog dlg(m_sourceDesc, parent);
         if (dlg.exec() == QDialog::Accepted) {
-            const QString workspace = dlg.resultWorkspaceJson();
-            const QString bakedHtml = dlg.resultBakedHtml().trimmed();
-            const QString filePath  = dlg.resultFilePath();
-            if (!workspace.isEmpty()) {
-                m_sourceDesc.htmlWorkspace = workspace;
-                m_sourceDesc.htmlContent   = bakedHtml;
-                m_sourceDesc.path.clear();
-                m_sourceDesc.displayName     = tr("HTML Overlay");
-                emit sourceDescriptorChanged(m_index, m_sourceDesc);
-            } else if (!filePath.isEmpty() || !bakedHtml.isEmpty()) {
-                m_sourceDesc.htmlWorkspace.clear();
-                m_sourceDesc.path        = filePath;
-                m_sourceDesc.htmlContent = dlg.resultHtml().trimmed();
-                if (!filePath.isEmpty())
-                    m_sourceDesc.displayName = QFileInfo(filePath).fileName();
-                emit sourceDescriptorChanged(m_index, m_sourceDesc);
-            }
+            const SourceDescriptor updated = dlg.resultDescriptor();
+            if (updated.svgTemplateId.isEmpty())
+                break;
+            m_sourceDesc = updated;
+            ui->thumbnailBtn->setIcon(QIcon(ThumbHelper::makeSvgTemplateThumb(m_sourceDesc)));
+            QFontMetrics fm(ui->titleLabel->font());
+            ui->titleLabel->setText(fm.elidedText(m_sourceDesc.displayName, Qt::ElideRight, 108));
+            ui->titleLabel->setToolTip(m_sourceDesc.displayName);
+            emit sourceDescriptorChanged(m_index, m_sourceDesc);
         }
         break;
     }
@@ -671,8 +663,7 @@ void ClipCard::onEditClicked() {
             if (updated.textTemplate.trimmed().isEmpty())
                 break;
             m_sourceDesc = updated;
-            ui->thumbnailBtn->setIcon(QIcon(ThumbHelper::makeTextThumb(
-                m_sourceDesc.textTemplate, m_sourceDesc.color)));
+            ui->thumbnailBtn->setIcon(QIcon(ThumbHelper::makeTextThumb(m_sourceDesc)));
             QFontMetrics fm(ui->titleLabel->font());
             ui->titleLabel->setText(fm.elidedText(m_sourceDesc.displayName, Qt::ElideRight, 108));
             ui->titleLabel->setToolTip(m_sourceDesc.displayName);
@@ -680,6 +671,19 @@ void ClipCard::onEditClicked() {
         }
         break;
     }
+
+    case Kind::Shape: {
+        ShapeEditDialog dlg(m_sourceDesc, parent);
+        if (dlg.exec() == QDialog::Accepted) {
+            m_sourceDesc = dlg.resultDescriptor();
+            ui->thumbnailBtn->setIcon(QIcon(ThumbHelper::makeShapeThumb(m_sourceDesc)));
+            emit sourceDescriptorChanged(m_index, m_sourceDesc);
+        }
+        break;
+    }
+
+    case Kind::RemovedHtml:
+        break;
 
     case Kind::WebRtc: {
 #ifdef PRISM_HAVE_WEBRTC

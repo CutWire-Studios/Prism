@@ -18,7 +18,7 @@
       <li
             >Node-based clip canvas with groups, transform contexts, audio routing, and a VJ hotkey grid</li>
       <li
-            >Many source types: video, images, slideshows, webcams, screen and window capture, GLSL shaders, HTML/QML overlays, text, Lua scripts, NDI inputs, and phone cameras over WebRTC</li>
+            >Many source types: video, images, slideshows, webcams, screen and window capture, GLSL shaders, SVG templates, text, Lua scripts, NDI inputs, and phone cameras over WebRTC</li>
       <li>Live A/B deck mixing with a crossfader and per-deck speed control</li>
       <li
             >Per-clip trim, crop, transform, and composited text/image overlay editing</li>
@@ -84,12 +84,6 @@
       <image
             >https://raw.githubusercontent.com/CutWire-Studios/Prism/main/docs/screenshots/overlay-editor.png</image>
       <caption>Editing composited text and image overlays</caption>
-    </screenshot>
-    <screenshot xml:lang="en">
-      <image
-            >https://raw.githubusercontent.com/CutWire-Studios/Prism/main/docs/screenshots/html-editor.png</image>
-      <caption
-            >Designing dynamic HTML overlays in the built-in visual editor</caption>
     </screenshot>
     <screenshot xml:lang="en">
       <image

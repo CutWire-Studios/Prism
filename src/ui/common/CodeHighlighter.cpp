@@ -11,9 +11,6 @@ const QColor kNumber(0xB5, 0xCE, 0xA8);
 const QColor kString(0xCE, 0x91, 0x78);
 const QColor kComment(0x6A, 0x99, 0x55);
 const QColor kPreprocessor(0x56, 0x9C, 0xD6);
-const QColor kTag(0x56, 0x9C, 0xD6);
-const QColor kAttribute(0x9C, 0xDC, 0xFE);
-const QColor kEntity(0xD7, 0xBA, 0x7D);
 
 QTextCharFormat fmt(const QColor &color, bool bold = false, bool italic = false) {
     QTextCharFormat f;
@@ -37,7 +34,6 @@ CodeHighlighter::CodeHighlighter(Language lang, QTextDocument *doc)
     switch (lang) {
     case Language::Glsl: setupGlsl(); break;
     case Language::Lua:  setupLua();  break;
-    case Language::Html: setupHtml(); break;
     }
 }
 
@@ -95,24 +91,6 @@ void CodeHighlighter::setupLua()
                      m_commentFormat });
     m_blockCommentStart = QRegularExpression(QStringLiteral("--\\[\\["));
     m_blockCommentEnd   = QRegularExpression(QStringLiteral("\\]\\]"));
-}
-
-void CodeHighlighter::setupHtml()
-{
-    m_rules.append({ QRegularExpression(QStringLiteral("</?\\s*[\\w-]+|/?>")),
-                     fmt(kTag, true) });
-    m_rules.append({ QRegularExpression(QStringLiteral("\\b[\\w-]+(?=\\s*=)")),
-                     fmt(kAttribute) });
-    m_rules.append({ QRegularExpression(QStringLiteral(
-                         "\"[^\"]*\"|'[^']*'")),
-                     fmt(kString) });
-    m_rules.append({ QRegularExpression(QStringLiteral("&\\w+;")),
-                     fmt(kEntity) });
-    m_rules.append({ QRegularExpression(QStringLiteral("<!DOCTYPE[^>]*>"),
-                         QRegularExpression::CaseInsensitiveOption),
-                     fmt(kPreprocessor) });
-    m_blockCommentStart = QRegularExpression(QStringLiteral("<!--"));
-    m_blockCommentEnd   = QRegularExpression(QStringLiteral("-->"));
 }
 
 void CodeHighlighter::highlightBlock(const QString &text)

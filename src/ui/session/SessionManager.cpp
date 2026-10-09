@@ -7,7 +7,6 @@
 #include "core/project/ClipManager.h"
 #include "core/media/ThumbnailExtractor.h"
 #include "core/sources/NdiSource.h"
-#include "core/sources/HtmlWorkspace.h"
 #include <QFile>
 #include <QDir>
 #include <QFileInfo>
@@ -339,17 +338,10 @@ bool SessionManager::loadFromFile(const QString &path, bool showErrors) {
                 desc.canvasFill, desc.color);
             break;
         case Kind::Shader: thumb = ThumbHelper::makeShaderThumb(desc.shaderCode);           break;
-        case Kind::Html: {
-            QString html = desc.htmlContent;
-            QString path = desc.path;
-            if (!desc.htmlWorkspace.isEmpty()) {
-                html = HtmlWorkspaceBuilder::buildFromJson(desc.htmlWorkspace);
-                path = {};
-            }
-            thumb = ThumbHelper::makeHtmlThumb(html, path);
-            break;
-        }
-        case Kind::Text:   thumb = ThumbHelper::makeTextThumb(desc.textTemplate, desc.color); break;
+        case Kind::RemovedHtml: break;
+        case Kind::Text:   thumb = ThumbHelper::makeTextThumb(desc); break;
+        case Kind::Shape:  thumb = ThumbHelper::makeShapeThumb(desc); break;
+        case Kind::SvgTemplate: thumb = ThumbHelper::makeSvgTemplateThumb(desc); break;
         case Kind::Ndi:    thumb = ThumbHelper::makeIconThumb(Icons::Names::Sensors); break;
         case Kind::WebRtc: thumb = ThumbHelper::makeIconThumb(Icons::Names::Smartphone); break;
         }

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="90" viewBox="0 0 1280 90">
+  <metadata id="prism">{"name":"News bar","params":[
+    {"name":"label","label":"Label","type":"text","default":"BREAKING"},
+    {"name":"headline","label":"Headline","type":"text","default":"Headline text goes here"},
+    {"name":"accentColor","label":"Label color","type":"color","default":"#d32f2f"},
+    {"name":"panelColor","label":"Panel color","type":"color","default":"#0d1117"},
+    {"name":"textColor","label":"Headline color","type":"color","default":"#ffffff"}
+  ]}</metadata>
+  <rect width="1280" height="90" fill="{panelColor}" fill-opacity="0.94"/>
+  <rect width="230" height="90" fill="{accentColor}"/>
+  <text x="115" y="57" text-anchor="middle" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="28" font-weight="bold" fill="#ffffff">{label}</text>
+  <text x="262" y="58" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="34" fill="{textColor}">{headline}</text>
+  <text x="1252" y="56" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="26" fill="#90a4ae">{time}</text>
+</svg>

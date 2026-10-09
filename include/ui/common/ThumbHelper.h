@@ -21,10 +21,14 @@ public:
 
     static QPixmap makeShaderThumb(const QString &code, int w = 110, int h = 65);
 
-    static QPixmap makeHtmlThumb(const QString &html, const QString &filePath,
-                                 int w = 110, int h = 65);
-
     static QPixmap makeTextThumb(const QString &textTemplate,
                                  const QColor &color = Qt::white,
                                  int w = 110, int h = 65);
+
+    /// Text thumbnail tinted with the style's fill colour.
+    static QPixmap makeTextThumb(const SourceDescriptor &desc, int w = 110, int h = 65);
+
+    static QPixmap makeShapeThumb(const SourceDescriptor &desc, int w = 110, int h = 65);
+
+    static QPixmap makeSvgTemplateThumb(const SourceDescriptor &desc, int w = 110, int h = 65);
 };

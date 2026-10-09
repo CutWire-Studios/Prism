@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="290" viewBox="0 0 900 290">
+  <metadata id="prism">{"name":"Cricket score table","params":[
+    {"name":"title","label":"Title","type":"text","default":"INDIA INNINGS  —  287/6  (47.2 ov)"},
+    {"name":"accentColor","label":"Accent color","type":"color","default":"#00e5ff"},
+    {"name":"panelColor","label":"Panel color","type":"color","default":"#0d1117"},
+    {"name":"b1name","label":"Batter 1 name","type":"text","default":"V Kohli *"},
+    {"name":"b1status","label":"Batter 1 status","type":"text","default":"batting"},
+    {"name":"b1r","label":"Batter 1 runs","type":"text","default":"82"},
+    {"name":"b1b","label":"Batter 1 balls","type":"text","default":"91"},
+    {"name":"b1f","label":"Batter 1 fours","type":"text","default":"7"},
+    {"name":"b1s","label":"Batter 1 sixes","type":"text","default":"2"},
+    {"name":"b2name","label":"Batter 2 name","type":"text","default":"H Pandya †"},
+    {"name":"b2status","label":"Batter 2 status","type":"text","default":"batting"},
+    {"name":"b2r","label":"Batter 2 runs","type":"text","default":"41"},
+    {"name":"b2b","label":"Batter 2 balls","type":"text","default":"38"},
+    {"name":"b2f","label":"Batter 2 fours","type":"text","default":"3"},
+    {"name":"b2s","label":"Batter 2 sixes","type":"text","default":"2"},
+    {"name":"b3name","label":"Batter 3 name","type":"text","default":"R Sharma"},
+    {"name":"b3status","label":"Batter 3 status","type":"text","default":"c Maxwell b Hazlewood"},
+    {"name":"b3r","label":"Batter 3 runs","type":"text","default":"55"},
+    {"name":"b3b","label":"Batter 3 balls","type":"text","default":"62"},
+    {"name":"b3f","label":"Batter 3 fours","type":"text","default":"6"},
+    {"name":"b3s","label":"Batter 3 sixes","type":"text","default":"1"},
+    {"name":"b4name","label":"Batter 4 name","type":"text","default":"S Gill"},
+    {"name":"b4status","label":"Batter 4 status","type":"text","default":"b Cummins"},
+    {"name":"b4r","label":"Batter 4 runs","type":"text","default":"33"},
+    {"name":"b4b","label":"Batter 4 balls","type":"text","default":"40"},
+    {"name":"b4f","label":"Batter 4 fours","type":"text","default":"4"},
+    {"name":"b4s","label":"Batter 4 sixes","type":"text","default":"0"},
+    {"name":"b5name","label":"Batter 5 name","type":"text","default":"S Iyer"},
+    {"name":"b5status","label":"Batter 5 status","type":"text","default":"lbw b Starc"},
+    {"name":"b5r","label":"Batter 5 runs","type":"text","default":"28"},
+    {"name":"b5b","label":"Batter 5 balls","type":"text","default":"25"},
+    {"name":"b5f","label":"Batter 5 fours","type":"text","default":"3"},
+    {"name":"b5s","label":"Batter 5 sixes","type":"text","default":"1"}
+  ]}</metadata>
+  <rect width="900" height="290" rx="10" fill="{panelColor}" fill-opacity="0.92"/>
+  <text x="24" y="38" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="20" font-weight="bold" fill="{accentColor}">{title}</text>
+  <rect x="16" y="52" width="868" height="1" fill="#263238"/>
+  <text x="24" y="82" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="12" font-weight="bold" fill="#607d8b">BATTER</text>
+  <text x="270" y="82" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="12" font-weight="bold" fill="#607d8b">STATUS</text>
+  <text x="640" y="82" text-anchor="end" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="12" font-weight="bold" fill="#607d8b">R</text>
+  <text x="710" y="82" text-anchor="end" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="12" font-weight="bold" fill="#607d8b">B</text>
+  <text x="780" y="82" text-anchor="end" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="12" font-weight="bold" fill="#607d8b">4s</text>
+  <text x="850" y="82" text-anchor="end" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="12" font-weight="bold" fill="#607d8b">6s</text>
+  <rect x="16" y="92" width="868" height="1" fill="#263238"/>
+  <text x="24" y="118" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" font-weight="bold" fill="{accentColor}">{b1name}</text>
+  <text x="270" y="118" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="{accentColor}">{b1status}</text>
+  <text x="640" y="118" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" font-weight="bold" fill="#ffffff">{b1r}</text>
+  <text x="710" y="118" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b1b}</text>
+  <text x="780" y="118" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b1f}</text>
+  <text x="850" y="118" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b1s}</text>
+  <rect x="16" y="130" width="868" height="1" fill="#1a1f27"/>
+  <text x="24" y="154" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" font-weight="bold" fill="{accentColor}">{b2name}</text>
+  <text x="270" y="154" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="{accentColor}">{b2status}</text>
+  <text x="640" y="154" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" font-weight="bold" fill="#ffffff">{b2r}</text>
+  <text x="710" y="154" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b2b}</text>
+  <text x="780" y="154" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b2f}</text>
+  <text x="850" y="154" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b2s}</text>
+  <rect x="16" y="166" width="868" height="1" fill="#1a1f27"/>
+  <text x="24" y="190" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="#cfd8dc">{b3name}</text>
+  <text x="270" y="190" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="#546e7a">{b3status}</text>
+  <text x="640" y="190" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b3r}</text>
+  <text x="710" y="190" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b3b}</text>
+  <text x="780" y="190" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b3f}</text>
+  <text x="850" y="190" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b3s}</text>
+  <rect x="16" y="202" width="868" height="1" fill="#1a1f27"/>
+  <text x="24" y="226" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="#cfd8dc">{b4name}</text>
+  <text x="270" y="226" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="#546e7a">{b4status}</text>
+  <text x="640" y="226" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b4r}</text>
+  <text x="710" y="226" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b4b}</text>
+  <text x="780" y="226" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b4f}</text>
+  <text x="850" y="226" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b4s}</text>
+  <rect x="16" y="238" width="868" height="1" fill="#1a1f27"/>
+  <text x="24" y="262" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="#cfd8dc">{b5name}</text>
+  <text x="270" y="262" text-anchor="start" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="16" fill="#546e7a">{b5status}</text>
+  <text x="640" y="262" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b5r}</text>
+  <text x="710" y="262" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b5b}</text>
+  <text x="780" y="262" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b5f}</text>
+  <text x="850" y="262" text-anchor="end" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="17" fill="#cfd8dc">{b5s}</text>
+  <rect x="16" y="274" width="868" height="1" fill="#1a1f27"/>
+</svg>

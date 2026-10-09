@@ -1,13 +1,12 @@
 #include "ui/common/ThumbHelper.h"
 #include "ui/common/Icons.h"
 #include "core/sources/ShaderSource.h"
+#include "core/sources/ShapeSource.h"
+#include "core/sources/SvgTemplateSource.h"
+#include "core/sources/TextSource.h"
 #include "ui/common/Theme.h"
 #include <QPainter>
 #include <QFont>
-#include <QWebEngineView>
-#include <QEventLoop>
-#include <QTimer>
-#include <QUrl>
 
 namespace {
 QColor placeholderFill() {
@@ -59,31 +58,6 @@ QPixmap ThumbHelper::makeShaderThumb(const QString &code, int w, int h) {
     return QPixmap::fromImage(img.copy());
 }
 
-QPixmap ThumbHelper::makeHtmlThumb(const QString &html, const QString &filePath, int w, int h) {
-    QWebEngineView view;
-    view.resize(1280, 720);
-    view.setAttribute(Qt::WA_TranslucentBackground);
-    view.page()->setBackgroundColor(Qt::transparent);
-    view.setAttribute(Qt::WA_DontShowOnScreen);
-    view.show();
-
-    QEventLoop loop;
-    QObject::connect(&view, &QWebEngineView::loadFinished, &loop, &QEventLoop::quit);
-    QTimer::singleShot(8000, &loop, &QEventLoop::quit);
-
-    if (!filePath.isEmpty())
-        view.load(QUrl::fromLocalFile(filePath));
-    else
-        view.setHtml(html, QUrl("qrc:/"));
-
-    loop.exec();
-
-    QPixmap grab = view.grab();
-    if (grab.isNull())
-        return makeIconThumb(Icons::Names::Language, w, h);
-    return grab.scaled(w, h, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-}
-
 QPixmap ThumbHelper::makeTextThumb(const QString &textTemplate, const QColor &color, int w, int h) {
     QPixmap pix(w, h);
     pix.fill(placeholderFill());
@@ -97,5 +71,35 @@ QPixmap ThumbHelper::makeTextThumb(const QString &textTemplate, const QColor &co
     p.drawText(pix.rect().adjusted(6, 4, -6, -4),
                Qt::AlignCenter | Qt::TextWordWrap,
                label.length() > 40 ? label.left(37) + QStringLiteral("…") : label);
+    return pix;
+}
+
+QPixmap ThumbHelper::makeTextThumb(const SourceDescriptor &desc, int w, int h) {
+    return makeTextThumb(desc.textTemplate, TextSource::styleFromDescriptor(desc).primaryColor(), w, h);
+}
+
+QPixmap ThumbHelper::makeShapeThumb(const SourceDescriptor &desc, int w, int h) {
+    QPixmap pix(w, h);
+    pix.fill(placeholderFill());
+    SourceDescriptor small = desc;
+    small.canvasWidth = w * 4;
+    small.canvasHeight = h * 4;
+    const QImage shape = ShapeSource::renderDescriptor(small);
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    p.drawImage(pix.rect(), shape);
+    return pix;
+}
+
+QPixmap ThumbHelper::makeSvgTemplateThumb(const SourceDescriptor &desc, int w, int h) {
+    const QImage frame = SvgTemplateSource::renderDescriptor(desc);
+    if (frame.isNull())
+        return makeIconThumb(Icons::Names::GridView, w, h);
+    QPixmap pix(w, h);
+    pix.fill(placeholderFill());
+    QPainter p(&pix);
+    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    const QSize fit = frame.size().scaled(w - 8, h - 8, Qt::KeepAspectRatio);
+    p.drawImage(QRect(QPoint((w - fit.width()) / 2, (h - fit.height()) / 2), fit), frame);
     return pix;
 }

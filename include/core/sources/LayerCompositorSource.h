@@ -6,6 +6,7 @@
 #include <QElapsedTimer>
 #include <QImage>
 #include <QSize>
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -53,6 +54,14 @@ public:
     void    seek(double s)      override { if (primary()) primary()->seek(s); }
     void    play()  override { if (primary()) primary()->play(); }
     void    pause() override { if (primary()) primary()->pause(); }
+    void    setOnAir(bool on) override {
+        for (Layer &l : m_layers) if (l.source) l.source->setOnAir(on);
+    }
+    double  requestOut() override {
+        double longest = 0.0;
+        for (Layer &l : m_layers) if (l.source) longest = std::max(longest, l.source->requestOut());
+        return longest;
+    }
 
 private:
     MediaSource *primary() const {

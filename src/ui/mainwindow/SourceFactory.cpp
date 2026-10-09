@@ -7,8 +7,8 @@
 #include "core/sources/WindowCaptureSource.h"
 #include "core/sources/CanvasSource.h"
 #include "core/sources/ShaderSource.h"
-#include "core/sources/HtmlSource.h"
-#include "core/sources/HtmlWorkspace.h"
+#include "core/sources/ShapeSource.h"
+#include "core/sources/SvgTemplateSource.h"
 #include "core/sources/TextSource.h"
 #include "core/sources/LayerCompositorSource.h"
 #include "core/sources/NdiSource.h"
@@ -107,17 +107,18 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
             desc.color);
     case Kind::Shader:
         return std::make_unique<ShaderSource>(desc.shaderCode);
-    case Kind::Html: {
-        QString html = desc.htmlContent;
-        QString path = desc.path;
-        if (!desc.htmlWorkspace.isEmpty()) {
-            html = HtmlWorkspaceBuilder::buildFromJson(desc.htmlWorkspace);
-            path = {};
-        }
-        return std::make_unique<HtmlSource>(html, path);
-    }
+    case Kind::RemovedHtml:
+        qWarning("Skipping source: HTML overlays are no longer supported");
+        return nullptr;
     case Kind::Text:
         return std::make_unique<TextSource>(desc);
+    case Kind::Shape:
+        return std::make_unique<ShapeSource>(desc);
+    case Kind::SvgTemplate: {
+        auto src = std::make_unique<SvgTemplateSource>(desc);
+        if (!src->isReady()) return nullptr;
+        return src;
+    }
     case Kind::Ndi: {
         auto src = std::make_unique<NdiSource>();
         if (!src->connectTo(desc.path)) return nullptr;
@@ -178,6 +179,11 @@ std::unique_ptr<MediaSource> SourceFactory::buildLayerSource(const ResolvedLayer
         if (auto data = editor->scriptOutputForDataNode(layer.inputNodeId)) {
             if (auto *textSrc = dynamic_cast<TextSource *>(src.get()))
                 textSrc->setDataSource(data);
+        }
+    } else if (desc.kind == Kind::SvgTemplate) {
+        if (auto data = editor->scriptOutputForDataNode(layer.inputNodeId)) {
+            if (auto *svgSrc = dynamic_cast<SvgTemplateSource *>(src.get()))
+                svgSrc->setDataSource(data);
         }
     } else if (desc.kind == Kind::Shader) {
         if (auto data = editor->scriptOutputForDataNode(layer.inputNodeId)) {

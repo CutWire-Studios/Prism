@@ -15,7 +15,6 @@
 #include "core/sources/CanvasSource.h"
 #include "core/sources/ImageSource.h"
 #include "core/sources/ShaderSource.h"
-#include "core/sources/HtmlSource.h"
 #include "core/sources/NdiSource.h"
 #ifdef PRISM_HAVE_WEBRTC
 #include "core/sources/WebRtcSource.h"
@@ -1974,11 +1973,13 @@ QString mcpKindName(SourceDescriptor::Kind kind)
     case K::Canvas:    return QStringLiteral("canvas");
     case K::Window:    return QStringLiteral("window");
     case K::Shader:    return QStringLiteral("shader");
-    case K::Html:      return QStringLiteral("html");
     case K::Ndi:       return QStringLiteral("ndi");
     case K::WebRtc:    return QStringLiteral("webrtc");
     case K::Text:      return QStringLiteral("text");
+    case K::Shape:     return QStringLiteral("shape");
     case K::AudioFile: return QStringLiteral("audio");
+    case K::SvgTemplate: return QStringLiteral("svg_template");
+    default: break;
     }
     return QStringLiteral("unknown");
 }
@@ -2068,8 +2069,8 @@ QJsonObject MainWindow::mcpInspect(bool includeClips, bool detail, int sinceRevi
                     row.insert(QStringLiteral("path"), d.path);
                 if (!d.textTemplate.isEmpty())
                     row.insert(QStringLiteral("text"), d.textTemplate);
-                if (!d.htmlContent.isEmpty())
-                    row.insert(QStringLiteral("html"), d.htmlContent);
+                if (!d.svgTemplateId.isEmpty())
+                    row.insert(QStringLiteral("template"), d.svgTemplateId);
                 if (!d.shaderCode.isEmpty())
                     row.insert(QStringLiteral("shader"), true);
                 row.insert(QStringLiteral("live"), d.isLiveSource());

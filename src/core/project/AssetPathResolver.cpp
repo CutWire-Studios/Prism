@@ -1,5 +1,6 @@
 #include "core/project/AssetPathResolver.h"
 
+#include "core/sources/SvgTemplates.h"
 #include <QDirIterator>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -119,11 +120,11 @@ SourceDescriptor AssetPathResolver::relinkDescriptor(const SourceDescriptor &des
                    pathExists(resolved, true));
         break;
     }
-    case Kind::Html: {
-        if (!desc.path.isEmpty()) {
-            const QString resolved = resolvePath(desc.path, opts, false);
-            out.path = resolved;
-            noteRelink(report, desc.path, pathExists(resolved, false));
+    case Kind::SvgTemplate: {
+        if (!desc.svgTemplateId.isEmpty() && !prism::isBuiltinSvgTemplate(desc.svgTemplateId)) {
+            const QString resolved = resolvePath(desc.svgTemplateId, opts, false);
+            out.svgTemplateId = resolved;
+            noteRelink(report, desc.svgTemplateId, pathExists(resolved, false));
         }
         break;
     }

@@ -16,8 +16,11 @@ set(CMAKE_AUTOUIC ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 
+# Skia draws text and shapes on the CPU (see third_party/build-skia.sh for the prebuilt)
+find_package(Skia REQUIRED)
+
 # Qt
-set(_prism_qt_components Core Widgets Svg OpenGL OpenGLWidgets Gui Multimedia WebEngineWidgets WebChannel Network)
+set(_prism_qt_components Core Widgets Svg OpenGL OpenGLWidgets Gui Multimedia Network)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND _prism_qt_components DBus)
 endif()
@@ -287,9 +290,33 @@ set(SOURCES
     src/core/sources/EffectSources.cpp
     src/core/sources/LayerCompositorSource.cpp
     src/core/effects/EffectPassRunner.cpp
-    src/core/sources/HtmlSource.cpp
-    src/core/sources/HtmlWorkspace.cpp
+    src/core/sources/SvgTemplates.cpp
+    src/core/sources/SvgTemplateSource.cpp
     src/core/sources/TextSource.cpp
+    src/core/sources/ShapeSource.cpp
+    src/core/text/BlendMode.cpp
+    src/core/text/Keyframe.cpp
+    src/core/text/ShapePath.cpp
+    src/core/text/ShapeStyle.cpp
+    src/core/text/TextAnimationPreset.cpp
+    src/core/text/TextAnimator.cpp
+    src/core/text/TextLook.cpp
+    src/core/text/TextParamSpec.cpp
+    src/core/text/TextPresetStore.cpp
+    src/core/text/TextShading.cpp
+    src/core/text/TextStyle.cpp
+    src/core/text/VectorSlotValue.cpp
+    src/core/render/SkiaFonts.cpp
+    src/core/render/SkiaPath.cpp
+    src/core/render/SkiaRender.cpp
+    src/core/render/SkiaRuntime.cpp
+    src/core/render/SkiaShading.cpp
+    src/core/render/SkiaShapePainter.cpp
+    src/core/render/SkiaSvg.cpp
+    src/core/render/SkiaTextEffects.cpp
+    src/core/render/SkiaTextPainter.cpp
+    src/core/render/SkiaVectorResources.cpp
+    src/core/render/TextLayout.cpp
     src/core/scripting/ScriptRuntime.cpp
     src/core/sources/NdiLibrary.cpp
     src/core/sources/NdiSource.cpp
@@ -332,12 +359,14 @@ set(SOURCES
     src/ui/recording/RecordingOptions.cpp
     src/ui/recording/RecordingSettingsDialog.cpp
     src/ui/editors/ShaderEditDialog.cpp
-    src/ui/editors/HtmlEditDialog.cpp
-    src/ui/canvas/HtmlPreviewWidget.cpp
-    src/ui/canvas/HtmlWorkspaceCanvasWidget.cpp
-    src/ui/canvas/HtmlVisualEditorWidget.cpp
     src/ui/editors/ScriptEditDialog.cpp
+    src/ui/editors/SvgTemplateDialog.cpp
     src/ui/editors/TextEditDialog.cpp
+    src/ui/editors/ShapeEditDialog.cpp
+    src/ui/editors/style/StyleControls.cpp
+    src/ui/editors/style/GradientEditor.cpp
+    src/ui/editors/style/EffectParamsEditor.cpp
+    src/ui/editors/style/ShadingLayerStackEditor.cpp
     # Extracted helper / controller classes
     src/ui/common/ThumbHelper.cpp
     src/ui/common/PreferencesDialog.cpp
@@ -442,9 +471,10 @@ set(HEADERS
     include/core/sources/EffectSources.h
     include/core/sources/LayerCompositorSource.h
     include/core/effects/EffectPassRunner.h
-    include/core/sources/HtmlSource.h
-    include/core/sources/HtmlWorkspace.h
+    include/core/sources/SvgTemplates.h
+    include/core/sources/SvgTemplateSource.h
     include/core/sources/TextSource.h
+    include/core/sources/ShapeSource.h
     include/core/scripting/ScriptOutput.h
     include/core/scripting/ScriptRuntime.h
     include/core/sources/NdiLibrary.h
@@ -491,12 +521,14 @@ set(HEADERS
     include/ui/recording/RecordingSettingsDialog.h
     include/ui/output/ProgramOutputSink.h
     include/ui/editors/ShaderEditDialog.h
-    include/ui/editors/HtmlEditDialog.h
-    include/ui/canvas/HtmlPreviewWidget.h
-    include/ui/canvas/HtmlWorkspaceCanvasWidget.h
-    include/ui/canvas/HtmlVisualEditorWidget.h
     include/ui/editors/ScriptEditDialog.h
+    include/ui/editors/SvgTemplateDialog.h
     include/ui/editors/TextEditDialog.h
+    include/ui/editors/ShapeEditDialog.h
+    include/ui/editors/style/StyleControls.h
+    include/ui/editors/style/GradientEditor.h
+    include/ui/editors/style/EffectParamsEditor.h
+    include/ui/editors/style/ShadingLayerStackEditor.h
     # Extracted helper / controller headers
     include/ui/common/ThumbHelper.h
     include/ui/common/CameraEnumerator.h
@@ -531,6 +563,31 @@ set(HEADERS
     include/mcp/McpStdio.h
     include/ui/common/QrCodeHelper.h
     include/core/platform/MacPermissions.h
+    include/core/text/Bezier.h
+    include/core/text/BlendMode.h
+    include/core/text/Keyframe.h
+    include/core/text/ShapePath.h
+    include/core/text/ShapeStyle.h
+    include/core/text/TextAnimationPreset.h
+    include/core/text/TextAnimator.h
+    include/core/text/TextLook.h
+    include/core/text/TextParamSpec.h
+    include/core/text/TextPresetStore.h
+    include/core/text/TextShading.h
+    include/core/text/TextStyle.h
+    include/core/text/Time.h
+    include/core/text/VectorSlotValue.h
+    include/core/render/SkiaFonts.h
+    include/core/render/SkiaPath.h
+    include/core/render/SkiaRender.h
+    include/core/render/SkiaRuntime.h
+    include/core/render/SkiaShading.h
+    include/core/render/SkiaShapePainter.h
+    include/core/render/SkiaTextEffects.h
+    include/core/render/SkiaTextPainter.h
+    include/core/render/SkiaVectorResources.h
+    include/core/render/TextLayout.h
+    include/core/render/VectorPainter.h
 )
 
 if(PRISM_HAVE_SEGMENTATION)
@@ -545,9 +602,8 @@ set(UI_FILES
     forms/ClipEditDialog.ui
     forms/OutputWindow.ui
     forms/ShaderEditDialog.ui
-    forms/HtmlEditDialog.ui
     forms/ScriptEditDialog.ui
-    forms/TextEditDialog.ui
+    forms/SvgTemplateDialog.ui
     # New dialog UI files extracted from inline widget construction
     forms/ContextNodeDialog.ui
     forms/AudioNodeDialog.ui
@@ -634,6 +690,13 @@ elseif(NOT WIN32)
     target_include_directories(prism_core PUBLIC ${LIBZIP_INCLUDE_DIRS})
 endif()
 
+# PRIVATE keeps Skia's include root and defines away from consumers: only the Skia*.cpp files
+# include Skia headers. build-skia.sh compiles Skia with RTTI, so Prism classes may subclass Skia
+# interfaces from any translation unit.
+# Qt's `foreach` macro collides with SkTHash::foreach(); nothing here writes foreach.
+target_link_libraries(prism_core PRIVATE Skia::Skia)
+target_compile_definitions(prism_core PRIVATE QT_NO_FOREACH)
+
 target_link_libraries(prism_core PUBLIC
     Qt6::Core
     Qt6::Widgets
@@ -642,8 +705,6 @@ target_link_libraries(prism_core PUBLIC
     Qt6::OpenGLWidgets
     Qt6::Gui
     Qt6::Multimedia
-    Qt6::WebEngineWidgets
-    Qt6::WebChannel
     Qt6::Network
     re2::re2
     ${FFMPEG_LIBRARIES}

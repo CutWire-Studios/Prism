@@ -2,6 +2,7 @@
 
 #include "core/project/OverlayItem.h"
 #include "core/sources/SourceDescriptor.h"
+#include "core/sources/SvgTemplates.h"
 #include "ui/nodes/ClipNodeModel.h"
 
 #include <QDateTime>
@@ -123,9 +124,9 @@ void collectFromDescriptor(const SourceDescriptor &desc,
     case Kind::Slideshow:
         collectDirectoryPath(desc.path, directories, warnings);
         break;
-    case Kind::Html:
-        if (!desc.path.isEmpty())
-            collectFilePath(desc.path, files, warnings);
+    case Kind::SvgTemplate:
+        if (!desc.svgTemplateId.isEmpty() && !prism::isBuiltinSvgTemplate(desc.svgTemplateId))
+            collectFilePath(desc.svgTemplateId, files, warnings);
         break;
     default:
         break;

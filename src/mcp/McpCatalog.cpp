@@ -7,8 +7,8 @@ namespace {
 const QStringList kSourceKinds = {
     QStringLiteral("video"),     QStringLiteral("image"),  QStringLiteral("audio"),
     QStringLiteral("slideshow"), QStringLiteral("camera"), QStringLiteral("canvas"),
-    QStringLiteral("shader"),    QStringLiteral("html"),   QStringLiteral("text"),
-    QStringLiteral("ndi")};
+    QStringLiteral("shader"),    QStringLiteral("text"),   QStringLiteral("shape"),
+    QStringLiteral("svg_template"), QStringLiteral("ndi")};
 
 const QStringList kPanicModes = {QStringLiteral("none"), QStringLiteral("blackout"),
                                  QStringLiteral("freeze"), QStringLiteral("stay_tuned")};
@@ -70,7 +70,7 @@ const QList<Op> &ops()
                       {QStringLiteral("path")})},
         {"add_source", "sources", "Create a live or generated source",
          "Add a non-file source. kind is required. Extra fields depend on kind: "
-         "text needs text; html needs html; shader needs code (a default gradient is used if "
+         "text needs text; svg_template needs template (built-in id or .svg path) and optional params; shader needs code (a default gradient is used if "
          "omitted); camera uses camera/index; slideshow needs path (folder); canvas uses "
          "w/h/fill/color; ndi needs ndi (sender name from list_ndi_sources). Returns {id, name, kind}.",
          objectSchema({{QStringLiteral("kind"),
@@ -79,7 +79,12 @@ const QList<Op> &ops()
                        {QStringLiteral("path"),
                         stringProp(QStringLiteral("File or folder path (video/image/audio/slideshow)"))},
                        {QStringLiteral("text"), stringProp(QStringLiteral("text kind: overlay string"))},
-                       {QStringLiteral("html"), stringProp(QStringLiteral("html kind: HTML/CSS/JS"))},
+                       {QStringLiteral("template"),
+                        stringProp(QStringLiteral("svg_template kind: built-in id (clock, countdown_timer, "
+                                                  "cricket_score_bar, cricket_score_table, lower_third, "
+                                                  "news_ticker, live_bug) or path of an .svg file"))},
+                       {QStringLiteral("params"),
+                        objectProp(QStringLiteral("svg_template kind: {token: value} overrides"))},
                        {QStringLiteral("code"), stringProp(QStringLiteral("shader kind: GLSL fragment"))},
                        {QStringLiteral("camera"),
                         stringProp(QStringLiteral("camera kind: device id from list_cameras"))},
@@ -113,12 +118,13 @@ const QList<Op> &ops()
                                   {QStringLiteral("color"),
                                    stringProp(QStringLiteral("Fill colour #RRGGBB or #AARRGGBB"))}}),
                       {QStringLiteral("clip"), QStringLiteral("text")})},
-        {"set_html", "sources", "Update an HTML overlay",
-         "Replace htmlContent on an html clip. Fails type_mismatch otherwise.",
+        {"set_svg_params", "sources", "Update an SVG template's parameters",
+         "Merge {token: value} overrides into an svg_template clip's parameters. Fails "
+         "type_mismatch otherwise. Decks showing it reload.",
          objectSchema(mergeProps(clipRefProps(),
-                                 {{QStringLiteral("html"),
-                                   stringProp(QStringLiteral("HTML/CSS/JS document"))}}),
-                      {QStringLiteral("clip"), QStringLiteral("html")})},
+                                 {{QStringLiteral("params"),
+                                   objectProp(QStringLiteral("{token: value} overrides"))}}),
+                      {QStringLiteral("clip"), QStringLiteral("params")})},
         {"set_shader", "sources", "Update a GLSL source",
          "Replace shaderCode on a shader clip. Fails type_mismatch otherwise.",
          objectSchema(mergeProps(clipRefProps(),
@@ -359,7 +365,7 @@ QJsonObject catalogPayload()
         const char *when;
     };
     static const Box boxes[] = {
-        {"sources", "Add, list, rename, and edit input clips (files, text, HTML, shaders, cameras)."},
+        {"sources", "Add, list, rename, and edit input clips (files, text, SVG templates, shaders, cameras)."},
         {"decks", "Assign clips to A/B, play/pause/seek, deck speed."},
         {"transition", "T-bar, CUT, AUTO, transition look and duration."},
         {"panic", "Emergency program output: blackout, freeze, stay-tuned slate."},

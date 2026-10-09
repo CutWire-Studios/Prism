@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="200" viewBox="0 0 640 200">
+  <metadata id="prism">{"name":"Clock","params":[
+    {"name":"color","label":"Time color","type":"color","default":"#00e5ff"},
+    {"name":"dateColor","label":"Date color","type":"color","default":"#90a4ae"},
+    {"name":"panelColor","label":"Panel color","type":"color","default":"#0d1117"}
+  ]}</metadata>
+  <rect width="640" height="200" rx="18" fill="{panelColor}" fill-opacity="0.88"/>
+  <rect x="1" y="1" width="638" height="198" rx="17" fill="none" stroke="{color}" stroke-opacity="0.35" stroke-width="2"/>
+  <text x="320" y="118" text-anchor="middle" font-family="DejaVu Sans Mono, Courier New, monospace" font-size="84" font-weight="bold" fill="{color}">{time}</text>
+  <text x="320" y="164" text-anchor="middle" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="22" fill="{dateColor}">{date}</text>
+</svg>

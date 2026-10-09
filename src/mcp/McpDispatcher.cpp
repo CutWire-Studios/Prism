@@ -9,6 +9,9 @@
 #include "ui/canvas/VideoWidget.h"
 #include "ui/common/CameraEnumerator.h"
 #include "ui/common/ThumbHelper.h"
+#include "core/sources/ShapeSource.h"
+#include "core/sources/SvgTemplateSource.h"
+#include "core/sources/TextSource.h"
 #include "ui/mainwindow/MainWindow.h"
 #include "ui/nodes/ClipNodeEditor.h"
 #include "ui/nodes/ClipNodeModel.h"
@@ -79,11 +82,13 @@ QString kindName(SourceDescriptor::Kind kind)
     case K::Canvas:     return QStringLiteral("canvas");
     case K::Window:     return QStringLiteral("window");
     case K::Shader:     return QStringLiteral("shader");
-    case K::Html:       return QStringLiteral("html");
     case K::Ndi:        return QStringLiteral("ndi");
     case K::WebRtc:     return QStringLiteral("webrtc");
     case K::Text:       return QStringLiteral("text");
+    case K::Shape:      return QStringLiteral("shape");
     case K::AudioFile:  return QStringLiteral("audio");
+    case K::SvgTemplate: return QStringLiteral("svg_template");
+    case K::RemovedHtml: break;
     }
     return QStringLiteral("unknown");
 }
@@ -106,10 +111,12 @@ bool parseKind(const QString &name, SourceDescriptor::Kind *out)
         *out = K::Canvas;
     else if (k == QLatin1String("shader"))
         *out = K::Shader;
-    else if (k == QLatin1String("html"))
-        *out = K::Html;
+    else if (k == QLatin1String("svg_template") || k == QLatin1String("svg"))
+        *out = K::SvgTemplate;
     else if (k == QLatin1String("text"))
         *out = K::Text;
+    else if (k == QLatin1String("shape"))
+        *out = K::Shape;
     else if (k == QLatin1String("ndi"))
         *out = K::Ndi;
     else
@@ -154,10 +161,12 @@ QPixmap thumbFor(const SourceDescriptor &desc)
                                             desc.canvasFill, desc.color);
     case K::Shader:
         return ThumbHelper::makeShaderThumb(desc.shaderCode);
-    case K::Html:
-        return ThumbHelper::makeHtmlThumb(desc.htmlContent, desc.path);
+    case K::SvgTemplate:
+        return ThumbHelper::makeSvgTemplateThumb(desc);
     case K::Text:
-        return ThumbHelper::makeTextThumb(desc.textTemplate, desc.color);
+        return ThumbHelper::makeTextThumb(desc);
+    case K::Shape:
+        return ThumbHelper::makeShapeThumb(desc);
     case K::Camera:
         return ThumbHelper::makeIconThumb(QStringLiteral("photo_camera"));
     case K::Slideshow:
@@ -249,8 +258,8 @@ QJsonObject McpDispatcher::applyOne(const QString &tool, const QJsonObject &args
         return opRenameClip(args);
     if (tool == QLatin1String("set_text"))
         return opSetText(args);
-    if (tool == QLatin1String("set_html"))
-        return opSetHtml(args);
+    if (tool == QLatin1String("set_svg_params"))
+        return opSetSvgParams(args);
     if (tool == QLatin1String("set_shader"))
         return opSetShader(args);
     if (tool == QLatin1String("select_a"))
@@ -440,7 +449,7 @@ QJsonObject McpDispatcher::opListSourceKinds() const
     add("camera", "list_cameras then camera/index");
     add("canvas", "w/h/fill/color");
     add("shader", "GLSL in code");
-    add("html", "HTML in html");
+    add("svg_template", "template (built-in id or .svg path) + params");
     add("text", "Overlay string in text");
     add("ndi", "list_ndi_sources then ndi");
     return ok({{QStringLiteral("kinds"), kinds}});
@@ -518,18 +527,33 @@ QJsonObject McpDispatcher::opAddSource(const QJsonObject &args)
         if (text.isEmpty())
             return err("bad_args", QStringLiteral("text is required for kind text"));
         desc.textTemplate = text;
-        desc.color = parseColor(args.value(QStringLiteral("color")).toString(), Qt::white);
+        prism::TextStyle style;
+        style.setPrimaryColor(parseColor(args.value(QStringLiteral("color")).toString(), Qt::white));
+        desc.textStyleJson = TextSource::styleToJson(style);
         if (desc.displayName.isEmpty())
             desc.displayName = text.left(24);
         break;
     }
-    case SourceDescriptor::Kind::Html: {
-        const QString html = args.value(QStringLiteral("html")).toString();
-        if (html.trimmed().isEmpty())
-            return err("bad_args", QStringLiteral("html is required for kind html"));
-        desc.htmlContent = html;
+    case SourceDescriptor::Kind::Shape: {
+        prism::ShapeStyle style;
+        if (args.contains(QStringLiteral("color")))
+            style.setSolidFill(parseColor(args.value(QStringLiteral("color")).toString(), Qt::white));
+        desc.shapeStyleJson = ShapeSource::styleToJson(style);
         if (desc.displayName.isEmpty())
-            desc.displayName = QStringLiteral("HTML Overlay");
+            desc.displayName = QStringLiteral("Shape");
+        break;
+    }
+    case SourceDescriptor::Kind::SvgTemplate: {
+        const QString tmpl = args.value(QStringLiteral("template")).toString().trimmed();
+        if (tmpl.isEmpty())
+            return err("bad_args", QStringLiteral("template is required for kind svg_template"));
+        const QByteArray svg = prism::svgTemplateBytes(tmpl);
+        if (svg.isEmpty())
+            return err("bad_args", QStringLiteral("Unknown template or unreadable file: %1").arg(tmpl));
+        desc.svgTemplateId = tmpl;
+        desc.svgParamsJson = SvgTemplateSource::paramsToJson(args.value(QStringLiteral("params")).toObject());
+        if (desc.displayName.isEmpty())
+            desc.displayName = prism::svgTemplateInfo(tmpl, svg).name;
         break;
     }
     case SourceDescriptor::Kind::Shader: {
@@ -649,23 +673,30 @@ QJsonObject McpDispatcher::opSetText(const QJsonObject &args)
         return err("type_mismatch", QStringLiteral("Clip is not a text source"));
     SourceDescriptor desc = node->sourceDescriptor();
     desc.textTemplate = args.value(QStringLiteral("text")).toString();
-    if (args.contains(QStringLiteral("color")))
-        desc.color = parseColor(args.value(QStringLiteral("color")).toString(), desc.color);
+    if (args.contains(QStringLiteral("color"))) {
+        prism::TextStyle style = TextSource::styleFromDescriptor(desc);
+        style.setPrimaryColor(parseColor(args.value(QStringLiteral("color")).toString(), style.primaryColor()));
+        desc.textStyleJson = TextSource::styleToJson(style);
+    }
     if (!m_window->mcpUpdateSource(node->nodeId(), desc, thumbFor(desc)))
         return err("not_found");
     return clipOk(node);
 }
 
-QJsonObject McpDispatcher::opSetHtml(const QJsonObject &args)
+QJsonObject McpDispatcher::opSetSvgParams(const QJsonObject &args)
 {
     QJsonObject error;
     ClipNodeModel *node = resolveClip(m_window, args, &error);
     if (!node)
         return error;
-    if (node->sourceDescriptor().kind != SourceDescriptor::Kind::Html)
-        return err("type_mismatch", QStringLiteral("Clip is not an HTML source"));
+    if (node->sourceDescriptor().kind != SourceDescriptor::Kind::SvgTemplate)
+        return err("type_mismatch", QStringLiteral("Clip is not an SVG template source"));
     SourceDescriptor desc = node->sourceDescriptor();
-    desc.htmlContent = args.value(QStringLiteral("html")).toString();
+    QJsonObject params = SvgTemplateSource::paramsFromDescriptor(desc);
+    const QJsonObject changes = args.value(QStringLiteral("params")).toObject();
+    for (auto it = changes.begin(); it != changes.end(); ++it)
+        params.insert(it.key(), it.value());
+    desc.svgParamsJson = SvgTemplateSource::paramsToJson(params);
     if (!m_window->mcpUpdateSource(node->nodeId(), desc, thumbFor(desc)))
         return err("not_found");
     return clipOk(node);

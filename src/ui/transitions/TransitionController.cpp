@@ -4,6 +4,7 @@
 #include <QSlider>
 #include <QVariantAnimation>
 #include <QEasingCurve>
+#include <QTimer>
 
 TransitionController::TransitionController(VideoWidget    *videoWidget,
                                            QComboBox      *transitionCombo,
@@ -27,6 +28,7 @@ TransitionController::~TransitionController() {
 }
 
 void TransitionController::shutdown() {
+    m_waitingForOut = false;
     if (m_animation) {
         m_animation->stop();
         delete m_animation;
@@ -78,7 +80,30 @@ void TransitionController::onTransitionModeChanged(int index) {
         m_videoWidget->setTransitionMode(modes[index]);
 }
 
+void TransitionController::startAfterOut(int currentVal, std::function<void()> transition) {
+    const bool atEndStop = currentVal == 0 || currentVal == 100;
+    const double outSecs = atEndStop ? m_videoWidget->requestDeckOut(currentVal == 0) : 0.0;
+    if (outSecs <= 0.0) {
+        transition();
+        return;
+    }
+    m_waitingForOut = true;
+    QTimer::singleShot(qRound(outSecs * 1000.0), this, [this, transition = std::move(transition)]() {
+        if (!m_waitingForOut)
+            return;
+        m_waitingForOut = false;
+        transition();
+    });
+}
+
 void TransitionController::onAutoTransitionClicked() {
+    if (!m_crossfaderSlider || m_waitingForOut)
+        return;
+
+    startAfterOut(m_crossfaderSlider->value(), [this]() { runAutoTransition(); });
+}
+
+void TransitionController::runAutoTransition() {
     if (!m_crossfaderSlider)
         return;
 
@@ -111,6 +136,13 @@ void TransitionController::onAutoTransitionClicked() {
 }
 
 void TransitionController::onCutTransitionClicked() {
+    if (!m_crossfaderSlider || m_waitingForOut)
+        return;
+
+    startAfterOut(m_crossfaderSlider->value(), [this]() { runCutTransition(); });
+}
+
+void TransitionController::runCutTransition() {
     if (!m_crossfaderSlider)
         return;
 

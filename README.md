@@ -54,7 +54,7 @@ See [all releases](https://github.com/CutWire-Studios/Prism/releases) for previo
 - **Node Graph Canvas**: Free-form visual pipeline — wire **Input → Process → Layer → A/B Select → Output** nodes; zoom, pan, and minimap for large shows
 - **Process & Layer Nodes**: Crop, flip, and ML background removal in Process nodes; stack and layout multiple inputs in Layer nodes with canvas sizing and transform editing
 - **AI Background Removal**: Remove-Background process node runs MediaPipe's selfie-segmentation model (via ONNX Runtime) to key out a webcam's background live, compositing the subject over the layers below
-- **Multiple Media Source Types**: Video files, images, slideshows, webcams, screen/window capture, custom canvases, GLSL shaders, HTML/QML overlays, text, NDI inputs, and phone cameras (WebRTC)
+- **Multiple Media Source Types**: Video files, images, slideshows, webcams, screen/window capture, custom canvases, GLSL shaders, SVG templates, text, NDI inputs, and phone cameras (WebRTC)
 - **Live A/B Deck Mixing**: Crossfade between two decks with per-deck speed, **AUTO** / **CUT**, and many transition modes (wipes, slides, dips, 3D cube/flip, and more)
 - **Master Audio Routing**: Master audio-input and master audio-output nodes for per-device capture and mixing inside the graph
 - **Asset Library**: Reusable sidebar of imported media — drag assets onto the node canvas or double-click to add files
@@ -65,7 +65,7 @@ See [all releases](https://github.com/CutWire-Studios/Prism/releases) for previo
   - **Base Canvas**: Drag/resize the source inside a fixed canvas
   - **Overlays**: Composited text and image overlays with font size, color, opacity, and visibility controls
 - **GLSL Shader Sources**: Built-in visual generators plus custom fragment shaders, including audio-reactive presets
-- **HTML / QML Overlays**: Dynamic scoreboards, clocks, and countdown timers via Qt WebEngine
+- **SVG Templates**: Data-driven scoreboards, clocks, countdown timers, lower thirds, and bugs from SVG files with `{token}` placeholders, rendered with Skia
 - **Lua Scripting**: Script nodes that generate live text/data overlays via an embedded Lua runtime (sol2, optional at build time)
 - **Phone Camera (WebRTC)**: Stream a smartphone camera into CutWire Prism over LAN or a public relay, paired by QR code
 - **Audio FFT Visualization**: Real-time spectrum analysis with kissfft-driven shader inputs
@@ -117,16 +117,9 @@ See [all releases](https://github.com/CutWire-Studios/Prism/releases) for previo
       <sub>Editing composited text and image overlays</sub>
     </td>
     <td width="50%">
-      <img src="docs/screenshots/html-editor.png" alt="Built-in visual HTML overlay editor" width="100%"><br>
-      <sub>Designing dynamic HTML overlays in the built-in visual editor</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
       <img src="docs/screenshots/lua-scripting.png" alt="Lua scripting" width="100%"><br>
       <sub>Generating live overlays with the embedded Lua scripting runtime</sub>
     </td>
-    <td width="50%"></td>
   </tr>
 </table>
 
@@ -154,7 +147,7 @@ Program output opens in a separate window (mirror, NDI, virtual camera, or recor
 | Video Decode | FFmpeg (libavcodec, libavformat, libavutil, libswscale, libswresample) |
 | Rendering | OpenGL via `QOpenGLWidget` |
 | Camera / Screen | Qt Multimedia; Linux screen capture uses PipeWire portal + GStreamer; Windows/macOS use `QScreenCapture` / `QWindowCapture` |
-| Web Overlays | Qt WebEngine |
+| Text / SVG Rendering | Skia (CPU raster) |
 | Scripting | Lua 5.4 + sol2 (optional) |
 | Audio Analysis | kissfft (FFT spectrum for shaders) |
 | Background Removal | ONNX Runtime + MediaPipe selfie-segmentation model (optional) |
@@ -180,7 +173,7 @@ src/
   │   ├── sources/        # MediaSource interface + every source type
   │   │     VideoFileSource, ImageSource, SlideshowSource, CameraSource,
   │   │     ScreenSource, WindowCaptureSource, CanvasSource, ShaderSource,
-  │   │     HtmlSource/HtmlWorkspace, TextSource, NdiSource, WebRtcSource
+  │   │     TextSource, ShapeSource, SvgTemplateSource, NdiSource, WebRtcSource
   │   ├── media/          # VideoPlayer, AudioDecoder, AudioPlayer,
   │   │                   # AudioAnalyzer (FFT), ThumbnailExtractor
   │   ├── project/        # ClipManager, OverlayItem, AssetPathResolver,
@@ -191,8 +184,7 @@ src/
       ├── mainwindow/     # MainWindow, DeckController, SourceFactory/Prompt
       ├── nodes/          # ClipNodeEditor, ClipNodeModel, ClipCard, ClipEditDialog
       ├── canvas/         # VideoWidget (OpenGL), crop/transform/group editors,
-      │                   # HTML preview & workspace canvas
-      ├── editors/        # Shader / HTML / Script / Text edit dialogs
+      ├── editors/        # Shader / Script / Text / SVG template edit dialogs
       ├── transitions/    # Crossfader and transition logic
       ├── output/         # OutputHub, OutputWindow, mirror windows,
       │                   # NDI + virtual-camera program sinks
@@ -215,7 +207,7 @@ resources/
   ├── fonts/              # Lucide SVG icons (ISC)
   ├── shaders/            # Built-in GLSL presets + slideshow transitions
   ├── scripts/            # Sample Lua scripts (clock, counter, …)
-  ├── html/               # HTML overlay templates
+  ├── svg-templates/      # Built-in SVG overlay templates
   └── qml/                # QML overlay templates
 
 flatpak/                  # Flatpak packaging (org.cutwire.Prism)
@@ -239,7 +231,7 @@ CutWire Prism prioritizes **simplicity over features**. Every button should feel
 **All platforms**
 
 - **CMake 3.16+**
-- **Qt 6.5+** — Widgets, OpenGL, Multimedia, WebEngine, Network (and WebSockets for OBS / WebRTC)
+- **Qt 6.5+** — Widgets, OpenGL, Multimedia, Network (and WebSockets for OBS / WebRTC)
 - **FFmpeg** — `avcodec`, `avformat`, `avutil`, `swscale`, `swresample`
 - **RE2**, **libzip**, **SoundTouch**
 - **kissfft** and **sol2** — fetched automatically by CMake when not installed
@@ -260,7 +252,7 @@ CutWire Prism prioritizes **simplicity over features**. Every button should feel
 
 ```bash
 sudo apt install -y \
-  qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-multimedia-dev qt6-webengine-dev qt6-websockets-dev \
+  qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-multimedia-dev qt6-websockets-dev \
   libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev \
   libre2-dev libzip-dev libsoundtouch-dev libssl-dev liblua5.4-dev libgl1-mesa-dev \
@@ -303,7 +295,7 @@ camera / microphone / local-network usage strings macOS requires.
 
 | Feature | macOS |
 |---------|-------|
-| Video, images, shaders, HTML, webcam, audio | Supported |
+| Video, images, shaders, SVG templates, webcam, audio | Supported |
 | Screen / window capture | `QScreenCapture` / `QWindowCapture` (needs Screen Recording permission) |
 | NDI | Supported when the [NDI SDK](https://ndi.video/) is installed (`-DNDI_ROOT=…`) |
 | Virtual camera output | Not available (needs a signed Camera Extension); the menu item is disabled |
@@ -318,7 +310,7 @@ CutWire Prism builds natively on Windows with **Visual Studio 2022**, **vcpkg**,
 |------|---------|
 | Visual Studio 2022 | [Build Tools](https://visualstudio.microsoft.com/downloads/) with **Desktop development with C++** |
 | CMake | `winget install Kitware.CMake` |
-| Qt 6.5+ | [Qt Online Installer](https://www.qt.io/download) — MSVC 2022 64-bit, modules: *Qt Multimedia*, *Qt WebEngine*, *Qt WebSockets* |
+| Qt 6.5+ | [Qt Online Installer](https://www.qt.io/download) — MSVC 2022 64-bit, modules: *Qt Multimedia*, *Qt WebSockets* |
 | vcpkg | `git clone https://github.com/microsoft/vcpkg.git` then `.\bootstrap-vcpkg.bat` |
 
 **2. Install native libraries (vcpkg)**
@@ -362,7 +354,7 @@ Or use the helper script (installs vcpkg deps, configures, builds):
 
 | Feature | Windows |
 |---------|---------|
-| Video, images, shaders, HTML, webcam | Supported |
+| Video, images, shaders, SVG templates, webcam | Supported |
 | Screen / window capture | `QScreenCapture` / `QWindowCapture` |
 | NDI | Supported when [NDI SDK](https://ndi.video/) is installed (`-DNDI_ROOT="C:\Program Files\NDI\NDI 6 SDK"`) |
 | Virtual camera output | Built-in via [softcam](https://github.com/tshino/softcam) (MIT) — appears as **DirectShow Softcam**; `softcam.dll` is copied next to `Prism.exe` at build time |
@@ -425,7 +417,7 @@ The workflow uploads the artifacts to the run; it does not create a GitHub Relea
 ## Quick Start
 
 1. **Import media**: Use **Media → Add Files…** or **Add Folder…** to populate the asset library on the left
-2. **Add sources**: Click **Add Element** on the canvas (or **Media → Add Element**) to insert video, photos, slideshows, cameras, screen/window capture, canvases, shaders, HTML overlays, or NDI sources
+2. **Add sources**: Click **Add Element** on the canvas (or **Media → Add Element**) to insert video, photos, slideshows, cameras, screen/window capture, canvases, shaders, SVG templates, or NDI sources
 3. **Wire the graph**: Connect **Input → Process → Layer → A/B Select → Output** nodes to build your pipeline
 4. **Assign decks**: Use **A/B Select** node slots (or hotkeys — **View → Edit Hotkeys**) to route sources to Deck A or B
 5. **Mix live**: Blend decks with the crossfader, **AUTO** / **CUT**, and per-deck speed controls in the control panel
@@ -445,7 +437,7 @@ The workflow uploads the artifacts to the run; it does not create a GitHub Relea
 | Live | Webcam, display capture, window capture |
 | Generator | Custom canvas (solid color, checkerboard, or transparent) |
 | Shader | GLSL fragment shaders, including built-in audio-reactive presets |
-| HTML / QML | Dynamic overlays (scoreboards, clocks, countdown timers) |
+| SVG Template | Data-driven overlays from SVG files with `{token}` placeholders (scoreboards, clocks, countdowns, lower thirds) |
 | Text | Styled text source for titles and lower thirds |
 | Script | Lua-driven dynamic text/data overlays |
 | Network | NDI sources (when NDI runtime is available) |
@@ -456,7 +448,7 @@ The workflow uploads the artifacts to the run; it does not create a GitHub Relea
 - **School Events**: Instant highlight reels and replays during cricket/football matches
 - **Live Concerts**: Music videos and audio-reactive shader visuals
 - **Visual Performances**: Dance, theater, immersive installations
-- **Sports Broadcasting**: HTML/QML score overlays, freeze-frame holds, and program recording
+- **Sports Broadcasting**: SVG score overlays, freeze-frame holds, and program recording
 
 ## Testing
 
@@ -486,7 +478,7 @@ CutWire Prism is licensed under GPLv3. See [LICENSE](LICENSE) for details.
 
 ### Qt not found
 
-- Ensure Qt 6.5+ is installed with WebEngine and Multimedia modules
+- Ensure Qt 6.5+ is installed with the Multimedia module
 - **Linux/macOS**: set `CMAKE_PREFIX_PATH` or `Qt6_DIR` (e.g. `/opt/Qt/6.7.0/gcc_64`)
 - **Windows**: `-DCMAKE_PREFIX_PATH=C:\Qt\6.x.x\msvc2022_64` (must match your MSVC kit)
 

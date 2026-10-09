@@ -34,11 +34,6 @@ int main(int argc, char *argv[]) {
     // found") which is harmless; keep genuine errors visible.
     av_log_set_level(AV_LOG_ERROR);
 
-    // WebEngine / Chromium uses the Gallium GPU stack on this system which
-    // crashes when trying to initialize its Vulkan/GBM render path on Wayland.
-    // Force software rendering to avoid the libgallium SIGSEGV.
-    qputenv("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu");
-
 #ifdef Q_OS_LINUX
     // The app themes itself with a global qApp stylesheet. On a normal desktop
     // (non-Flatpak) QFileDialog uses the platform theme's *in-process* native
@@ -91,7 +86,7 @@ int main(int argc, char *argv[]) {
     QThread::msleep(150);
 
     // Resources are compiled into prism_core (static lib); register them here so
-    // :/… paths (shaders, HTML presets, Lua examples, etc.) resolve at runtime.
+    // :/… paths (shaders, SVG templates, Lua examples, etc.) resolve at runtime.
     splash.setProgress(45, "Loading icons & resources...");
     app.processEvents();
     QThread::msleep(150);

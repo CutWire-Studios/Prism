@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="64" viewBox="0 0 200 64">
+  <metadata id="prism">{"name":"Live bug","params":[
+    {"name":"label","label":"Label","type":"text","default":"LIVE"},
+    {"name":"color","label":"Color","type":"color","default":"#e53935"}
+  ]}</metadata>
+  <rect width="200" height="64" rx="12" fill="{color}"/>
+  <circle cx="38" cy="32" r="9" fill="#ffffff"/>
+  <text x="124" y="45" text-anchor="middle" font-family="Inter, DejaVu Sans, Arial, sans-serif" font-size="36" font-weight="bold" fill="#ffffff">{label}</text>
+</svg>
