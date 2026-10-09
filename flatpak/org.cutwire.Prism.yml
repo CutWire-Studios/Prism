@@ -112,6 +112,24 @@ modules:
         only-arches:
           - aarch64
 
+  # Pitch shifting for the audio effects. Not in org.kde.Platform, so it is built here.
+  - name: soundtouch
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_SHARED_LIBS=ON
+      - -DSOUNDSTRETCH=OFF
+      # Without this it lands in /app/lib64, where neither pkg-config nor the runtime linker looks.
+      - -DCMAKE_INSTALL_LIBDIR=lib
+    sources:
+      # Upstream's own release tarball; the mirror is fetched first because www.surina.net
+      # times out from CI often enough to fail builds. The sha256 is upstream's either way.
+      - type: archive
+        url: https://github.com/CutWire-Studios/SoundTouch-Builds/releases/download/2.4.1/soundtouch-2.4.1.tar.gz
+        mirror-urls:
+          - https://www.surina.net/soundtouch/soundtouch-2.4.1.tar.gz
+        sha256: e07abf20ce8f95850c280132e1f61ad400fc1f4011b7fac698a503de6aab6733
+
   # Skia's build generator. Not in the SDK and has no release tarballs, so it is built from source
   # with the SDK's gcc. --allow-warnings: gn builds with -Werror and trips over gcc's newer
   # warnings; the commit-position header is hand-written because there is no git metadata to
@@ -146,6 +164,8 @@ modules:
         -DPRISM_WITH_WEBRTC=ON
         -DPRISM_WITH_SEGMENTATION=ON
         -DONNXRUNTIME_ROOT=/app
+        -DPRISM_FETCH_JUCE=OFF
+        -DPRISM_JUCE_DIR=juce
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5
         -DFETCHCONTENT_FULLY_DISCONNECTED=ON
         -DFETCHCONTENT_SOURCE_DIR_SOL2=/run/build/Prism/vendor/sol2
@@ -164,9 +184,18 @@ modules:
           - flatpak/build-dir
           - flatpak/repo
           - build
+          - juce
           # Local Skia checkouts and prebuilts (gitignored); the sandbox builds its own.
           - third_party/src
           - third_party/prebuilt
+
+      # JUCE (audio effect DSP; only juce_dsp and its dependencies are compiled). Unpacked into the
+      # tree rather than fetched by CMake: the build has no network. Keep the version in step with
+      # PRISM_JUCE_TAG in CMakeLists.txt.
+      - type: archive
+        url: https://github.com/juce-framework/JUCE/archive/refs/tags/8.0.15.tar.gz
+        sha256: 0eafd736286c6e7bb6958d79fce18d42cb654b8e231890d327b7cece379bd156
+        dest: juce
 
       # Skia at the commit third_party/build-skia.sh pins, unpacked where the script looks for it so
       # it never reaches for the network. Keep url, sha256 and dest in step with the script.

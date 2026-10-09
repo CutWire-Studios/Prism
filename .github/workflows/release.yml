@@ -126,7 +126,7 @@ jobs:
             build-essential cmake ninja-build pkg-config \
             libgl1-mesa-dev libglib2.0-dev libdbus-1-dev \
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            libre2-dev libzip-dev libssl-dev liblua5.4-dev \
+            libre2-dev libzip-dev libssl-dev liblua5.4-dev libsoundtouch-dev \
             clang-15 libharfbuzz-dev libexpat1-dev libpng-dev \
             libfontconfig1-dev libfreetype6-dev libxkbcommon-dev \
             libx11-dev libx11-xcb-dev libxext-dev libxfixes-dev libxi-dev libxrender-dev \
@@ -304,7 +304,7 @@ jobs:
             git clone --depth 1 https://github.com/microsoft/vcpkg.git vcpkg
             .\vcpkg\bootstrap-vcpkg.bat
           }
-          .\vcpkg\vcpkg.exe install re2 libzip openssl --triplet x64-windows
+          .\vcpkg\vcpkg.exe install re2 libzip openssl soundtouch --triplet x64-windows
           # Skia comes from vcpkg here rather than third_party/build-skia.sh, which has no Windows target.
           # x64-windows-static-md, not x64-windows: Skottie needs a static Skia, and -md keeps the dynamic
           # CRT Qt uses. zlib is installed in the same triplet because Skia's archives link its static
