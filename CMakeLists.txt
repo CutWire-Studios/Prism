@@ -446,7 +446,6 @@ set(UI_FILES
     forms/ScriptEditDialog.ui
     forms/TextEditDialog.ui
     # New dialog UI files extracted from inline widget construction
-    forms/TransformNodeDialog.ui
     forms/ContextNodeDialog.ui
     forms/AudioNodeDialog.ui
 )

@@ -53,6 +53,8 @@ public:
     bool isPlayingB() const;
     NodeId activeNodeA() const;
     NodeId activeNodeB() const;
+    VideoWidget::OutputScaleMode outputScaleMode() const;
+    void setOutputScaleMode(VideoWidget::OutputScaleMode mode);
     ClipNodeEditor* clipNodeEditor() const { return m_clipNodeEditor; }
 
     OutputWindow *outputWindow() const { return m_outputWindow; }
@@ -86,6 +88,7 @@ public:
     prism::mcp::McpServer *mcpServer() const { return m_mcp; }
 
 protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;

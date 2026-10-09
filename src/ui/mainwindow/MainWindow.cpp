@@ -47,6 +47,13 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QShortcut>
+#include <QKeyEvent>
+#include <QTextEdit>
+#include <QPlainTextEdit>
+#include <QAbstractSpinBox>
+#include <QAbstractButton>
+#include <QAbstractItemView>
+#include <QAbstractSlider>
 #include <QKeySequence>
 #include <QFileDialog>
 #include <QStandardPaths>
@@ -97,7 +104,7 @@ MainWindow::MainWindow(QWidget *parent)
     setAcceptDrops(true);
     m_baseWindowTitle = windowTitle();
 
-    Icons::setActionIcon(ui->actionLoadFolder, Icons::Names::Description);
+    Icons::setActionIcon(ui->actionAddFiles, Icons::Names::Description);
     Icons::setActionIcon(ui->actionAddFolder, Icons::Names::FolderOpen);
     Icons::setActionIcon(ui->actionSaveSession, Icons::Names::Save);
     Icons::setActionIcon(ui->actionLoadSession, Icons::Names::FolderOpen);
@@ -418,7 +425,7 @@ void MainWindow::refreshPreviewPixmaps() {
 
 void MainWindow::setupConnections() {
     // Menubar Media actions
-    connect(ui->actionLoadFolder, &QAction::triggered, this, &MainWindow::onLoadFolderClicked);
+    connect(ui->actionAddFiles, &QAction::triggered, this, &MainWindow::onLoadFolderClicked);
     connect(ui->actionAddFolder,  &QAction::triggered, this, &MainWindow::onAddFolderClicked);
     connect(ui->actionClearAll,   &QAction::triggered, this, &MainWindow::onClearAllClicked);
     connect(ui->actionSaveSession,&QAction::triggered, this, &MainWindow::onSaveSessionClicked);
@@ -430,6 +437,27 @@ void MainWindow::setupConnections() {
 
     // Output menu
     connect(ui->actionSetOutputResolution, &QAction::triggered, this, &MainWindow::onSetOutputResolution);
+    {
+        auto *scaleMenu = new QMenu(tr("Scaling"), this);
+        auto *group = new QActionGroup(scaleMenu);
+        const std::pair<const char *, VideoWidget::OutputScaleMode> modes[] = {
+            {QT_TR_NOOP("Stretch"), VideoWidget::OutputScaleMode::Stretch},
+            {QT_TR_NOOP("Fit"),     VideoWidget::OutputScaleMode::Fit},
+            {QT_TR_NOOP("Crop"),    VideoWidget::OutputScaleMode::Crop},
+        };
+        for (const auto &[label, mode] : modes) {
+            QAction *a = scaleMenu->addAction(tr(label));
+            a->setCheckable(true);
+            a->setActionGroup(group);
+            a->setData(static_cast<int>(mode));
+            connect(a, &QAction::triggered, this, [this, mode]() { setOutputScaleMode(mode); });
+        }
+        connect(scaleMenu, &QMenu::aboutToShow, this, [scaleMenu]() {
+            for (QAction *a : scaleMenu->actions())
+                a->setChecked(a->data().toInt() == static_cast<int>(VideoWidget::outputScaleMode()));
+        });
+        ui->menuOutput->insertMenu(ui->menuOutput->actions().value(1), scaleMenu);
+    }
     connect(ui->actionShowOutput, &QAction::triggered, this, &MainWindow::showOutputWindow);
     connect(ui->actionShowPreview, &QAction::triggered, this, [this]() {
         for (const auto &mirror : m_outputHub->mirrorOutputs()) {
@@ -517,8 +545,7 @@ void MainWindow::setupConnections() {
         if (ok && !label.isEmpty())
             m_outputHub->addRecordingMarker(label);
     });
-    auto *markerShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_M), this);
-    connect(markerShortcut, &QShortcut::activated, ui->actionDropMarker, &QAction::trigger);
+    ui->actionDropMarker->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_M));
     connect(ui->actionConnectObs, &QAction::triggered, this, &MainWindow::onConnectObs);
     connect(ui->actionEditHotkeys, &QAction::triggered, this, &MainWindow::onEditHotkeys);
     {
@@ -594,6 +621,18 @@ void MainWindow::setupConnections() {
         m_deckController->syncMasterAudioInputs();
         rebuildActiveDeckChains();
     });
+    connect(m_clipNodeEditor, &ClipNodeEditor::clipRepeatChanged, this, [this](NodeId id, bool r) {
+        auto *out = m_outputWindow->videoWidget();
+        if (id == m_deckController->activeNodeA()) out->setRepeatA(r);
+        if (id == m_deckController->activeNodeB()) out->setRepeatB(r);
+    });
+    connect(m_clipNodeEditor, &ClipNodeEditor::clipTrimChanged, this, [this](NodeId id) {
+        auto *node = m_clipNodeEditor->nodeAt(id);
+        if (!node) return;
+        auto *out = m_outputWindow->videoWidget();
+        if (id == m_deckController->activeNodeA()) out->setTrimPointsA(node->startTime(), node->endTime());
+        if (id == m_deckController->activeNodeB()) out->setTrimPointsB(node->startTime(), node->endTime());
+    });
     connect(m_clipNodeEditor, &ClipNodeEditor::audioControllerChanged, this, [this](NodeId clipId) {
         if (clipId == m_deckController->activeNodeA())
             m_deckController->applyAudioControllerToDeck(true,  clipId);
@@ -625,12 +664,24 @@ void MainWindow::setupConnections() {
         QKeySequence(Qt::Key_P).toString(QKeySequence::NativeText)));
 
     auto *blackoutShortcut = new QShortcut(QKeySequence(Qt::Key_B), this);
-    blackoutShortcut->setContext(Qt::ApplicationShortcut);
+    blackoutShortcut->setContext(Qt::WindowShortcut);
     connect(blackoutShortcut, &QShortcut::activated, ui->panicBlackoutBtn, &QPushButton::toggle);
 
     auto *pauseShortcut = new QShortcut(QKeySequence(Qt::Key_P), this);
-    pauseShortcut->setContext(Qt::ApplicationShortcut);
+    pauseShortcut->setContext(Qt::WindowShortcut);
     connect(pauseShortcut, &QShortcut::activated, ui->panicPauseBtn, &QPushButton::toggle);
+
+    ui->panicStayTunedBtn->setToolTip(tr("Show a \"Stay Tuned\" holding screen on program output (%1)").arg(
+        QKeySequence(Qt::Key_F9).toString(QKeySequence::NativeText)));
+    auto *stayTunedShortcut = new QShortcut(QKeySequence(Qt::Key_F9), this);
+    stayTunedShortcut->setContext(Qt::WindowShortcut);
+    connect(stayTunedShortcut, &QShortcut::activated, ui->panicStayTunedBtn, &QPushButton::toggle);
+
+    ui->cutBtn->setToolTip(tr("Instant cut to opposite deck (%1)").arg(
+        QKeySequence(Qt::Key_Space).toString(QKeySequence::NativeText)));
+    ui->autoBtn->setToolTip(tr("Smooth auto transition using selected mode (%1)").arg(
+        QKeySequence(Qt::Key_Return).toString(QKeySequence::NativeText)));
+    qApp->installEventFilter(this);
 
     // Progress sliders — A deck
     connect(ui->aProgressSlider, &QSlider::sliderPressed,  this, [this]() { m_aSliderDragging = true;  });
@@ -773,7 +824,33 @@ void MainWindow::onAddVideoUrlClicked() {
     }
 }
 
+bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
+    if (event->type() == QEvent::KeyPress && QApplication::activeWindow() == this) {
+        auto *ke = static_cast<QKeyEvent *>(event);
+        const bool isSpace = ke->key() == Qt::Key_Space;
+        const bool isReturn = ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter;
+        if ((isSpace || isReturn) && !ke->isAutoRepeat()
+            && (ke->modifiers() & ~Qt::KeypadModifier) == Qt::NoModifier) {
+            QWidget *fw = QApplication::focusWidget();
+            const bool consumes = fw && (qobject_cast<QLineEdit *>(fw)
+                || qobject_cast<QTextEdit *>(fw) || qobject_cast<QPlainTextEdit *>(fw)
+                || qobject_cast<QAbstractSpinBox *>(fw) || qobject_cast<QComboBox *>(fw)
+                || qobject_cast<QAbstractButton *>(fw) || qobject_cast<QAbstractItemView *>(fw)
+                || qobject_cast<QAbstractSlider *>(fw));
+            if (!consumes && fw && fw->window() == this) {
+                (isSpace ? ui->cutBtn : ui->autoBtn)->click();
+                return true;
+            }
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
+}
+
 void MainWindow::onClearAllClicked() {
+    if (QMessageBox::question(this, tr("Clear All"),
+            tr("Remove all clips and nodes from the grid? This cannot be undone."),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+        return;
     m_clipNodeEditor->clearAllNodes();
     m_deckController->setActiveNodeA(0);
     m_deckController->setActiveNodeB(0);
@@ -1363,6 +1440,7 @@ void MainWindow::loadFromFile(const QString &path, bool showErrors) {
 
 void MainWindow::onSessionLoaded() {
     m_assetLibrary->rebuild();
+    refreshPreviewPixmaps();
 
     // Restore hotkeys.
     m_hotkeyManager->restoreHotkeys(m_sessionManager->restoredHotkeys());
@@ -1525,6 +1603,15 @@ void MainWindow::onSetOutputResolution() {
 
     if (target == current) return;
     videoWidget->setProgramResolution(target.width(), target.height());
+    refreshPreviewPixmaps();
+}
+
+VideoWidget::OutputScaleMode MainWindow::outputScaleMode() const {
+    return VideoWidget::outputScaleMode();
+}
+
+void MainWindow::setOutputScaleMode(VideoWidget::OutputScaleMode mode) {
+    m_outputWindow->videoWidget()->setOutputScaleMode(mode);
 }
 
 void MainWindow::onAboutPrism() {

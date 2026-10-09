@@ -81,7 +81,7 @@ QPixmap ThumbHelper::makeHtmlThumb(const QString &html, const QString &filePath,
     QPixmap grab = view.grab();
     if (grab.isNull())
         return makeIconThumb(Icons::Names::Language, w, h);
-    return grab.scaled(w, h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    return grab.scaled(w, h, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 }
 
 QPixmap ThumbHelper::makeTextThumb(const QString &textTemplate, const QColor &color, int w, int h) {

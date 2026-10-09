@@ -238,6 +238,8 @@ public:
 
 signals:
     void clipChainChanged();
+    void clipRepeatChanged(NodeId id, bool repeat);
+    void clipTrimChanged(NodeId id);
     void deckAClipChanged(NodeId clipId);
     void deckBClipChanged(NodeId clipId);
     void nodeAdded(NodeId nodeId);

@@ -95,6 +95,8 @@ signals:
     void transformChanged(float x, float y, float w, float h);
     void setOutputClicked();
     void sourceDescriptorChanged(const SourceDescriptor &desc);
+    void repeatChanged(bool repeat);
+    void trimChanged();
 
 private:
     ClipCard *m_card   = nullptr;  // borrowed — owned by QGraphicsProxyWidget inside ClipNodeItem

@@ -23,6 +23,9 @@
 #include <algorithm>
 
 int VideoWidget::s_programWidth  = 1280;
+int VideoWidget::s_deckPreviewWidth  = 640;
+int VideoWidget::s_deckPreviewHeight = 360;
+VideoWidget::OutputScaleMode VideoWidget::s_outputScaleMode = VideoWidget::OutputScaleMode::Stretch;
 int VideoWidget::s_programHeight = 720;
 
 VideoWidget::VideoWidget(QWidget *parent)
@@ -153,9 +156,9 @@ void VideoWidget::composeProgramFrame() {
         if (wantDeckFrame) {
             // Full-res deck frames were just read back; derive the previews from
             // them instead of a second glReadPixels per deck.
-            m_deckPreviewA = m_deckFrameCacheA.scaled(kDeckPreviewWidth, kDeckPreviewHeight,
+            m_deckPreviewA = m_deckFrameCacheA.scaled(s_deckPreviewWidth, s_deckPreviewHeight,
                                                       Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-            m_deckPreviewB = m_deckFrameCacheB.scaled(kDeckPreviewWidth, kDeckPreviewHeight,
+            m_deckPreviewB = m_deckFrameCacheB.scaled(s_deckPreviewWidth, s_deckPreviewHeight,
                                                       Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
         } else {
             cacheDeckPreviewFromFbo(true);
@@ -423,6 +426,13 @@ void VideoWidget::setProgramResolution(int width, int height) {
 
     s_programWidth  = width;
     s_programHeight = height;
+    if (width >= height) {
+        s_deckPreviewWidth  = 640;
+        s_deckPreviewHeight = std::max(1, qRound(640.0 * height / width));
+    } else {
+        s_deckPreviewHeight = 640;
+        s_deckPreviewWidth  = std::max(1, qRound(640.0 * width / height));
+    }
 
     // Program/deck FBOs are lazily (re)created at the new size on the next
     // composeProgramFrame() (see ensureProgramFbo/ensureDeckFbos).
@@ -464,21 +474,47 @@ void VideoWidget::blitProgramToScreen(int surfaceW, int surfaceH) {
     glEnable(GL_TEXTURE_2D);
     glColor4f(1.f, 1.f, 1.f, 1.f);
     glBindTexture(GL_TEXTURE_2D, m_programColorTex);
+    const QRectF r = programRectOnSurface(QSizeF(w, h), QSizeF(s_programWidth, s_programHeight),
+                                          s_outputScaleMode);
+    const float x0 = (float)r.left(),  y0 = (float)r.top();
+    const float x1 = (float)r.right(), y1 = (float)r.bottom();
     glBegin(GL_QUADS);
-    glTexCoord2f(0.f, 0.f); glVertex2f(0.f,     0.f);
-    glTexCoord2f(1.f, 0.f); glVertex2f((float)w, 0.f);
-    glTexCoord2f(1.f, 1.f); glVertex2f((float)w, (float)h);
-    glTexCoord2f(0.f, 1.f); glVertex2f(0.f,     (float)h);
+    glTexCoord2f(0.f, 0.f); glVertex2f(x0, y0);
+    glTexCoord2f(1.f, 0.f); glVertex2f(x1, y0);
+    glTexCoord2f(1.f, 1.f); glVertex2f(x1, y1);
+    glTexCoord2f(0.f, 1.f); glVertex2f(x0, y1);
     glEnd();
     glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+QRectF VideoWidget::programRectOnSurface(const QSizeF &surface, const QSizeF &program, OutputScaleMode mode) {
+    const QRectF full(QPointF(0, 0), surface);
+    if (mode == OutputScaleMode::Stretch || program.isEmpty() || surface.isEmpty())
+        return full;
+    const double sx = surface.width()  / program.width();
+    const double sy = surface.height() / program.height();
+    const double s = mode == OutputScaleMode::Fit ? std::min(sx, sy) : std::max(sx, sy);
+    const double w = program.width() * s;
+    const double h = program.height() * s;
+    return QRectF((surface.width() - w) / 2.0, (surface.height() - h) / 2.0, w, h);
+}
+
+void VideoWidget::setOutputScaleMode(OutputScaleMode mode) {
+    s_outputScaleMode = mode;
+    m_videoRectA = scaleRectToWidget(m_videoRectProgramA);
+    m_videoRectB = scaleRectToWidget(m_videoRectProgramB);
+    update();
 }
 
 QRectF VideoWidget::scaleRectToWidget(const QRectF &programRect) const {
     if (programRect.isEmpty() || width() <= 0 || height() <= 0)
         return programRect;
-    const double sx = (double)width()  / s_programWidth;
-    const double sy = (double)height() / s_programHeight;
-    return QRectF(programRect.x() * sx, programRect.y() * sy,
+    const QRectF dst = programRectOnSurface(QSizeF(width(), height()),
+                                            QSizeF(s_programWidth, s_programHeight),
+                                            s_outputScaleMode);
+    const double sx = dst.width()  / s_programWidth;
+    const double sy = dst.height() / s_programHeight;
+    return QRectF(dst.x() + programRect.x() * sx, dst.y() + programRect.y() * sy,
                   programRect.width() * sx, programRect.height() * sy);
 }
 
@@ -543,7 +579,7 @@ void VideoWidget::cacheDeckPreviewFromFbo(bool deckA) {
 
     full = full.mirrored(false, true);
     QImage &cache = deckA ? m_deckPreviewA : m_deckPreviewB;
-    cache = full.scaled(kDeckPreviewWidth, kDeckPreviewHeight,
+    cache = full.scaled(s_deckPreviewWidth, s_deckPreviewHeight,
                         Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 }
 
@@ -1266,10 +1302,10 @@ QImage VideoWidget::deckPreviewWithOverlays(bool deckA) const {
     p.setRenderHint(QPainter::Antialiasing);
 
     const QRectF &programRect = deckA ? m_videoRectProgramA : m_videoRectProgramB;
-    const double sx = (double)kDeckPreviewWidth  / s_programWidth;
-    const double sy = (double)kDeckPreviewHeight / s_programHeight;
+    const double sx = (double)s_deckPreviewWidth  / s_programWidth;
+    const double sy = (double)s_deckPreviewHeight / s_programHeight;
     const QRectF vr = programRect.isEmpty()
-        ? QRectF(0, 0, kDeckPreviewWidth, kDeckPreviewHeight)
+        ? QRectF(0, 0, s_deckPreviewWidth, s_deckPreviewHeight)
         : QRectF(programRect.x() * sx, programRect.y() * sy,
                  programRect.width() * sx, programRect.height() * sy);
     const_cast<VideoWidget *>(this)->renderOverlays(p, overlays, vr, 1.f);
@@ -1511,9 +1547,25 @@ bool windowIsFullscreen(const QWidget *w) {
 }
 } // namespace
 
+Qt::Edges VideoWidget::resizeEdgesAt(const QPointF &pos) const {
+    constexpr double kGrip = 8.0;
+    Qt::Edges edges;
+    if (pos.x() < kGrip) edges |= Qt::LeftEdge;
+    else if (pos.x() >= width() - kGrip) edges |= Qt::RightEdge;
+    if (pos.y() < kGrip) edges |= Qt::TopEdge;
+    else if (pos.y() >= height() - kGrip) edges |= Qt::BottomEdge;
+    return edges;
+}
+
 void VideoWidget::mousePressEvent(QMouseEvent *event) {
     if (m_framelessWindowChrome && window() && !windowIsFullscreen(window())
         && event->button() == Qt::LeftButton) {
+        if (const Qt::Edges edges = resizeEdgesAt(event->position()); edges) {
+            if (auto *wh = window()->windowHandle(); wh && wh->startSystemResize(edges)) {
+                event->accept();
+                return;
+            }
+        }
         if (auto *wh = window()->windowHandle(); wh && wh->startSystemMove()) {
             event->accept();
             return;
@@ -1527,6 +1579,20 @@ void VideoWidget::mousePressEvent(QMouseEvent *event) {
 }
 
 void VideoWidget::mouseMoveEvent(QMouseEvent *event) {
+    if (m_framelessWindowChrome && !m_windowDragActive) {
+        const Qt::Edges edges = (window() && !windowIsFullscreen(window()))
+            ? resizeEdgesAt(event->position()) : Qt::Edges();
+        if (edges == Qt::Edges(Qt::LeftEdge | Qt::TopEdge) || edges == Qt::Edges(Qt::RightEdge | Qt::BottomEdge))
+            setCursor(Qt::SizeFDiagCursor);
+        else if (edges == Qt::Edges(Qt::RightEdge | Qt::TopEdge) || edges == Qt::Edges(Qt::LeftEdge | Qt::BottomEdge))
+            setCursor(Qt::SizeBDiagCursor);
+        else if (edges & (Qt::LeftEdge | Qt::RightEdge))
+            setCursor(Qt::SizeHorCursor);
+        else if (edges & (Qt::TopEdge | Qt::BottomEdge))
+            setCursor(Qt::SizeVerCursor);
+        else
+            unsetCursor();
+    }
     if (m_windowDragActive && window() && !windowIsFullscreen(window())
         && (event->buttons() & Qt::LeftButton)) {
         window()->move(event->globalPosition().toPoint() - m_windowDragOffset);

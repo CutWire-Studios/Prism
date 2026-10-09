@@ -3,6 +3,8 @@
     <qresource prefix="/">
         <file>Prism_icon.png</file>
         <file>icons/app-window.svg</file>
+        <file>icons/arrow-up-down.svg</file>
+        <file>icons/arrow-up.svg</file>
         <file>icons/camera.svg</file>
         <file>icons/check.svg</file>
         <file>icons/chevron-down.svg</file>
@@ -12,10 +14,13 @@
         <file>icons/eye-off.svg</file>
         <file>icons/eye.svg</file>
         <file>icons/file-text.svg</file>
+        <file>icons/folder-plus.svg</file>
         <file>icons/folder-open.svg</file>
         <file>icons/folder.svg</file>
         <file>icons/globe.svg</file>
+        <file>icons/layout-grid.svg</file>
         <file>icons/link.svg</file>
+        <file>icons/list.svg</file>
         <file>icons/maximize-2.svg</file>
         <file>icons/mic.svg</file>
         <file>icons/minimize-2.svg</file>
@@ -29,6 +34,7 @@
         <file>icons/repeat.svg</file>
         <file>icons/rotate-ccw.svg</file>
         <file>icons/save.svg</file>
+        <file>icons/search.svg</file>
         <file>icons/scissors.svg</file>
         <file>icons/skip-back.svg</file>
         <file>icons/skip-forward.svg</file>

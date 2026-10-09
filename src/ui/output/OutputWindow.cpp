@@ -3,6 +3,7 @@
 #include "ui/canvas/VideoWidget.h"
 #include "ui/common/Theme.h"
 #include <QAction>
+#include <QActionGroup>
 #include <QKeyEvent>
 #include <QMenu>
 #include <QGuiApplication>
@@ -108,6 +109,23 @@ void OutputWindow::showContextMenu(const QPoint &globalPos) {
         isFullscreenActive() ? tr("Exit Full Screen") : tr("Full Screen"));
     fullscreenAction->setCheckable(true);
     fullscreenAction->setChecked(isFullscreenActive());
+
+    QMenu *scaleMenu = menu.addMenu(tr("Scaling"));
+    auto *group = new QActionGroup(scaleMenu);
+    const std::pair<const char *, VideoWidget::OutputScaleMode> modes[] = {
+        {QT_TR_NOOP("Stretch"), VideoWidget::OutputScaleMode::Stretch},
+        {QT_TR_NOOP("Fit"),     VideoWidget::OutputScaleMode::Fit},
+        {QT_TR_NOOP("Crop"),    VideoWidget::OutputScaleMode::Crop},
+    };
+    for (const auto &[label, mode] : modes) {
+        QAction *a = scaleMenu->addAction(tr(label));
+        a->setCheckable(true);
+        a->setActionGroup(group);
+        a->setChecked(VideoWidget::outputScaleMode() == mode);
+        connect(a, &QAction::triggered, this, [this, mode]() {
+            ui->outputWidget->setOutputScaleMode(mode);
+        });
+    }
 
     if (menu.exec(globalPos) == fullscreenAction) {
         toggleFullscreen();

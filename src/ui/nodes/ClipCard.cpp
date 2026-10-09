@@ -72,7 +72,14 @@ ClipCard::ClipCard(int index, QWidget *parent)
     ui->removeBtn->setText({});
     ui->removeBtn->setIconSize(QSize(14, 14));
     ui->repeatBtn->setIcon(Icons::icon(Icons::Names::Repeat, 12));
-    ui->repeatBtn->setText(tr(" Off"));
+    ui->repeatBtn->setText(tr(" Loop"));
+    ui->repeatBtn->setCheckable(true);
+    ui->repeatBtn->setToolTip(tr("Loop clip when it reaches the end"));
+    ui->editBtn->setToolTip(tr("Edit trim, crop and source settings"));
+    ui->transformToggleBtn->setToolTip(tr("Show position and size controls"));
+    ui->setOutputBtn->setToolTip(tr("Use this clip as the output"));
+    ui->aBtn->setToolTip(tr("Send to deck A"));
+    ui->bBtn->setToolTip(tr("Send to deck B"));
 
     // Hotkey badge — floats over the top-left corner of the thumbnail area.
     // The thumbnail button is at (5, 5) in ClipCard's local coords (layout margins).
@@ -206,7 +213,6 @@ void ClipCard::loadSource(const SourceDescriptor &desc, const QPixmap &thumbnail
     ui->editBtn->setEnabled(true);
     ui->aBtn->setEnabled(true);
     ui->bBtn->setEnabled(true);
-    ui->ovlBtn->setVisible(false);
     setActive(false);
 }
 
@@ -222,7 +228,6 @@ void ClipCard::clearClip() {
     ui->editBtn->setEnabled(false);
     ui->aBtn->setEnabled(false);
     ui->bBtn->setEnabled(false);
-    ui->ovlBtn->setVisible(false);
     setCardMode(CardMode::Deck);
     setOutputSelected(false);
     setActive(false);
@@ -252,11 +257,12 @@ void ClipCard::setBSelected(bool selected) {
 
 void ClipCard::setRepeat(bool r) {
     m_repeat = r;
-    ui->repeatBtn->setText(m_repeat ? tr(" On") : tr(" Off"));
+    ui->repeatBtn->setChecked(r);
 }
 
 void ClipCard::onRepeatClicked() {
-    setRepeat(!m_repeat);
+    setRepeat(ui->repeatBtn->isChecked());
+    emit repeatChanged(m_repeat);
 }
 
 void ClipCard::onEditClicked() {
@@ -273,6 +279,7 @@ void ClipCard::onEditClicked() {
         if (dlg.exec() == QDialog::Accepted) {
             m_settings = dlg.resultSettings();
             m_settings.saveFor(m_clipPath);
+            emit trimChanged();
         }
         break;
     }
@@ -285,6 +292,7 @@ void ClipCard::onEditClicked() {
         if (dlg.exec() == QDialog::Accepted) {
             m_settings = dlg.resultSettings();
             m_settings.saveFor(m_clipPath);
+            emit trimChanged();
         }
         break;
     }

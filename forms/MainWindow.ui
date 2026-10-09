@@ -907,7 +907,7 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     </property>
     <addaction name="menuAddElement"/>
     <addaction name="separator"/>
-    <addaction name="actionLoadFolder"/>
+    <addaction name="actionAddFiles"/>
     <addaction name="actionAddFolder"/>
     <addaction name="separator"/>
     <addaction name="actionSaveSession"/>
@@ -986,12 +986,15 @@ Split 4-Corner: split into 4 quadrants sliding outwards
    <addaction name="menuHelp"/>
   </widget>
   <!-- ── Actions ──────────────────────────────────────────────────────── -->
-  <action name="actionLoadFolder">
+  <action name="actionAddFiles">
    <property name="text">
     <string>Add Files…</string>
    </property>
    <property name="toolTip">
-    <string>Select media files to add to the Asset Library</string>
+    <string>Select media files to add to the Asset Library (Ctrl+I)</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+I</string>
    </property>
   </action>
   <action name="actionAddFolder">
@@ -1006,6 +1009,9 @@ Split 4-Corner: split into 4 quadrants sliding outwards
    <property name="text">
     <string>Save Session…</string>
    </property>
+   <property name="toolTip">
+    <string>Save the layout and settings to a file. Media is referenced in place, not copied (Ctrl+S)</string>
+   </property>
    <property name="shortcut">
     <string>Ctrl+S</string>
    </property>
@@ -1013,6 +1019,9 @@ Split 4-Corner: split into 4 quadrants sliding outwards
   <action name="actionLoadSession">
    <property name="text">
     <string>Load Session…</string>
+   </property>
+   <property name="toolTip">
+    <string>Load a saved session. Media files must still exist at their original locations (Ctrl+O)</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+O</string>
@@ -1023,7 +1032,7 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <string>Export Project…</string>
    </property>
    <property name="toolTip">
-    <string>Bundle session and media into a portable .prism archive</string>
+    <string>Export a portable .prism package: the session plus a copy of its media files</string>
    </property>
   </action>
   <action name="actionImportProject">
@@ -1031,7 +1040,7 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <string>Import Project…</string>
    </property>
    <property name="toolTip">
-    <string>Extract and open a .prism project archive</string>
+    <string>Import a portable .prism package: extracts its media and opens the session</string>
    </property>
   </action>
   <action name="actionClearAll">
@@ -1055,7 +1064,10 @@ Split 4-Corner: split into 4 quadrants sliding outwards
     <string>Output Window</string>
    </property>
    <property name="toolTip">
-    <string>Show the output window</string>
+    <string>Show the output window (Ctrl+Shift+O)</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+O</string>
    </property>
   </action>
   <action name="actionShowPreview">

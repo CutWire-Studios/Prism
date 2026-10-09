@@ -1,5 +1,6 @@
 #include "ui/output/ProgramMirrorWidget.h"
 #include "ui/common/GlWidgetSurface.h"
+#include "ui/canvas/VideoWidget.h"
 
 ProgramMirrorWidget::ProgramMirrorWidget(QWidget *parent)
     : QOpenGLWidget(parent)
@@ -61,11 +62,15 @@ void ProgramMirrorWidget::paintGL() {
     glEnable(GL_TEXTURE_2D);
     glColor4f(1.f, 1.f, 1.f, 1.f);
     glBindTexture(GL_TEXTURE_2D, m_displayTex);
+    const QRectF r = VideoWidget::programRectOnSurface(
+        QSizeF(w, h), QSizeF(m_frame.width(), m_frame.height()), VideoWidget::outputScaleMode());
+    const float x0 = (float)r.left(),  y0 = (float)r.top();
+    const float x1 = (float)r.right(), y1 = (float)r.bottom();
     glBegin(GL_QUADS);
-    glTexCoord2f(0.f, 0.f); glVertex2f(0.f,     0.f);
-    glTexCoord2f(1.f, 0.f); glVertex2f((float)w, 0.f);
-    glTexCoord2f(1.f, 1.f); glVertex2f((float)w, (float)h);
-    glTexCoord2f(0.f, 1.f); glVertex2f(0.f,     (float)h);
+    glTexCoord2f(0.f, 0.f); glVertex2f(x0, y0);
+    glTexCoord2f(1.f, 0.f); glVertex2f(x1, y0);
+    glTexCoord2f(1.f, 1.f); glVertex2f(x1, y1);
+    glTexCoord2f(0.f, 1.f); glVertex2f(x0, y1);
     glEnd();
     glBindTexture(GL_TEXTURE_2D, 0);
 }

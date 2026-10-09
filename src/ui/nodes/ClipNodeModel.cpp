@@ -22,6 +22,8 @@ void ClipNodeModel::setCard(ClipCard *card) {
     connect(m_card, &ClipCard::setOutputClicked, this, [this](int) { emit setOutputClicked(); });
     connect(m_card, &ClipCard::sourceDescriptorChanged, this,
             [this](int, const SourceDescriptor &desc) { emit sourceDescriptorChanged(desc); });
+    connect(m_card, &ClipCard::repeatChanged, this, &ClipNodeModel::repeatChanged);
+    connect(m_card, &ClipCard::trimChanged,   this, &ClipNodeModel::trimChanged);
 }
 
 void ClipNodeModel::clearCard() {

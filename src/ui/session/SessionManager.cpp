@@ -187,6 +187,13 @@ QJsonObject SessionManager::buildJson(int crossfader, int transitionMode,
     root["transitionDuration"] = transitionDuration;
     root["activeNodeA"]        = (qint64)activeNodeA;
     root["activeNodeB"]        = (qint64)activeNodeB;
+    root["outputResolution"]   = QJsonObject{{"w", VideoWidget::programWidth()},
+                                             {"h", VideoWidget::programHeight()}};
+    switch (VideoWidget::outputScaleMode()) {
+    case VideoWidget::OutputScaleMode::Stretch: root["outputScaleMode"] = "stretch"; break;
+    case VideoWidget::OutputScaleMode::Fit:     root["outputScaleMode"] = "fit";     break;
+    case VideoWidget::OutputScaleMode::Crop:    root["outputScaleMode"] = "crop";    break;
+    }
 
     const QDir sessionDir = sessionFilePath.isEmpty()
         ? QDir()
@@ -204,6 +211,27 @@ QJsonObject SessionManager::buildJson(int crossfader, int transitionMode,
             : path);
     }
     root["assetLibrary"] = assetLibrary;
+
+    QJsonArray assetFolders;
+    for (const ClipManager::BinFolder &f : m_clipManager->folders()) {
+        QJsonObject o;
+        o["id"]     = f.id;
+        o["name"]   = f.name;
+        o["parent"] = f.parentId;
+        assetFolders.append(o);
+    }
+    root["assetFolders"] = assetFolders;
+
+    QJsonObject assetClipFolders;
+    for (const QString &path : m_clipManager->getClips()) {
+        const QString folderId = m_clipManager->folderOf(path);
+        if (folderId.isEmpty())
+            continue;
+        assetClipFolders[sessionDir.isAbsolute()
+            ? AssetPathResolver::storePath(path, sessionDir)
+            : path] = folderId;
+    }
+    root["assetClipFolders"] = assetClipFolders;
     return root;
 }
 
@@ -254,16 +282,30 @@ bool SessionManager::loadFromFile(const QString &path, bool showErrors) {
 
     QJsonArray libArr = root["assetLibrary"].toArray();
     QStringList libPaths;
+    QHash<QString, QString> resolvedByStored;
     for (const QJsonValue &v : libArr) {
         const QString stored = v.toString();
         if (stored.isEmpty())
             continue;
         const QString resolved = AssetPathResolver::resolvePath(stored, relinkOpts, false);
-        if (!resolved.isEmpty())
+        if (!resolved.isEmpty()) {
             libPaths << resolved;
+            resolvedByStored.insert(stored, resolved);
+        }
+    }
+    for (const QJsonValue &v : root["assetFolders"].toArray()) {
+        const QJsonObject o = v.toObject();
+        m_clipManager->restoreFolder({o["id"].toString(), o["name"].toString(),
+                                      o["parent"].toString()});
     }
     if (!libPaths.isEmpty())
         m_clipManager->addFiles(libPaths);
+    const QJsonObject clipFolders = root["assetClipFolders"].toObject();
+    for (auto it = clipFolders.begin(); it != clipFolders.end(); ++it) {
+        const QString resolved = resolvedByStored.value(it.key());
+        if (!resolved.isEmpty())
+            m_clipManager->moveClip(resolved, it.value().toString());
+    }
 
     // Re-generate thumbnails for every restored node ─────────────────────────
     for (ClipNodeModel *model : m_editor->allNodes()) {
@@ -338,6 +380,16 @@ bool SessionManager::loadFromFile(const QString &path, bool showErrors) {
     m_restoredTransitionDuration = root["transitionDuration"].toDouble(1.0);
     m_restoredActiveNodeA        = (NodeId)root["activeNodeA"].toInteger();
     m_restoredActiveNodeB        = (NodeId)root["activeNodeB"].toInteger();
+
+    const QJsonObject res = root["outputResolution"].toObject();
+    const int resW = res["w"].toInt();
+    const int resH = res["h"].toInt();
+    if (resW >= 160 && resH >= 90)
+        m_videoWidget->setProgramResolution(resW, resH);
+    const QString scaleMode = root["outputScaleMode"].toString();
+    if (scaleMode == "stretch")   m_videoWidget->setOutputScaleMode(VideoWidget::OutputScaleMode::Stretch);
+    else if (scaleMode == "fit")  m_videoWidget->setOutputScaleMode(VideoWidget::OutputScaleMode::Fit);
+    else if (scaleMode == "crop") m_videoWidget->setOutputScaleMode(VideoWidget::OutputScaleMode::Crop);
 
     emit sessionLoaded();
     return true;

@@ -16,7 +16,7 @@ QPixmap ThumbnailExtractor::extract(const QString &filePath, int width, int heig
         const QImage img = StillImage::decode(filePath);
         if (img.isNull())
             return {};
-        return QPixmap::fromImage(img.scaledToWidth(width, Qt::SmoothTransformation));
+        return QPixmap::fromImage(img.scaled(width, height, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     }
 
     // Seek to ~10% into the file for a more representative frame.
@@ -32,6 +32,6 @@ QPixmap ThumbnailExtractor::extract(const QString &filePath, int width, int heig
     const QImage frame = StillImage::decodeVideoFrame(filePath, at, width * 2, height * 2);
     if (frame.isNull())
         return {};
-    return QPixmap::fromImage(frame.scaled(width, height, Qt::IgnoreAspectRatio,
+    return QPixmap::fromImage(frame.scaled(width, height, Qt::KeepAspectRatio,
                                            Qt::SmoothTransformation));
 }

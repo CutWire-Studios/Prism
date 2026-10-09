@@ -399,8 +399,15 @@ void DeckController::assignNodeToDeck(ClipNodeModel *node, NodeId nodeId, bool d
             src = ProcessEffects::applySourceEffects(std::move(src), sourceEffects);
         }
         applyTransform(deckA);
-        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
-        else       { out->setSourceB(std::move(src)); out->playB(); }
+        if (deckA) {
+            out->setRepeatA(node->isRepeat());
+            out->setTrimPointsA(node->startTime(), node->endTime());
+            out->setSourceA(std::move(src)); out->playA();
+        } else {
+            out->setRepeatB(node->isRepeat());
+            out->setTrimPointsB(node->startTime(), node->endTime());
+            out->setSourceB(std::move(src)); out->playB();
+        }
         updateDeckAudio(deckA, nodeId, node, node->startTime(), true);
         progressSlider->setVisible(false);
         playBtn->setVisible(desc.isPausable());

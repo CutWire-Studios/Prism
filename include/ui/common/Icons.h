@@ -35,6 +35,12 @@ public:
     struct Names {
         Names() = delete;
         inline static constexpr const char *Add = "plus";
+        inline static constexpr const char *ArrowUp = "arrow-up";
+        inline static constexpr const char *FolderPlus = "folder-plus";
+        inline static constexpr const char *GridView = "layout-grid";
+        inline static constexpr const char *ListView = "list";
+        inline static constexpr const char *Search = "search";
+        inline static constexpr const char *Sort = "arrow-up-down";
         inline static constexpr const char *Check = "check";
         inline static constexpr const char *Close = "x";
         inline static constexpr const char *CloseFullscreen = "minimize-2";

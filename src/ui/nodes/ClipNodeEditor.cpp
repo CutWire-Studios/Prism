@@ -3128,6 +3128,7 @@ public:
     static constexpr qreal kZoomStep    = 1.12;
 
     std::function<void()> onDeleteSelection;
+    std::function<bool()> isEmpty;
     std::function<void(const QStringList &, const QPoint &)> onFileDrop;
     std::function<void(qreal)> onZoomChanged;
 
@@ -3152,7 +3153,35 @@ public:
 
     qreal zoomScale() const { return transform().m11(); }
 
+    void drawForeground(QPainter *painter, const QRectF &) override {
+        if (!isEmpty || !isEmpty())
+            return;
+        painter->save();
+        painter->resetTransform();
+        painter->setPen(Theme::instance().tokens().textSecondary);
+        painter->drawText(viewport()->rect().adjusted(24, 0, -24, 0),
+                          Qt::AlignCenter | Qt::TextWordWrap,
+                          tr("Drop media here, drag from the Media bin, or right-click to add a source"));
+        painter->restore();
+    }
+
+    // While set, the view keeps fitting all nodes on resize until the user zooms or clicks.
+    bool fitPending = false;
+
+    void fitToItems() {
+        const QRectF bounds = scene()->itemsBoundingRect().adjusted(-40, -40, 40, 40);
+        if (bounds.isEmpty() || viewport()->width() <= 0 || viewport()->height() <= 0)
+            return;
+        const qreal s = std::clamp(std::min(viewport()->width() / bounds.width(),
+                                            viewport()->height() / bounds.height()),
+                                   kMinZoom, 1.0);
+        setTransform(QTransform::fromScale(s, s));
+        centerOn(bounds.center());
+        notifyZoomChanged();
+    }
+
     void setZoomScale(qreal targetScale) {
+        fitPending = false;
         targetScale = std::clamp(targetScale, kMinZoom, kMaxZoom);
         const qreal current = zoomScale();
         if (qFuzzyCompare(current, targetScale))
@@ -3174,6 +3203,7 @@ public:
     void zoomOut() { zoomBy(1.0 / kZoomStep); }
 
     void resetZoom() {
+        fitPending = false;
         const QPointF center = mapToScene(viewport()->rect().center());
         resetTransform();
         centerOn(center);
@@ -3210,7 +3240,14 @@ protected:
             onFileDrop(paths, e->position().toPoint());
     }
 
+    void resizeEvent(QResizeEvent *e) override {
+        QGraphicsView::resizeEvent(e);
+        if (fitPending)
+            fitToItems();
+    }
+
     void wheelEvent(QWheelEvent *e) override {
+        fitPending = false;
         const qreal current = zoomScale();
         const qreal factor  = e->angleDelta().y() > 0 ? kZoomStep : 1.0 / kZoomStep;
         const qreal target  = std::clamp(current * factor, kMinZoom, kMaxZoom);
@@ -3253,6 +3290,7 @@ protected:
     }
 
     void mousePressEvent(QMouseEvent *e) override {
+        fitPending = false;
         if (e->button() == Qt::MiddleButton) {
             m_panStart = e->pos();
             m_panning  = true;
@@ -3570,6 +3608,12 @@ ClipNodeEditor::ClipNodeEditor(QWidget *parent)
         m_view->viewport()->update();
     });
     nodeView->onDeleteSelection = [this]() { deleteSelection(m_view); };
+    nodeView->isEmpty = [this]() {
+        for (auto it = m_itemMap.cbegin(); it != m_itemMap.cend(); ++it)
+            if (it.key() != m_outputNode)
+                return false;
+        return true;
+    };
     nodeView->onFileDrop = [this](const QStringList &paths, const QPoint &viewPos) {
         const QPoint globalPos = m_view->mapToGlobal(viewPos);
         for (int i = 0; i < paths.size(); ++i) {
@@ -5645,6 +5689,10 @@ void ClipNodeEditor::connectNodeSignals(ClipNodeModel *model, NodeId id) {
     // must reload any deck currently showing it.
     connect(model, &ClipNodeModel::sourceDescriptorChanged, this,
             [this](const SourceDescriptor &) { emit clipChainChanged(); });
+    connect(model, &ClipNodeModel::repeatChanged, this,
+            [this, id](bool r) { emit clipRepeatChanged(id, r); });
+    connect(model, &ClipNodeModel::trimChanged, this,
+            [this, id]() { emit clipTrimChanged(id); });
 }
 
 void ClipNodeEditor::disconnectNodeSignals(ClipNodeModel *model) {
@@ -5952,6 +6000,13 @@ void ClipNodeEditor::restoreConnections(ClipNodeScene *scene, const QJsonArray &
 void ClipNodeEditor::restoreState(const QJsonObject &state) {
     m_restoring = true;
     clearAllNodes();
+
+    auto *view = static_cast<ClipNodeView *>(m_view);
+    view->fitPending = true;
+    QTimer::singleShot(0, view, [view]() {
+        if (view->fitPending)
+            view->fitToItems();
+    });
 
     // Clean break: only graphVersion >= 2 graphs are loadable.
     if (state.value("graphVersion").toInt(0) < 2) {

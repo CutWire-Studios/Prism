@@ -83,6 +83,8 @@ signals:
     void removeRequested(int index);
     void transformChanged(int index, float x, float y, float w, float h);
     void setOutputClicked(int index);
+    void repeatChanged(bool repeat);
+    void trimChanged();
     // Emitted when the user changes a live source's settings via Edit.
     void sourceDescriptorChanged(int index, const SourceDescriptor &desc);
     void preferredHeightChanged(int height);

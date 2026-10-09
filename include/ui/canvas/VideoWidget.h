@@ -171,8 +171,14 @@ public:
     static int programHeight() { return s_programHeight; }
     /// Change the compositor's render resolution, reallocating the program/deck FBOs.
     void setProgramResolution(int width, int height);
-    static constexpr int kDeckPreviewWidth  = 640;
-    static constexpr int kDeckPreviewHeight = 360;
+    static int deckPreviewWidth()  { return s_deckPreviewWidth; }
+    static int deckPreviewHeight() { return s_deckPreviewHeight; }
+
+    enum class OutputScaleMode { Stretch, Fit, Crop };
+    static OutputScaleMode outputScaleMode() { return s_outputScaleMode; }
+    void setOutputScaleMode(OutputScaleMode mode);
+    /// Where the whole program frame lands on a surface of the given size.
+    static QRectF programRectOnSurface(const QSizeF &surface, const QSizeF &program, OutputScaleMode mode);
 
     GLuint programColorTexture() const { return m_programColorTex; }
     QSize  programFrameSize()    const { return {s_programWidth, s_programHeight}; }
@@ -199,7 +205,11 @@ public:
     void captureOutputFrameNow() override;
 
     /// Enable drag-to-move, double-click, and context menu for frameless windows.
-    void setFramelessWindowChrome(bool enabled) { m_framelessWindowChrome = enabled; }
+    void setFramelessWindowChrome(bool enabled) {
+        m_framelessWindowChrome = enabled;
+        setMouseTracking(enabled);
+        if (!enabled) unsetCursor();
+    }
     bool framelessWindowChrome() const { return m_framelessWindowChrome; }
 
     /// Replace a deck base source or overlay chain entry with a still image.
@@ -363,7 +373,12 @@ private:
     QImage deckPreviewWithOverlays(bool deckA) const;
     QImage deckProgramFrameWithOverlays(bool deckA) const;
 
+    Qt::Edges resizeEdgesAt(const QPointF &pos) const;
+
     static int s_programWidth;
+    static int s_deckPreviewWidth;
+    static int s_deckPreviewHeight;
+    static OutputScaleMode s_outputScaleMode;
     static int s_programHeight;
 
     GLuint m_programFbo      = 0;
