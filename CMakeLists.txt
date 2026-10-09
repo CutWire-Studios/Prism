@@ -261,6 +261,9 @@ set(SOURCES
     src/ui/mainwindow/SourceFactory.cpp
     src/ui/mainwindow/SourcePrompt.cpp
     src/ui/mainwindow/PrismSplashScreen.cpp
+    src/ui/remote/OscProtocol.cpp
+    src/ui/remote/OscServer.cpp
+    src/ui/remote/OscSettingsDialog.cpp
     src/ui/remote/RemoteControlServer.cpp
     src/ui/remote/RemoteProtocol.cpp
     src/ui/mainwindow/MainWindowUtils.cpp
@@ -413,6 +416,9 @@ set(HEADERS
     include/ui/mainwindow/SourceFactory.h
     include/ui/mainwindow/SourcePrompt.h
     include/ui/mainwindow/PrismSplashScreen.h
+    include/ui/remote/OscProtocol.h
+    include/ui/remote/OscServer.h
+    include/ui/remote/OscSettingsDialog.h
     include/ui/remote/RemoteControlServer.h
     include/ui/remote/RemoteProtocol.h
     include/ui/mainwindow/MainWindowUtils.h

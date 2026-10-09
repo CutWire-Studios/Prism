@@ -966,6 +966,7 @@ Split 4-Corner: split into 4 quadrants sliding outwards
      <string>Run</string>
     </property>
     <addaction name="actionStartRemoteControl"/>
+    <addaction name="actionOscServer"/>
     <addaction name="actionAgentAccess"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
@@ -1198,6 +1199,14 @@ Split 4-Corner: split into 4 quadrants sliding outwards
    </property>
    <property name="toolTip">
     <string>Start a remote control web server to manage mixing, fader, cut, and auto remotely</string>
+   </property>
+  </action>
+  <action name="actionOscServer">
+   <property name="text">
+    <string>OSC Server…</string>
+   </property>
+   <property name="toolTip">
+    <string>Configure the OSC server for show-control software such as Linux Show Player</string>
    </property>
   </action>
   <action name="actionAgentAccess">

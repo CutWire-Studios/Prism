@@ -23,6 +23,8 @@
 #include "ui/obs/ObsWebSocketClient.h"
 #include "ui/hotkeys/HotkeyEditorDialog.h"
 #include "ui/session/SessionRecoveryDialog.h"
+#include "ui/remote/OscServer.h"
+#include "ui/remote/OscSettingsDialog.h"
 #include "ui/remote/RemoteControlServer.h"
 #include "ui/remote/RemoteServerDialog.h"
 #include "ui/mcp/McpAccessDialog.h"
@@ -220,6 +222,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_transitionCtrl->setupConnections();
 
     m_remoteServer = new RemoteControlServer(this, m_transitionCtrl, ui->crossfaderSlider, this);
+    m_oscServer = new OscServer(this, this);
 
     m_mcp = new prism::mcp::McpServer(this, this);
     connect(m_mcp, &prism::mcp::McpServer::runningChanged, this, [this]() {
@@ -229,6 +232,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     setupConnections();
     setupAddMenu(ui->menuAddElement);
+    applyOscSettings();
 
     // Prime Qt Multimedia backend.
     QTimer::singleShot(0, []() {
@@ -279,6 +283,8 @@ void MainWindow::shutdownLivePipeline() {
 
     if (m_remoteServer)
         m_remoteServer->stopServer();
+    if (m_oscServer)
+        m_oscServer->stop();
     if (m_mcp)
         m_mcp->stop();
 
@@ -581,6 +587,11 @@ void MainWindow::setupConnections() {
     }
 
     connect(ui->actionStartRemoteControl, &QAction::triggered, this, &MainWindow::onStartRemoteControl);
+    connect(ui->actionOscServer, &QAction::triggered, this, [this] {
+        OscSettingsDialog dlg(this);
+        if (dlg.exec() == QDialog::Accepted)
+            applyOscSettings();
+    });
     connect(ui->actionAgentAccess, &QAction::triggered, this, &MainWindow::onAgentAccess);
 
     // Help menu
@@ -1682,6 +1693,11 @@ void MainWindow::rebuildObsScenesMenu(const QStringList &scenes) {
             m_obsIntegration->switchProgramScene(scene);
         });
     }
+}
+
+void MainWindow::applyOscSettings() {
+    if (!m_oscServer->applySettings())
+        statusBar()->showMessage(tr("OSC: could not listen on UDP port %1").arg(m_oscServer->port()), 8000);
 }
 
 void MainWindow::onStartRemoteControl() {

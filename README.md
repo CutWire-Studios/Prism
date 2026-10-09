@@ -75,6 +75,7 @@ See [all releases](https://github.com/CutWire-Studios/Prism/releases) for previo
 - **Program Output Hub**: Mirror windows, optional NDI program output, virtual-camera output, program video recording with markers, FLAC program-audio recording, and freeze-frame capture
 - **OBS Integration**: Optional WebSocket connection for scene switching and per-source OBS scene links
 - **Remote Control**: Built-in server for triggering sources and decks from another device on the network
+- **OSC Control**: UDP OSC server (Run → OSC Server…) for show-control software such as Linux Show Player; `/prism/{a,b}/slot <n>`, `/prism/cut`, `/prism/auto`, `/prism/fader`, `/prism/{a,b}/play|pause|toggle|seek`, `/prism/transition/mode|duration`, `/prism/panic`, with optional state feedback to a host/port
 - **Agent Access**: Optional localhost MCP server so Cursor, Claude Code, or other agents can drive the mixer (off at every launch; see [docs/MCP.md](docs/MCP.md))
 - **Real-time Playback**: FFmpeg decoding on a background thread with low-latency OpenGL compositing
 - **Hardware Acceleration**: NVDEC, VAAPI and Direct3D 11 decoding with zero-copy GPU import where the driver allows, plus NVENC / Quick Sync / AMF / VAAPI encoding for recordings (Tools → Playback & Hardware)

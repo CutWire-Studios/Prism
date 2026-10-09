@@ -22,6 +22,7 @@
 
 namespace Ui { class MainWindow; }
 class RemoteControlServer;
+class OscServer;
 class RemoteServerDialog;
 class RecordingSettingsDialog;
 class McpAccessDialog;
@@ -138,6 +139,7 @@ private slots:
     void onPanicStayTunedClicked(bool checked);
 
 private:
+    void applyOscSettings();
     Ui::MainWindow *ui;
     OutputWindow   *m_outputWindow   = nullptr;
 
@@ -166,6 +168,7 @@ private:
     ObsIntegration     *m_obsIntegration     = nullptr;
     QMenu              *m_obsScenesMenu      = nullptr;
     RemoteControlServer *m_remoteServer      = nullptr;
+    OscServer           *m_oscServer         = nullptr;
     RemoteServerDialog  *m_serverDialog      = nullptr;
     RecordingSettingsDialog *m_recordingPanel = nullptr;
     prism::mcp::McpServer *m_mcp             = nullptr;
