@@ -5,12 +5,18 @@
 extern "C" {
 #include <libavutil/channel_layout.h>
 #include <libavutil/opt.h>
-#include <libavfilter/avfilter.h>
-#include <libavfilter/buffersrc.h>
-#include <libavfilter/buffersink.h>
 }
 
-AudioDecoder::AudioDecoder() = default;
+#include <soundtouch/SoundTouch.h>
+
+AudioDecoder::AudioDecoder() {
+    m_stretcher = std::make_unique<soundtouch::SoundTouch>();
+    m_stretcher->setSampleRate(kOutputSampleRate);
+    m_stretcher->setChannels(kOutputChannels);
+    m_stretcher->setRate(1.0);
+    m_stretcher->setPitch(1.0);
+    m_stretcher->setSetting(SETTING_USE_QUICKSEEK, 0);
+}
 
 AudioDecoder::~AudioDecoder() {
     close();
@@ -66,25 +72,21 @@ bool AudioDecoder::open(const QString &filePath) {
 
     m_packet = av_packet_alloc();
     m_frame = av_frame_alloc();
-    m_filtFrame = av_frame_alloc();
-    if (!m_packet || !m_frame || !m_filtFrame) {
+    if (!m_packet || !m_frame) {
         qWarning() << "AudioDecoder: unable to allocate decode buffers";
         close();
         return false;
     }
 
-    if (!initFilterGraph()) {
-        close();
-        return false;
-    }
-
+    m_stretcher->setTempo(m_speed);
+    m_stretcher->clear();
+    m_stretchFlushed = false;
     m_sentFlushPacket = false;
     m_eof = false;
     return true;
 }
 
 void AudioDecoder::close() {
-    freeFilterGraph();
     if (m_packet) {
         av_packet_free(&m_packet);
         m_packet = nullptr;
@@ -92,10 +94,6 @@ void AudioDecoder::close() {
     if (m_frame) {
         av_frame_free(&m_frame);
         m_frame = nullptr;
-    }
-    if (m_filtFrame) {
-        av_frame_free(&m_filtFrame);
-        m_filtFrame = nullptr;
     }
     if (m_swrCtx) {
         swr_free(&m_swrCtx);
@@ -141,84 +139,11 @@ bool AudioDecoder::initResampler() {
     return ok;
 }
 
-void AudioDecoder::freeFilterGraph() {
-    if (m_filterGraph)
-        avfilter_graph_free(&m_filterGraph);
-    m_filterGraph = nullptr;
-    m_filterSrc = nullptr;
-    m_filterSink = nullptr;
-    m_filterFlushed = false;
-}
-
-bool AudioDecoder::initFilterGraph() {
-    freeFilterGraph();
-    if (qFuzzyCompare(m_speed, 1.0))
-        return true;   // no graph needed, plain swr path
-
-    m_filterGraph = avfilter_graph_alloc();
-    if (!m_filterGraph) return false;
-
-    char layoutDesc[64];
-    av_channel_layout_describe(&m_codecCtx->ch_layout, layoutDesc, sizeof(layoutDesc));
-    const QByteArray srcArgs =
-        QStringLiteral("time_base=1/%1:sample_rate=%1:sample_fmt=%2:channel_layout=%3")
-            .arg(m_codecCtx->sample_rate)
-            .arg(QLatin1String(av_get_sample_fmt_name(m_codecCtx->sample_fmt)),
-                 QLatin1String(layoutDesc))
-            .toUtf8();
-
-    if (avfilter_graph_create_filter(&m_filterSrc, avfilter_get_by_name("abuffer"),
-                                     "in", srcArgs.constData(), nullptr, m_filterGraph) < 0 ||
-        avfilter_graph_create_filter(&m_filterSink, avfilter_get_by_name("abuffersink"),
-                                     "out", nullptr, nullptr, m_filterGraph) < 0) {
-        qWarning() << "AudioDecoder: unable to create atempo filter endpoints";
-        freeFilterGraph();
-        return false;
-    }
-
-    // atempo accepts [0.5, 100] per instance; chain instances for slower rates.
-    QStringList stages;
-    double t = m_speed;
-    while (t < 0.5) {
-        stages << QStringLiteral("atempo=0.5");
-        t *= 2.0;
-    }
-    stages << QStringLiteral("atempo=%1").arg(t, 0, 'f', 4);
-    const QByteArray chain =
-        (stages.join(QLatin1Char(',')) +
-         QStringLiteral(",aresample=%1,aformat=sample_fmts=flt:channel_layouts=stereo")
-             .arg(kOutputSampleRate))
-            .toUtf8();
-
-    AVFilterInOut *inputs = avfilter_inout_alloc();
-    AVFilterInOut *outputs = avfilter_inout_alloc();
-    outputs->name = av_strdup("in");
-    outputs->filter_ctx = m_filterSrc;
-    outputs->pad_idx = 0;
-    outputs->next = nullptr;
-    inputs->name = av_strdup("out");
-    inputs->filter_ctx = m_filterSink;
-    inputs->pad_idx = 0;
-    inputs->next = nullptr;
-
-    const int ret = avfilter_graph_parse_ptr(m_filterGraph, chain.constData(),
-                                             &inputs, &outputs, nullptr);
-    avfilter_inout_free(&inputs);
-    avfilter_inout_free(&outputs);
-    if (ret < 0 || avfilter_graph_config(m_filterGraph, nullptr) < 0) {
-        qWarning() << "AudioDecoder: unable to configure atempo filter graph";
-        freeFilterGraph();
-        return false;
-    }
-    return true;
-}
-
 void AudioDecoder::setPlaybackSpeed(double speed) {
     if (speed <= 0.0) speed = 1.0;
     if (qFuzzyCompare(m_speed, speed)) return;
     m_speed = speed;
-    if (isOpen())
-        initFilterGraph();
+    m_stretcher->setTempo(speed);
 }
 
 bool AudioDecoder::seek(double seconds) {
@@ -232,10 +157,25 @@ bool AudioDecoder::seek(double seconds) {
     avcodec_flush_buffers(m_codecCtx);
     swr_close(m_swrCtx);
     swr_init(m_swrCtx);
-    initFilterGraph();   // drop audio buffered inside the atempo chain
+    m_stretcher->clear();
+    m_stretchFlushed = false;
     m_sentFlushPacket = false;
     m_eof = false;
     return true;
+}
+
+bool AudioDecoder::stretching() const {
+    return !qFuzzyCompare(m_speed, 1.0);
+}
+
+bool AudioDecoder::drainStretcher(QByteArray &outChunk) {
+    const uint available = m_stretcher->numSamples();
+    if (available == 0)
+        return false;
+    outChunk.resize(static_cast<int>(available) * kOutputChannels * static_cast<int>(sizeof(float)));
+    const uint got = m_stretcher->receiveSamples(reinterpret_cast<float *>(outChunk.data()), available);
+    outChunk.resize(static_cast<int>(got) * kOutputChannels * static_cast<int>(sizeof(float)));
+    return got > 0;
 }
 
 bool AudioDecoder::decodeNextChunk(QByteArray &outChunk) {
@@ -243,23 +183,6 @@ bool AudioDecoder::decodeNextChunk(QByteArray &outChunk) {
     if (!isOpen() || m_eof) return false;
 
     while (true) {
-        // Time-stretch path: drain the atempo graph before decoding more.
-        if (m_filterGraph) {
-            const int sinkRet = av_buffersink_get_frame(m_filterSink, m_filtFrame);
-            if (sinkRet == 0) {
-                const int bytes = m_filtFrame->nb_samples * kOutputChannels
-                                  * static_cast<int>(sizeof(float));
-                outChunk = QByteArray(reinterpret_cast<const char *>(m_filtFrame->data[0]), bytes);
-                av_frame_unref(m_filtFrame);
-                if (outChunk.isEmpty()) continue;
-                return true;
-            }
-            if (sinkRet != AVERROR(EAGAIN)) {
-                m_eof = true;
-                return false;
-            }
-        }
-
         const int receiveRet = avcodec_receive_frame(m_codecCtx, m_frame);
         if (receiveRet == 0) {
             if (m_seekTrimTarget >= 0.0) {
@@ -286,15 +209,6 @@ bool AudioDecoder::decodeNextChunk(QByteArray &outChunk) {
                 m_seekTrimTarget = -1.0;
             }
 
-            if (m_filterGraph) {
-                if (av_buffersrc_add_frame(m_filterSrc, m_frame) < 0) {
-                    qWarning() << "AudioDecoder: atempo filter rejected frame";
-                    m_eof = true;
-                    return false;
-                }
-                continue;
-            }
-
             const int dstSamples = av_rescale_rnd(
                 swr_get_delay(m_swrCtx, m_codecCtx->sample_rate) + m_frame->nb_samples,
                 kOutputSampleRate,
@@ -313,14 +227,21 @@ bool AudioDecoder::decodeNextChunk(QByteArray &outChunk) {
             if (converted <= 0) continue;
 
             outChunk.resize(converted * kOutputChannels * static_cast<int>(sizeof(float)));
+            if (stretching()) {
+                m_stretcher->putSamples(reinterpret_cast<const float *>(outChunk.constData()),
+                                        static_cast<uint>(converted));
+                if (!drainStretcher(outChunk))
+                    continue;
+            }
             return true;
         }
 
         if (receiveRet == AVERROR_EOF) {
-            if (m_filterGraph && !m_filterFlushed) {
-                (void)av_buffersrc_add_frame(m_filterSrc, nullptr);
-                m_filterFlushed = true;
-                continue;   // drain what the filter still holds
+            if (stretching() && !m_stretchFlushed) {
+                m_stretcher->flush();
+                m_stretchFlushed = true;
+                if (drainStretcher(outChunk))
+                    return true;
             }
             m_eof = true;
             return false;

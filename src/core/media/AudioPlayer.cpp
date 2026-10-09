@@ -200,7 +200,7 @@ void AudioPlayer::pushAudio() {
                 chunk = std::move(processed);
             }
 
-            applyGain(chunk, 1.0f);
+            applyGain(chunk, m_muted ? 0.0f : static_cast<float>(m_volumePercent) / 100.0f);
         }
 
         if (m_isoPcmTap)
@@ -225,9 +225,7 @@ void AudioPlayer::pushAudio() {
     }
 }
 
-void AudioPlayer::applyGain(QByteArray &pcmChunk, float crossfadeFactor) const {
-    const float gain = m_muted ? 0.0f
-                               : static_cast<float>(m_volumePercent) / 100.0f * crossfadeFactor;
+void AudioPlayer::applyGain(QByteArray &pcmChunk, float gain) const {
     if (gain == 1.0f) return;
 
     auto *samples = reinterpret_cast<float *>(pcmChunk.data());

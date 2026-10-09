@@ -125,6 +125,8 @@ class ClipNodeEditor : public QWidget {
     Q_OBJECT
 
 public:
+    /// Updates an Audio FX node's params and label. structural → audioGraphChanged, else audioEffectParamsChanged.
+    void setAudioEffectParams(int nodeId, const QJsonObject &params, bool structural);
     explicit ClipNodeEditor(QWidget *parent = nullptr);
     ~ClipNodeEditor();
 
@@ -245,6 +247,8 @@ signals:
     void nodeAdded(NodeId nodeId);
     void nodeRemoved(NodeId nodeId);
     void audioGraphChanged();
+    /// Audio FX values or pedalboard shape changed; effect chains update without seeking.
+    void audioEffectParamsChanged();
     void audioControllerChanged(NodeId clipId);
     void addInputNodeRequested();
     void outputWindowRequested();

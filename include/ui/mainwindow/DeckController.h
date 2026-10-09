@@ -57,6 +57,8 @@ public:
     void refreshShaderAudioForActiveDecks();
     void refreshTextDataForActiveDecks();
     void syncMasterAudioInputs();
+    /// Re-resolve effect chains for the playing decks and master inputs without seeking or restarting.
+    void refreshAudioEffects();
     void releaseAllMasterAudioInputs();
 
     // ── UI state ─────────────────────────────────────────────────────────────

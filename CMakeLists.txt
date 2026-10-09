@@ -50,6 +50,99 @@ endif()
 find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat avutil swscale swresample avfilter)
 
 include(FetchContent)
+
+# SoundTouch does pitch shifting (and tempo) for the audio effects. pkg-config first: SoundTouch's
+# installed CMake config can name include directories that do not exist, which is a hard
+# generate-time error on an imported target. Where there is no pkg-config (MSVC), the CMake config
+# is the only path, so it gets repaired instead.
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(SOUNDTOUCH QUIET IMPORTED_TARGET soundtouch)
+endif()
+if(TARGET PkgConfig::SOUNDTOUCH)
+    set(PRISM_SOUNDTOUCH_TARGET PkgConfig::SOUNDTOUCH)
+    # soundtouch.pc often exports -I.../include/soundtouch (for <SoundTouch.h>), but our sources
+    # use <soundtouch/SoundTouch.h> and need .../include.
+    get_target_property(_st_pc_includes PkgConfig::SOUNDTOUCH INTERFACE_INCLUDE_DIRECTORIES)
+    if(_st_pc_includes)
+        set(_st_usable "")
+        foreach(_dir IN LISTS _st_pc_includes)
+            if(EXISTS "${_dir}/soundtouch/SoundTouch.h")
+                list(APPEND _st_usable "${_dir}")
+            elseif(EXISTS "${_dir}/SoundTouch.h")
+                get_filename_component(_parent "${_dir}" DIRECTORY)
+                if(EXISTS "${_parent}/soundtouch/SoundTouch.h")
+                    list(APPEND _st_usable "${_parent}")
+                else()
+                    list(APPEND _st_usable "${_dir}")
+                endif()
+            elseif(IS_DIRECTORY "${_dir}")
+                list(APPEND _st_usable "${_dir}")
+            endif()
+        endforeach()
+        list(REMOVE_DUPLICATES _st_usable)
+        set_target_properties(PkgConfig::SOUNDTOUCH PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${_st_usable}")
+    endif()
+else()
+    find_package(SoundTouch CONFIG REQUIRED)
+    set(PRISM_SOUNDTOUCH_TARGET SoundTouch::SoundTouch)
+    # Upstream 2.4.x exports include dirs that do not exist (install() keywords leaked into
+    # INCLUDES DESTINATION); only <prefix>/include is real.
+    get_target_property(_st_includes SoundTouch::SoundTouch INTERFACE_INCLUDE_DIRECTORIES)
+    if(_st_includes)
+        set(_st_usable "")
+        foreach(_dir IN LISTS _st_includes)
+            if(IS_DIRECTORY "${_dir}")
+                list(APPEND _st_usable "${_dir}")
+            else()
+                message(STATUS "SoundTouch: ignoring exported include dir that does not exist: ${_dir}")
+            endif()
+        endforeach()
+        list(REMOVE_DUPLICATES _st_usable)
+        set_target_properties(SoundTouch::SoundTouch PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${_st_usable}")
+    endif()
+endif()
+
+# JUCE: only juce_dsp and the modules it pulls in. Not juce_audio_processors, which would drag in
+# the GUI modules. JUCE never opens the sound card; it only processes float blocks.
+# The project helpers are unused, so skip them (they add install() rules and build juceaide).
+set(JUCE_MODULES_ONLY ON CACHE BOOL "Only configure the JUCE modules" FORCE)
+
+option(PRISM_FETCH_JUCE "Download JUCE when PRISM_JUCE_DIR is not set" ON)
+# STRING, not PATH: a relative PATH cache entry is rewritten against the build directory.
+set(PRISM_JUCE_DIR "" CACHE STRING
+    "JUCE source tree, absolute or relative to this file; overrides PRISM_FETCH_JUCE")
+set(PRISM_JUCE_TAG "8.0.15" CACHE STRING "JUCE release tag to fetch when PRISM_JUCE_DIR is unset")
+
+if(PRISM_JUCE_DIR)
+    if(IS_ABSOLUTE "${PRISM_JUCE_DIR}")
+        set(_prism_juce_dir "${PRISM_JUCE_DIR}")
+    else()
+        set(_prism_juce_dir "${CMAKE_CURRENT_SOURCE_DIR}/${PRISM_JUCE_DIR}")
+    endif()
+    if(NOT EXISTS "${_prism_juce_dir}/CMakeLists.txt")
+        message(FATAL_ERROR
+            "PRISM_JUCE_DIR=${PRISM_JUCE_DIR} does not point at a JUCE source tree "
+            "(looked in ${_prism_juce_dir}).")
+    endif()
+    message(STATUS "JUCE: using ${_prism_juce_dir}")
+    add_subdirectory("${_prism_juce_dir}" "${CMAKE_BINARY_DIR}/juce-build")
+elseif(PRISM_FETCH_JUCE)
+    message(STATUS "JUCE: fetching ${PRISM_JUCE_TAG}")
+    FetchContent_Declare(JUCE
+        GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+        GIT_TAG ${PRISM_JUCE_TAG}
+        GIT_SHALLOW TRUE
+        GIT_PROGRESS TRUE)
+    FetchContent_MakeAvailable(JUCE)
+    set(_prism_juce_dir "${juce_SOURCE_DIR}")
+else()
+    message(FATAL_ERROR
+        "JUCE not available. Point PRISM_JUCE_DIR at a JUCE source tree, "
+        "or enable PRISM_FETCH_JUCE to download it automatically.")
+endif()
 find_package(kissfft CONFIG QUIET COMPONENTS float STATIC)
 if(NOT kissfft_FOUND)
     FetchContent_Declare(kissfft
@@ -172,6 +265,7 @@ set(SOURCES
     src/core/sources/VideoFileSource.cpp
     src/core/media/AudioDecoder.cpp
     src/core/media/AudioEffectChain.cpp
+    src/core/audio/AudioRack.cpp
     src/core/media/AudioAnalyzer.cpp
     src/core/media/AudioPlayer.cpp
     src/core/media/AudioInputCapture.cpp
@@ -216,6 +310,7 @@ set(SOURCES
     src/ui/nodes/ClipNodeEditor.cpp
     src/ui/nodes/ProcessEffects.cpp
     src/ui/nodes/AudioEffects.cpp
+    src/ui/nodes/PedalboardDialog.cpp
     src/ui/common/AssetLibrary.cpp
     src/ui/nodes/ClipEditDialog.cpp
     src/ui/canvas/CropSelectorWidget.cpp
@@ -324,6 +419,7 @@ set(HEADERS
     include/core/sources/VideoFileSource.h
     include/core/media/AudioDecoder.h
     include/core/media/AudioEffectChain.h
+    include/core/audio/AudioRack.h
     include/core/media/AudioAnalyzer.h
     include/core/media/AudioPlayer.h
     include/core/media/AudioInputCapture.h
@@ -370,6 +466,7 @@ set(HEADERS
     include/ui/nodes/ClipNodeEditor.h
     include/ui/nodes/ProcessEffects.h
     include/ui/nodes/AudioEffects.h
+    include/ui/nodes/PedalboardDialog.h
     include/ui/common/AssetLibrary.h
     include/ui/nodes/ClipEditDialog.h
     include/ui/canvas/CanvasGeometry.h
@@ -456,6 +553,57 @@ set(UI_FILES
     forms/AudioNodeDialog.ui
 )
 
+# Audio effect DSP. JUCE modules compile into whatever target links them, so they live in a library
+# of their own to keep JUCE's compile definitions and build time out of prism_core. prism_core only
+# gets JUCE's headers, through prism_juce_headers.
+add_library(prismaudiodsp STATIC
+    include/core/audio/dsp/AudioStage.h
+    include/core/audio/dsp/AudioEffectProcessor.h
+    src/core/audio/dsp/AudioEffectProcessor.cpp
+    include/core/audio/dsp/FilterProcessors.h
+    src/core/audio/dsp/FilterProcessors.cpp
+    include/core/audio/dsp/DynamicsProcessors.h
+    src/core/audio/dsp/DynamicsProcessors.cpp
+    include/core/audio/dsp/ModulationProcessors.h
+    src/core/audio/dsp/ModulationProcessors.cpp
+    include/core/audio/dsp/SoundTouchPitchProcessor.h
+    src/core/audio/dsp/SoundTouchPitchProcessor.cpp
+    include/core/audio/dsp/AudioEffectFactory.h
+    src/core/audio/dsp/AudioEffectFactory.cpp
+    include/core/audio/dsp/PedalCatalog.h
+    src/core/audio/dsp/PedalCatalog.cpp
+    include/core/audio/dsp/WavReader.h
+    src/core/audio/dsp/WavReader.cpp
+    include/core/audio/dsp/AudioGraph.h
+    src/core/audio/dsp/AudioGraph.cpp
+    include/core/audio/dsp/GraphPedals.h
+    src/core/audio/dsp/GraphPedals.cpp
+    include/core/audio/dsp/GraphProcessor.h
+    src/core/audio/dsp/GraphProcessor.cpp
+)
+# Nothing here is a QObject, and AUTOMOC would otherwise scan JUCE's amalgamated sources.
+set_target_properties(prismaudiodsp PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(prismaudiodsp PUBLIC include)
+target_link_libraries(prismaudiodsp PRIVATE juce::juce_dsp juce::juce_recommended_config_flags
+    ${PRISM_SOUNDTOUCH_TARGET})
+
+# JUCE_USE_CURL and JUCE_WEB_BROWSER matter: without them juce_core links libcurl on Linux.
+set(PRISM_JUCE_DEFINITIONS
+    JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1
+    JUCE_STANDALONE_APPLICATION=1
+    JUCE_USE_CURL=0
+    JUCE_WEB_BROWSER=0
+    JUCE_MODAL_LOOPS_PERMITTED=0
+    JUCE_DISABLE_JUCE_VERSION_PRINTING=1
+)
+target_compile_definitions(prismaudiodsp PRIVATE ${PRISM_JUCE_DEFINITIONS})
+
+# Headers and definitions only, no JUCE sources: lets prism_core translation units include
+# core/audio/dsp/GraphProcessor.h without compiling a second copy of the JUCE modules.
+add_library(prism_juce_headers INTERFACE)
+target_include_directories(prism_juce_headers SYSTEM INTERFACE "${_prism_juce_dir}/modules")
+target_compile_definitions(prism_juce_headers INTERFACE ${PRISM_JUCE_DEFINITIONS})
+
 # Core library (linked by the app and unit tests)
 add_library(prism_core STATIC ${SOURCES} ${HEADERS} ${UI_FILES} resources/resources.qrc)
 
@@ -500,6 +648,8 @@ target_link_libraries(prism_core PUBLIC
     re2::re2
     ${FFMPEG_LIBRARIES}
     kissfft::kissfft
+    prismaudiodsp
+    prism_juce_headers
 )
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(prism_core PUBLIC
@@ -534,6 +684,8 @@ else()
         target_link_libraries(prism_core PUBLIC "-framework CoreGraphics")
     endif()
 endif()
+
+target_link_libraries(prism_core PRIVATE ${PRISM_SOUNDTOUCH_TARGET})
 
 if(PRISM_HAVE_LUA)
     target_compile_definitions(prism_core PUBLIC PRISM_HAVE_LUA)

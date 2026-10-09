@@ -241,7 +241,7 @@ CutWire Prism prioritizes **simplicity over features**. Every button should feel
 - **CMake 3.16+**
 - **Qt 6.5+** — Widgets, OpenGL, Multimedia, WebEngine, Network (and WebSockets for OBS / WebRTC)
 - **FFmpeg** — `avcodec`, `avformat`, `avutil`, `swscale`, `swresample`
-- **RE2**, **libzip**
+- **RE2**, **libzip**, **SoundTouch**
 - **kissfft** and **sol2** — fetched automatically by CMake when not installed
 
 **Linux only**
@@ -263,7 +263,7 @@ sudo apt install -y \
   qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-multimedia-dev qt6-webengine-dev qt6-websockets-dev \
   libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev \
-  libre2-dev libzip-dev libssl-dev liblua5.4-dev libgl1-mesa-dev \
+  libre2-dev libzip-dev libsoundtouch-dev libssl-dev liblua5.4-dev libgl1-mesa-dev \
   cmake build-essential pkg-config
 ```
 
@@ -272,7 +272,7 @@ sudo apt install -y \
 Requires macOS 11+ and the Xcode command-line tools (`xcode-select --install`).
 
 ```bash
-brew install qt ffmpeg re2 libzip lua openssl
+brew install qt ffmpeg re2 libzip sound-touch lua openssl
 ```
 
 Screen and window capture use Qt Multimedia (`QScreenCapture` / `QWindowCapture`)
@@ -325,7 +325,7 @@ CutWire Prism builds natively on Windows with **Visual Studio 2022**, **vcpkg**,
 
 ```powershell
 cd C:\path\to\vcpkg
-.\vcpkg install re2 ffmpeg libzip --triplet x64-windows
+.\vcpkg install re2 ffmpeg libzip soundtouch --triplet x64-windows
 # Optional:
 .\vcpkg install lua openssl --triplet x64-windows
 ```

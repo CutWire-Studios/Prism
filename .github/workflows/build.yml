@@ -79,7 +79,7 @@ jobs:
             build-essential cmake ninja-build pkg-config \
             libgl1-mesa-dev libglib2.0-dev libdbus-1-dev \
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            libre2-dev libzip-dev libssl-dev liblua5.4-dev \
+            libre2-dev libzip-dev libssl-dev liblua5.4-dev libsoundtouch-dev \
             libfontconfig1-dev libfreetype6-dev libxkbcommon-dev \
             libx11-dev libx11-xcb-dev libxext-dev libxfixes-dev libxi-dev libxrender-dev \
             libxcb1-dev libxcb-glx0-dev libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev \
@@ -233,7 +233,7 @@ jobs:
             git clone --depth 1 https://github.com/microsoft/vcpkg.git vcpkg
             .\vcpkg\bootstrap-vcpkg.bat
           }
-          .\vcpkg\vcpkg.exe install re2 libzip openssl --triplet x64-windows
+          .\vcpkg\vcpkg.exe install re2 libzip openssl soundtouch --triplet x64-windows
 
       # Save even when a later step fails so the vcpkg build is not repeated on
       # the next run (actions/cache only saves on job success).

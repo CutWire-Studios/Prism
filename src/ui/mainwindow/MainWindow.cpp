@@ -632,6 +632,8 @@ void MainWindow::setupConnections() {
         m_deckController->syncMasterAudioInputs();
         rebuildActiveDeckChains();
     });
+    connect(m_clipNodeEditor, &ClipNodeEditor::audioEffectParamsChanged,
+            m_deckController, &DeckController::refreshAudioEffects);
     connect(m_clipNodeEditor, &ClipNodeEditor::clipRepeatChanged, this, [this](NodeId id, bool r) {
         auto *out = m_outputWindow->videoWidget();
         if (id == m_deckController->activeNodeA()) out->setRepeatA(r);

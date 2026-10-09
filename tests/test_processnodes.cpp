@@ -1,6 +1,7 @@
 #include "ui/nodes/ClipNodeEditor.h"
 #include "ui/nodes/ProcessEffects.h"
 #include "ui/nodes/AudioEffects.h"
+#include "core/audio/AudioRack.h"
 #include "core/sources/SourceDescriptor.h"
 
 #include <QtTest>
@@ -267,20 +268,20 @@ private slots:
             QVERIFY(d.id >= 0);
             QVERIFY(!d.name.isEmpty());
             QVERIFY(!d.menuLabel.isEmpty());
-            QVERIFY(d.filterSpec);
             QCOMPARE(AudioEffects::byId(d.id), &d);
         }
         QCOMPARE(AudioEffects::byId(99), nullptr);
-        QCOMPARE(AudioEffects::all().size(), 10);
-        const QString chain = AudioEffects::buildFilterChain({{0, QJsonObject{{QStringLiteral("gainDb"), 3.0}}},
-                                                              {4, QJsonObject{
-                                                                  {QStringLiteral("threshold"), -18.0},
-                                                                  {QStringLiteral("ratio"), 4.0},
-                                                                  {QStringLiteral("attack"), 20.0},
-                                                                  {QStringLiteral("release"), 250.0},
-                                                              }}});
-        QVERIFY(chain.contains(QStringLiteral("volume=")));
-        QVERIFY(chain.contains(QStringLiteral("acompressor=")));
+        QCOMPARE(AudioEffects::all().size(), 1);
+
+        int audioFxCount = 0;
+        for (const AudioEffectDescriptor &d : AudioEffects::all()) {
+            if (d.id == AudioEffects::kAudioFxEffectId) {
+                ++audioFxCount;
+                QCOMPARE(d.name, QStringLiteral("Audio FX"));
+                QVERIFY(prism::audiofx::fromJson(d.defaultParams).empty());
+            }
+        }
+        QCOMPARE(audioFxCount, 1);
     }
 
     void audioOutputSingletonOnAdd() {

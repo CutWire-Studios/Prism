@@ -14,7 +14,7 @@ depends=(
     # (AudioLoopbackCapture_gst_linux.cpp) both need the pipewiresrc GStreamer
     # element at runtime; nothing else in this list pulls it in transitively.
     'gst-plugin-pipewire'
-    're2' 'libzip' 'lua54' 'openssl' 'fontconfig' 'freetype2'
+    're2' 'libzip' 'soundtouch' 'lua54' 'openssl' 'fontconfig' 'freetype2'
 )
 optdepends=(
     'intel-media-driver: VAAPI hardware decode/encode on Intel GPUs'

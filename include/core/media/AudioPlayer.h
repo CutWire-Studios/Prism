@@ -59,7 +59,7 @@ private slots:
     void pushAudio();
 
 private:
-    void applyGain(QByteArray &pcmChunk, float crossfadeFactor) const;
+    void applyGain(QByteArray &pcmChunk, float gain) const;
 
     AudioDecoder m_decoder;
     AudioEffectChain m_effectChain;

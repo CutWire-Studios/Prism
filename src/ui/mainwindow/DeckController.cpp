@@ -217,6 +217,34 @@ void DeckController::syncMasterAudioInputs() {
     }
 }
 
+void DeckController::refreshAudioEffects() {
+    if (!m_editor) return;
+
+    const auto refreshDeck = [this](bool deckA, NodeId clipId) {
+        auto &player = deckA ? m_audioPlayerA : m_audioPlayerB;
+        if (!clipId || !player) return;
+        ResolvedAudioRoute route;
+        if (m_editor->resolveAudioStreamRoute(clipId, route))
+            player->setEffectChain(route.effects);
+        else
+            player->setEffectChain({});
+    };
+    refreshDeck(true, m_aClipNodeId);
+    refreshDeck(false, m_bClipNodeId);
+
+    const auto refreshCaptures = [this](auto &captures) {
+        for (auto &[id, capture] : captures) {
+            ResolvedAudioRoute route;
+            if (m_editor->resolveAudioStreamRoute(id, route))
+                capture->setEffectChain(route.effects);
+            else
+                capture->setEffectChain({});
+        }
+    };
+    refreshCaptures(m_inputCaptures);
+    refreshCaptures(m_loopbackCaptures);
+}
+
 void DeckController::updateDeckAudio(bool deckA, NodeId clipId, const ClipNodeModel *node,
                                      double currentTimeHint, bool forceSeek) {
     if (!node || (node->sourceDescriptor().kind != SourceDescriptor::Kind::VideoFile

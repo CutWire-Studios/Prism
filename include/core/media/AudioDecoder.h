@@ -9,8 +9,9 @@ extern "C" {
 #include <libswresample/swresample.h>
 }
 
-struct AVFilterGraph;
-struct AVFilterContext;
+#include <memory>
+
+namespace soundtouch { class SoundTouch; }
 
 /// FFmpeg audio-file decoder. Resamples any input to interleaved 44.1 kHz
 /// stereo float PCM, handed out one chunk at a time (used by AudioPlayer and
@@ -31,15 +32,15 @@ public:
     bool decodeNextChunk(QByteArray &outChunk);
     bool atEnd() const { return m_eof; }
 
-    /// Time-stretch via FFmpeg's atempo filter: the media plays `speed`× faster
-    /// or slower with the pitch preserved.
+    /// Time-stretch via SoundTouch: the media plays `speed`× faster or slower
+    /// with the pitch preserved. Takes effect without a seek.
     void setPlaybackSpeed(double speed);
     double playbackSpeed() const { return m_speed; }
 
 private:
     bool initResampler();
-    bool initFilterGraph();
-    void freeFilterGraph();
+    bool stretching() const;
+    bool drainStretcher(QByteArray &outChunk);
 
     AVFormatContext *m_formatCtx = nullptr;
     AVCodecContext *m_codecCtx = nullptr;
@@ -54,11 +55,8 @@ private:
     // frames are trimmed to this time so seeks are sample-accurate.
     double m_seekTrimTarget = -1.0;
 
-    // atempo time-stretch graph, present only while m_speed != 1.0.
-    AVFilterGraph *m_filterGraph = nullptr;
-    AVFilterContext *m_filterSrc = nullptr;
-    AVFilterContext *m_filterSink = nullptr;
-    AVFrame *m_filtFrame = nullptr;
-    bool m_filterFlushed = false;
+    // Only fed while m_speed != 1.0.
+    std::unique_ptr<soundtouch::SoundTouch> m_stretcher;
+    bool m_stretchFlushed = false;
     double m_speed = 1.0;   // persists across open/close
 };

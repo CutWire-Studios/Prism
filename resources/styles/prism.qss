@@ -340,3 +340,80 @@ QLabel[role="badge"] {
     font-weight: bold;
     padding: 0 2px;
 }
+
+/* Pedalboard dialog */
+QLabel#sectionHeader { color: @textSecondary; font-size: 11px; font-weight: 600; letter-spacing: 1px; }
+QLabel#subHeader { color: @textSecondary; font-size: 11px; font-weight: 600; }
+QLabel#knobLabel { color: @textSecondary; font-size: 11px; }
+QLabel#knobValue { color: @text; font-size: 11px; }
+QLabel#laneTitle { color: @textSecondary; font-size: 11px; font-weight: 600; }
+QLabel#cardTitle { font-weight: 600; }
+QLabel#irName { color: @textSecondary; font-size: 11px; }
+QLabel#modDot { color: @accent; font-size: 8px; }
+QLabel#flowArrow { color: @textDisabled; font-size: 14px; }
+QLabel#ioPill {
+    background: @glassControl;
+    color: @textSecondary;
+    border: 1px solid @stroke;
+    border-radius: 10px;
+    padding: 0 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+QLabel#dropHint {
+    border: 1px dashed @stroke;
+    border-radius: 10px;
+    color: @textSecondary;
+    font-size: 11px;
+}
+
+QFrame#board { background: transparent; border: 1px solid transparent; border-radius: 12px; }
+QFrame#board[target="true"] { border: 1px solid @accent; }
+
+QFrame#pedalCard, QFrame#modCard {
+    background: @glassPanel;
+    border: 1px solid @stroke;
+    border-top-color: @strokeTop;
+    border-radius: 10px;
+}
+QFrame#modCard { background: @glassHover; border-color: @accentSelection; }
+QFrame#pedalCard[bypassed="true"] { background: transparent; border-style: dashed; }
+QFrame#splitCard {
+    background: @glassControl;
+    border: 1px dashed @accent;
+    border-radius: 10px;
+}
+QFrame#laneRow {
+    background: @glassPanel;
+    border: 1px solid transparent;
+    border-radius: 8px;
+}
+QFrame#laneRow[target="true"] { border: 1px solid @accent; }
+
+QFrame#cardStrip { border: none; border-radius: 1px; background: @textDisabled; margin-top: 1px; }
+QFrame#cardStrip[category="filter"] { background: @success; }
+QFrame#cardStrip[category="texture"] { background: @warning; }
+QFrame#cardStrip[category="space"] { background: @textSecondary; }
+QFrame#cardStrip[category="modulator"] { background: @accent; }
+
+QToolButton#pedalPower {
+    background: transparent;
+    border: 2px solid @textDisabled;
+    border-radius: 7px;
+    padding: 0;
+    min-height: 0;
+}
+QToolButton#pedalPower:hover { border-color: @textSecondary; }
+QToolButton#pedalPower:checked { background: @accent; border-color: @accent; }
+QToolButton#cardMenu, QToolButton#flatTool {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 0;
+    min-height: 0;
+    color: @textSecondary;
+    font-size: 16px;
+}
+QToolButton#cardMenu:hover, QToolButton#flatTool:hover { background: @glassHover; color: @text; }
+QToolButton#cardMenu:pressed, QToolButton#flatTool:pressed { background: @glassPressed; }
+QToolButton#addLane { padding: 2px 8px; }

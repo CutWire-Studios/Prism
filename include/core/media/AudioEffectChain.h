@@ -3,13 +3,13 @@
 #include <QByteArray>
 #include <QString>
 #include <QVector>
+#include "core/audio/AudioRack.h"
 #include "ui/nodes/AudioEffects.h"
 
-struct AVFilterGraph;
-struct AVFilterContext;
-struct AVFrame;
+#include <memory>
+#include <vector>
 
-/// Real-time PCM processor: 44.1 kHz stereo float in/out via FFmpeg libavfilter.
+/// Real-time PCM processor: 44.1 kHz stereo float in/out, one pedalboard graph per Audio FX node.
 class AudioEffectChain {
 public:
     static constexpr int kSampleRate = 44100;
@@ -22,27 +22,19 @@ public:
     void setEffects(const QVector<AudioEffectRef> &effects);
     const QVector<AudioEffectRef> &effects() const { return m_effects; }
 
-    /// Drop buffered filter state (call on seek / graph change).
+    /// Clear delay/reverb tails and modulator phases (call on seek).
     void reset();
 
-    /// Process one PCM chunk; may return partial output when filters buffer.
+    /// Processes one PCM chunk; output is always the same size as the input.
     bool process(const QByteArray &in, QByteArray &out);
 
-    bool hasFilters() const { return !m_filterChain.isEmpty(); }
+    bool hasFilters() const { return !m_stages.empty(); }
 
 private:
-    bool rebuildGraph();
-    void freeGraph();
-    bool drainSink(QByteArray &out);
-    bool pushSamples(const float *samples, int nbSamples, QByteArray &out);
+    struct Stage;
 
     QVector<AudioEffectRef> m_effects;
-    QString m_filterChain;
-    QByteArray m_inputBuffer;
-    AVFilterGraph *m_graph = nullptr;
-    AVFilterContext *m_src = nullptr;
-    AVFilterContext *m_sink = nullptr;
-    AVFrame *m_inFrame = nullptr;
-    AVFrame *m_outFrame = nullptr;
-    qint64 m_pts = 0;
+    std::vector<std::unique_ptr<Stage>> m_stages;
+    std::vector<float> m_left = std::vector<float>(kFrameSamples);
+    std::vector<float> m_right = std::vector<float>(kFrameSamples);
 };

@@ -7,6 +7,9 @@
 
 namespace {
 
+// Half a second of 44.1 kHz stereo float. With no player draining a device, older input is dropped.
+constexpr int kMaxPendingBytes = 44100 / 2 * 2 * static_cast<int>(sizeof(float));
+
 QHash<QString, QByteArray> &pendingBuffers() {
     static QHash<QString, QByteArray> buffers;
     return buffers;
@@ -20,7 +23,10 @@ QString AudioInputMixRegistry::deviceKey(const QString &outputDeviceId) {
 
 void AudioInputMixRegistry::appendPcm(const QString &outputDeviceId, const QByteArray &pcm) {
     if (pcm.isEmpty()) return;
-    pendingBuffers()[deviceKey(outputDeviceId)].append(pcm);
+    QByteArray &pending = pendingBuffers()[deviceKey(outputDeviceId)];
+    pending.append(pcm);
+    if (pending.size() > kMaxPendingBytes)
+        pending.remove(0, pending.size() - kMaxPendingBytes);
 }
 
 void AudioInputMixRegistry::mixIntoPlaybackChunk(const QString &outputDeviceId, QByteArray &chunk) {

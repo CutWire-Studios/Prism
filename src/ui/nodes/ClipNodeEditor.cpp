@@ -717,7 +717,7 @@ public:
         p->setPen(tk().text);
         p->setFont(uiFont(11, true));
         p->drawText(QRectF(4, 6, AE_W - 8, 28), Qt::AlignCenter,
-                    QStringLiteral("AUDIO FX\n%1").arg(m_desc->name));
+                    m_desc->name.toUpper());
 
         if (m_desc->editDialog) {
             const QRectF r = getEditButtonRect();
@@ -4747,7 +4747,7 @@ bool ClipNodeEditor::resolveAudioStreamRoute(NodeId sourceNodeId, ResolvedAudioR
 
         if (kind == ConnectionItem::AudioEffectChain) {
             if (auto *ae = m_audioEffectNodes.value(toId)) {
-                route.effects.append({ae->effectId(), ae->params()});
+                route.effects.append({int(ae->nodeId()), prism::audiofx::fromJson(ae->params())});
                 current = toId;
                 continue;
             }
@@ -5662,6 +5662,16 @@ void ClipNodeEditor::onEditProcessNode(NodeId processId) {
     }
 }
 
+void ClipNodeEditor::setAudioEffectParams(int nodeId, const QJsonObject &params, bool structural) {
+    auto *ae = m_audioEffectNodes.value(nodeId);
+    if (!ae) return;
+    ae->setParams(params);
+    if (structural)
+        emit audioGraphChanged();
+    else
+        emit audioEffectParamsChanged();
+}
+
 void ClipNodeEditor::onEditAudioEffectNode(NodeId effectId) {
     auto *ae = m_audioEffectNodes.value(effectId);
     if (!ae || !ae->descriptor()->editDialog) return;
@@ -5670,15 +5680,14 @@ void ClipNodeEditor::onEditAudioEffectNode(NodeId effectId) {
     QJsonObject params = originalParams;
     const auto onLiveChange = [this, ae](const QJsonObject &p) {
         ae->setParams(p);
-        emit audioGraphChanged();
+        emit audioEffectParamsChanged();
     };
     if (ae->descriptor()->editDialog(this, params, onLiveChange)) {
         ae->setParams(params);
-        emit audioGraphChanged();
     } else {
         ae->setParams(originalParams);
-        emit audioGraphChanged();
     }
+    emit audioEffectParamsChanged();
 }
 
 void ClipNodeEditor::onNodeRemoveRequested(NodeId nodeId) { removeNode(nodeId); }
