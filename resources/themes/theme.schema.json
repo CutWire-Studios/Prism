@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prism.cutwire.org/schemas/theme.schema.json",
+  "title": "Prism theme",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Theme format this document was written for. Omitted means a theme from before versioning. A theme newer than the running Prism still loads, with a warning. Tokens missing from an older theme are filled from the built-in dark or light theme."
+    },
+    "variant": {
+      "enum": ["dark", "light"]
+    },
+    "extends": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Theme name to deep-merge under this document. Built-in names are dark and light. Missing keys fall through to the base."
+    },
+    "variants": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional dark and light overlays. When both are present the theme follows the light/dark toggle. A folder theme may instead ship theme.dark.json and theme.light.json beside theme.json; those files use the same shape as one side here.",
+      "properties": {
+        "dark": { "$ref": "#/$defs/variantOverlay" },
+        "light": { "$ref": "#/$defs/variantOverlay" }
+      }
+    },
+    "palette": {
+      "type": "object",
+      "description": "Raw color strings (#rgb, #rrggbb, #aarrggbb) or $references. No nested objects.",
+      "additionalProperties": {
+        "$ref": "#/$defs/colorOrRef"
+      }
+    },
+    "semantic": {
+      "$ref": "#/$defs/tokenObject"
+    },
+    "components": {
+      "description": "Per-component groups, variant-independent. Each group name is lowerCamel of the QML file basename (appWindow and androidMain are the shell exceptions). Values are colors, numbers, strings, or $references.",
+      "$ref": "#/$defs/tokenObject"
+    },
+    "metrics": {
+      "$ref": "#/$defs/tokenObject"
+    },
+    "typography": {
+      "$ref": "#/$defs/tokenObject"
+    },
+    "motion": {
+      "$ref": "#/$defs/tokenObject"
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "translucent": { "type": "boolean" },
+        "backdrop": { "type": "string" },
+        "backgroundOpacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    }
+  },
+  "$defs": {
+    "variantOverlay": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Partial theme merged onto the base for one appearance side. No name, extends, variant, or nested variants.",
+      "properties": {
+        "palette": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/colorOrRef" }
+        },
+        "semantic": { "$ref": "#/$defs/tokenObject" },
+        "components": { "$ref": "#/$defs/tokenObject" },
+        "metrics": { "$ref": "#/$defs/tokenObject" },
+        "typography": { "$ref": "#/$defs/tokenObject" },
+        "motion": { "$ref": "#/$defs/tokenObject" },
+        "window": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "translucent": { "type": "boolean" },
+            "backdrop": { "type": "string" },
+            "backgroundOpacity": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
+      }
+    },
+    "colorOrRef": {
+      "type": "string",
+      "pattern": "^(#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})|\\$[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*)$"
+    },
+    "tokenObject": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/tokenValue"
+      }
+    },
+    "tokenValue": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/tokenValue" }
+        },
+        { "$ref": "#/$defs/tokenObject" }
+      ]
+    }
+  }
+}

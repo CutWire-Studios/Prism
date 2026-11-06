@@ -1,0 +1,66 @@
+{
+  "name": "frost",
+  "schemaVersion": 1,
+  "extends": "light",
+  "variant": "light",
+  "window": {
+    "translucent": true,
+    "backdrop": "blur",
+    "backgroundOpacity": 0.75
+  },
+  "palette": {
+    "appBackground": "#f5f5f7",
+    "panelBackground": "#f2ffffff",
+    "panelBorder": "#1a000000",
+    "border": "#d6d6da",
+    "foreground": "#111111",
+    "panelForeground": "#1a1a1a",
+    "mutedForeground": "#6b6b70",
+    "primary": "#111111",
+    "primaryForeground": "#ffffff",
+    "accentOnPanel": "#1a1a1a",
+    "accent": "#e8e8ec",
+    "accentForeground": "#0a0a0a",
+    "panelAccent": "#14000000",
+    "panelAccentForeground": "#0a0a0a",
+    "panelMuted": "#d0d0d4",
+    "popoverHover": "#0f000000",
+    "panelSecondaryBg": "#ececee",
+    "panelSecondaryBorder": "#c8c8cc",
+    "panelSecondaryForeground": "#111111",
+    "exportGradientTop": "#2a2a2a",
+    "exportGradientBottom": "#000000",
+    "exportGlow": "#555555",
+    "scrollbarTrack": "#0f000000",
+    "scrollbarHandle": "#a0a0a5",
+    "scrollbarHandleHover": "#808085",
+    "scrollbarHandlePressed": "#505055",
+    "sheetHandle": "#a0a0a5",
+    "sliderTrack": "#c4c4c8",
+    "skeleton": "#e6e6ea",
+    "skeletonHighlight": "#f2f2f4"
+  },
+  "components": {
+    "panelFrame": {
+      "background": "#00000000"
+    },
+    "previewPanel": {
+      "background": "#00000000"
+    },
+    "propertiesPanel": {
+      "background": "#00000000"
+    },
+    "assetsPanel": {
+      "background": "#00000000"
+    },
+    "assetsPanelHeader": {
+      "background": "#00000000"
+    },
+    "timelinePanel": {
+      "background": "#00000000"
+    },
+    "timelineToolbar": {
+      "background": "#00000000"
+    }
+  }
+}

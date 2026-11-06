@@ -839,6 +839,7 @@ else()
 endif()
 
 target_link_libraries(Prism PRIVATE prism_core)
+include(PrismQml)
 
 if(WIN32)
     add_custom_command(TARGET Prism POST_BUILD
