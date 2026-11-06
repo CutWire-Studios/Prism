@@ -336,6 +336,8 @@ set(SOURCES
     src/ui/nodes/ClipCard.cpp
     src/ui/nodes/ClipNodeModel.cpp
     src/ui/nodes/ClipNodeEditor.cpp
+    src/core/graph/ClipGraph.cpp
+    src/core/graph/ClipGraphModels.cpp
     src/ui/nodes/ProcessEffects.cpp
     src/ui/nodes/AudioEffects.cpp
     src/ui/nodes/PedalboardDialog.cpp
@@ -495,6 +497,8 @@ set(HEADERS
     include/ui/nodes/ClipCard.h
     include/ui/nodes/ClipNodeModel.h
     include/ui/nodes/ClipNodeEditor.h
+    include/core/graph/ClipGraph.h
+    include/core/graph/ClipGraphModels.h
     include/ui/nodes/ProcessEffects.h
     include/ui/nodes/AudioEffects.h
     include/ui/nodes/PedalboardDialog.h
@@ -710,6 +714,7 @@ target_link_libraries(prism_core PUBLIC
     Qt6::Gui
     Qt6::Multimedia
     Qt6::Network
+    Qt6::Qml
     re2::re2
     ${FFMPEG_LIBRARIES}
     kissfft::kissfft

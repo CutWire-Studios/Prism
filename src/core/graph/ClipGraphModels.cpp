@@ -1,0 +1,392 @@
+#include "core/graph/ClipGraphModels.h"
+
+#include <QUndoCommand>
+
+namespace {
+
+class SnapshotCommand : public QUndoCommand {
+public:
+    SnapshotCommand(ClipGraph *graph, const QString &text, const QJsonObject &before,
+                    const QJsonObject &after)
+        : QUndoCommand(text), m_graph(graph), m_before(before), m_after(after) {}
+
+    void undo() override { m_graph->fromJson(m_before); }
+    void redo() override {
+        if (m_applied) m_graph->fromJson(m_after);
+        m_applied = true;
+    }
+
+private:
+    ClipGraph *m_graph;
+    QJsonObject m_before;
+    QJsonObject m_after;
+    bool m_applied = false;
+};
+
+class MoveCommand : public QUndoCommand {
+public:
+    MoveCommand(ClipGraph *graph, NodeId id, const QPointF &from, const QPointF &to,
+                const bool *mergeFlag)
+        : QUndoCommand(QStringLiteral("Move node")), m_graph(graph), m_id(id), m_from(from),
+          m_to(to), m_mergeFlag(mergeFlag) {}
+
+    int id() const override { return 1; }
+    void undo() override { m_graph->moveNode(m_id, m_from); }
+    void redo() override { m_graph->moveNode(m_id, m_to); }
+    bool mergeWith(const QUndoCommand *other) override {
+        if (!*m_mergeFlag || other->id() != id()) return false;
+        const auto *o = static_cast<const MoveCommand *>(other);
+        if (o->m_id != m_id) return false;
+        m_to = o->m_to;
+        return true;
+    }
+
+private:
+    ClipGraph *m_graph;
+    NodeId m_id;
+    QPointF m_from;
+    QPointF m_to;
+    const bool *m_mergeFlag;
+};
+
+class ParamsCommand : public QUndoCommand {
+public:
+    ParamsCommand(ClipGraph *graph, NodeId id, const QVariantMap &before, const QVariantMap &after)
+        : QUndoCommand(QStringLiteral("Edit node")), m_graph(graph), m_id(id), m_before(before),
+          m_after(after) {}
+
+    void undo() override { m_graph->setParams(m_id, m_before, false); }
+    void redo() override { m_graph->setParams(m_id, m_after, false); }
+
+private:
+    ClipGraph *m_graph;
+    NodeId m_id;
+    QVariantMap m_before;
+    QVariantMap m_after;
+};
+
+}  // namespace
+
+// ── Nodes model ─────────────────────────────────────────────────────────────
+
+ClipGraphNodesModel::ClipGraphNodesModel(ClipGraph *graph, QObject *parent)
+    : QAbstractListModel(parent), m_graph(graph), m_ids(graph->nodeIds())
+{
+    connect(graph, &ClipGraph::nodeAdded, this, [this](NodeId id) {
+        beginInsertRows({}, int(m_ids.size()), int(m_ids.size()));
+        m_ids.append(id);
+        endInsertRows();
+    });
+    connect(graph, &ClipGraph::nodeRemoved, this, [this](NodeId id) {
+        const int row = rowOfNode(id);
+        if (row < 0) return;
+        beginRemoveRows({}, row, row);
+        m_ids.removeAt(row);
+        endRemoveRows();
+    });
+    connect(graph, &ClipGraph::nodeChanged, this, [this](NodeId id) {
+        const int row = rowOfNode(id);
+        if (row >= 0) emit dataChanged(index(row), index(row));
+    });
+    connect(graph, &ClipGraph::edgeAdded, this, [this] { emitPortsChanged(); });
+    connect(graph, &ClipGraph::edgeRemoved, this, [this] { emitPortsChanged(); });
+    connect(graph, &ClipGraph::edgeChanged, this, [this] { emitPortsChanged(); });
+    connect(graph, &ClipGraph::graphReset, this, [this] {
+        beginResetModel();
+        m_ids = m_graph->nodeIds();
+        endResetModel();
+    });
+}
+
+void ClipGraphNodesModel::emitPortsChanged() {
+    if (m_ids.isEmpty()) return;
+    emit dataChanged(index(0), index(int(m_ids.size()) - 1), {InputPortsRole, OutputPortsRole});
+}
+
+int ClipGraphNodesModel::rowCount(const QModelIndex &parent) const {
+    return parent.isValid() ? 0 : int(m_ids.size());
+}
+
+int ClipGraphNodesModel::rowOfNode(quint64 id) const {
+    return int(m_ids.indexOf(id));
+}
+
+QVariantList ClipGraphNodesModel::portList(const QVector<ClipGraph::Port> &ports, NodeId id) const {
+    QVariantList out;
+    for (const ClipGraph::Port &p : ports) {
+        out.append(QVariantMap{
+            {"kind", int(p.kind)},
+            {"direction", int(p.direction)},
+            {"index", p.index},
+            {"label", p.label},
+            {"slotted", p.slotted},
+            {"x", p.pos.x()},
+            {"y", p.pos.y()},
+            {"connected", m_graph->isPortConnected(id, p.direction, p.index)},
+        });
+    }
+    return out;
+}
+
+QVariant ClipGraphNodesModel::data(const QModelIndex &idx, int role) const {
+    if (!idx.isValid() || idx.row() >= m_ids.size() || !m_graph) return {};
+    const NodeId id = m_ids[idx.row()];
+    const ClipGraph::Node *n = m_graph->node(id);
+    if (!n) return {};
+    switch (role) {
+    case NodeIdRole:      return QVariant::fromValue<quint64>(id);
+    case TypeRole:        return int(n->type);
+    case XRole:           return n->pos.x();
+    case YRole:           return n->pos.y();
+    case WidthRole:       return n->size.width();
+    case HeightRole:      return n->size.height();
+    case TitleRole:       return n->title;
+    case ParamsRole:      return n->params;
+    case InputPortsRole:  return portList(m_graph->inputPorts(id), id);
+    case OutputPortsRole: return portList(m_graph->outputPorts(id), id);
+    }
+    return {};
+}
+
+QHash<int, QByteArray> ClipGraphNodesModel::roleNames() const {
+    return {
+        {NodeIdRole, "nodeId"},
+        {TypeRole, "type"},
+        {XRole, "x"},
+        {YRole, "y"},
+        {WidthRole, "width"},
+        {HeightRole, "height"},
+        {TitleRole, "title"},
+        {ParamsRole, "params"},
+        {InputPortsRole, "inputPorts"},
+        {OutputPortsRole, "outputPorts"},
+    };
+}
+
+// ── Edges model ─────────────────────────────────────────────────────────────
+
+ClipGraphEdgesModel::ClipGraphEdgesModel(ClipGraph *graph, QObject *parent)
+    : QAbstractListModel(parent), m_graph(graph)
+{
+    for (const ClipGraph::Edge &e : graph->edges())
+        m_ids.append(e.id);
+
+    connect(graph, &ClipGraph::edgeAdded, this, [this](EdgeId id) {
+        beginInsertRows({}, int(m_ids.size()), int(m_ids.size()));
+        m_ids.append(id);
+        endInsertRows();
+    });
+    connect(graph, &ClipGraph::edgeRemoved, this, [this](EdgeId id) {
+        const int row = rowOfEdge(id);
+        if (row < 0) return;
+        beginRemoveRows({}, row, row);
+        m_ids.removeAt(row);
+        endRemoveRows();
+    });
+    connect(graph, &ClipGraph::edgeChanged, this, [this](EdgeId id) {
+        const int row = rowOfEdge(id);
+        if (row >= 0) emit dataChanged(index(row), index(row));
+    });
+    connect(graph, &ClipGraph::graphReset, this, [this] {
+        beginResetModel();
+        m_ids.clear();
+        for (const ClipGraph::Edge &e : m_graph->edges())
+            m_ids.append(e.id);
+        endResetModel();
+    });
+}
+
+int ClipGraphEdgesModel::rowCount(const QModelIndex &parent) const {
+    return parent.isValid() ? 0 : int(m_ids.size());
+}
+
+int ClipGraphEdgesModel::rowOfEdge(quint64 id) const {
+    return int(m_ids.indexOf(id));
+}
+
+QVariant ClipGraphEdgesModel::data(const QModelIndex &idx, int role) const {
+    if (!idx.isValid() || idx.row() >= m_ids.size() || !m_graph) return {};
+    const ClipGraph::Edge *e = m_graph->edge(m_ids[idx.row()]);
+    if (!e) return {};
+    switch (role) {
+    case EdgeIdRole:   return QVariant::fromValue<quint64>(e->id);
+    case FromNodeRole: return QVariant::fromValue<quint64>(e->from);
+    case FromPortRole: return e->fromPort;
+    case ToNodeRole:   return QVariant::fromValue<quint64>(e->to);
+    case ToPortRole:   return e->toPort;
+    case KindRole:     return int(e->kind);
+    }
+    return {};
+}
+
+QHash<int, QByteArray> ClipGraphEdgesModel::roleNames() const {
+    return {
+        {EdgeIdRole, "edgeId"},
+        {FromNodeRole, "fromNode"},
+        {FromPortRole, "fromPort"},
+        {ToNodeRole, "toNode"},
+        {ToPortRole, "toPort"},
+        {KindRole, "kind"},
+    };
+}
+
+// ── Controller ──────────────────────────────────────────────────────────────
+
+ClipGraphController::ClipGraphController(QObject *parent)
+    : QObject(parent), m_graph(new ClipGraph(this))
+{
+    init();
+}
+
+ClipGraphController::ClipGraphController(ClipGraph *graph, QObject *parent)
+    : QObject(parent), m_graph(graph)
+{
+    init();
+}
+
+void ClipGraphController::init() {
+    m_nodes = new ClipGraphNodesModel(m_graph, this);
+    m_edges = new ClipGraphEdgesModel(m_graph, this);
+    connect(&m_undo, &QUndoStack::indexChanged, this, &ClipGraphController::undoStateChanged);
+    connect(&m_undo, &QUndoStack::cleanChanged, this, &ClipGraphController::undoStateChanged);
+    connect(m_graph, &ClipGraph::graphReset, this, [this] {
+        const qsizetype before = m_selection.size();
+        m_selection.removeIf([this](NodeId id) { return !m_graph->hasNode(id); });
+        if (m_selection.size() != before) emit selectionChanged();
+        if (m_pending.node != 0 && !m_graph->hasNode(m_pending.node)) cancelConnection();
+    });
+    connect(m_graph, &ClipGraph::nodeRemoved, this, [this](NodeId id) {
+        if (m_selection.remove(id)) emit selectionChanged();
+        if (m_pending.node == id) cancelConnection();
+    });
+}
+
+void ClipGraphController::pushSnapshot(const QString &text, const QJsonObject &before) {
+    const QJsonObject after = m_graph->toJson();
+    if (after == before) return;
+    m_mergeMoves = false;
+    m_undo.push(new SnapshotCommand(m_graph, text, before, after));
+}
+
+quint64 ClipGraphController::addNode(int type, qreal x, qreal y, const QVariantMap &params) {
+    const QJsonObject before = m_graph->toJson();
+    const NodeId id = m_graph->addNode(ClipGraph::NodeType(type), QPointF(x, y), params);
+    if (id != 0) pushSnapshot(QStringLiteral("Add node"), before);
+    return id;
+}
+
+void ClipGraphController::removeNodes(const QVariantList &ids) {
+    const QJsonObject before = m_graph->toJson();
+    for (const QVariant &v : ids)
+        m_graph->removeNode(v.toULongLong());
+    pushSnapshot(QStringLiteral("Remove nodes"), before);
+}
+
+void ClipGraphController::moveNode(quint64 id, qreal x, qreal y) {
+    const ClipGraph::Node *n = m_graph->node(id);
+    if (!n || n->pos == QPointF(x, y)) return;
+    m_undo.push(new MoveCommand(m_graph, id, n->pos, QPointF(x, y), &m_mergeMoves));
+    m_mergeMoves = true;
+}
+
+void ClipGraphController::endMove() {
+    m_mergeMoves = false;
+}
+
+bool ClipGraphController::setParams(quint64 id, const QVariantMap &params) {
+    const ClipGraph::Node *n = m_graph->node(id);
+    if (!n) return false;
+    QVariantMap next = n->params;
+    for (auto it = params.begin(); it != params.end(); ++it)
+        next.insert(it.key(), it.value());
+    if (next == n->params) return true;
+    m_mergeMoves = false;
+    m_undo.push(new ParamsCommand(m_graph, id, n->params, next));
+    return true;
+}
+
+bool ClipGraphController::beginConnection(quint64 node, bool isOutput, int port) {
+    const auto ports = isOutput ? m_graph->outputPorts(node) : m_graph->inputPorts(node);
+    if (port < 0 || port >= ports.size()) return false;
+    m_pending = {node, isOutput, port};
+    emit connectingChanged();
+    return true;
+}
+
+bool ClipGraphController::canConnect(quint64 node, bool isOutput, int port) const {
+    if (m_pending.node == 0 || m_pending.output == isOutput) return false;
+    return isOutput
+        ? m_graph->canConnectPorts(node, port, m_pending.node, m_pending.port)
+        : m_graph->canConnectPorts(m_pending.node, m_pending.port, node, port);
+}
+
+bool ClipGraphController::finishConnection(quint64 node, bool isOutput, int port) {
+    bool ok = false;
+    if (canConnect(node, isOutput, port)) {
+        const QJsonObject before = m_graph->toJson();
+        ok = isOutput
+            ? m_graph->connectPorts(node, port, m_pending.node, m_pending.port)
+            : m_graph->connectPorts(m_pending.node, m_pending.port, node, port);
+        if (ok) pushSnapshot(QStringLiteral("Connect"), before);
+    }
+    cancelConnection();
+    return ok;
+}
+
+void ClipGraphController::cancelConnection() {
+    if (m_pending.node == 0) return;
+    m_pending = {};
+    emit connectingChanged();
+}
+
+bool ClipGraphController::disconnectEdge(quint64 edgeId) {
+    const QJsonObject before = m_graph->toJson();
+    const bool ok = m_graph->disconnectEdge(edgeId);
+    if (ok) pushSnapshot(QStringLiteral("Disconnect"), before);
+    return ok;
+}
+
+bool ClipGraphController::insertIntoEdge(quint64 node, quint64 edgeId) {
+    const QJsonObject before = m_graph->toJson();
+    const bool ok = m_graph->insertIntoEdge(node, edgeId);
+    if (ok) pushSnapshot(QStringLiteral("Insert node"), before);
+    return ok;
+}
+
+QVariantList ClipGraphController::selection() const {
+    QList<NodeId> sorted = m_selection.values();
+    std::sort(sorted.begin(), sorted.end());
+    QVariantList out;
+    for (NodeId id : std::as_const(sorted))
+        out.append(QVariant::fromValue<quint64>(id));
+    return out;
+}
+
+void ClipGraphController::select(const QVariantList &ids, bool additive) {
+    QSet<NodeId> next = additive ? m_selection : QSet<NodeId>{};
+    for (const QVariant &v : ids)
+        if (m_graph->hasNode(v.toULongLong())) next.insert(v.toULongLong());
+    if (next == m_selection) return;
+    m_selection = next;
+    emit selectionChanged();
+}
+
+void ClipGraphController::clearSelection() {
+    if (m_selection.isEmpty()) return;
+    m_selection.clear();
+    emit selectionChanged();
+}
+
+void ClipGraphController::undo() {
+    m_mergeMoves = false;
+    m_undo.undo();
+}
+
+void ClipGraphController::redo() {
+    m_mergeMoves = false;
+    m_undo.redo();
+}
+
+void ClipGraphController::clearHistory() {
+    m_undo.clear();
+}
