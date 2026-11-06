@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.25)
 
 # Must be set before project() to apply to the whole build. Qt 6 / Homebrew Qt
 # require macOS 11+; matches Qt's own minimum so QtMultimedia capture APIs exist.
@@ -15,12 +15,13 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
+include(PrismBuildSpeed)
 
 # Skia draws text and shapes on the CPU (see third_party/build-skia.sh for the prebuilt)
 find_package(Skia REQUIRED)
 
 # Qt
-set(_prism_qt_components Core Widgets Svg OpenGL OpenGLWidgets Gui Multimedia Network)
+set(_prism_qt_components Core Widgets Svg OpenGL OpenGLWidgets Gui Multimedia Network Qml Quick QuickControls2 QuickEffects)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND _prism_qt_components DBus)
 endif()
@@ -659,6 +660,9 @@ target_compile_definitions(prismaudiodsp PRIVATE ${PRISM_JUCE_DEFINITIONS})
 add_library(prism_juce_headers INTERFACE)
 target_include_directories(prism_juce_headers SYSTEM INTERFACE "${_prism_juce_dir}/modules")
 target_compile_definitions(prism_juce_headers INTERFACE ${PRISM_JUCE_DEFINITIONS})
+# JUCE derives JUCE_DEBUG from _DEBUG and checks it at link time, so header-only consumers need the
+# same debug defines its module targets get, or Debug builds fail to link.
+target_compile_definitions(prism_juce_headers INTERFACE $<$<CONFIG:Debug>:DEBUG=1 _DEBUG=1>)
 
 # Core library (linked by the app and unit tests)
 add_library(prism_core STATIC ${SOURCES} ${HEADERS} ${UI_FILES} resources/resources.qrc)
