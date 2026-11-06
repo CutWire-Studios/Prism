@@ -3,7 +3,7 @@ import QtQuick
 import Prism
 
 // Layer compositor: one row per input slot with visibility eye, rename (double-click) and
-// reorder arrows, then an "Edit Layout" button. The trailing unconnected slot is a placeholder.
+// reorder arrows. The trailing unconnected slot is a placeholder.
 Item {
     id: root
 
@@ -141,13 +141,5 @@ Item {
                 onClicked: root.node.controller.swapSlots(root.node.nodeId, slotRow.index, slotRow.index + 1)
             }
         }
-    }
-
-    NodeButton {
-        x: 6
-        y: root.height - 23
-        width: root.width - 12
-        text: qsTr("Edit Layout")
-        onClicked: root.node.requestEditor("layerLayout")
     }
 }

@@ -567,6 +567,14 @@ private slots:
         QVERIFY(g.resolveAudioStreamRoute(clip, route));
         QCOMPARE(route.effects.size(), 1);
         QCOMPARE(route.effects[0].nodeId, int(fx));
+
+        QVERIFY(g.setParams(fx, {{"bypass", true}}));
+        QVERIFY(g.resolveAudioStreamRoute(clip, route));
+        QVERIFY(route.effects.isEmpty());
+        QCOMPARE(route.mixerNodeId, mixer);
+        QVERIFY(g.setParams(fx, {{"bypass", false}}));
+        QVERIFY(g.resolveAudioStreamRoute(clip, route));
+        QCOMPARE(route.effects.size(), 1);
         QCOMPARE(route.mixerNodeId, mixer);
         QCOMPARE(route.mixerSlotIndex, 0);
         QCOMPARE(route.outputNodeId, master);
@@ -697,6 +705,43 @@ private slots:
         QCOMPARE(g.edges().size(), 2);
         QCOMPARE(g.producerForInput(layer, 0), p);
         QCOMPARE(g.producerForInput(p, 0), a);
+    }
+
+    void bypassedProcessAddsNoSourceEffect() {
+        ClipGraph g;
+        const NodeId a = g.addNode(NT::Input, {}, canvas("a"));
+        const NodeId p = g.addNode(NT::Process, {}, {{"effect", 4}});
+        QVERIFY(g.connectNodes(a, p));
+        QCOMPARE(g.evaluateVideoInput(p).layers.first().sourceEffects.size(), 1);
+        QVERIFY(g.setParams(p, {{"bypass", true}}));
+        QCOMPARE(g.evaluateVideoInput(p).layers.first().sourceEffects.size(), 0);
+
+        ClipGraph g2;
+        QVERIFY(g2.fromJson(g.toJson()));
+        QVERIFY(g2.node(p)->params.value("bypass").toBool());
+    }
+
+    void coalescedParamEditsShareOneUndoStep() {
+        ClipGraphController c;
+        const quint64 p = c.addNode(int(NT::Process), 0, 0, {{"effect", 8}});
+        QVERIFY(c.setParams(p, {{"params", QVariantMap{{"radius", 3}}}}, true));
+        QVERIFY(c.setParams(p, {{"params", QVariantMap{{"radius", 4}}}}, true));
+        QVERIFY(c.setParams(p, {{"params", QVariantMap{{"radius", 5}}}}, true));
+        QCOMPARE(c.graph()->node(p)->params["params"].toMap()["radius"].toInt(), 5);
+        c.undo();
+        QVERIFY(c.graph()->node(p)->params["params"].toMap()["radius"].toInt() != 3
+                && c.graph()->node(p)->params["params"].toMap()["radius"].toInt() != 4);
+    }
+
+    void inputModelParamsCarryPlaybackCaps() {
+        ClipGraphController c;
+        const quint64 a = c.addNode(int(NT::Input), 10, 20, canvas("a"));
+        const auto idx = c.nodes()->index(c.nodes()->rowOfNode(a));
+        const QVariantMap p = c.nodes()->data(idx, ClipGraphNodesModel::ParamsRole).toMap();
+        QVERIFY(!p.value("repeatable").toBool());
+        QVERIFY(!p.value("seekable").toBool());
+        QVERIFY(!p.value("pausable").toBool());
+        QVERIFY(!p.value("speedControl").toBool());
     }
 
     void signalsAreFineGrained() {

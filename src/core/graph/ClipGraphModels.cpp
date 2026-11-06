@@ -1,6 +1,8 @@
 #include "core/graph/ClipGraphModels.h"
 
 #include <QJsonArray>
+#include <QElapsedTimer>
+#include <QSet>
 #include <QUndoCommand>
 
 namespace {
@@ -83,18 +85,36 @@ private:
 
 class ParamsCommand : public QUndoCommand {
 public:
-    ParamsCommand(ClipGraph *graph, NodeId id, const QVariantMap &before, const QVariantMap &after)
+    ParamsCommand(ClipGraph *graph, NodeId id, const QVariantMap &before, const QVariantMap &after,
+                  bool coalesce)
         : QUndoCommand(QStringLiteral("Edit node")), m_graph(graph), m_id(id), m_before(before),
-          m_after(after) {}
+          m_after(after), m_coalesce(coalesce) {
+        for (auto it = after.begin(); it != after.end(); ++it)
+            if (before.value(it.key()) != it.value()) m_keys.insert(it.key());
+        m_clock.start();
+    }
 
     void undo() override { m_graph->setParams(m_id, m_before, false); }
     void redo() override { m_graph->setParams(m_id, m_after, false); }
+
+    // A slider drag commits every step; callers that ask to coalesce fold those into one entry.
+    int id() const override { return m_coalesce ? 3 : -1; }
+    bool mergeWith(const QUndoCommand *other) override {
+        const auto *o = static_cast<const ParamsCommand *>(other);
+        if (o->m_id != m_id || o->m_keys != m_keys || m_clock.elapsed() > 600) return false;
+        m_after = o->m_after;
+        m_clock.restart();
+        return true;
+    }
 
 private:
     ClipGraph *m_graph;
     NodeId m_id;
     QVariantMap m_before;
     QVariantMap m_after;
+    bool m_coalesce;
+    QSet<QString> m_keys;
+    QElapsedTimer m_clock;
 };
 
 }  // namespace
@@ -173,7 +193,16 @@ QVariant ClipGraphNodesModel::data(const QModelIndex &idx, int role) const {
     case WidthRole:       return n->size.width();
     case HeightRole:      return n->size.height();
     case TitleRole:       return n->title;
-    case ParamsRole:      return n->params;
+    case ParamsRole: {
+        if (n->type != ClipGraph::NodeType::Input) return n->params;
+        const SourceDescriptor desc = m_graph->sourceDescriptor(id);
+        QVariantMap params = n->params;
+        params.insert(QStringLiteral("repeatable"), desc.isRepeatable());
+        params.insert(QStringLiteral("seekable"), desc.isSeekable());
+        params.insert(QStringLiteral("pausable"), desc.isPausable());
+        params.insert(QStringLiteral("speedControl"), desc.hasSpeedControl());
+        return params;
+    }
     case InputPortsRole:  return portList(m_graph->inputPorts(id), id);
     case OutputPortsRole: return portList(m_graph->outputPorts(id), id);
     }
@@ -330,7 +359,7 @@ void ClipGraphController::endMove() {
     m_mergeMoves = false;
 }
 
-bool ClipGraphController::setParams(quint64 id, const QVariantMap &params) {
+bool ClipGraphController::setParams(quint64 id, const QVariantMap &params, bool coalesce) {
     const ClipGraph::Node *n = m_graph->node(id);
     if (!n) return false;
     QVariantMap next = n->params;
@@ -338,7 +367,7 @@ bool ClipGraphController::setParams(quint64 id, const QVariantMap &params) {
         next.insert(it.key(), it.value());
     if (next == n->params) return true;
     m_mergeMoves = false;
-    m_undo.push(new ParamsCommand(m_graph, id, n->params, next));
+    m_undo.push(new ParamsCommand(m_graph, id, n->params, next, coalesce));
     return true;
 }
 

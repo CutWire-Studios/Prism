@@ -40,15 +40,15 @@ Popup {
         list.push({ label: qsTr("Layer"), category: qsTr("Switching"), type: T.Layer })
         list.push({ label: qsTr("Switcher"), category: qsTr("Switching"), type: T.AbSelect })
         for (const fx of NodeCatalog.audioEffects())
-            list.push({ label: fx.menuLabel, category: qsTr("Audio Effects"), type: T.AudioEffect, params: { effect: fx.id } })
+            list.push({ label: fx.menuLabel, category: qsTr("Audio FX"), type: T.AudioEffect, params: { effect: fx.id } })
         list.push({ label: qsTr("Audio Output"), category: qsTr("Audio"), type: T.MasterAudioOutput, unique: true })
         list.push({ label: qsTr("Audio Capture"), category: qsTr("Audio"), type: T.MasterAudioCapture })
         list.push({ label: qsTr("Mic Input"), category: qsTr("Audio"), type: T.MasterAudioInput })
-        list.push({ label: qsTr("Audio Mixer"), category: qsTr("Audio"), type: T.AudioMixer })
+        list.push({ label: qsTr("Mixer"), category: qsTr("Audio"), type: T.AudioMixer })
         if (NodeCatalog.scriptingAvailable()) {
-            list.push({ label: qsTr("Script Node"), category: qsTr("Script"), type: T.Script })
-            list.push({ label: qsTr("Audio Script Node"), category: qsTr("Script"), type: T.AudioScript })
-            list.push({ label: qsTr("Trigger Node"), category: qsTr("Script"), type: T.Trigger })
+            list.push({ label: qsTr("Script"), category: qsTr("Script"), type: T.Script })
+            list.push({ label: qsTr("Audio Script"), category: qsTr("Script"), type: T.AudioScript })
+            list.push({ label: qsTr("Trigger"), category: qsTr("Script"), type: T.Trigger })
         }
         return list
     }

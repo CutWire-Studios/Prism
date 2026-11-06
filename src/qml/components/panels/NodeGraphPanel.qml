@@ -4,17 +4,14 @@ import Prism
 PanelFrame {
     id: root
 
-    property var editors: null
+    signal inspectorRequested()
 
     NodeEditorPanel {
         id: editor
         anchors.fill: parent
         controller: AppController.graph
 
-        onOpenEditorRequested: (nodeId, kind) => {
-            if (root.editors)
-                root.editors.open(nodeId, kind)
-        }
+        onInspectorRequested: root.inspectorRequested()
         onAddInputNodeRequested: (x, y) => {
             sourceMenu.worldX = x
             sourceMenu.worldY = y

@@ -1,26 +1,22 @@
 import QtQuick
 import Prism
 
-// Opens the node editor for openEditorRequested(nodeId, kind). Each editor is a separate file
-// in this directory, created on first use and reused; it exposes openFor(nodeId, kind).
+// Opens the heavy node editor the inspector's "Open editor" button asks for. Each editor is a
+// separate file in this directory, created on first use and reused; it exposes openFor(nodeId, kind).
 QtObject {
     id: root
 
     property Item host
 
     readonly property var files: ({
-        "source": "SourceEditor.qml",
         "process": "ProcessEditor.qml",
         "audioEffect": "AudioEffectEditor.qml",
-        "audio": "NodeAudioEditor.qml",
         "layerLayout": "LayerLayoutEditor.qml",
-        "layerCanvas": "LayerCanvasEditor.qml",
-        "mixer": "MixerEditor.qml",
-        "mic": "AudioDeviceEditor.qml",
-        "capture": "AudioDeviceEditor.qml",
         "script": "ScriptEditor.qml",
-        "audioScript": "AudioScriptEditor.qml",
-        "trigger": "TriggerEditor.qml"
+        "shader": "ShaderSourceEditor.qml",
+        "text": "TextSourceEditor.qml",
+        "shape": "ShapeSourceEditor.qml",
+        "svgTemplate": "SvgTemplateEditor.qml"
     })
 
     property var _instances: ({})

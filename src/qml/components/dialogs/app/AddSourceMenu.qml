@@ -1,9 +1,10 @@
 import QtQuick
 import Prism
 
-// Every way to add an Input (or audio source) node. Media and URL go through AppController's
-// file / app-dialog requests; mic and audio capture become plain nodes placed at worldX/worldY
-// (NaN = auto placement).
+// Every way to add an Input (or audio source) node. Media, URL and phone camera go through
+// AppController's file / app-dialog requests; camera, screen, slideshow, canvas and NDI are added
+// with defaults and configured in the inspector; mic and audio capture become plain nodes placed
+// at worldX/worldY (NaN = auto placement).
 ThemedContextMenu {
     id: root
 
@@ -25,13 +26,13 @@ ThemedContextMenu {
         onTriggered: AppController.requestAddSource("url")
     }
     ThemedMenuItem {
-        text: qsTr("Slideshow…")
+        text: qsTr("Slideshow")
         icon.name: "folder"
         onTriggered: AppController.requestAddSource("slideshow")
     }
     ThemedMenuSeparator { }
     ThemedMenuItem {
-        text: qsTr("Camera…")
+        text: qsTr("Camera")
         icon.name: "camera"
         onTriggered: AppController.requestAddSource("camera")
     }
@@ -42,22 +43,22 @@ ThemedContextMenu {
     }
     ThemedMenuItem {
         text: qsTr("Audio Capture")
-        icon.name: "speaker"
+        icon.name: "audio-lines"
         onTriggered: root.addAudioNode(NodePalette.nodeType.MasterAudioCapture)
     }
     ThemedMenuItem {
-        text: qsTr("Screen Capture…")
-        icon.name: "monitor"
+        text: qsTr("Screen Capture")
+        icon.name: "screen-share"
         onTriggered: AppController.requestAddSource("screen")
     }
     ThemedMenuItem {
-        text: qsTr("Window / Tab…")
+        text: qsTr("Window Capture")
         icon.name: "app-window"
         onTriggered: AppController.requestAddSource("window")
     }
     ThemedMenuSeparator { }
     ThemedMenuItem {
-        text: qsTr("Canvas…")
+        text: qsTr("Canvas")
         icon.name: "square-dashed"
         onTriggered: AppController.requestAddSource("canvas")
     }
@@ -82,7 +83,7 @@ ThemedContextMenu {
         onTriggered: AppController.requestAddSource("shape")
     }
     ThemedMenuItem {
-        text: qsTr("NDI Source…")
+        text: qsTr("NDI Source")
         icon.name: "radio-receiver"
         enabled: SourcePrompts.ndiAvailable
         onTriggered: AppController.requestAddSource("ndi")

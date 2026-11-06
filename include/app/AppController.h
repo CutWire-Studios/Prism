@@ -297,8 +297,8 @@ public:
     Q_INVOKABLE void openOscSettings();
     Q_INVOKABLE void openAgentAccess();
     Q_INVOKABLE void connectObs();
-    /// kind: "slideshow" | "camera" | "screen" | "window" | "canvas" | "ndi" | "webrtc" open an
-    /// app dialog; "shader" | "svgTemplate" | "text" | "shape" emit sourceEditorRequested.
+    /// kind: "url" | "webrtc" open an app dialog; "slideshow" | "camera" | "screen" | "window" |
+    /// "canvas" | "ndi" are added with defaults by AppDialogs; "shader" | "svgTemplate" | "text" | "shape" emit sourceEditorRequested.
     Q_INVOKABLE void requestAddSource(const QString &kind);
     /// {exists, name, savedAt} of a session / autosave file, for the recovery dialog.
     Q_INVOKABLE QVariantMap describeSessionFile(const QString &path) const;

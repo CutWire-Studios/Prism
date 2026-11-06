@@ -67,10 +67,7 @@ PanelFrame {
 
                             readonly property var nt: NodePalette.nodeType
                             readonly property var meta: NodePalette.meta[del.type]
-                            readonly property bool hasEditor: (del.type === nt.Process || del.type === nt.AudioEffect)
-                                                              ? NodeCatalog.effectHasEditor(del.type, del.params.effect)
-                                                              : true
-                            readonly property string editKind: NodePalette.editorKind(del.type, hasEditor)
+                            readonly property string editKind: NodePalette.editorKind(del.type, del.params)
                             readonly property bool hasSlots: del.type === nt.Layer || del.type === nt.AbSelect
                                                              || del.type === nt.AudioMixer
                             readonly property var slots: del.params.slots ? del.params.slots : []
@@ -88,7 +85,8 @@ PanelFrame {
                                 spacing: Theme.spacingMd
 
                                 IconGlyph {
-                                    glyph: body.meta ? body.meta.icon : ""
+                                    glyph: del.type === body.nt.Input ? NodePalette.sourceIcon(del.params.source)
+                                                                      : body.meta ? body.meta.icon : ""
                                     iconColor: body.meta ? body.meta.hue : Theme.c.iconGlyph.icon
                                 }
                                 ThemedLabel {
@@ -114,14 +112,6 @@ PanelFrame {
                                 }
                             }
 
-                            ThemedLabel {
-                                Layout.fillWidth: true
-                                visible: del.type === body.nt.Input && !!del.params.source
-                                text: del.params.source ? del.params.source.path || del.params.source.displayName || "" : ""
-                                elide: Text.ElideMiddle
-                                wrapMode: Text.NoWrap
-                            }
-
                             RowLayout {
                                 Layout.fillWidth: true
                                 visible: del.type === body.nt.Input
@@ -134,15 +124,89 @@ PanelFrame {
                                 }
                             }
 
-                            ThemedLabel {
-                                visible: del.type === body.nt.Input && !!del.params.hasAudio
-                                text: qsTr("Has audio")
+                            InspectorInputForm {
+                                visible: del.type === body.nt.Input
+                                nodeId: del.nodeId
+                                params: del.params
+                            }
+
+                            InspectorProcessForm {
+                                visible: del.type === body.nt.Process
+                                nodeId: del.nodeId
+                                params: del.params
+                            }
+
+                            InspectorTriggerForm {
+                                visible: del.type === body.nt.Trigger
+                                nodeId: del.nodeId
+                                params: del.params
+                            }
+
+                            InspectorAudioForm {
+                                visible: del.type === body.nt.MasterAudioInput || del.type === body.nt.MasterAudioCapture
+                                         || del.type === body.nt.AudioScript
+                                isCapture: del.type === body.nt.MasterAudioCapture
+                                isScript: del.type === body.nt.AudioScript
+                                nodeId: del.nodeId
+                                params: del.params
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                visible: del.type === body.nt.Layer
+                                spacing: Theme.spacingMd
+
+                                ThemedSwitch {
+                                    text: qsTr("Custom canvas size")
+                                    checked: !!del.params.canvasCustom
+                                    onToggled: root.graph.setParams(del.nodeId, { canvasCustom: checked })
+                                }
+                                StyleFieldRow {
+                                    Layout.fillWidth: true
+                                    visible: !!del.params.canvasCustom
+                                    label: qsTr("Width")
+                                    ThemedNumberField {
+                                        Layout.fillWidth: true
+                                        from: 1
+                                        to: 7680
+                                        unit: "px"
+                                        value: del.params.canvasW
+                                        onEdited: v => root.graph.setParams(del.nodeId, { canvasW: Math.round(v) })
+                                    }
+                                }
+                                StyleFieldRow {
+                                    Layout.fillWidth: true
+                                    visible: !!del.params.canvasCustom
+                                    label: qsTr("Height")
+                                    ThemedNumberField {
+                                        Layout.fillWidth: true
+                                        from: 1
+                                        to: 4320
+                                        unit: "px"
+                                        value: del.params.canvasH
+                                        onEdited: v => root.graph.setParams(del.nodeId, { canvasH: Math.round(v) })
+                                    }
+                                }
+                            }
+
+                            ThemedSwitch {
+                                visible: del.type === body.nt.Process || del.type === body.nt.AudioEffect
+                                text: qsTr("Bypass")
+                                checked: !!del.params.bypass
+                                onToggled: root.graph.setParams(del.nodeId, { bypass: checked })
+                            }
+
+                            ThemedButton {
+                                Layout.fillWidth: true
+                                visible: del.type === body.nt.Script
+                                text: qsTr("Run now")
+                                onClicked: AppController.runScript(del.nodeId)
                             }
 
                             ThemedButton {
                                 Layout.fillWidth: true
                                 visible: body.editKind.length > 0
-                                text: qsTr("Edit...")
+                                text: qsTr("Open editor…")
                                 onClicked: {
                                     if (root.editors)
                                         root.editors.open(del.nodeId, body.editKind)
@@ -154,10 +218,6 @@ PanelFrame {
                                 visible: del.type === body.nt.MasterAudioInput || del.type === body.nt.MasterAudioCapture
                                 spacing: Theme.spacingSm
 
-                                ThemedLabel {
-                                    text: del.params.deviceId && del.params.deviceId.length > 0
-                                          ? del.params.deviceLabel : qsTr("Default device")
-                                }
                                 RowLayout {
                                     Layout.fillWidth: true
                                     spacing: Theme.spacingSm
@@ -205,12 +265,24 @@ PanelFrame {
                                     Layout.fillWidth: true
                                     spacing: Theme.spacingXs
 
+                                    ThemedTextField {
+                                        Layout.fillWidth: true
+                                        visible: del.type === body.nt.AudioMixer
+                                        text: slotRow.modelData.name || ""
+                                        placeholderText: qsTr("in %1").arg(slotRow.index + 1)
+                                        onEditingFinished: {
+                                            if (text !== (slotRow.modelData.name || ""))
+                                                body.patchSlot(slotRow.index, { name: text })
+                                        }
+                                    }
+
                                     RowLayout {
                                         Layout.fillWidth: true
                                         spacing: Theme.spacingSm
 
                                         ThemedLabel {
                                             Layout.fillWidth: true
+                                            visible: del.type !== body.nt.AudioMixer
                                             tone: "default"
                                             elide: Text.ElideRight
                                             wrapMode: Text.NoWrap

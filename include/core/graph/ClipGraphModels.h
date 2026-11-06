@@ -109,7 +109,8 @@ public:
     /// Consecutive moves of one node collapse into a single undo step until endMove().
     Q_INVOKABLE void moveNode(quint64 id, qreal x, qreal y);
     Q_INVOKABLE void endMove();
-    Q_INVOKABLE bool setParams(quint64 id, const QVariantMap &params);
+    /// coalesce: fold consecutive edits of the same keys into one undo step (slider drags).
+    Q_INVOKABLE bool setParams(quint64 id, const QVariantMap &params, bool coalesce = false);
     /// Undoable replacement of an Input node's source; descriptor uses the .psm "source" keys.
     Q_INVOKABLE bool setSource(quint64 id, const QVariantMap &descriptor);
     bool setSourceDescriptor(quint64 id, const SourceDescriptor &desc);

@@ -1,7 +1,7 @@
 import QtQuick
 import Prism
 
-// Audio FX: a caption and, when the effect has a dialog, its edit button.
+// Audio FX: a caption and its current effect label. The pedalboard opens from the inspector.
 Item {
     id: root
 
@@ -13,17 +13,17 @@ Item {
         width: root.width - 16
         height: 14
         muted: true
-        text: qsTr("AUDIO FX")
+        text: root.node.params.bypass ? qsTr("BYPASSED") : qsTr("AUDIO FX")
         horizontalAlignment: Text.AlignHCenter
     }
 
-    NodeButton {
-        visible: root.node.hasEditor
+    NodeLabel {
         x: 8
         y: root.height - 24
         width: root.width - 16
         height: 18
+        opacity: root.node.params.bypass ? 0.5 : 1
         text: NodeCatalog.effectLabel(root.node.type, root.node.params)
-        onClicked: root.node.requestEditor("audioEffect")
+        horizontalAlignment: Text.AlignHCenter
     }
 }

@@ -22,6 +22,7 @@
 #include <QGuiApplication>
 #include <QMediaDevices>
 #include <QScreen>
+#include <QStandardPaths>
 #include <QSettings>
 #include <QUrl>
 #include <QUuid>
@@ -79,6 +80,24 @@ quint64 SourcePrompts::add(SourceDescriptor desc, const QImage &thumb)
     return app ? app->addSourceFromDescriptor(desc, thumb) : 0;
 }
 
+quint64 SourcePrompts::addDefault(const QString &kind)
+{
+    if (kind == QLatin1String("camera"))
+        return addCamera(0);
+    if (kind == QLatin1String("slideshow"))
+        return addSlideshow(QStandardPaths::writableLocation(QStandardPaths::PicturesLocation), 3);
+    if (kind == QLatin1String("canvas"))
+        return addCanvas(1280, 720, QStringLiteral("checkered"), Qt::white);
+    if (kind == QLatin1String("ndi"))
+        return addNdi(discoverNdi().value(0));
+    if (kind == QLatin1String("screen") || kind == QLatin1String("window")) {
+        if (!capturePickerNeeded())
+            return addPortalCapture(kind);
+        return kind == QLatin1String("screen") ? addScreen(0) : addWindow(0);
+    }
+    return 0;
+}
+
 quint64 SourcePrompts::addSlideshow(const QString &folder, int intervalSeconds)
 {
     if (folder.isEmpty())
@@ -99,14 +118,6 @@ quint64 SourcePrompts::addSlideshow(const QString &folder, int intervalSeconds)
     desc.slideshowEffect = 0;
     desc.slideshowTransitionMs = 800;
     return add(desc, thumb);
-}
-
-QStringList SourcePrompts::cameraLabels()
-{
-    QStringList labels;
-    for (const CameraDeviceInfo &e : CameraEnumerator::listDevices())
-        labels << e.label;
-    return labels;
 }
 
 quint64 SourcePrompts::addCamera(int index)
@@ -140,7 +151,7 @@ quint64 SourcePrompts::addPortalCapture(const QString &kind)
     SourceDescriptor desc;
     const bool window = kind == QLatin1String("window");
     desc.kind = window ? SourceDescriptor::Kind::Window : SourceDescriptor::Kind::Screen;
-    desc.displayName = window ? tr("Window / Tab") : tr("Screen Capture");
+    desc.displayName = window ? tr("Window Capture") : tr("Screen Capture");
     desc.screenIndex = 0;
     desc.windowIndex = 0;
     desc.captureId = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -200,16 +211,6 @@ quint64 SourcePrompts::addShader(const QString &code)
     return add(desc, ThumbHelper::makeShaderThumb(trimmed));
 }
 
-QVariantList SourcePrompts::canvasPresets() const
-{
-    return {
-        QVariantMap{{"label", QStringLiteral("16:9  (1280x720)")}, {"width", 1280}, {"height", 720}},
-        QVariantMap{{"label", QStringLiteral("4:3  (1024x768)")}, {"width", 1024}, {"height", 768}},
-        QVariantMap{{"label", QStringLiteral("1:1  (1080x1080)")}, {"width", 1080}, {"height", 1080}},
-        QVariantMap{{"label", QStringLiteral("9:16  (1080x1920)")}, {"width", 1080}, {"height", 1920}},
-    };
-}
-
 quint64 SourcePrompts::addCanvas(int width, int height, const QString &fill, const QColor &color)
 {
     width = qBound(16, width, 16384);
@@ -243,12 +244,10 @@ QStringList SourcePrompts::discoverNdi()
 
 quint64 SourcePrompts::addNdi(const QString &name)
 {
-    if (name.isEmpty())
-        return 0;
     SourceDescriptor desc;
     desc.kind = SourceDescriptor::Kind::Ndi;
     desc.path = name;
-    desc.displayName = name;
+    desc.displayName = name.isEmpty() ? tr("NDI Source") : name;
     return add(desc, ThumbHelper::makeIconThumb(ThumbHelper::Names::Sensors));
 }
 

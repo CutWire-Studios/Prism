@@ -8,19 +8,9 @@ Item {
 
     function _openAddSource(kind) {
         switch (kind) {
-        case "slideshow": slideshow.ensure().open(); break
-        case "camera": camera.ensure().open(); break
-        case "canvas": canvas.ensure().open(); break
-        case "ndi": ndi.ensure().open(); break
         case "webrtc": webrtc.ensure().open(); break
         case "url": urlDlg.ensure().open(); break
-        case "screen":
-        case "window":
-            if (SourcePrompts.capturePickerNeeded)
-                capture.ensure().show(kind)
-            else
-                SourcePrompts.addPortalCapture(kind)
-            break
+        default: SourcePrompts.addDefault(kind)
         }
     }
 
@@ -63,11 +53,6 @@ Item {
     LazyLoader { id: agent; sourceComponent: AgentAccessDialog { } }
     LazyLoader { id: obs; sourceComponent: ObsConnectDialog { } }
     LazyLoader { id: recovery; keepLoaded: true; sourceComponent: SessionRecoveryDialog { } }
-    LazyLoader { id: slideshow; sourceComponent: SlideshowSourceDialog { } }
-    LazyLoader { id: camera; sourceComponent: CameraSourceDialog { } }
-    LazyLoader { id: capture; sourceComponent: CaptureSourceDialog { } }
-    LazyLoader { id: canvas; sourceComponent: CanvasSourceDialog { } }
-    LazyLoader { id: ndi; sourceComponent: NdiSourceDialog { } }
     LazyLoader { id: webrtc; sourceComponent: WebRtcSourceDialog { } }
     LazyLoader { id: urlDlg; sourceComponent: AddUrlDialog { } }
     LazyLoader { id: shaderEditor; sourceComponent: ShaderSourceEditor { } }

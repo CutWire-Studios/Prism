@@ -52,7 +52,8 @@ FocusScope {
     property bool connectClickMode: false
     property bool spaceDown: false
 
-    signal openEditorRequested(var nodeId, string kind)
+    // A node was double-clicked: the shell should bring the inspector forward.
+    signal inspectorRequested()
     signal outputWindowRequested()
     signal nodeMenuRequested(var item, point worldPos, point screenPos)
     signal edgeMenuRequested(var edgeId, point screenPos)

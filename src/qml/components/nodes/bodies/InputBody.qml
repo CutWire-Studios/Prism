@@ -2,8 +2,9 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Prism
 
-// Source card: thumbnail, name, loop toggle and edit button, plus the audio strip when the
-// source carries audio. Geometry matches ClipGraph's Input node (20.5 header, 175 card, 54 strip).
+// Source card: thumbnail and a loop toggle where the source can repeat, plus the audio strip
+// when it carries audio; audio files get the strip only. Geometry matches ClipGraph's Input node
+// (20.5 header, 105 card, 54 strip). Everything else is edited in the inspector.
 Item {
     id: root
 
@@ -12,12 +13,8 @@ Item {
     readonly property var source: p.source ? p.source : ({})
     readonly property bool hasAudio: !!p.hasAudio
     readonly property real cardTop: 20.5
-    readonly property real stripTop: cardTop + 175
-
-    // SourceDescriptor::Kind order.
-    readonly property var kindIcons: ["film", "image", "layout-grid", "camera", "monitor",
-        "square-dashed", "app-window", "sparkles", "film", "radio", "smartphone", "type",
-        "music", "shapes", "shapes"]
+    readonly property bool audioOnly: !!p.audioOnly
+    readonly property real stripTop: audioOnly ? cardTop : cardTop + 105
 
     property int thumbRevision: AppController.nodeThumbnailRevision(node.nodeId)
 
@@ -31,6 +28,7 @@ Item {
 
     Rectangle {
         id: thumb
+        visible: !root.audioOnly
         x: 6
         y: root.cardTop + 6
         width: root.width - 12
@@ -43,7 +41,7 @@ Item {
 
         IconGlyph {
             anchors.centerIn: parent
-            glyph: root.kindIcons[root.source.kind] || "film"
+            glyph: NodePalette.sourceIcon(root.source)
             iconSize: Theme.iconSizeXl
             iconColor: Theme.mutedForeground
             visible: root.thumbRevision === 0 || image.status !== Image.Ready
@@ -60,33 +58,16 @@ Item {
         }
     }
 
-    NodeLabel {
-        x: 6
-        y: thumb.y + thumb.height + 4
-        width: root.width - 12
-        height: 16
-        text: root.node.model.title
-        horizontalAlignment: Text.AlignHCenter
-    }
-
     NodeButton {
+        visible: !!root.p.repeatable && !root.audioOnly
         x: 6
-        y: thumb.y + thumb.height + 24
+        y: thumb.y + thumb.height + 6
         width: root.width - 12
         glyph: "repeat"
         text: qsTr("Loop")
         variant: root.p.repeat ? "primary" : "secondary"
         tooltip: qsTr("Loop clip when it reaches the end")
         onClicked: root.node.controller.setParams(root.node.nodeId, { repeat: !root.p.repeat })
-    }
-
-    NodeButton {
-        x: 6
-        y: thumb.y + thumb.height + 48
-        width: root.width - 12
-        text: qsTr("Edit")
-        tooltip: qsTr("Edit trim, crop and source settings")
-        onClicked: root.node.requestEditor("source")
     }
 
     Rectangle {
@@ -120,12 +101,16 @@ Item {
             horizontalAlignment: Text.AlignHCenter
         }
         NodeButton {
+            visible: !!root.p.repeatable && root.audioOnly
             x: 4
             y: parent.height - 22
             width: parent.width - 8
             height: 18
-            text: qsTr("Edit Audio")
-            onClicked: root.node.requestEditor("audio")
+            glyph: "repeat"
+            text: qsTr("Loop")
+            variant: root.p.repeat ? "primary" : "secondary"
+            tooltip: qsTr("Loop audio when it reaches the end")
+            onClicked: root.node.controller.setParams(root.node.nodeId, { repeat: !root.p.repeat })
         }
     }
 }

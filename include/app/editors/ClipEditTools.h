@@ -10,7 +10,7 @@
 
 class ScreenSource;
 
-// Backend for SourceEditor / ProcessEditor / NodeAudioEditor: node lookups and the source
+// Backend for the inspector and ProcessEditor: node lookups and the source
 // pickers (cameras, NDI, screen capture portal) that the old ClipCard dialogs ran inline.
 class ClipEditTools : public QObject
 {

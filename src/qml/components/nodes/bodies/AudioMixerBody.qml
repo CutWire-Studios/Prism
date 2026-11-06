@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Prism
 
-// Audio mixer: per input slot a name (double-click to rename) with its level, and "Edit Mix".
+// Audio mixer: per input slot a name (double-click to rename) with its level.
 Item {
     id: root
 
@@ -97,13 +97,5 @@ Item {
                 Keys.onEscapePressed: root.editing = -1
             }
         }
-    }
-
-    NodeButton {
-        x: 6
-        y: root.height - 23
-        width: root.width - 12
-        text: qsTr("Edit Mix")
-        onClicked: root.node.requestEditor("mixer")
     }
 }

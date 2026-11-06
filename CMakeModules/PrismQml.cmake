@@ -93,8 +93,6 @@ qt_add_qml_module(prism_qml
         src/app/editors/AudioGraphParams.cpp
         include/app/editors/CodeHighlighterAttacher.h
         src/app/editors/CodeHighlighterAttacher.cpp
-        include/app/editors/MixerChannels.h
-        src/app/editors/MixerChannels.cpp
         include/app/editors/ScriptPreview.h
         src/app/editors/ScriptPreview.cpp
         include/app/editors/ShaderPreview.h

@@ -14,7 +14,7 @@ Item {
     Component { id: controlC; ControlPanel {} }
     Component { id: decksC; DecksPanel {} }
     Component { id: programC; ProgramPanel {} }
-    Component { id: nodeGraphC; NodeGraphPanel { editors: root.editors } }
+    Component { id: nodeGraphC; NodeGraphPanel { onInspectorRequested: root.reveal("inspector") } }
     Component { id: assetsC; AssetsPanel {} }
     Component { id: inspectorC; InspectorPanel { editors: root.editors } }
     Component { id: mixerC; MixerPanel {} }
@@ -54,6 +54,13 @@ Item {
         const w = c ? c.createObject(root) : placeholderC.createObject(root, { panelType: type, label: root.label(type) })
         root._created = Object.assign({}, root._created, { [type]: w })
         return w
+    }
+
+    // Brings a panel forward when it shares a tab strip with others.
+    function reveal(type) {
+        const slot = root.inLayout(type) ? root._created[type].parent.parent : null
+        if (slot && typeof slot.activate === "function")
+            slot.activate(type)
     }
 
     function parkAll() {

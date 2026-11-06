@@ -4,7 +4,7 @@ import Prism
 
 // One node of the graph. Instantiated by the canvas for every row of controller.nodes; the card
 // chrome (header, outline, ports, drag) is shared and the type-specific content is a body from
-// the 13 *Body.qml files. Port rows live in node-local coordinates supplied by the model.
+// the *Body.qml files. Port rows live in node-local coordinates supplied by the model.
 Item {
     id: root
 
@@ -56,28 +56,14 @@ Item {
     }
 
     readonly property bool selected: canvas.selectedMap[nodeId] === true
-    readonly property bool hasEditor: (type === NodePalette.nodeType.Process || type === NodePalette.nodeType.AudioEffect)
-                                      ? NodeCatalog.effectHasEditor(type, params.effect)
-                                      : true
     readonly property real headerH: meta.header
     readonly property string headerText: {
         switch (type) {
-        case NodePalette.nodeType.Input:
-            return params.audioOnly ? qsTr("Audio") : qsTr("Input")
         case NodePalette.nodeType.Layer:
             return model.title + "  " + (params.canvasCustom ? params.canvasW + "×" + params.canvasH
                                                               : AppController.programWidth + "×" + AppController.programHeight)
         }
         return model.title
-    }
-
-    function requestEditor(kind) {
-        if (kind.length > 0)
-            canvas.openEditorRequested(nodeId, kind)
-    }
-
-    function activate() {
-        requestEditor(NodePalette.editorKind(type, hasEditor))
     }
 
     x: model.x
@@ -140,7 +126,7 @@ Item {
             id: headerIcon
             x: root.type === NodePalette.nodeType.Output ? 44 : Theme.spacingMd
             anchors.verticalCenter: parent.verticalCenter
-            glyph: root.meta.icon
+            glyph: root.type === NodePalette.nodeType.Input ? NodePalette.sourceIcon(root.params.source) : root.meta.icon
             iconSize: Theme.iconSizeMd
             iconColor: NodePalette.desat(Qt.color(root.meta.hue), 0.65)
         }
@@ -230,7 +216,7 @@ Item {
 
         onDoubleClicked: (mouse) => {
             if (mouse.button === Qt.LeftButton)
-                root.activate()
+                root.canvas.inspectorRequested()
         }
 
         ThemedToolTip {

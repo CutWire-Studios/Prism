@@ -111,15 +111,15 @@ QtObject {
           inKinds: [], outKinds: [1, 7] },
         { name: qsTr("Process"), icon: "wand-sparkles", hue: "#78aad2", header: 20, category: "video",
           inKinds: [0], outKinds: [1] },
-        { name: qsTr("Audio Effect"), icon: "audio-waveform", hue: "#e4b042", header: 20, category: "audio",
+        { name: qsTr("Audio FX"), icon: "audio-waveform", hue: "#e4b042", header: 20, category: "audio",
           inKinds: [14], outKinds: [15] },
         { name: qsTr("Layer"), icon: "layers", hue: "#78aad2", header: 20, category: "video",
           inKinds: [0], outKinds: [1] },
         { name: qsTr("Switcher"), icon: "split", hue: "#e67878", header: 20, category: "video",
           inKinds: [0, 11], outKinds: [2] },
-        { name: qsTr("Output"), icon: "monitor", hue: "#96c8f0", header: 20, category: "video",
+        { name: qsTr("Output"), icon: "cast", hue: "#96c8f0", header: 20, category: "video",
           inKinds: [0, 3], outKinds: [] },
-        { name: qsTr("Audio Mixer"), icon: "sliders-vertical", hue: "#e4b042", header: 20, category: "audio",
+        { name: qsTr("Mixer"), icon: "sliders-vertical", hue: "#e4b042", header: 20, category: "audio",
           inKinds: [12], outKinds: [13] },
         { name: qsTr("Audio Output"), icon: "speaker", hue: "#e88030", header: 22, category: "audio",
           inKinds: [8], outKinds: [] },
@@ -127,7 +127,7 @@ QtObject {
           inKinds: [], outKinds: [9] },
         { name: qsTr("Audio Capture"), icon: "audio-lines", hue: "#e4b042", header: 20, category: "audio",
           inKinds: [], outKinds: [9] },
-        { name: qsTr("Lua Script"), icon: "binary", hue: "#78dcaa", header: 20, category: "script",
+        { name: qsTr("Script"), icon: "binary", hue: "#78dcaa", header: 20, category: "script",
           inKinds: [11], outKinds: [10] },
         { name: qsTr("Audio Script"), icon: "activity", hue: "#e6be5a", header: 20, category: "script",
           inKinds: [6], outKinds: [10] },
@@ -146,24 +146,36 @@ QtObject {
             return qsTr("Double-click an input name to rename. Stage sends the input to Staging; Cut to Live sends it straight to Live. "
                         + "Wire a Script node's output here to automate switching.")
         case nodeType.AudioMixer:
-            return qsTr("Double-click a name to rename. Edit opens per-input volume and mute.")
+            return qsTr("Double-click a name to rename. Select the node to set per-input volume and mute.")
         }
         return ""
     }
 
-    // Name of the editor the shell should open for a node, "" if it has none.
-    function editorKind(type, hasEditor) {
+    // SourceDescriptor::Kind order.
+    readonly property var kindIcons: ["film", "image", "folder", "camera", "screen-share",
+        "square-dashed", "app-window", "sparkles", "film", "radio-receiver", "smartphone", "type",
+        "music", "shapes", "layout-grid"]
+
+    function sourceIcon(source) {
+        return source && kindIcons[source.kind] ? kindIcons[source.kind] : meta[nodeType.Input].icon
+    }
+
+    // Name of the editor the inspector's "Open editor" button asks the shell for, "" if the node
+    // is fully editable in the inspector.
+    function editorKind(type, params) {
         switch (type) {
-        case nodeType.Input: return "source"
-        case nodeType.Process: return hasEditor ? "process" : ""
-        case nodeType.AudioEffect: return hasEditor ? "audioEffect" : ""
+        case nodeType.Input:
+            switch (params.source ? params.source.kind : -1) {
+            case 7: return "shader"
+            case 11: return "text"
+            case 13: return "shape"
+            case 14: return "svgTemplate"
+            }
+            return ""
+        case nodeType.Process: return [0, 10, 11].indexOf(params.effect) >= 0 ? "process" : ""
+        case nodeType.AudioEffect: return "audioEffect"
         case nodeType.Layer: return "layerLayout"
-        case nodeType.AudioMixer: return "mixer"
-        case nodeType.MasterAudioInput: return "mic"
-        case nodeType.MasterAudioCapture: return "capture"
         case nodeType.Script: return "script"
-        case nodeType.AudioScript: return "audioScript"
-        case nodeType.Trigger: return "trigger"
         }
         return ""
     }

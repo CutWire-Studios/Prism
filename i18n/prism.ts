@@ -82,7 +82,19 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Audio Effects</source>
+        <source>Audio FX</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mixer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Script</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Trigger</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -102,23 +114,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Audio Mixer</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Script Node</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Script</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Audio Script Node</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Trigger Node</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -145,14 +141,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Slideshow…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Camera…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Mic Input</source>
         <translation type="unfinished"></translation>
     </message>
@@ -161,15 +149,23 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Screen Capture…</source>
+        <source>Slideshow</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Window / Tab…</source>
+        <source>Camera</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Canvas…</source>
+        <source>Screen Capture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Window Capture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Canvas</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -189,7 +185,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>NDI Source…</source>
+        <source>NDI Source</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -691,28 +687,13 @@ Another application may already be using the virtual camera, or softcam.dll may 
     </message>
 </context>
 <context>
-    <name>AudioDeviceEditor</name>
-    <message>
-        <source>Audio Capture</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Mic Input</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Playback Device:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Input Device:</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>AudioEffectBody</name>
     <message>
         <source>AUDIO FX</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>BYPASSED</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -777,140 +758,12 @@ Another application may already be using the virtual camera, or softcam.dll may 
         <source>Muted</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>Edit Mix</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 <context>
     <name>AudioScriptBody</name>
     <message>
         <source>FFT %1 · %2 bins
 low/mid/high · beat</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit FFT</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>AudioScriptEditor</name>
-    <message>
-        <source>Audio FFT Settings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>FFT size:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Spectrum bins:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Smoothing:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Beat sensitivity:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Low/Mid split:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Mid/High split:</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>CameraSourceDialog</name>
-    <message>
-        <source>Add camera</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Camera device</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No camera devices were found.</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>CanvasSourceDialog</name>
-    <message>
-        <source>Add canvas</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Aspect ratio</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Custom…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Fill</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Checkered</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Transparent</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Color</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Pick color</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>CaptureSourceDialog</name>
-    <message>
-        <source>Select capture source</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>What do you want to capture?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Entire screen</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Application window</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Refresh window list</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No screens or capturable windows were found.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1164,14 +1017,6 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Edit</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit trim, crop and source settings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Audio</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1188,7 +1033,201 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Edit Audio</source>
+        <source>Loop audio when it reaches the end</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>InspectorAudioForm</name>
+    <message>
+        <source>Playback</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>FFT size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bins</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Smoothing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Beat</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Low / mid</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mid / high</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>InspectorInputForm</name>
+    <message>
+        <source>Select Image Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace Image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Images (*.png *.jpg *.jpeg *.bmp *.webp)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace image…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Default Camera</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No camera devices were found.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>NDI is not available in this build.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>NDI source</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No NDI sources found on the network.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose what to capture…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Window</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Screen</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Screen %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Refresh window list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Width</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Height</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fill</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Checkered</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transparent</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Per slide</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Effect</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transition</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>In</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Playhead</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Set from the playhead of the deck this clip is loaded on</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Out</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Length %1 of %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Loop</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Phone camera session. Add another Phone Camera to pair a different phone.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Always play</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Only when on air</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delay</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1219,15 +1258,27 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Has audio</source>
+        <source>Custom canvas size</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Edit...</source>
+        <source>Width</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Default device</source>
+        <source>Height</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bypass</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Run now</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open editor…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1236,6 +1287,10 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Mute</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>in %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1248,6 +1303,84 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Cut to Live</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>InspectorProcessForm</name>
+    <message>
+        <source>Direction</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Horizontal</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Vertical</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Both</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Angle</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Opacity</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Key colour</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Threshold</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Smoothness</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Radius</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Amount</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>InspectorTriggerForm</name>
+    <message>
+        <source>Mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Interval</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>At time of day</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Manual pulse</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Time of day</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>HH:mm:ss</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pulse now</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1286,49 +1419,6 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Move down</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit Layout</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>LayerCanvasEditor</name>
-    <message>
-        <source>Custom</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>16:9 (1280×720)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>16:9 (1920×1080)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>4:3 (1024×768)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Layer Canvas</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Custom size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Preset</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Width</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Height</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1499,10 +1589,6 @@ low/mid/high · beat</source>
         <source>Volume %1%</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>Edit</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 <context>
     <name>MasterAudioInputBody</name>
@@ -1516,10 +1602,6 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Volume %1%</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit Mic</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1774,37 +1856,6 @@ low/mid/high · beat</source>
     </message>
 </context>
 <context>
-    <name>MixerEditor</name>
-    <message>
-        <source>Audio Mixer</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Muted</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>-∞ dB</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 dB</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Connect audio streams to the mixer first.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Mute</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>in %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>MixerPanel</name>
     <message>
         <source>No audio channels</source>
@@ -1851,67 +1902,6 @@ low/mid/high · beat</source>
     </message>
 </context>
 <context>
-    <name>NdiSourceDialog</name>
-    <message>
-        <source>Add NDI source</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>NDI is not available. Install the NDI SDK and rebuild Prism with -DNDI_ROOT=…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Searching the network…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No NDI sources found on the network. Make sure another app (Prism program output, OBS, a phone NDI app) is sending NDI, then try again.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Search again</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>NodeAudioEditor</name>
-    <message>
-        <source>Audio Settings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Playback mode</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Always play (while on Live or Staging)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Play when its deck is on air</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Audio delay</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>NodeDelegate</name>
-    <message>
-        <source>Audio</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Input</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>NodeEditorPanel</name>
     <message>
         <source>Drop media here, drag from the Media bin, or right-click to add a node</source>
@@ -1943,38 +1933,6 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Zoom in (Ctrl++)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit Layout</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit Mix</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit Mic…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit Audio Capture…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit FFT</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit Audio</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit Canvas Size</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2052,11 +2010,23 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Audio Effect</source>
+        <source>Audio FX</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Double-click a name to rename. Select the node to set per-input volume and mute.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Layer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mixer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Script</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2065,10 +2035,6 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Output</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Audio Mixer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2084,10 +2050,6 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Lua Script</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Audio Script</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2097,10 +2059,6 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Double-click a layer name to rename. The eye toggles visibility; the arrows reorder.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Double-click a name to rename. Edit opens per-input volume and mute.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2513,6 +2471,10 @@ low/mid/high · beat</source>
         <source>PROCESS</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>BYPASSED</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ProcessEditor</name>
@@ -2530,50 +2492,6 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Reset</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Direction</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Horizontal</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Vertical</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Both</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Angle</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Opacity</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Key colour</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Threshold</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Smoothness</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Radius</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Amount</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2995,10 +2913,6 @@ Technical detail: %1</source>
     </message>
     <message>
         <source>On input</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -4002,247 +3916,17 @@ Technical detail: %1</source>
     </message>
 </context>
 <context>
-    <name>SlideshowSourceDialog</name>
-    <message>
-        <source>Add slideshow</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Image folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select a folder of images</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Browse…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Seconds per slide</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select image folder for slideshow</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>SourceEditor</name>
-    <message>
-        <source>Edit Clip — %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit Slideshow</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select Camera</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Capture Window</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Capture Screen</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit Canvas</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select NDI Source</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit — %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit Source</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Close</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Start must be at least 0.1 s before end (%1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>End must be at least 0.1 s after start (%1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>End cannot exceed clip duration (%1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Transparent</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Checkered</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Canvas %1:%2 (%3)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Default Camera</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Screen %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select Image Folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Loop</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Pause</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Play</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Position</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Invalid time format — use M:SS.ss</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Set start</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Length %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Set end</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Browse…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Seconds per slide</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Transition effect</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Transition duration</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Choose camera device:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No camera devices were found.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>The system picker chooses what is captured. Picking again replaces the current selection.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Choose the window to capture:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Choose the screen to capture:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No screens or capturable windows were found.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Refresh window list</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Choose…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Width</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Height</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Fill</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Color</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>NDI is not available in this build.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No NDI sources found on the network.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Choose NDI source:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Refresh</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>SourcePrompts</name>
     <message>
         <source>Default Camera</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Window / Tab</source>
+        <source>Screen Capture</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Screen Capture</source>
+        <source>Window Capture</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4271,6 +3955,10 @@ Technical detail: %1</source>
     </message>
     <message>
         <source>Canvas %1 (%2)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>NDI Source</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -5320,53 +5008,6 @@ Continue anyway? Your phone may not be able to connect.</source>
     <message>
         <source>Manual
 pulse</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>TriggerEditor</name>
-    <message>
-        <source>Trigger Timing</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Mode:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Interval</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>At time of day</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Manual pulse</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Interval:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Time of day:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>HH:mm:ss</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>OK</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

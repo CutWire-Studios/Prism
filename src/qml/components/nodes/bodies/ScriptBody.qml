@@ -1,7 +1,7 @@
 import QtQuick
 import Prism
 
-// Lua script: its trigger mode and the edit button.
+// Script: its trigger mode.
 Item {
     id: root
 
@@ -26,14 +26,5 @@ Item {
             }
             return ""
         }
-    }
-
-    NodeButton {
-        x: 4
-        y: 78
-        width: root.width - 8
-        height: 24
-        text: qsTr("Edit")
-        onClicked: root.node.requestEditor("script")
     }
 }

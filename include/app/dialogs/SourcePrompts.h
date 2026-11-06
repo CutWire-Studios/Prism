@@ -12,9 +12,10 @@
 
 #include "core/sources/SourceDescriptor.h"
 
-/// Backend of the add-source dialogs (slideshow, camera, screen / window, canvas, NDI, phone
+/// Backend of the add-source actions (slideshow, camera, screen / window, canvas, NDI, phone
 /// camera). Each add*() builds the descriptor and hands it to AppController; it returns the new
-/// node id (0 on failure).
+/// node id (0 on failure). Only the phone camera needs a dialog (pairing); the rest are added
+/// with defaults by addDefault() and configured in the inspector.
 class SourcePrompts : public QObject {
     Q_OBJECT
     QML_ELEMENT
@@ -40,29 +41,14 @@ public:
     bool webrtcUsesRelay() const { return m_webrtcRelay; }
     QString webrtcDefaultRelayUrl() const;
 
-    Q_INVOKABLE quint64 addSlideshow(const QString &folder, int intervalSeconds);
+    /// kind: "camera" | "slideshow" | "canvas" | "ndi" | "screen" | "window". Adds the node with
+    /// default settings (first camera / NDI source, Pictures folder, 16:9 canvas).
+    Q_INVOKABLE quint64 addDefault(const QString &kind);
 
-    /// Labels in the same order addCamera() indexes.
-    Q_INVOKABLE QStringList cameraLabels();
-    Q_INVOKABLE quint64 addCamera(int index);
-
-    /// kind: "screen" | "window". On the portal platforms there is nothing to pick.
-    Q_INVOKABLE quint64 addPortalCapture(const QString &kind);
     Q_INVOKABLE QStringList screenLabels() const;
     Q_INVOKABLE QStringList windowLabels();
-    Q_INVOKABLE quint64 addScreen(int index);
-    Q_INVOKABLE quint64 addWindow(int index);
 
     Q_INVOKABLE quint64 addShader(const QString &code);
-
-    /// Rows {label, width, height}.
-    Q_INVOKABLE QVariantList canvasPresets() const;
-    /// fill: "checkered" | "transparent" | "color".
-    Q_INVOKABLE quint64 addCanvas(int width, int height, const QString &fill, const QColor &color);
-
-    /// Blocks for about two seconds while the network is scanned.
-    Q_INVOKABLE QStringList discoverNdi();
-    Q_INVOKABLE quint64 addNdi(const QString &name);
 
     Q_INVOKABLE QStringList webrtcInterfaces() const;
     Q_INVOKABLE int webrtcDefaultInterface() const;
@@ -78,6 +64,17 @@ signals:
     void webrtcStarted(bool ok, const QString &error);
 
 private:
+    quint64 addSlideshow(const QString &folder, int intervalSeconds);
+    quint64 addCamera(int index);
+    /// kind: "screen" | "window". On the portal platforms there is nothing to pick.
+    quint64 addPortalCapture(const QString &kind);
+    quint64 addScreen(int index);
+    quint64 addWindow(int index);
+    /// fill: "checkered" | "transparent" | "color".
+    quint64 addCanvas(int width, int height, const QString &fill, const QColor &color);
+    /// Blocks for about two seconds while the network is scanned.
+    QStringList discoverNdi();
+    quint64 addNdi(const QString &name);
     quint64 add(SourceDescriptor desc, const QImage &thumb);
 #ifdef PRISM_HAVE_WEBRTC
     void webrtcCreateSession(const QString &relay, const QString &bind);

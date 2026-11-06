@@ -25,7 +25,7 @@ struct ClipGraph::ConnectPlan {
 namespace {
 
 constexpr qreal kCardW = 122.0;
-constexpr qreal kCardBodyH = 175.0;
+constexpr qreal kCardBodyH = 105.0;
 constexpr qreal kPortR = 4.5;
 constexpr qreal kHeaderH = 16.0;
 constexpr qreal kProxyY = kPortR + kHeaderH;
@@ -364,6 +364,8 @@ QSizeF ClipGraph::nodeSize(const Node &n) const {
     switch (n.type) {
     case NT::Input: {
         const bool hasAudio = n.params.value("hasAudio").toBool();
+        if (n.params.value("audioOnly").toBool())
+            return {kCardW, kProxyY + kAudioStripH + kPortR + kPortR};
         return {kCardW, kProxyY + kCardBodyH + (hasAudio ? kAudioStripH : 0.0) + kPortR + kPortR};
     }
     case NT::Process:
@@ -1255,7 +1257,7 @@ ClipGraph::ResolvedStream ClipGraph::evaluateGuarded(NodeId producerNode, QSet<N
         const ProcessEffectDescriptor *desc = ProcessEffects::byId(n->params.value("effect").toInt());
         if (!desc) return out;
         out = evaluateGuarded(producerForInput(producerNode, 0), visited);
-        if (desc->isDecorator) {
+        if (desc->isDecorator && !n->params.value("bypass").toBool()) {
             const QJsonObject params = toJsonObject(n->params.value("params").toMap());
             for (ResolvedLayer &l : out.layers)
                 l.sourceEffects.append({desc->id, params});
@@ -1559,8 +1561,9 @@ bool ClipGraph::resolveAudioStreamRoute(NodeId sourceNodeId, ResolvedAudioRoute 
         if (e->kind == EK::AudioEffectChain) {
             const Node *ae = node(toId);
             if (ae && ae->type == NT::AudioEffect) {
-                route.effects.append({int(toId), prism::audiofx::fromJson(
-                    toJsonObject(ae->params.value("params").toMap()))});
+                if (!ae->params.value("bypass").toBool())
+                    route.effects.append({int(toId), prism::audiofx::fromJson(
+                        toJsonObject(ae->params.value("params").toMap()))});
                 current = toId;
                 continue;
             }
@@ -1880,7 +1883,9 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
             params["w"] = obj["cropW"].toDouble(1.0);
             params["h"] = obj["cropH"].toDouble(1.0);
         }
-        restore(obj, NT::Process, {{"effect", desc->id}, {"params", params.toVariantMap()}});
+        QVariantMap nodeParams{{"effect", desc->id}, {"params", params.toVariantMap()}};
+        if (obj.contains("bypass")) nodeParams["bypass"] = obj["bypass"].toBool();
+        restore(obj, NT::Process, nodeParams);
     }
 
     for (const QJsonValue &val : state["audioEffectNodes"].toArray()) {
@@ -1888,7 +1893,9 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         const AudioEffectDescriptor *desc = AudioEffects::byId(obj["effect"].toInt());
         if (!desc) continue;
         const QJsonObject params = obj.contains("params") ? obj["params"].toObject() : desc->defaultParams;
-        restore(obj, NT::AudioEffect, {{"effect", desc->id}, {"params", params.toVariantMap()}});
+        QVariantMap nodeParams{{"effect", desc->id}, {"params", params.toVariantMap()}};
+        if (obj.contains("bypass")) nodeParams["bypass"] = obj["bypass"].toBool();
+        restore(obj, NT::AudioEffect, nodeParams);
     }
 
     auto readSlots = [](const QJsonObject &obj, NT type) {

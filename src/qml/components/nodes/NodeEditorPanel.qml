@@ -4,8 +4,8 @@ import QtQuick.Controls.Basic
 import Prism
 
 // The node graph editor panel (workspace panel type "nodeGraph"). Wraps NodeCanvas with the
-// toolbar, zoom bar, minimap, add-node menu and context menus. Editors that the old widget UI
-// ran as modal dialogs are not hosted here: the panel asks the shell via openEditorRequested.
+// toolbar, zoom bar, minimap, add-node menu and context menus. Node properties live in the
+// inspector panel; the panel asks the shell to bring it forward via inspectorRequested.
 Item {
     id: root
 
@@ -15,9 +15,7 @@ Item {
     property alias zoom: graphCanvas.zoom
     property bool showMinimap: true
 
-    // kind: source | audio | process | audioEffect | layerLayout | mixer | mic | capture |
-    //       script | audioScript | trigger
-    signal openEditorRequested(var nodeId, string kind)
+    signal inspectorRequested()
     // Source picker for a new Input node; x/y are graph coordinates to place it at.
     signal addInputNodeRequested(real x, real y)
     signal outputWindowRequested()
@@ -33,7 +31,7 @@ Item {
         anchors.fill: parent
         controller: root.controller
 
-        onOpenEditorRequested: (nodeId, kind) => root.openEditorRequested(nodeId, kind)
+        onInspectorRequested: root.inspectorRequested()
         onOutputWindowRequested: root.outputWindowRequested()
 
         onAddMenuRequested: (screenPos, worldPos) => {
@@ -209,35 +207,7 @@ Item {
         property var target: null
         readonly property int type: target ? target.type : -1
         readonly property var nodeTypes: NodePalette.nodeType
-        readonly property string editKind: target ? NodePalette.editorKind(type, target.hasEditor) : ""
 
-        ThemedMenuItem {
-            visible: nodeMenu.editKind.length > 0
-            text: {
-                switch (nodeMenu.type) {
-                case nodeMenu.nodeTypes.Layer: return qsTr("Edit Layout")
-                case nodeMenu.nodeTypes.AudioMixer: return qsTr("Edit Mix")
-                case nodeMenu.nodeTypes.MasterAudioInput: return qsTr("Edit Mic…")
-                case nodeMenu.nodeTypes.MasterAudioCapture: return qsTr("Edit Audio Capture…")
-                case nodeMenu.nodeTypes.AudioScript: return qsTr("Edit FFT")
-                case nodeMenu.nodeTypes.Process:
-                case nodeMenu.nodeTypes.AudioEffect:
-                    return NodeCatalog.effectLabel(nodeMenu.type, nodeMenu.target.params)
-                }
-                return qsTr("Edit")
-            }
-            onTriggered: nodeMenu.target.requestEditor(nodeMenu.editKind)
-        }
-        ThemedMenuItem {
-            visible: nodeMenu.type === nodeMenu.nodeTypes.Input && !!nodeMenu.target && !!nodeMenu.target.params.hasAudio
-            text: qsTr("Edit Audio")
-            onTriggered: nodeMenu.target.requestEditor("audio")
-        }
-        ThemedMenuItem {
-            visible: nodeMenu.type === nodeMenu.nodeTypes.Layer
-            text: qsTr("Edit Canvas Size")
-            onTriggered: nodeMenu.target.requestEditor("layerCanvas")
-        }
         ThemedMenuItem {
             visible: nodeMenu.type === nodeMenu.nodeTypes.Script
             text: qsTr("Run now")

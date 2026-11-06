@@ -4,9 +4,9 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Prism
 
-// GLSL source editor for Input nodes with a shader source. SourceEditor delegates here through
-// openFor(nodeId); saving writes the code into the node's source descriptor. openForNew()
-// creates a new Input node on accept instead.
+// GLSL source editor for Input nodes with a shader source. The inspector opens it through the
+// editor router with openFor(nodeId); saving writes the code into the node's source descriptor.
+// openForNew() creates a new Input node on accept instead.
 ThemedDialog {
     id: root
 

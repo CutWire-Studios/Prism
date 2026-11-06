@@ -902,6 +902,8 @@ NodeId AppController::addSourceFromDescriptor(const SourceDescriptor &desc, cons
         && !desc.path.isEmpty() && QFileInfo(desc.path).isFile()) {
         m_clipManager.addFiles({desc.path});
     }
+    if (id)
+        m_graphController->select({QVariant::fromValue<quint64>(id)});
     mcpBumpRevision();
     return id;
 }

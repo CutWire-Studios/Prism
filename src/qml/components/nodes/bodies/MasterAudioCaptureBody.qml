@@ -1,7 +1,7 @@
 import QtQuick
 import Prism
 
-// Audio capture: selected device, level, and the edit button.
+// Audio capture: selected device, level.
 Item {
     id: root
 
@@ -25,14 +25,5 @@ Item {
         muted: true
         text: root.p.muted ? qsTr("Muted") : qsTr("Volume %1%").arg(root.p.volume)
         horizontalAlignment: Text.AlignHCenter
-    }
-
-    NodeButton {
-        x: 4
-        y: root.height - 32
-        width: root.width - 8
-        height: 24
-        text: qsTr("Edit")
-        onClicked: root.node.requestEditor("capture")
     }
 }

@@ -1,7 +1,7 @@
 import QtQuick
 import Prism
 
-// Trigger: its timing mode and the edit button. A manual trigger is pulsed from the context menu.
+// Trigger: its timing mode. A manual trigger is pulsed from the context menu.
 Item {
     id: root
 
@@ -25,14 +25,5 @@ Item {
             }
             return ""
         }
-    }
-
-    NodeButton {
-        x: 4
-        y: 78
-        width: root.width - 8
-        height: 24
-        text: qsTr("Edit")
-        onClicked: root.node.requestEditor("trigger")
     }
 }
