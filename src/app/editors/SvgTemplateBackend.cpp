@@ -1,5 +1,7 @@
 #include "app/editors/SvgTemplateBackend.h"
 
+#include "app/AppController.h"
+#include "app/common/ThumbHelper.h"
 #include "core/graph/ClipGraphModels.h"
 #include "core/sources/SvgTemplateSource.h"
 
@@ -152,8 +154,12 @@ bool SvgTemplateBackend::commit()
 {
     if (!m_graph || !m_graph->graph() || m_info.id.isEmpty())
         return false;
-    m_graph->graph()->setSourceDescriptor(m_nodeId, currentDescriptor());
-    return true;
+    const SourceDescriptor desc = currentDescriptor();
+    if (m_nodeId == 0) {
+        auto *app = AppController::instance();
+        return app && app->addSourceFromDescriptor(desc, ThumbHelper::makeSvgTemplateThumb(desc)) != 0;
+    }
+    return m_graph->setSourceDescriptor(m_nodeId, desc);
 }
 
 SourceDescriptor SvgTemplateBackend::currentDescriptor() const

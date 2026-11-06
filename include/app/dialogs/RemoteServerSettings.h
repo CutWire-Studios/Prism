@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QHostAddress>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -50,6 +51,8 @@ signals:
     void changed();
 
 private:
+    void startServer(const QHostAddress &addr);
+
     QVector<NetworkUtils::Ipv4Interface> m_ifaces;
     int m_interfaceIndex = 0;
     bool m_localhostOnly = false;

@@ -37,6 +37,7 @@ public:
     QVariantList layers() const;
     QImage preview() const { return m_preview; }
 
+    /// nodeId 0 starts a new source: commit() then adds an Input node instead of editing one.
     Q_INVOKABLE void open(ClipGraphController *graph, quint64 nodeId);
     Q_INVOKABLE void setKind(const QString &kind);
     Q_INVOKABLE void setGeometry(const QString &name, double value);

@@ -13,6 +13,7 @@ Item {
         case "canvas": canvas.ensure().open(); break
         case "ndi": ndi.ensure().open(); break
         case "webrtc": webrtc.ensure().open(); break
+        case "url": urlDlg.ensure().open(); break
         case "screen":
         case "window":
             if (SourcePrompts.capturePickerNeeded)
@@ -41,6 +42,15 @@ Item {
             }
         }
 
+        function onSourceEditorRequested(kind) {
+            switch (kind) {
+            case "shader": shaderEditor.ensure().openForNew(); break
+            case "svgTemplate": svgEditor.ensure().openForNew(); break
+            case "text": textEditor.ensure().openForNew(); break
+            case "shape": shapeEditor.ensure().openForNew(); break
+            }
+        }
+
         function onRecoveryRequested(autosavePath, backupPaths) {
             recovery.ensure().show(autosavePath, backupPaths)
         }
@@ -59,4 +69,9 @@ Item {
     LazyLoader { id: canvas; sourceComponent: CanvasSourceDialog { } }
     LazyLoader { id: ndi; sourceComponent: NdiSourceDialog { } }
     LazyLoader { id: webrtc; sourceComponent: WebRtcSourceDialog { } }
+    LazyLoader { id: urlDlg; sourceComponent: AddUrlDialog { } }
+    LazyLoader { id: shaderEditor; sourceComponent: ShaderSourceEditor { } }
+    LazyLoader { id: svgEditor; sourceComponent: SvgTemplateEditor { } }
+    LazyLoader { id: textEditor; sourceComponent: TextSourceEditor { } }
+    LazyLoader { id: shapeEditor; sourceComponent: ShapeSourceEditor { } }
 }

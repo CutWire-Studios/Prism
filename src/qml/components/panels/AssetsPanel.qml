@@ -35,6 +35,10 @@ PanelFrame {
         }
     }
 
+    AddSourceMenu {
+        id: sourceMenu
+    }
+
     ThemedContextMenu {
         id: itemMenu
 
@@ -81,6 +85,12 @@ PanelFrame {
                 placeholderText: qsTr("Search media")
                 text: assets.search
                 onTextChanged: assets.search = text
+            }
+            IconButton {
+                id: addSourceButton
+                glyph: "diamond-plus"
+                tooltip: qsTr("Add source")
+                onClicked: sourceMenu.popup(addSourceButton, 0, addSourceButton.height)
             }
             IconButton {
                 glyph: "plus"

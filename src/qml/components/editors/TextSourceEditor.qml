@@ -24,9 +24,13 @@ ThemedDialog {
         id: backend
     }
 
+    function openForNew() {
+        openFor(0)
+    }
+
     function openFor(nodeId) {
         backend.setHighlightColors(Theme.accentOnPanel, Theme.warning, Theme.c.themedLabel.foregroundMuted)
-        backend.open(AppController.graph, nodeId, AppController)
+        backend.open(AppController.graph, nodeId)
         templateArea.text = backend.templateText()
         stack.currentIndex = 0
         root.open()

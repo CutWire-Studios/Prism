@@ -127,6 +127,88 @@
     </message>
 </context>
 <context>
+    <name>AddSourceMenu</name>
+    <message>
+        <source>Media File…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Video URL…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Slideshow…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Camera…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mic Input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Capture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Screen Capture…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Window / Tab…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Canvas…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shader…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SVG Template…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Text…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shape…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>NDI Source…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Phone Camera (WebRTC)…</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AddUrlDialog</name>
+    <message>
+        <source>Add video URL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stream or video URL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>https://…</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>AgentAccessDialog</name>
     <message>
         <source>Agent access</source>
@@ -584,6 +666,10 @@ Files on disk are not deleted.</source>
     </message>
     <message>
         <source>Search media</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add source</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1367,6 +1453,10 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Add Media Folder…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add Source…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2455,18 +2545,6 @@ Technical detail: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Camera Error</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Network Interface</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Phone must reach CutWire Prism on this network:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Command timed out: %1 %2</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2484,10 +2562,6 @@ Technical detail: %1</source>
     </message>
     <message>
         <source>incoming connections</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Firewall Detected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2709,6 +2783,10 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Firewall Detected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Could not open the firewall port. %1 Your phone may not be able to connect.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2725,10 +2803,6 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
     <name>ScreenSource</name>
     <message>
         <source>Screen capture stream ended.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Screen Capture Error</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3978,6 +4052,10 @@ Technical detail: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Screen %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Select Image Folder</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4046,7 +4124,19 @@ Technical detail: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Changing the capture target is not available on this platform yet. Remove the source and add it again.</source>
+        <source>Choose the window to capture:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose the screen to capture:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No screens or capturable windows were found.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Refresh window list</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4110,6 +4200,10 @@ Technical detail: %1</source>
     </message>
     <message>
         <source>Screen %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shader</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

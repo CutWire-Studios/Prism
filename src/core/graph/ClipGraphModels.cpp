@@ -342,6 +342,16 @@ bool ClipGraphController::setParams(quint64 id, const QVariantMap &params) {
     return true;
 }
 
+bool ClipGraphController::setSource(quint64 id, const QVariantMap &descriptor) {
+    const ClipGraph::Node *n = m_graph->node(id);
+    if (!n || n->type != ClipGraph::NodeType::Input) return false;
+    return setParams(id, {{"source", descriptor}});
+}
+
+bool ClipGraphController::setSourceDescriptor(quint64 id, const SourceDescriptor &desc) {
+    return setSource(id, ClipGraph::sourceToMap(desc));
+}
+
 bool ClipGraphController::beginConnection(quint64 node, bool isOutput, int port) {
     const auto ports = isOutput ? m_graph->outputPorts(node) : m_graph->inputPorts(node);
     if (port < 0 || port >= ports.size()) return false;

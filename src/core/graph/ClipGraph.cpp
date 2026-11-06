@@ -343,7 +343,11 @@ bool ClipGraph::clipRepeat(NodeId inputNodeId) const {
 bool ClipGraph::setSourceDescriptor(NodeId inputNodeId, const SourceDescriptor &desc) {
     const Node *n = node(inputNodeId);
     if (!n || n->type != NT::Input) return false;
-    return setParams(inputNodeId, {{"source", descriptorToJson(desc).toVariantMap()}});
+    return setParams(inputNodeId, {{"source", sourceToMap(desc)}});
+}
+
+QVariantMap ClipGraph::sourceToMap(const SourceDescriptor &desc) {
+    return descriptorToJson(desc).toVariantMap();
 }
 
 bool ClipGraph::setClipSettings(NodeId inputNodeId, const ClipSettings &settings) {

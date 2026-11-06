@@ -110,6 +110,9 @@ public:
     Q_INVOKABLE void moveNode(quint64 id, qreal x, qreal y);
     Q_INVOKABLE void endMove();
     Q_INVOKABLE bool setParams(quint64 id, const QVariantMap &params);
+    /// Undoable replacement of an Input node's source; descriptor uses the .psm "source" keys.
+    Q_INVOKABLE bool setSource(quint64 id, const QVariantMap &descriptor);
+    bool setSourceDescriptor(quint64 id, const SourceDescriptor &desc);
 
     Q_INVOKABLE bool beginConnection(quint64 node, bool isOutput, int port);
     Q_INVOKABLE bool canConnect(quint64 node, bool isOutput, int port) const;

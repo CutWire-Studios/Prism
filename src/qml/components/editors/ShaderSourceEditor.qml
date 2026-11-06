@@ -5,7 +5,8 @@ import QtQuick.Layouts
 import Prism
 
 // GLSL source editor for Input nodes with a shader source. SourceEditor delegates here through
-// openFor(nodeId); saving writes the code into the node's source descriptor.
+// openFor(nodeId); saving writes the code into the node's source descriptor. openForNew()
+// creates a new Input node on accept instead.
 ThemedDialog {
     id: root
 
@@ -25,9 +26,13 @@ ThemedDialog {
         preview.refresh(codeArea.text)
     }
 
+    function openForNew() {
+        openFor(0)
+    }
+
     function openFor(id) {
         nodeId = id
-        const code = graphParams.params(id).source.shaderCode || ""
+        const code = id === 0 ? "" : graphParams.params(id).source.shaderCode || ""
 
         _loadingPreset = true
         if (code.length > 0) {
@@ -51,8 +56,12 @@ ThemedDialog {
         const code = codeArea.text.trim()
         if (code.length === 0)
             return
+        if (root.nodeId === 0) {
+            SourcePrompts.addShader(code)
+            return
+        }
         const source = Object.assign({}, graphParams.params(root.nodeId).source, { shaderCode: code })
-        AppController.graph.setParams(root.nodeId, { source: source })
+        AppController.graph.setSource(root.nodeId, source)
     }
 
     AudioGraphParams {

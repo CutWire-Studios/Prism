@@ -53,6 +53,8 @@ public:
     Q_INVOKABLE quint64 addScreen(int index);
     Q_INVOKABLE quint64 addWindow(int index);
 
+    Q_INVOKABLE quint64 addShader(const QString &code);
+
     /// Rows {label, width, height}.
     Q_INVOKABLE QVariantList canvasPresets() const;
     /// fill: "checkered" | "transparent" | "color".

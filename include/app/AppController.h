@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QHash>
 #include <QImage>
 #include <QJsonObject>
 #include <QList>
@@ -10,12 +11,14 @@
 #include <QVariantList>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
+#include <functional>
 #include <memory>
 
 #include "core/graph/ClipGraph.h"
 #include "core/graph/ClipGraphModels.h"
 #include "core/project/ClipManager.h"
 #include "core/render/Compositor.h"
+#include "core/scripting/ScriptOutput.h"
 #include "core/sources/SourceDescriptor.h"
 
 class DeckController;
@@ -235,6 +238,12 @@ public:
     Q_INVOKABLE void removeNode(quint64 nodeId);
     Q_INVOKABLE void renameNode(quint64 nodeId, const QString &name);
     Q_INVOKABLE void linkNodeObsScene(quint64 nodeId, const QString &sceneName);
+    /// "Run now" on a Script node; false when the node is not a running Script node.
+    Q_INVOKABLE bool runScript(quint64 nodeId);
+    /// "Pulse now" on a Trigger node; false when the node is not a Trigger node.
+    Q_INVOKABLE bool pulseTrigger(quint64 nodeId);
+    /// Code, output and run hook of the script feeding a Text/Shader node's data input (empty when unconnected).
+    ScriptBinding scriptBindingFor(NodeId dataNodeId) const;
 
     // ── Session (QML) ─────────────────────────────────────────────────────────
     Q_INVOKABLE void newSession();          // confirms via confirmRequested("newSession", ...) when dirty
@@ -282,6 +291,10 @@ public:
     Q_INVOKABLE void confirmAnswered(const QString &id, bool accepted);
     /// Empty paths = cancelled. id is the one given in filePickRequested.
     Q_INVOKABLE void filePicked(const QString &id, const QStringList &paths);
+
+    /// C++ side of confirmRequested: shows the prompt and calls @p answer with the user's choice
+    /// (false on cancel) once QML answers.
+    void requestConfirm(const QString &title, const QString &text, std::function<void(bool)> answer);
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
     /// Stops servers, timers, recording and the decks. Idempotent. Also autosaves and marks a clean exit
@@ -416,4 +429,6 @@ private:
     QStringList m_obsScenes;
     QString m_pendingAfterOutputDir;
     int m_mcpEditRevision = 0;
+    QHash<QString, std::function<void(bool)>> m_confirmCallbacks;
+    int m_nextConfirmId = 0;
 };

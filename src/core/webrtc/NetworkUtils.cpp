@@ -1,10 +1,8 @@
 #include "core/webrtc/NetworkUtils.h"
 #include <QAbstractSocket>
 #include <QHostAddress>
-#include <QInputDialog>
 #include <QNetworkAddressEntry>
 #include <QNetworkInterface>
-#include <QWidget>
 
 namespace NetworkUtils {
 
@@ -67,32 +65,6 @@ int defaultInterfaceIndex(const QList<Ipv4Interface> &ifaces) {
             return i;
     }
     return 0;
-}
-
-QString promptInterface(QWidget *parent, const QList<Ipv4Interface> &ifaces, int defaultIndex) {
-    if (ifaces.isEmpty())
-        return {};
-    if (ifaces.size() == 1)
-        return ifaces.first().address;
-
-    QStringList labels;
-    for (const Ipv4Interface &iface : ifaces)
-        labels << iface.label;
-
-    bool ok = false;
-    const QString chosen = QInputDialog::getItem(
-        parent,
-        QObject::tr("Network Interface"),
-        QObject::tr("Phone must reach CutWire Prism on this network:"),
-        labels,
-        defaultIndex,
-        false,
-        &ok);
-    if (!ok || chosen.isEmpty())
-        return {};
-
-    const int idx = labels.indexOf(chosen);
-    return idx >= 0 ? ifaces[idx].address : QString{};
 }
 
 } // namespace NetworkUtils

@@ -1,8 +1,8 @@
 #include "app/editors/TextSourceBackend.h"
 
 #include "app/AppController.h"
+#include "app/common/ThumbHelper.h"
 #include "app/editors/StyleLayers.h"
-#include "app/graph/GraphRuntime.h"
 #include "core/graph/ClipGraphModels.h"
 #include "core/render/SkiaRender.h"
 #include "core/sources/TextSource.h"
@@ -223,7 +223,7 @@ TextSourceBackend::TextSourceBackend(QObject *parent)
     connect(m_pollTimer, &QTimer::timeout, this, &TextSourceBackend::onPollScriptOutput);
 }
 
-void TextSourceBackend::open(ClipGraphController *graph, quint64 nodeId, QObject *app)
+void TextSourceBackend::open(ClipGraphController *graph, quint64 nodeId)
 {
     if (!graph || !graph->graph())
         return;
@@ -244,10 +244,8 @@ void TextSourceBackend::open(ClipGraphController *graph, quint64 nodeId, QObject
     }
 
     ScriptBinding binding;
-    if (auto *controller = qobject_cast<AppController *>(app)) {
-        if (GraphRuntime *runtime = controller->graphRuntime())
-            binding = runtime->scriptBindingFor(nodeId);
-    }
+    if (auto *app = AppController::instance())
+        binding = app->scriptBindingFor(nodeId);
     setScriptBinding(binding);
 
     m_durDirty = true;
@@ -594,8 +592,12 @@ bool TextSourceBackend::commit()
 {
     if (!m_graph || !m_graph->graph() || m_template.trimmed().isEmpty())
         return false;
-    m_graph->graph()->setSourceDescriptor(m_nodeId, currentDescriptor());
-    return true;
+    const SourceDescriptor desc = currentDescriptor();
+    if (m_nodeId == 0) {
+        auto *app = AppController::instance();
+        return app && app->addSourceFromDescriptor(desc, ThumbHelper::makeTextThumb(desc)) != 0;
+    }
+    return m_graph->setSourceDescriptor(m_nodeId, desc);
 }
 
 void TextSourceBackend::styleEdited()

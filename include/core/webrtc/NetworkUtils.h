@@ -3,8 +3,6 @@
 #include <QString>
 #include <QList>
 
-class QWidget;
-
 namespace NetworkUtils {
 
 struct Ipv4Interface {
@@ -22,8 +20,5 @@ QList<Ipv4Interface> listIpv4Interfaces();
 
 /// Pick a sensible default index into listIpv4Interfaces() (Wi-Fi, then Ethernet, else 0).
 int defaultInterfaceIndex(const QList<Ipv4Interface> &ifaces);
-
-/// Ask the user to choose an interface; returns empty address if cancelled.
-QString promptInterface(QWidget *parent, const QList<Ipv4Interface> &ifaces, int defaultIndex);
 
 } // namespace NetworkUtils

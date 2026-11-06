@@ -1,11 +1,10 @@
 #include "core/sources/CameraSource.h"
+#include "core/platform/ErrorReporter.h"
 #include <QCamera>
 #include <QMediaCaptureSession>
 #include <QVideoSink>
 #include <QVideoFrame>
 #include <QMediaDevices>
-#include <QApplication>
-#include <QMessageBox>
 #include <QHash>
 #include <QDebug>
 
@@ -70,8 +69,7 @@ public:
                 // so the queued call is dropped if this backend is destroyed first.
                 QMetaObject::invokeMethod(m_sink, [this]() {
                     if (m_camera) m_camera->stop();
-                    if (QWidget *w = QApplication::activeWindow())
-                        QMessageBox::warning(w, QObject::tr("Camera Error"), m_lastError);
+                    ErrorReporter::report(m_lastError);
                 }, Qt::QueuedConnection);
             });
 

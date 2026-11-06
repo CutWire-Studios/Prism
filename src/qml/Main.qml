@@ -153,6 +153,10 @@ ApplicationWindow {
         ThemedMenuSeparator { }
         ThemedMenuItem { text: qsTr("Add Media Files…"); onTriggered: AppController.requestAddFiles() }
         ThemedMenuItem { text: qsTr("Add Media Folder…"); onTriggered: AppController.requestAddFolder() }
+        ThemedMenuItem {
+            text: qsTr("Add Source…")
+            onTriggered: Qt.callLater(() => sourceMenu.popup(fileButton, 0, fileButton.height))
+        }
         ThemedMenuSeparator { }
         ThemedMenuItem { text: qsTr("Export Project…"); onTriggered: AppController.requestExportProject() }
         ThemedMenuItem { text: qsTr("Import Project…"); onTriggered: AppController.requestImportProject() }
@@ -163,6 +167,10 @@ ApplicationWindow {
             onTriggered: AppController.dropMarker("")
         }
         ThemedMenuItem { text: qsTr("Clear Graph…"); onTriggered: AppController.clearGraph() }
+    }
+
+    AddSourceMenu {
+        id: sourceMenu
     }
 
     ColumnLayout {

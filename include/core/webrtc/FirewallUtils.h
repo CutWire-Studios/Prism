@@ -3,8 +3,6 @@
 #include <QList>
 #include <QString>
 
-class QWidget;
-
 namespace FirewallUtils {
 
 enum class Backend { None, Ufw, Firewalld };
@@ -16,16 +14,19 @@ struct Status {
 
 Status detect();
 
-/// If a host firewall is active, ask the user and open TCP ports via pkexec.
-/// purposeDescription is shown in the dialog (e.g. "phone pairing", "remote control access").
-/// Returns false on decline or failure.
-bool ensurePortsOpen(QWidget *parent, const QList<quint16> &tcpPorts, QString &errorOut,
-                     const QString &purposeDescription = QString());
+/// Confirmation text to show before openPorts() for an active firewall (from detect()).
+/// purposeDescription is part of the text (e.g. "phone pairing", "remote control access").
+QString promptText(const Status &status, const QList<quint16> &tcpPorts,
+                   const QString &purposeDescription = QString());
 
-/// Remove specific temporary rules opened by ensurePortsOpen (best effort).
+/// Opens the TCP ports through the firewall in @p status via pkexec. The caller has already got
+/// the user's consent. Returns false on failure with errorOut set.
+bool openPorts(const Status &status, const QList<quint16> &tcpPorts, QString &errorOut);
+
+/// Remove specific temporary rules opened by openPorts (best effort).
 void releasePorts(const QList<quint16> &tcpPorts);
 
-/// Remove all temporary rules opened by ensurePortsOpen (best effort).
+/// Remove all temporary rules opened by openPorts (best effort).
 void releaseOpenedPorts();
 
 } // namespace FirewallUtils

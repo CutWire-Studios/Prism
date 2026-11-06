@@ -777,6 +777,31 @@ private slots:
         c.undo();
         QVERIFY2(c.graph()->toJson() == full, qPrintable(dump(c.graph()->toJson())));
     }
+
+    void sourceChangeIsUndoable() {
+        ClipGraphController c;
+        const quint64 a = c.addNode(int(NT::Input), 0, 0, canvas("a"));
+        const quint64 mixer = c.addNode(int(NT::AudioMixer), 0, 0);
+        QVERIFY(!c.setSource(mixer, {}));
+
+        SourceDescriptor desc = c.graph()->sourceDescriptor(a);
+        QCOMPARE(desc.displayName, QStringLiteral("a"));
+        desc.displayName = QStringLiteral("renamed");
+        QVERIFY(c.setSourceDescriptor(a, desc));
+        QCOMPARE(c.graph()->sourceName(a), QStringLiteral("renamed"));
+
+        c.undo();
+        QCOMPARE(c.graph()->sourceName(a), QStringLiteral("a"));
+        c.redo();
+        QCOMPARE(c.graph()->sourceName(a), QStringLiteral("renamed"));
+
+        QVariantMap map = ClipGraph::sourceToMap(desc);
+        map["displayName"] = QStringLiteral("viaMap");
+        QVERIFY(c.setSource(a, map));
+        QCOMPARE(c.graph()->sourceName(a), QStringLiteral("viaMap"));
+        c.undo();
+        QCOMPARE(c.graph()->sourceName(a), QStringLiteral("renamed"));
+    }
 };
 
 QTEST_MAIN(TestClipGraph)

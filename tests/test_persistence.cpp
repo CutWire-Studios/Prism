@@ -60,7 +60,6 @@ private slots:
 
         AssetPathResolver::Options opts;
         opts.sessionDir = sessionDir;
-        opts.allowUserPrompt = false;
 
         QCOMPARE(AssetPathResolver::resolvePath(storedInside, opts, false),
                  QFileInfo(insideFile).absoluteFilePath());
@@ -80,7 +79,6 @@ private slots:
 
         AssetPathResolver::Options opts;
         opts.sessionDir = sessionDir;
-        opts.allowUserPrompt = false;
 
         SourceDescriptor video;
         video.kind = SourceDescriptor::Kind::VideoFile;

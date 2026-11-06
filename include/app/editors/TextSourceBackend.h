@@ -83,7 +83,8 @@ public:
     QString animNote() const { return m_animNote; }
     QStringList fontFamilies() const;
 
-    Q_INVOKABLE void open(ClipGraphController *graph, quint64 nodeId, QObject *app);
+    /// nodeId 0 starts a new source: commit() then adds an Input node instead of editing one.
+    Q_INVOKABLE void open(ClipGraphController *graph, quint64 nodeId);
     Q_INVOKABLE QString templateText() const { return m_template; }
     Q_INVOKABLE void setTemplate(const QString &text);
     Q_INVOKABLE void setHighlightColors(const QColor &known, const QColor &unknown, const QColor &muted);

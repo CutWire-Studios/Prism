@@ -414,6 +414,7 @@ set(SOURCES
     src/mcp/McpStdio.cpp
     src/ui/common/QrCodeHelper.cpp
     src/core/platform/MacPermissions.cpp
+    src/core/platform/ErrorReporter.cpp
     third_party/qrcodegen/qrcodegen.cpp
 )
 
@@ -548,6 +549,7 @@ set(HEADERS
     include/mcp/McpStdio.h
     include/ui/common/QrCodeHelper.h
     include/core/platform/MacPermissions.h
+    include/core/platform/ErrorReporter.h
     include/core/text/Bezier.h
     include/core/text/BlendMode.h
     include/core/text/Keyframe.h

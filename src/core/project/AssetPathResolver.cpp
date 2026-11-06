@@ -2,9 +2,7 @@
 
 #include "core/sources/SvgTemplates.h"
 #include <QDirIterator>
-#include <QFileDialog>
 #include <QFileInfo>
-#include <QMessageBox>
 
 namespace {
 
@@ -26,25 +24,6 @@ QString searchByBasename(const QDir &root, const QString &basename, bool isDirec
             return fi.absoluteFilePath();
     }
     return {};
-}
-
-QString promptForPath(const QString &label, const AssetPathResolver::Options &opts,
-                      bool isDirectory) {
-    if (!opts.allowUserPrompt || !opts.dialogParent) return {};
-
-    const QString title = QStringLiteral("Relink Missing Asset");
-    const QString msg = QStringLiteral("Could not find:\n%1\n\nLocate the file or folder manually?")
-                            .arg(label);
-    if (QMessageBox::question(opts.dialogParent, title, msg,
-                              QMessageBox::Yes | QMessageBox::No,
-                              QMessageBox::Yes) != QMessageBox::Yes)
-        return {};
-
-    if (isDirectory)
-        return QFileDialog::getExistingDirectory(opts.dialogParent, title,
-                                                 opts.sessionDir.absolutePath());
-    return QFileDialog::getOpenFileName(opts.dialogParent, title,
-                                        opts.sessionDir.absolutePath());
 }
 
 void noteRelink(AssetPathResolver::RelinkReport *report, const QString &label, bool found) {
@@ -89,10 +68,6 @@ QString AssetPathResolver::resolvePath(const QString &storedPath, const Options 
     const QString found = searchByBasename(opts.sessionDir, basename, isDirectory);
     if (!found.isEmpty())
         return found;
-
-    const QString prompted = promptForPath(storedPath, opts, isDirectory);
-    if (!prompted.isEmpty() && pathExists(prompted, isDirectory))
-        return QFileInfo(prompted).absoluteFilePath();
 
     return storedPath;
 }

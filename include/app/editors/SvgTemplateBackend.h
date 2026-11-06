@@ -32,6 +32,7 @@ public:
     QVariantList params() const { return m_params; }
     QImage preview() const { return m_preview; }
 
+    /// nodeId 0 starts a new source: commit() then adds an Input node instead of editing one.
     Q_INVOKABLE void open(ClipGraphController *graph, quint64 nodeId);
     Q_INVOKABLE void selectTemplate(const QString &id);
     Q_INVOKABLE void addCustomFile(const QUrl &url);

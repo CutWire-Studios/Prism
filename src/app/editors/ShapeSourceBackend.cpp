@@ -1,5 +1,7 @@
 #include "app/editors/ShapeSourceBackend.h"
 
+#include "app/AppController.h"
+#include "app/common/ThumbHelper.h"
 #include "app/editors/StyleLayers.h"
 #include "core/graph/ClipGraphModels.h"
 #include "core/render/SkiaRender.h"
@@ -140,8 +142,12 @@ bool ShapeSourceBackend::commit()
 {
     if (!m_graph || !m_graph->graph())
         return false;
-    m_graph->graph()->setSourceDescriptor(m_nodeId, resultDescriptor());
-    return true;
+    const SourceDescriptor desc = resultDescriptor();
+    if (m_nodeId == 0) {
+        auto *app = AppController::instance();
+        return app && app->addSourceFromDescriptor(desc, ThumbHelper::makeShapeThumb(desc)) != 0;
+    }
+    return m_graph->setSourceDescriptor(m_nodeId, desc);
 }
 
 SourceDescriptor ShapeSourceBackend::resultDescriptor() const

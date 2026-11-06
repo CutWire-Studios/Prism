@@ -1,4 +1,5 @@
 #include "core/sources/ScreenSource.h"
+#include "core/platform/ErrorReporter.h"
 #include "core/sources/ScreenCapturePersist.h"
 #include <QDBusConnection>
 #include <QDBusInterface>
@@ -9,8 +10,6 @@
 #include <QDBusVariant>
 #include <QRandomGenerator>
 #include <QTransform>
-#include <QApplication>
-#include <QMessageBox>
 #include <QDebug>
 
 #include <unistd.h>
@@ -415,13 +414,11 @@ gboolean ScreenSource::onBusMessage(GstBus *bus, GstMessage *msg, gpointer userD
 void ScreenSource::handlePipelineError(const QString &detail) {
     qWarning() << "ScreenSource: pipeline error:" << detail;
     if (m_state == State::Capturing || m_state == State::Starting) {
-        if (QWidget *w = QApplication::activeWindow()) {
-            QMessageBox::warning(w, tr("Screen Capture Error"),
-                tr("Screen capture failed.\n\n"
-                   "Try selecting the source again in the portal picker, "
-                   "or check that PipeWire and xdg-desktop-portal are running.\n\n"
-                   "Technical detail: %1").arg(detail));
-        }
+        ErrorReporter::report(
+            tr("Screen capture failed.\n\n"
+               "Try selecting the source again in the portal picker, "
+               "or check that PipeWire and xdg-desktop-portal are running.\n\n"
+               "Technical detail: %1").arg(detail));
     }
     stop();
 }

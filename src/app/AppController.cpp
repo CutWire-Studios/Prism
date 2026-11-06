@@ -16,6 +16,7 @@
 #include "core/project/ProjectPackager.h"
 #include "mcp/McpJson.h"
 #include "mcp/McpServer.h"
+#include "core/platform/ErrorReporter.h"
 #include "ui/common/Icons.h"
 #include "ui/hotkeys/HotkeyManager.h"
 #include "ui/mainwindow/MainWindowUtils.h"
@@ -121,6 +122,7 @@ AppController::AppController(QObject *parent)
     : QObject(parent)
 {
     s_instance = this;
+    ErrorReporter::setHandler([this](const QString &text) { emit errorOccurred(text); });
 
     m_compositor = std::make_unique<Compositor>();
     m_graph = new ClipGraph(this);
@@ -171,8 +173,10 @@ AppController::~AppController()
     delete m_graphController;
     delete m_graph;
     m_compositor.reset();
-    if (s_instance == this)
+    if (s_instance == this) {
+        ErrorReporter::setHandler({});
         s_instance = nullptr;
+    }
 }
 
 void AppController::setEngine(QQmlEngine *engine)
@@ -913,6 +917,15 @@ void AppController::linkNodeObsScene(quint64 nodeId, const QString &sceneName)
     m_graph->setSourceDescriptor(nodeId, desc);
 }
 
+bool AppController::runScript(quint64 nodeId) { return m_runtime->runScript(nodeId); }
+
+bool AppController::pulseTrigger(quint64 nodeId) { return m_runtime->pulseTrigger(nodeId); }
+
+ScriptBinding AppController::scriptBindingFor(NodeId dataNodeId) const
+{
+    return m_runtime->scriptBindingFor(dataNodeId);
+}
+
 bool AppController::mcpUpdateSource(NodeId id, const SourceDescriptor &desc, const QImage &thumb)
 {
     if (!m_graph->setSourceDescriptor(id, desc))
@@ -1151,8 +1164,19 @@ bool AppController::mcpLoadSession(const QString &path)
 
 // ── Dialog answers ────────────────────────────────────────────────────────────
 
+void AppController::requestConfirm(const QString &title, const QString &text, std::function<void(bool)> answer)
+{
+    const QString id = QStringLiteral("callback:") + QString::number(++m_nextConfirmId);
+    m_confirmCallbacks.insert(id, std::move(answer));
+    emit confirmRequested(id, title, text);
+}
+
 void AppController::confirmAnswered(const QString &id, bool accepted)
 {
+    if (const auto callback = m_confirmCallbacks.take(id)) {
+        callback(accepted);
+        return;
+    }
     if (!accepted)
         return;
     if (id == QLatin1String("clearAll")) {

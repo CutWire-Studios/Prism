@@ -43,7 +43,6 @@ private slots:
 
         AssetPathResolver::Options opts;
         opts.sessionDir = sessionDir;
-        opts.allowUserPrompt = false;
 
         const QString resolvedDir = AssetPathResolver::resolvePath(
             slideDir, opts, true);
@@ -62,7 +61,6 @@ private slots:
 
         AssetPathResolver::Options opts;
         opts.sessionDir = sessionDir;
-        opts.allowUserPrompt = false;
 
         SourceDescriptor slideshow;
         slideshow.kind = SourceDescriptor::Kind::Slideshow;
@@ -223,7 +221,6 @@ private slots:
 
         AssetPathResolver::Options opts;
         opts.sessionDir = sessionDir;
-        opts.allowUserPrompt = false;
 
         SourceDescriptor audio;
         audio.kind = SourceDescriptor::Kind::AudioFile;

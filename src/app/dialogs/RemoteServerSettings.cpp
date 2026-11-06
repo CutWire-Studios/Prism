@@ -103,20 +103,40 @@ void RemoteServerSettings::toggle()
     const quint16 p = RemoteControlServer::kPort;
     if (server->isRunning()) {
         server->stopServer();
-    } else {
-        const QHostAddress addr = m_localhostOnly ? QHostAddress::LocalHost : QHostAddress::Any;
-        if (addr != QHostAddress::LocalHost && FirewallUtils::detect().active) {
-            QString fwErr;
-            if (!FirewallUtils::ensurePortsOpen(nullptr, {p}, fwErr, tr("remote control access from your phone"))) {
-                m_error = tr("Could not open the firewall port. %1 Your phone may not be able to connect.")
-                              .arg(fwErr.isEmpty() ? tr("Permission denied or cancelled.") : fwErr);
-            }
+        refresh();
+        return;
+    }
+
+    const QHostAddress addr = m_localhostOnly ? QHostAddress::LocalHost : QHostAddress::Any;
+    const FirewallUtils::Status fw = addr != QHostAddress::LocalHost ? FirewallUtils::detect()
+                                                                      : FirewallUtils::Status{};
+    if (!fw.active) {
+        startServer(addr);
+        return;
+    }
+
+    const QString text = FirewallUtils::promptText(fw, {p}, tr("remote control access from your phone"));
+    app->requestConfirm(tr("Firewall Detected"), text, [this, fw, addr, p](bool allow) {
+        QString fwErr;
+        if (!allow || !FirewallUtils::openPorts(fw, {p}, fwErr)) {
+            m_error = tr("Could not open the firewall port. %1 Your phone may not be able to connect.")
+                          .arg(fwErr.isEmpty() ? tr("Permission denied or cancelled.") : fwErr);
         }
-        if (!server->startServer(addr, p)) {
-            FirewallUtils::releasePorts({p});
-            m_error = tr("Could not start the remote control server on port %1. "
-                         "Check whether another application is using the port.").arg(p);
-        }
+        startServer(addr);
+    });
+}
+
+void RemoteServerSettings::startServer(const QHostAddress &addr)
+{
+    auto *app = AppController::instance();
+    RemoteControlServer *server = app ? app->remoteServer() : nullptr;
+    if (!server)
+        return;
+    const quint16 p = RemoteControlServer::kPort;
+    if (!server->startServer(addr, p)) {
+        FirewallUtils::releasePorts({p});
+        m_error = tr("Could not start the remote control server on port %1. "
+                     "Check whether another application is using the port.").arg(p);
     }
     refresh();
 }

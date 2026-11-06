@@ -1,8 +1,6 @@
 #include "core/webrtc/FirewallUtils.h"
-#include <QMessageBox>
 #include <QProcess>
 #include <QSet>
-#include <QWidget>
 
 #ifdef Q_OS_LINUX
 
@@ -99,13 +97,8 @@ Status detect() {
     return status;
 }
 
-bool ensurePortsOpen(QWidget *parent, const QList<quint16> &tcpPorts, QString &errorOut,
-                     const QString &purposeDescription) {
-    const Status status = detect();
-    if (!status.active)
-        return true;
-
-    g_backend = status.backend;
+QString promptText(const Status &status, const QList<quint16> &tcpPorts,
+                   const QString &purposeDescription) {
     const QString fwName = status.backend == Backend::Ufw
         ? QObject::tr("UFW")
         : QObject::tr("firewalld");
@@ -118,18 +111,17 @@ bool ensurePortsOpen(QWidget *parent, const QList<quint16> &tcpPorts, QString &e
         ? QObject::tr("incoming connections")
         : purposeDescription;
 
-    const auto answer = QMessageBox::question(
-        parent,
-        QObject::tr("Firewall Detected"),
-        QObject::tr("%1 is active and may block %2.\n\n"
-                      "Allow incoming TCP on port(s) %3 until CutWire Prism exits?\n"
-                      "(Administrator password required)")
-            .arg(fwName, purpose, portStrs.join(QStringLiteral(", "))),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::Yes);
+    return QObject::tr("%1 is active and may block %2.\n\n"
+                       "Allow incoming TCP on port(s) %3 until CutWire Prism exits?\n"
+                       "(Administrator password required)")
+        .arg(fwName, purpose, portStrs.join(QStringLiteral(", ")));
+}
 
-    if (answer != QMessageBox::Yes)
-        return false;
+bool openPorts(const Status &status, const QList<quint16> &tcpPorts, QString &errorOut) {
+    if (!status.active)
+        return true;
+
+    g_backend = status.backend;
 
     QStringList commands;
     QList<quint16> portsToOpen;
@@ -209,14 +201,9 @@ namespace FirewallUtils {
 
 Status detect() { return {}; }
 
-bool ensurePortsOpen(QWidget *parent, const QList<quint16> &tcpPorts, QString &errorOut,
-                     const QString &purposeDescription) {
-    Q_UNUSED(parent);
-    Q_UNUSED(tcpPorts);
-    Q_UNUSED(errorOut);
-    Q_UNUSED(purposeDescription);
-    return true;
-}
+QString promptText(const Status &, const QList<quint16> &, const QString &) { return {}; }
+
+bool openPorts(const Status &, const QList<quint16> &, QString &) { return true; }
 
 void releasePorts(const QList<quint16> &tcpPorts) {
     Q_UNUSED(tcpPorts);

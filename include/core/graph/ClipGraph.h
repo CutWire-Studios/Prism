@@ -208,6 +208,8 @@ public:
     ClipSettings clipSettings(NodeId inputNodeId) const;
     bool clipRepeat(NodeId inputNodeId) const;
     bool setSourceDescriptor(NodeId inputNodeId, const SourceDescriptor &desc);
+    /// The "source" param value for a descriptor (same shape sourceDescriptor() reads back).
+    static QVariantMap sourceToMap(const SourceDescriptor &desc);
     bool setClipSettings(NodeId inputNodeId, const ClipSettings &settings);
 
     QVector<Port> inputPorts(NodeId id) const;

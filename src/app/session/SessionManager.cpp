@@ -285,7 +285,6 @@ bool SessionManager::loadFromFile(const QString &path) {
     m_graph->fromJson(root["graph"].toObject());
 
     AssetPathResolver::Options relinkOpts;
-    relinkOpts.allowUserPrompt = false;
     const QString savedSessionDir = root["sessionDir"].toString();
     if (!savedSessionDir.isEmpty())
         relinkOpts.sessionDir = QDir(savedSessionDir);

@@ -56,6 +56,9 @@ public:
     std::shared_ptr<ScriptOutput> scriptOutputForDataNode(NodeId dataNodeId) const;
     /// What ClipNodeEditor::wireTextScriptBinding installed as ClipCard::scriptBindingProvider.
     ScriptBinding scriptBindingFor(NodeId dataNodeId) const;
+    /// "Run now" on a Script node / "Pulse now" on a Trigger node. False when the node is not that kind.
+    bool runScript(NodeId scriptNodeId);
+    bool pulseTrigger(NodeId triggerNodeId);
 
     // ── Audio scripts ─────────────────────────────────────────────────────────
     void feedLiveAudioForProducer(NodeId producerId, const QByteArray &pcm);

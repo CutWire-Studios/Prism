@@ -674,6 +674,22 @@ ScriptBinding GraphRuntime::scriptBindingFor(NodeId dataNodeId) const {
     return binding;
 }
 
+bool GraphRuntime::runScript(NodeId scriptNodeId) {
+    ScriptNode *sn = d->script(scriptNodeId);
+    if (!sn || sn->type != NT::Script || !sn->runtime)
+        return false;
+    QMetaObject::invokeMethod(sn->runtime, "runNow", Qt::QueuedConnection);
+    return true;
+}
+
+bool GraphRuntime::pulseTrigger(NodeId triggerNodeId) {
+    ScriptNode *sn = d->script(triggerNodeId);
+    if (!sn || sn->type != NT::Trigger)
+        return false;
+    sn->pulse();
+    return true;
+}
+
 void GraphRuntime::feedLiveAudioForProducer(NodeId producerId, const QByteArray &pcm) {
     for (auto &[id, sn] : d->scripts) {
         if (sn->type != NT::AudioScript)

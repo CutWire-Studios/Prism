@@ -3,7 +3,6 @@
 #include <QString>
 #include <QStringList>
 #include <QDir>
-#include <QWidget>
 
 #include "core/sources/SourceDescriptor.h"
 #include "core/project/OverlayItem.h"
@@ -13,8 +12,6 @@ class AssetPathResolver {
 public:
     struct Options {
         QDir sessionDir;
-        QWidget *dialogParent = nullptr;
-        bool allowUserPrompt  = true;
     };
 
     struct RelinkReport {
@@ -26,7 +23,7 @@ public:
     /// Store an absolute path relative to the session directory when possible.
     static QString storePath(const QString &absolutePath, const QDir &sessionDir);
 
-    /// Resolve a stored path: absolute if present, relative to session dir, search by name, then prompt.
+    /// Resolve a stored path: absolute if present, relative to session dir, search by name.
     static QString resolvePath(const QString &storedPath, const Options &opts,
                                bool isDirectory = false);
 

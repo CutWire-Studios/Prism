@@ -188,6 +188,18 @@ quint64 SourcePrompts::addWindow(int index)
     return add(desc, ThumbHelper::makeIconThumb(Icons::Names::SelectWindow));
 }
 
+quint64 SourcePrompts::addShader(const QString &code)
+{
+    const QString trimmed = code.trimmed();
+    if (trimmed.isEmpty())
+        return 0;
+    SourceDescriptor desc;
+    desc.kind = SourceDescriptor::Kind::Shader;
+    desc.shaderCode = trimmed;
+    desc.displayName = tr("Shader");
+    return add(desc, ThumbHelper::makeShaderThumb(trimmed));
+}
+
 QVariantList SourcePrompts::canvasPresets() const
 {
     return {

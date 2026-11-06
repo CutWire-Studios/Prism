@@ -21,6 +21,10 @@ ThemedDialog {
         id: backend
     }
 
+    function openForNew() {
+        openFor(0)
+    }
+
     function openFor(nodeId) {
         backend.open(AppController.graph, nodeId)
         root.open()

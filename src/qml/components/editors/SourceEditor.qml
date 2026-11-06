@@ -40,6 +40,12 @@ ThemedDialog {
     property var ndiSources: []
     property int ndiIndex: 0
 
+    // screen / window capture where the system picker is not used
+    property var captureTargets: []
+    property int captureIndex: 0
+    readonly property bool captureIsWindow: source.kind === 6
+    readonly property bool portalCapture: ClipEditTools.captureSupported()
+
     // canvas
     property int canvasWidth: 1280
     property int canvasHeight: 720
@@ -48,7 +54,8 @@ ThemedDialog {
 
     readonly property string fileName: source.path ? String(source.path).split("/").pop() : ""
     readonly property bool valid: mode === "camera" ? cameras.length > 1
-                                : mode === "ndi" ? ndiSources.length > 0 : true
+                                : mode === "ndi" ? ndiSources.length > 0
+                                : mode === "screen" && !portalCapture ? captureTargets.length > 0 : true
 
     title: {
         switch (mode) {
@@ -63,8 +70,8 @@ ThemedDialog {
         return qsTr("Edit Source")
     }
     preferredWidth: mode === "trim" ? 760 : Theme.dialogWidthMd
-    showAccept: mode !== "screen" && valid
-    rejectText: mode === "screen" || !valid ? qsTr("Close") : qsTr("Cancel")
+    showAccept: (mode !== "screen" || !portalCapture) && valid
+    rejectText: (mode === "screen" && portalCapture) || !valid ? qsTr("Close") : qsTr("Cancel")
     acceptOnReturn: false
 
     function openFor(id, kind) {
@@ -124,6 +131,10 @@ ThemedDialog {
             ndiIndex = 0
             Qt.callLater(refreshNdi)
             break
+        case "screen":
+            if (!portalCapture)
+                refreshCaptureTargets()
+            break
         }
         open()
     }
@@ -163,6 +174,12 @@ ThemedDialog {
         ndiSources = ClipEditTools.ndiSources()
         const idx = ndiSources.indexOf(keep)
         ndiIndex = idx >= 0 ? idx : 0
+    }
+
+    function refreshCaptureTargets() {
+        captureTargets = captureIsWindow ? SourcePrompts.windowLabels() : SourcePrompts.screenLabels()
+        const current = captureIsWindow ? source.windowIndex : source.screenIndex
+        captureIndex = Math.max(0, Math.min(current || 0, captureTargets.length - 1))
     }
 
     function clampTime(t) {
@@ -271,6 +288,13 @@ ThemedDialog {
             upd = { source: Object.assign({}, source, { path: name, displayName: name }) }
             break
         }
+        case "screen":
+            if (portalCapture)
+                return
+            upd = { source: Object.assign({}, source, captureIsWindow
+                ? { windowIndex: captureIndex, displayName: captureTargets[captureIndex] }
+                : { screenIndex: captureIndex, displayName: qsTr("Screen %1").arg(captureIndex + 1) }) }
+            break
         default:
             return
         }
@@ -559,12 +583,26 @@ ThemedDialog {
             ThemedLabel {
                 Layout.fillWidth: true
                 tone: "default"
-                text: ClipEditTools.captureSupported()
+                text: root.portalCapture
                       ? qsTr("The system picker chooses what is captured. Picking again replaces the current selection.")
-                      : qsTr("Changing the capture target is not available on this platform yet. Remove the source and add it again.")
+                      : root.captureTargets.length > 0
+                        ? (root.captureIsWindow ? qsTr("Choose the window to capture:") : qsTr("Choose the screen to capture:"))
+                        : qsTr("No screens or capturable windows were found.")
+            }
+            ThemedComboBox {
+                Layout.fillWidth: true
+                visible: !root.portalCapture && root.captureTargets.length > 0
+                model: root.captureTargets
+                currentIndex: root.captureIndex
+                onActivated: index => root.captureIndex = index
             }
             ThemedButton {
-                visible: ClipEditTools.captureSupported()
+                visible: !root.portalCapture && root.captureIsWindow
+                text: qsTr("Refresh window list")
+                onClicked: root.refreshCaptureTargets()
+            }
+            ThemedButton {
+                visible: root.portalCapture
                 variant: "primary"
                 text: qsTr("Choose…")
                 onClicked: ClipEditTools.pickCapture(root.nodeId)
