@@ -64,7 +64,7 @@ build() {
         -DPRISM_WITH_NDI=OFF \
         -DPRISM_WITH_WEBRTC=ON \
         -DPRISM_WITH_SEGMENTATION=ON
-    cmake --build build --target Prism --target juice --target datachannel --parallel
+    cmake --build build --target prism --target juice --target datachannel --parallel
 }
 
 package() {

@@ -151,6 +151,17 @@ private slots:
         QCOMPARE(info.streams.first().rotationDegrees, 90);
     }
 
+    void displaySize_appliesRotationAndSampleAspect() {
+        QCOMPARE(displaySize(1920, 1080, {1, 1}, 0), QSize(1920, 1080));
+        QCOMPARE(displaySize(1920, 1080, {1, 1}, 90), QSize(1080, 1920));
+        QCOMPARE(displaySize(1920, 1080, {1, 1}, 180), QSize(1920, 1080));
+        QCOMPARE(displaySize(1920, 1080, {1, 1}, 270), QSize(1080, 1920));
+        QCOMPARE(displaySize(720, 576, {16, 15}, 0), QSize(768, 576));
+        QCOMPARE(displaySize(720, 576, {16, 15}, 90), QSize(576, 768));
+        QCOMPARE(displaySize(720, 576, {0, 1}, 0), QSize(720, 576));
+        QCOMPARE(displaySize(101, 51, {1, 1}, 0), QSize(100, 50));
+    }
+
     void stillImage_appliesRotation() {
         const QImage img = StillImage::decodeVideoFrame(clip("portrait.mp4"), 0.0);
         QVERIFY(!img.isNull());

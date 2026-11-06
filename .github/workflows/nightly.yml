@@ -155,7 +155,7 @@ jobs:
           - **AppImage** (Linux, any distro): `chmod +x Prism-nightly-x86_64.AppImage && ./Prism-nightly-x86_64.AppImage`
           - **Windows installer**: run `Prism-Setup-nightly-x64.exe`. Installs as "Prism Nightly" in its own
             directory; it does not touch a stable install.
-          - **Windows portable**: extract `Prism-Portable-nightly-x64.zip` and run `Prism.exe` from the
+          - **Windows portable**: extract `Prism-Portable-nightly-x64.zip` and run `prism.exe` from the
             `Prism Nightly` folder inside it.
           - **macOS**: open `Prism-nightly-arm64.dmg` and drag *Prism Nightly* to Applications. Ad-hoc signed unless
             notarised, so the first launch may need right-click → Open.

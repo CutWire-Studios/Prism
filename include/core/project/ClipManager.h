@@ -44,8 +44,8 @@ public:
     // Returns the id of the folder created for folderPath (empty if none).
     QString addFolder(const QString &folderPath, const QString &parentId = {});
 
-    // Append individual files selected by the user
-    void addFiles(const QStringList &filePaths);
+    // Append individual files selected by the user, optionally straight into a bin folder.
+    void addFiles(const QStringList &filePaths, const QString &folderId = {});
 
     ImportCheck checkFolderImport(const QString &folderPath) const;
     ImportCheck checkFilesImport(const QStringList &filePaths) const;
@@ -66,6 +66,16 @@ public:
     bool    moveClip(const QString &path, const QString &folderId);
     bool    moveFolder(const QString &id, const QString &newParentId);
 
+    // Points a library entry at another file, keeping its folder, position and name.
+    // False when the old path is unknown or the new one is already in the library.
+    bool    relinkClip(const QString &oldPath, const QString &newPath);
+    // Label shown in the bin; empty or equal to the file name clears the override.
+    void    setDisplayName(const QString &path, const QString &name);
+    QString displayName(const QString &path) const;
+    bool    hasCustomName(const QString &path) const { return m_names.contains(path); }
+    // Bumped by every change to the clip list, folders, assignments or names.
+    quint64 revision() const { return m_revision; }
+
     QList<BinFolder> folders() const { return m_folders; }
     QList<BinFolder> foldersIn(const QString &parentId) const;
     QStringList      clipsIn(const QString &folderId) const;
@@ -85,7 +95,9 @@ private:
     QList<BinFolder> m_folders;
     QHash<QString, QString> m_clipFolder;
     QHash<QString, qint64> m_added;
+    QHash<QString, QString> m_names;
     qint64 m_addCounter = 0;
+    quint64 m_revision = 0;
     void appendClip(const QString &path, const QString &folderId);
     bool isDescendant(const QString &id, const QString &ancestorId) const;
     QStringList allMediaRecursive(const QString &folderPath) const;

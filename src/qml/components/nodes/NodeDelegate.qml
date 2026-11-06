@@ -279,7 +279,7 @@ Item {
         radius: card.radius
         color: "transparent"
         border.width: 2
-        border.color: Theme.accent
+        border.color: Theme.primary
         visible: root.selected
     }
 

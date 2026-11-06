@@ -29,6 +29,16 @@ int displayRotationOf(const AVStream *stream)
     return rounded;
 }
 
+QSize displaySize(int codedW, int codedH, AVRational sar, int rotation)
+{
+    double w = codedW;
+    if (sar.num > 0 && sar.den > 0)
+        w = w * sar.num / sar.den;
+    const int dw = qMax(2, int(std::lround(w)) & ~1);
+    const int dh = qMax(2, codedH & ~1);
+    return (rotation == 90 || rotation == 270) ? QSize(dh, dw) : QSize(dw, dh);
+}
+
 namespace {
 
 StreamInfo describeStream(const AVFormatContext *fmt, const AVStream *stream)
@@ -63,6 +73,14 @@ StreamInfo describeStream(const AVFormatContext *fmt, const AVStream *stream)
         if (stream->avg_frame_rate.den != 0)
             info.fps = av_q2d(stream->avg_frame_rate);
         info.rotationDegrees = displayRotationOf(stream);
+        {
+            const AVRational sar = av_guess_sample_aspect_ratio(const_cast<AVFormatContext *>(fmt),
+                                                                const_cast<AVStream *>(stream), nullptr);
+            if (sar.num > 0 && sar.den > 0) {
+                info.sarNum = sar.num;
+                info.sarDen = sar.den;
+            }
+        }
         info.attachedPicture = (stream->disposition & AV_DISPOSITION_ATTACHED_PIC) != 0;
         break;
     case AVMEDIA_TYPE_AUDIO:

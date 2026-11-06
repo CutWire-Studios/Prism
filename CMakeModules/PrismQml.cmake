@@ -23,7 +23,7 @@ file(GLOB PRISM_LUCIDE_ICONS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" CONFIGURE_DE
      "resources/icons/*.svg")
 
 # The QML module directory is <build>/qml/Prism, not <build>/Prism: the executable is written to
-# <build>/Prism and the two would collide.
+# <build>/prism and the two (case-insensitively, on macOS and Windows) would collide.
 qt_policy(SET QTP0001 NEW)
 qt_policy(SET QTP0004 NEW)
 qt_add_qml_module(prism_qml
@@ -111,8 +111,12 @@ qt_add_qml_module(prism_qml
         src/app/editors/ShapeSourceBackend.cpp
         include/app/editors/SvgTemplateBackend.h
         src/app/editors/SvgTemplateBackend.cpp
-        include/app/panels/AssetLibraryModel.h
-        src/app/panels/AssetLibraryModel.cpp
+        include/app/bin/MediaMetaCache.h
+        src/app/bin/MediaMetaCache.cpp
+        include/app/bin/MediaThumbnailProvider.h
+        src/app/bin/MediaThumbnailProvider.cpp
+        include/app/bin/MediaBinModel.h
+        src/app/bin/MediaBinModel.cpp
     QML_FILES
         ${PRISM_QML_FILES}
     RESOURCES
@@ -140,7 +144,7 @@ target_include_directories(prism_qml PRIVATE
     include/app/gpu
     include/app/dialogs
     include/app/nodes
-    include/app/panels
+    include/app/bin
     include/app
 )
 
@@ -151,4 +155,4 @@ target_link_libraries(prism_qml PRIVATE
     prism_core
 )
 
-target_link_libraries(Prism PRIVATE prism_qmlplugin)
+target_link_libraries(prism PRIVATE prism_qmlplugin)

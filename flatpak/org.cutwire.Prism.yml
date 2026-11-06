@@ -6,7 +6,7 @@ sdk: org.kde.Sdk
 # for clang. The extension is build-time only; nothing from it ends up in /app.
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.llvm20
-command: Prism
+command: prism
 rename-icon: org.cutwire.Prism
 
 finish-args:

@@ -70,9 +70,9 @@ Item {
             y: root.offY + (root.view.y - root.bounds.y) * root.mapScale
             width: root.view.width * root.mapScale
             height: root.view.height * root.mapScale
-            color: Qt.alpha(Theme.accent, 0.16)
+            color: Qt.alpha(Theme.primary, 0.16)
             border.width: 1.5
-            border.color: Theme.accent
+            border.color: Theme.primary
         }
     }
 

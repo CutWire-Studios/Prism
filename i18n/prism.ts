@@ -404,7 +404,7 @@ You may need to specify a device path in settings if the loopback device is not 
     <message>
         <source>Could not start virtual camera output (%1).
 
-Another application may already be using the virtual camera, or softcam.dll may be missing next to Prism.exe.</source>
+Another application may already be using the virtual camera, or softcam.dll may be missing next to prism.exe.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -460,6 +460,13 @@ Another application may already be using the virtual camera, or softcam.dll may 
     </message>
 </context>
 <context>
+    <name>AssetQuickAddButton</name>
+    <message>
+        <source>Add to graph</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>AssetsPanel</name>
     <message>
         <source>Rename Folder</source>
@@ -470,63 +477,192 @@ Another application may already be using the virtual camera, or softcam.dll may 
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Media</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Import Media</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Import Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Couldn’t import that folder.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose Media</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Couldn’t use that file. It must be a media file not already in the library.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save a Copy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Saving a copy…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Couldn’t save a copy.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Rename Media</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Folder name</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Add to graph</source>
+        <source>Media name</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Move out of folder</source>
+        <source>Relink more files?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Rename</source>
+        <source>Relink</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Remove folder</source>
+        <source>Not now</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n other missing file(s) from the same folder were found in “%1” with the same name. Relink them too?</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Move to folder</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Remove from library</source>
+        <source>There is nowhere else to move this.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Search media</source>
+        <source>The library is full (%1 items). Remove some media to add more.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message numerus="yes">
+        <source>Imported %n file(s). %1 skipped: unsupported format.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Imported %n file(s).</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n file(s) skipped: unsupported format.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Those files are already in the library.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>Imported %n file(s) into %1 folder(s), as many as the library takes. Import the rest separately.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Imported %n file(s) into %1 folder(s). %2 file(s) were skipped: unsupported format.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Imported %n file(s) into %1 folder(s).</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Couldn’t save “%1”.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AssetsPanelDropOverlay</name>
+    <message>
+        <source>Drop to import</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Video, audio and image files, or whole folders</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AssetsPanelHeader</name>
     <message>
         <source>Add source</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Add media files</source>
+        <source>New Folder</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Add media folder</source>
+        <source>Create a new folder here</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AssetsPanelImportMenu</name>
+    <message>
+        <source>Import Files…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>New folder</source>
+        <source>Import Folder…</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AssetsPanelImportOverlay</name>
+    <message>
+        <source>Importing…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Up one folder</source>
+        <source>Reading the folder.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AssetsPanelImportSplit</name>
+    <message>
+        <source>Import</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No matches</source>
+        <source>Import video, audio or image files</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No media</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add files or drop them here</source>
+        <source>More import options</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1375,6 +1511,249 @@ low/mid/high · beat</source>
     <name>MasterAudioOutputBody</name>
     <message>
         <source>Default</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MediaAssetsEmptyState</name>
+    <message>
+        <source>No media yet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Import files or drop them here, then double-click or drag them onto the node graph.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Import media</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Import folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Supported formats</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Video</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Images</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MediaAssetsFolderMenu</name>
+    <message>
+        <source>Open</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Move to folder…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MediaAssetsGridCard</name>
+    <message numerus="yes">
+        <source>%1 — %n item(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n item(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>MediaAssetsItemMenu</name>
+    <message numerus="yes">
+        <source>Add %n items to graph</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Add to graph</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Relink media…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace media…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>Move %n items to folder…</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Move to folder…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show in file manager</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save a copy…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>Remove %n items from library</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Remove from library</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MediaAssetsListRow</name>
+    <message numerus="yes">
+        <source>%n item(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Empty</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Missing file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Collapse folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Expand folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MediaAssetsMissingBadge</name>
+    <message>
+        <source>Media file not found. Use Relink media… on this item to point it at the file again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MediaAssetsTab</name>
+    <message>
+        <source>Couldn’t add the media to the graph.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Search media</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Expand all</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Collapse all</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No media match “%1”</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Try a different name.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This folder is empty</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Drag media here, or import more.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Importing folder…</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MediaAssetsViewToolbar</name>
+    <message>
+        <source>Grid view</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>List view</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tree view</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sort</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Date added</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MediaBinModel</name>
+    <message>
+        <source>Media</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Media Files (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source> copy</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2256,69 +2635,6 @@ Route clip audio to a Master Audio Output node and load a video clip, then try a
     </message>
 </context>
 <context>
-    <name>ProgramPanel</name>
-    <message>
-        <source>A</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Fader</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>B</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cut</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Instant cut to opposite deck (Space)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Auto</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Smooth auto transition using selected mode (Enter)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Time</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Transition duration</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Blackout</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cut program output to black (B)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Freeze</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Freeze the program output on the current frame (P)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Stay Tuned</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Show a &quot;Stay Tuned&quot; holding screen on program output (F9)</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>ProgramRecorder</name>
     <message>
         <source>Could not create output file format.</source>
@@ -2401,6 +2717,14 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Could not start %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Command timed out: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Auto (hardware when available)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2442,6 +2766,26 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
     </message>
     <message>
         <source>Mid/High</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>mono</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>stereo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 ch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 kHz</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 fps</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3923,6 +4267,33 @@ Technical detail: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>phone pairing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Firewall Detected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not open firewall port(s).
+%1
+
+Continue anyway? Your phone may not be able to connect.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Permission denied or cancelled.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Firewall</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Firewall port(s) could not be opened.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Could not start the WebRTC servers on %1. Check that ports %2 (signaling) and %3 (browser) are free.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4190,6 +4561,69 @@ Technical detail: %1</source>
     </message>
     <message>
         <source>OK</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>SwitcherView</name>
+    <message>
+        <source>A</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fader</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>B</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cut</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Instant cut to opposite deck (Space)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Smooth auto transition using selected mode (Enter)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Time</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transition duration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Blackout</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cut program output to black (B)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Freeze</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Freeze the program output on the current frame (P)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stay Tuned</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show a &quot;Stay Tuned&quot; holding screen on program output (F9)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -5207,6 +5641,10 @@ pulse</source>
 </context>
 <context>
     <name>WorkspaceStore</name>
+    <message>
+        <source>Control Panel</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message>
         <source>Decks</source>
         <translation type="unfinished"></translation>

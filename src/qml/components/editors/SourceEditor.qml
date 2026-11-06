@@ -330,10 +330,7 @@ ThemedDialog {
     FolderDialog {
         id: folderDialog
         title: qsTr("Select Image Folder")
-        onAccepted: {
-            let s = decodeURIComponent(String(selectedFolder)).replace(/^file:\/\/\//, "")
-            root.folder = /^[A-Za-z]:/.test(s) ? s : "/" + s
-        }
+        onAccepted: root.folder = AppController.localPath(selectedFolder)
     }
 
     ThemedColorDialog {

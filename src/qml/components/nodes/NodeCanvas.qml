@@ -640,9 +640,9 @@ FocusScope {
     Rectangle {
         id: band
         visible: bgArea.banding && bgArea.pressed
-        color: Qt.alpha(Theme.accent, 0.12)
+        color: Qt.alpha(Theme.primary, 0.12)
         border.width: 1
-        border.color: Theme.accent
+        border.color: Theme.primary
     }
 
     MouseArea {

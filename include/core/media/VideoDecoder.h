@@ -15,6 +15,7 @@
 
 extern "C" {
 #include <libavutil/pixfmt.h>
+#include <libavutil/rational.h>
 }
 
 struct AVBufferRef;
@@ -54,6 +55,7 @@ public:
 
     QSize codedSize() const { return m_codedSize; }
     int rotation() const { return m_rotation; }
+    AVRational sampleAspect() const { return m_sar; }
     double duration() const { return m_durationUs / 1e6; }
 
     // Flushes the queue and restarts decoding from `seconds`.
@@ -121,6 +123,7 @@ private:
     int m_streamIndex = -1;
     QSize m_codedSize;
     int m_rotation = 0;
+    AVRational m_sar = {1, 1};
     int64_t m_durationUs = 0;
     int64_t m_frameDurationUs = 33333;
     int m_queueDepth = 4;

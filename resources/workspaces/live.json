@@ -8,25 +8,18 @@
       "id": "main",
       "root": {
         "split": "v",
-        "sizes": [0.5, 0.5],
+        "sizes": [0.42, 0.58],
         "children": [
           {
             "split": "h",
-            "sizes": [0.3, 0.4, 0.3],
+            "sizes": [0.14, 0.62, 0.24],
             "children": [
-              { "panels": [ { "type": "decks" } ], "active": 0 },
-              { "panels": [ { "type": "program" } ], "active": 0 },
+              { "panels": [ { "type": "assets" } ], "active": 0 },
+              { "panels": [ { "type": "nodeGraph" } ], "active": 0 },
               { "panels": [ { "type": "inspector" }, { "type": "mixer" }, { "type": "outputs" } ], "active": 0 }
             ]
           },
-          {
-            "split": "h",
-            "sizes": [0.7, 0.3],
-            "children": [
-              { "panels": [ { "type": "nodeGraph" } ], "active": 0 },
-              { "panels": [ { "type": "assets" } ], "active": 0 }
-            ]
-          }
+          { "panels": [ { "type": "control" } ], "active": 0 }
         ]
       }
     }

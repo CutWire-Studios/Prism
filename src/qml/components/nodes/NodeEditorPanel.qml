@@ -208,20 +208,20 @@ Item {
 
         property var target: null
         readonly property int type: target ? target.type : -1
-        readonly property var T: NodePalette.nodeType
+        readonly property var nodeTypes: NodePalette.nodeType
         readonly property string editKind: target ? NodePalette.editorKind(type, target.hasEditor) : ""
 
         ThemedMenuItem {
             visible: nodeMenu.editKind.length > 0
             text: {
                 switch (nodeMenu.type) {
-                case nodeMenu.T.Layer: return qsTr("Edit Layout")
-                case nodeMenu.T.AudioMixer: return qsTr("Edit Mix")
-                case nodeMenu.T.MasterAudioInput: return qsTr("Edit Mic…")
-                case nodeMenu.T.MasterAudioCapture: return qsTr("Edit Audio Capture…")
-                case nodeMenu.T.AudioScript: return qsTr("Edit FFT")
-                case nodeMenu.T.Process:
-                case nodeMenu.T.AudioEffect:
+                case nodeMenu.nodeTypes.Layer: return qsTr("Edit Layout")
+                case nodeMenu.nodeTypes.AudioMixer: return qsTr("Edit Mix")
+                case nodeMenu.nodeTypes.MasterAudioInput: return qsTr("Edit Mic…")
+                case nodeMenu.nodeTypes.MasterAudioCapture: return qsTr("Edit Audio Capture…")
+                case nodeMenu.nodeTypes.AudioScript: return qsTr("Edit FFT")
+                case nodeMenu.nodeTypes.Process:
+                case nodeMenu.nodeTypes.AudioEffect:
                     return NodeCatalog.effectLabel(nodeMenu.type, nodeMenu.target.params)
                 }
                 return qsTr("Edit")
@@ -229,29 +229,29 @@ Item {
             onTriggered: nodeMenu.target.requestEditor(nodeMenu.editKind)
         }
         ThemedMenuItem {
-            visible: nodeMenu.type === nodeMenu.T.Input && !!nodeMenu.target && !!nodeMenu.target.params.hasAudio
+            visible: nodeMenu.type === nodeMenu.nodeTypes.Input && !!nodeMenu.target && !!nodeMenu.target.params.hasAudio
             text: qsTr("Edit Audio")
             onTriggered: nodeMenu.target.requestEditor("audio")
         }
         ThemedMenuItem {
-            visible: nodeMenu.type === nodeMenu.T.Layer
+            visible: nodeMenu.type === nodeMenu.nodeTypes.Layer
             text: qsTr("Edit Canvas Size")
             onTriggered: nodeMenu.target.requestEditor("layerCanvas")
         }
         ThemedMenuItem {
-            visible: nodeMenu.type === nodeMenu.T.Script
+            visible: nodeMenu.type === nodeMenu.nodeTypes.Script
             text: qsTr("Run now")
             onTriggered: root.runScriptRequested(nodeMenu.target.nodeId)
         }
         ThemedMenuItem {
-            visible: nodeMenu.type === nodeMenu.T.Trigger
+            visible: nodeMenu.type === nodeMenu.nodeTypes.Trigger
             text: qsTr("Pulse now")
             onTriggered: root.pulseTriggerRequested(nodeMenu.target.nodeId)
         }
         ThemedMenuItem {
             text: qsTr("Delete")
             icon.name: "trash-2"
-            enabled: nodeMenu.type !== nodeMenu.T.Output || graphCanvas.nodeCount <= 1
+            enabled: nodeMenu.type !== nodeMenu.nodeTypes.Output || graphCanvas.nodeCount <= 1
             onTriggered: root.controller.removeNodes(root.controller.selection)
         }
         onClosed: graphCanvas.forceActiveFocus()

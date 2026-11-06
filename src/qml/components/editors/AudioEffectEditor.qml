@@ -26,9 +26,7 @@ ThemedDialog {
     }
 
     function localPath(url) {
-        let s = decodeURIComponent(String(url))
-        s = s.replace(/^file:\/\/\//, "")
-        return /^[A-Za-z]:/.test(s) ? s : "/" + s
+        return AppController.localPath(url)
     }
 
     function chooseIr(pedalId) {

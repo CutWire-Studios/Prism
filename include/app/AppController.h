@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QUrl>
 #include <QHash>
 #include <QImage>
 #include <QJsonObject>
@@ -121,7 +122,8 @@ class AppController : public QObject {
     Q_PROPERTY(bool mcpEnabled READ mcpEnabled WRITE setMcpEnabled NOTIFY mcpEnabledChanged)
 
 public:
-    explicit AppController(QObject *parent = nullptr);
+    // No default argument: a default-constructible type makes QML build its own instance instead of calling create().
+    explicit AppController(QObject *parent);
     ~AppController() override;
 
     /// The process-wide instance (null before construction).
@@ -148,6 +150,8 @@ public:
     OscServer *oscServer() const { return m_oscServer; }
     prism::mcp::McpServer *mcpServer() const { return m_mcp; }
     ClipManager *clipManager() { return &m_clipManager; }
+    // ── Media library ──
+    void notifyLibraryChanged();
 
     // ── Property getters ──────────────────────────────────────────────────────
     quint64 activeNodeA() const;
@@ -228,6 +232,7 @@ public:
     // ── Sources / media (QML) ─────────────────────────────────────────────────
     /// Adds files to the media library and creates a clip node per media file (MainWindow::onAddFilesClicked).
     Q_INVOKABLE void importFiles(const QStringList &paths);
+    Q_INVOKABLE QString localPath(const QUrl &url) const;
     Q_INVOKABLE void importFolder(const QString &path);
     Q_INVOKABLE void requestAddFiles();    // filePickRequested("addFiles", ...)
     Q_INVOKABLE void requestAddFolder();   // filePickRequested("addFolder", ...)
@@ -242,6 +247,8 @@ public:
     Q_INVOKABLE bool runScript(quint64 nodeId);
     /// "Pulse now" on a Trigger node; false when the node is not a Trigger node.
     Q_INVOKABLE bool pulseTrigger(quint64 nodeId);
+    /// 0 while the node has no thumbnail; otherwise a cache-buster for image://nodethumb/<id>?v=<rev>.
+    Q_INVOKABLE int nodeThumbnailRevision(quint64 nodeId) const;
     /// Code, output and run hook of the script feeding a Text/Shader node's data input (empty when unconnected).
     ScriptBinding scriptBindingFor(NodeId dataNodeId) const;
 
@@ -327,6 +334,8 @@ public:
     QJsonObject currentSessionJson(const QString &sessionFilePath = {}) const;
 
 signals:
+    /// id 0 means all node thumbnails were dropped.
+    void nodeThumbnailChanged(quint64 id);
     // Properties
     void decksChanged();
     void deckClockChanged();

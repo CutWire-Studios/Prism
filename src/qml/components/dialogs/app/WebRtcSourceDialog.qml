@@ -13,9 +13,11 @@ ThemedDialog {
     showFooter: false
     acceptOnReturn: false
     property bool finished: false
+    property bool starting: false
 
     onAboutToShow: {
         paired = false
+        starting = false
         error = ""
         interfaces = SourcePrompts.webrtcInterfaces()
         networkCombo.currentIndex = SourcePrompts.webrtcDefaultInterface()
@@ -23,10 +25,21 @@ ThemedDialog {
     }
 
     function startPairing() {
-        const result = SourcePrompts.webrtcStart(modeCombo.currentIndex === 1 ? relayField.text : "",
-                                                 networkCombo.currentIndex)
-        paired = result.ok
-        error = result.ok ? "" : result.error
+        starting = true
+        error = ""
+        SourcePrompts.webrtcStart(modeCombo.currentIndex === 1 ? relayField.text : "",
+                                  networkCombo.currentIndex)
+    }
+
+    Connections {
+        target: SourcePrompts
+        function onWebrtcStarted(ok, message) {
+            if (!root.starting)
+                return
+            root.starting = false
+            root.paired = ok
+            root.error = ok ? "" : message
+        }
     }
 
     onClosed: {
@@ -127,7 +140,7 @@ ThemedDialog {
             ThemedButton {
                 variant: "primary"
                 text: root.paired ? qsTr("Add") : qsTr("Start pairing")
-                enabled: SourcePrompts.webrtcAvailable
+                enabled: SourcePrompts.webrtcAvailable && !root.starting
                 onClicked: {
                     if (root.paired) {
                         SourcePrompts.webrtcFinish()

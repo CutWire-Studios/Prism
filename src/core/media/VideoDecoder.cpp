@@ -263,6 +263,9 @@ bool VideoDecoder::open(const QString &path)
     const AVStream *stream = fmt->streams[index];
     m_codedSize = QSize(stream->codecpar->width, stream->codecpar->height);
     m_rotation = displayRotationOf(stream);
+    m_sar = av_guess_sample_aspect_ratio(fmt, const_cast<AVStream *>(stream), nullptr);
+    if (m_sar.num <= 0 || m_sar.den <= 0)
+        m_sar = {1, 1};
 
     if (stream->duration != AV_NOPTS_VALUE && stream->duration > 0)
         m_durationUs = av_rescale_q(stream->duration, stream->time_base, {1, 1000000});
@@ -310,6 +313,7 @@ void VideoDecoder::close()
     m_streamIndex = -1;
     m_codedSize = {};
     m_rotation = 0;
+    m_sar = {1, 1};
     m_durationUs = 0;
 }
 

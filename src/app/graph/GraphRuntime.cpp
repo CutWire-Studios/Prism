@@ -2,12 +2,14 @@
 
 #include "core/media/AudioAnalyzer.h"
 #include "core/media/MediaProbe.h"
+#include "app/common/ThumbHelper.h"
 #include "core/media/ThumbnailExtractor.h"
 #include "core/project/ClipManager.h"
 #include "core/scripting/ScriptRuntime.h"
 #include "core/media/AudioLoopbackEnumerator.h"
 
 #include <QDate>
+#include <QDir>
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QFileInfo>
@@ -18,6 +20,7 @@
 #include <QMutexLocker>
 #include <QPointer>
 #include <QThread>
+#include <QThreadPool>
 #include <QTime>
 #include <QTimer>
 #include <QtQuick/QQuickImageProvider>
@@ -25,6 +28,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <numeric>
 
 namespace {
 
@@ -36,6 +40,7 @@ struct ThumbState {
     QMutex mutex;
     QHash<NodeId, QImage> images;
     QHash<NodeId, int> revisions;
+    int counter = 0;
 };
 
 class NodeThumbProvider : public QQuickImageProvider {
@@ -70,6 +75,60 @@ public:
 private:
     std::shared_ptr<ThumbState> m_state;
 };
+
+bool isInput(const ClipGraph *graph, NodeId id) {
+    const ClipGraph::Node *n = graph->node(id);
+    return n && n->type == NT::Input;
+}
+
+QImage generateThumbnail(const SourceDescriptor &desc) {
+    using K = SourceDescriptor::Kind;
+    switch (desc.kind) {
+    case K::VideoFile:
+    case K::Image:
+        return ThumbnailExtractor::extractImage(desc.path, 110, 65);
+    case K::Slideshow: {
+        const QStringList imgs = QDir(desc.path).entryList(
+            {"*.png", "*.jpg", "*.jpeg", "*.bmp", "*.webp"}, QDir::Files, QDir::Name);
+        QImage img;
+        if (!imgs.isEmpty())
+            img = ThumbnailExtractor::extractImage(QDir(desc.path).absoluteFilePath(imgs.first()), 110, 65);
+        return img.isNull() ? ThumbHelper::makeIconThumb(ThumbHelper::Names::Folder) : img;
+    }
+    case K::Camera:
+        return ThumbHelper::makeIconThumb(ThumbHelper::Names::PhotoCamera);
+    case K::Screen:
+        return ThumbHelper::makeIconThumb(ThumbHelper::Names::DesktopWindows);
+    case K::Window:
+        return ThumbHelper::makeIconThumb(ThumbHelper::Names::SelectWindow);
+    case K::Ndi:
+    case K::WebRtc:
+        return ThumbHelper::makeIconThumb(ThumbHelper::Names::Sensors);
+    case K::Shader:
+        return ThumbHelper::makeIconThumb(ThumbHelper::Names::Grain);
+    case K::Canvas: {
+        const int g = std::gcd(std::max(1, desc.canvasWidth), std::max(1, desc.canvasHeight));
+        return ThumbHelper::makeCanvasThumb(
+            QStringLiteral("%1:%2").arg(desc.canvasWidth / g).arg(desc.canvasHeight / g),
+            desc.canvasFill, desc.color);
+    }
+    case K::Text:
+        return ThumbHelper::makeTextThumb(desc);
+    case K::Shape:
+        return ThumbHelper::makeShapeThumb(desc);
+    case K::SvgTemplate:
+        return ThumbHelper::makeSvgTemplateThumb(desc);
+    case K::AudioFile:
+    case K::RemovedHtml:
+        break;
+    }
+    return {};
+}
+
+QString sourceKey(const SourceDescriptor &desc) {
+    return QString::fromUtf8(QJsonDocument(QJsonObject::fromVariantMap(ClipGraph::sourceToMap(desc)))
+                                 .toJson(QJsonDocument::Compact));
+}
 
 void publishJson(ScriptOutput &out, const QJsonObject &obj) {
     const QString json = QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact));
@@ -379,6 +438,7 @@ struct GraphRuntime::Impl {
     QHash<NodeId, uint> lastAbVersion;
     mutable QHash<NodeId, std::shared_ptr<ScriptOutput>> dataInputs;
     std::shared_ptr<ThumbState> thumbs = std::make_shared<ThumbState>();
+    QHash<NodeId, QString> thumbKeys;
     QTimer *pollTimer = nullptr;
 
     ScriptNode *script(NodeId id) const {
@@ -464,6 +524,7 @@ struct GraphRuntime::Impl {
         lastMergedVersion.remove(id);
         lastAbVersion.remove(id);
         dataInputs.remove(id);
+        thumbKeys.remove(id);
         QMutexLocker lock(&thumbs->mutex);
         thumbs->images.remove(id);
         thumbs->revisions.remove(id);
@@ -474,8 +535,24 @@ GraphRuntime::GraphRuntime(ClipGraph *graph, QObject *parent)
     : QObject(parent), d(std::make_unique<Impl>()), m_graph(graph) {
     d->rebuild(m_graph);
 
-    connect(m_graph, &ClipGraph::nodeAdded, this, [this](NodeId id) { d->sync(m_graph, id); });
-    connect(m_graph, &ClipGraph::nodeChanged, this, [this](NodeId id) { d->sync(m_graph, id); });
+    connect(m_graph, &ClipGraph::nodeAdded, this, [this](NodeId id) {
+        d->sync(m_graph, id);
+        QTimer::singleShot(0, this, [this, id]() {
+            if (m_graph->hasNode(id) && thumbnailRevision(id) == 0 && !d->thumbKeys.contains(id))
+                requestThumbnail(id);
+        });
+    });
+    connect(m_graph, &ClipGraph::nodeChanged, this, [this](NodeId id) {
+        d->sync(m_graph, id);
+        if (!isInput(m_graph, id))
+            return;
+        const QString key = sourceKey(m_graph->sourceDescriptor(id));
+        auto it = d->thumbKeys.find(id);
+        if (it == d->thumbKeys.end())
+            d->thumbKeys.insert(id, key);
+        else if (*it != key)
+            requestThumbnail(id);
+    });
     connect(m_graph, &ClipGraph::nodeRemoved, this, [this](NodeId id) { d->removeNode(id); });
     connect(m_graph, &ClipGraph::graphReset, this, [this]() {
         {
@@ -483,7 +560,10 @@ GraphRuntime::GraphRuntime(ClipGraph *graph, QObject *parent)
             d->thumbs->images.clear();
             d->thumbs->revisions.clear();
         }
+        d->thumbKeys.clear();
+        emit thumbnailChanged(0);
         d->rebuild(m_graph);
+        generateMissingThumbnails();
     });
 
     d->pollTimer = new QTimer(this);
@@ -538,9 +618,34 @@ void GraphRuntime::setThumbnail(NodeId id, const QImage &image) {
     {
         QMutexLocker lock(&d->thumbs->mutex);
         d->thumbs->images.insert(id, image);
-        d->thumbs->revisions[id] += 1;
+        d->thumbs->revisions[id] = ++d->thumbs->counter;
     }
     emit thumbnailChanged(id);
+}
+
+void GraphRuntime::generateMissingThumbnails() {
+    for (NodeId id : m_graph->nodeIds()) {
+        if (isInput(m_graph, id) && thumbnailRevision(id) == 0)
+            requestThumbnail(id);
+    }
+}
+
+void GraphRuntime::requestThumbnail(NodeId id) {
+    if (!m_graph->hasNode(id) || !isInput(m_graph, id))
+        return;
+    const SourceDescriptor desc = m_graph->sourceDescriptor(id);
+    const QString key = sourceKey(desc);
+    d->thumbKeys.insert(id, key);
+    QPointer<GraphRuntime> self(this);
+    QThreadPool::globalInstance()->start([self, id, key, desc]() {
+        const QImage image = generateThumbnail(desc);
+        if (image.isNull() || !self)
+            return;
+        QMetaObject::invokeMethod(self.data(), [self, id, key, image]() {
+            if (self && self->m_graph->hasNode(id) && self->d->thumbKeys.value(id) == key)
+                self->setThumbnail(id, image);
+        }, Qt::QueuedConnection);
+    });
 }
 
 int GraphRuntime::thumbnailRevision(NodeId id) const {

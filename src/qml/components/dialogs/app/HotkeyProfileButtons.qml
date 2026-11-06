@@ -10,7 +10,7 @@ Row {
     signal message(string text)
 
     function _path(url) {
-        return decodeURIComponent(url.toString().replace(/^file:\/\//, ""))
+        return AppController.localPath(url)
     }
 
     ThemedButton {

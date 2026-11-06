@@ -724,7 +724,7 @@ endif()
 
 if(APPLE)
     set(_prism_icns "${CMAKE_CURRENT_SOURCE_DIR}/resources/macos/Prism.icns")
-    qt_add_executable(Prism MACOSX_BUNDLE src/main.cpp ${_prism_icns})
+    qt_add_executable(prism MACOSX_BUNDLE src/main.cpp ${_prism_icns})
 
     # A nightly is "Prism Nightly.app" with its own bundle id, so it installs beside a stable copy.
     set(MACOSX_BUNDLE_BUNDLE_NAME "${PRISM_APP_NAME}")
@@ -737,20 +737,20 @@ if(APPLE)
     # Copy the icon into the bundle's Resources so CFBundleIconFile resolves.
     set_source_files_properties(${_prism_icns} PROPERTIES
         MACOSX_PACKAGE_LOCATION "Resources")
-    set_target_properties(Prism PROPERTIES
+    set_target_properties(prism PROPERTIES
         OUTPUT_NAME "${PRISM_APP_NAME}"
         MACOSX_BUNDLE_INFO_PLIST
             "${CMAKE_CURRENT_SOURCE_DIR}/resources/macos/Info.plist.in")
 else()
     if(WIN32)
         set(_prism_win_rc "${CMAKE_CURRENT_SOURCE_DIR}/resources/windows/Prism.rc")
-        qt_add_executable(Prism WIN32 src/main.cpp ${_prism_win_rc})
+        qt_add_executable(prism WIN32 src/main.cpp ${_prism_win_rc})
     else()
-        qt_add_executable(Prism src/main.cpp)
+        qt_add_executable(prism src/main.cpp)
     endif()
 endif()
 
-target_link_libraries(Prism PRIVATE prism_core)
+target_link_libraries(prism PRIVATE prism_core)
 include(PrismQml)
 
 # Translations. English is the source language; i18n/prism.ts is the catalog lupdate maintains.
@@ -838,18 +838,18 @@ else()
 endif()
 
 if(WIN32)
-    add_custom_command(TARGET Prism POST_BUILD
+    add_custom_command(TARGET prism POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:softcam>
-            $<TARGET_FILE_DIR:Prism>
-        COMMENT "Copy softcam.dll next to Prism.exe")
+            $<TARGET_FILE_DIR:prism>
+        COMMENT "Copy softcam.dll next to prism.exe")
 
     if(PRISM_HAVE_SEGMENTATION AND ONNXRUNTIME_RUNTIME_LIBS)
-        add_custom_command(TARGET Prism POST_BUILD
+        add_custom_command(TARGET prism POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 ${ONNXRUNTIME_RUNTIME_LIBS}
-                $<TARGET_FILE_DIR:Prism>
-            COMMENT "Copy onnxruntime.dll next to Prism.exe")
+                $<TARGET_FILE_DIR:prism>
+            COMMENT "Copy onnxruntime.dll next to prism.exe")
     endif()
 endif()
 
@@ -859,7 +859,7 @@ enable_testing()
 # Add test subdirectory
 add_subdirectory(tests)
 
-install(TARGETS Prism prism_core
+install(TARGETS prism prism_core
     RUNTIME DESTINATION bin
     BUNDLE  DESTINATION .
     ARCHIVE DESTINATION lib)

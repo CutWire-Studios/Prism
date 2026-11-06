@@ -11,6 +11,7 @@ Item {
     property var editors: null
 
     Component { id: placeholderC; PlaceholderPanel {} }
+    Component { id: controlC; ControlPanel {} }
     Component { id: decksC; DecksPanel {} }
     Component { id: programC; ProgramPanel {} }
     Component { id: nodeGraphC; NodeGraphPanel { editors: root.editors } }
@@ -21,6 +22,7 @@ Item {
 
     function componentFor(type) {
         switch (type) {
+        case "control": return controlC
         case "decks": return decksC
         case "program": return programC
         case "nodeGraph": return nodeGraphC

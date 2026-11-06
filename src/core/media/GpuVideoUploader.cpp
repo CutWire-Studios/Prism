@@ -815,7 +815,7 @@ bool GpuVideoUploader::readback(QOpenGLFramebufferObject *target, uint8_t *rgb)
 }
 
 GLuint GpuVideoUploader::render(const AVFrame *av, int rotation,
-                                std::unique_ptr<QOpenGLFramebufferObject> &target)
+                                std::unique_ptr<QOpenGLFramebufferObject> &target, QSize displaySize)
 {
     if (!av || av->width < 2 || av->height < 2 || !makeCurrent())
         return 0;
@@ -868,8 +868,10 @@ GLuint GpuVideoUploader::render(const AVFrame *av, int rotation,
     }
 
     const bool swap = rotation == 90 || rotation == 270;
-    const int destW = qMax(2, (swap ? av->height : av->width) & ~1);
-    const int destH = qMax(2, (swap ? av->width : av->height) & ~1);
+    const int destW = displaySize.isValid() ? displaySize.width()
+                                            : qMax(2, (swap ? av->height : av->width) & ~1);
+    const int destH = displaySize.isValid() ? displaySize.height()
+                                            : qMax(2, (swap ? av->width : av->height) & ~1);
     if (!target || target->width() != destW || target->height() != destH) {
         target = std::make_unique<QOpenGLFramebufferObject>(
             destW, destH, QOpenGLFramebufferObject::NoAttachment, GL_TEXTURE_2D, GL_RGBA8);

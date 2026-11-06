@@ -255,6 +255,16 @@ QJsonObject SessionManager::buildJson(int crossfader, int transitionMode,
             : path] = folderId;
     }
     root["assetClipFolders"] = assetClipFolders;
+
+    QJsonObject assetNames;
+    for (const QString &path : m_clipManager->getClips()) {
+        if (!m_clipManager->hasCustomName(path))
+            continue;
+        assetNames[sessionDir.isAbsolute()
+            ? AssetPathResolver::storePath(path, sessionDir)
+            : path] = m_clipManager->displayName(path);
+    }
+    root["assetNames"] = assetNames;
     return root;
 }
 
@@ -318,6 +328,12 @@ bool SessionManager::loadFromFile(const QString &path) {
         const QString resolved = resolvedByStored.value(it.key());
         if (!resolved.isEmpty())
             m_clipManager->moveClip(resolved, it.value().toString());
+    }
+    const QJsonObject clipNames = root["assetNames"].toObject();
+    for (auto it = clipNames.begin(); it != clipNames.end(); ++it) {
+        const QString resolved = resolvedByStored.value(it.key());
+        if (!resolved.isEmpty())
+            m_clipManager->setDisplayName(resolved, it.value().toString());
     }
 
     for (const NodeId id : m_graph->nodeIdsOfType(ClipGraph::NodeType::Input)) {

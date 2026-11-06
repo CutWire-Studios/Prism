@@ -87,7 +87,7 @@ jobs:
 
           - **AppImage** (Linux, any distro): `chmod +x Prism-*-x86_64.AppImage && ./Prism-*-x86_64.AppImage`
           - **Windows installer**: run `Prism-Setup-*-x64.exe`
-          - **Windows portable**: extract `Prism-Portable-*-x64.zip` anywhere and run `Prism.exe` from the
+          - **Windows portable**: extract `Prism-Portable-*-x64.zip` anywhere and run `prism.exe` from the
             `Prism` folder inside it. Nothing is installed, but settings are still stored per-user.
           - **macOS**: open `Prism-*-arm64.dmg` (Apple Silicon) and drag Prism to Applications. Unless these
             notes say the build is notarised, the first launch needs right-click → Open.

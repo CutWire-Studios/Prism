@@ -8,7 +8,7 @@
 # cmake flag — cannot be forgotten here.
 #
 # Unlike the AppImage, Flatpak and installers, the two channels are NOT co-installable on Arch:
-# both packages own /usr/bin/Prism, and pacman will not have that. So the nightly takes a distinct
+# both packages own /usr/bin/prism, and pacman will not have that. So the nightly takes a distinct
 # package identity and declares the conflict outright, the same way an AUR -git package does. Its
 # desktop entry, icon and AppStream id are still the nightly ones (PRISM_CHANNEL=nightly, see
 # CMakeLists.txt), so a user can always tell which channel is installed.
@@ -48,7 +48,7 @@ once(
     'pkgdesc="Qt6 live media mixer/switcher with FFmpeg, OpenGL and a dark Resolume-inspired UI"',
     'pkgdesc="Qt6 live media mixer/switcher with FFmpeg, OpenGL and a dark Resolume-inspired UI'
     ' (nightly build)"\n'
-    "# Both packages own /usr/bin/Prism, so they cannot be co-installed; say so rather than\n"
+    "# Both packages own /usr/bin/prism, so they cannot be co-installed; say so rather than\n"
     "# letting pacman fail on a file conflict at install time.\n"
     "conflicts=('prism')\n"
     "provides=(\"prism=$pkgver\")",

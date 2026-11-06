@@ -117,12 +117,19 @@ void RemoteServerSettings::toggle()
 
     const QString text = FirewallUtils::promptText(fw, {p}, tr("remote control access from your phone"));
     app->requestConfirm(tr("Firewall Detected"), text, [this, fw, addr, p](bool allow) {
-        QString fwErr;
-        if (!allow || !FirewallUtils::openPorts(fw, {p}, fwErr)) {
+        if (!allow) {
             m_error = tr("Could not open the firewall port. %1 Your phone may not be able to connect.")
-                          .arg(fwErr.isEmpty() ? tr("Permission denied or cancelled.") : fwErr);
+                          .arg(tr("Permission denied or cancelled."));
+            startServer(addr);
+            return;
         }
-        startServer(addr);
+        FirewallUtils::openPortsAsync(fw, {p}, this, [this, addr](bool ok, QString fwErr) {
+            if (!ok) {
+                m_error = tr("Could not open the firewall port. %1 Your phone may not be able to connect.")
+                              .arg(fwErr.isEmpty() ? tr("Permission denied or cancelled.") : fwErr);
+            }
+            startServer(addr);
+        });
     });
 }
 

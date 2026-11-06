@@ -16,7 +16,7 @@
   #define MyOutputBase "Prism-Setup-x64"
 #endif
 #define MyAppPublisher "CutWire"
-#define MyAppExeName "Prism.exe"
+#define MyAppExeName "prism.exe"
 
 ; /DNightly builds the nightly channel installer: its own AppId, name and install directory, so it
 ; sits beside a stable install instead of upgrading it. Never change either AppId: it is what lets

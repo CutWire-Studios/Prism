@@ -106,11 +106,16 @@ QImage decodeVideoFrame(const QString &path, double seconds, int maxWidth, int m
     }
 
     if (got) {
-        QSize size(frame->width, frame->height);
+        const int rotation = displayRotationOf(stream);
+        const bool swapped = rotation == 90 || rotation == 270;
+        QSize size = displaySize(frame->width, frame->height,
+                                 av_guess_sample_aspect_ratio(fmt, stream, frame), rotation);
         if (maxWidth > 0 && maxHeight > 0
             && (size.width() > maxWidth || size.height() > maxHeight))
             size.scale(maxWidth, maxHeight, Qt::KeepAspectRatio);
         size = size.expandedTo(QSize(1, 1));
+        if (swapped)
+            size.transpose();
 
         SwsContext *sws = sws_getContext(frame->width, frame->height,
                                          AVPixelFormat(frame->format),
@@ -123,7 +128,6 @@ QImage decodeVideoFrame(const QString &path, double seconds, int maxWidth, int m
             sws_scale(sws, frame->data, frame->linesize, 0, frame->height, dst, dstStride);
             sws_freeContext(sws);
 
-            const int rotation = displayRotationOf(stream);
             if (rotation != 0)
                 out = out.transformed(QTransform().rotate(rotation));
         }

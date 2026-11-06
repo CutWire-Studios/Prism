@@ -11,12 +11,12 @@ bool ThumbnailExtractor::isStaticImageFile(const QString &path) {
     return MediaFormats::isImagePath(path);
 }
 
-QPixmap ThumbnailExtractor::extract(const QString &filePath, int width, int height) {
+QImage ThumbnailExtractor::extractImage(const QString &filePath, int width, int height) {
     if (isStaticImageFile(filePath)) {
         const QImage img = StillImage::decode(filePath);
         if (img.isNull())
             return {};
-        return QPixmap::fromImage(img.scaled(width, height, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        return img.scaled(width, height, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }
 
     // Seek to ~10% into the file for a more representative frame.
@@ -32,6 +32,10 @@ QPixmap ThumbnailExtractor::extract(const QString &filePath, int width, int heig
     const QImage frame = StillImage::decodeVideoFrame(filePath, at, width * 2, height * 2);
     if (frame.isNull())
         return {};
-    return QPixmap::fromImage(frame.scaled(width, height, Qt::KeepAspectRatio,
-                                           Qt::SmoothTransformation));
+    return frame.scaled(width, height, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+}
+
+QPixmap ThumbnailExtractor::extract(const QString &filePath, int width, int height) {
+    const QImage img = extractImage(filePath, width, height);
+    return img.isNull() ? QPixmap() : QPixmap::fromImage(img);
 }

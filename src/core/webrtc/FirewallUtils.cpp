@@ -1,6 +1,9 @@
 #include "core/webrtc/FirewallUtils.h"
+#include <QPointer>
 #include <QProcess>
 #include <QSet>
+#include <QTimer>
+#include <memory>
 
 #ifdef Q_OS_LINUX
 
@@ -117,9 +120,12 @@ QString promptText(const Status &status, const QList<quint16> &tcpPorts,
         .arg(fwName, purpose, portStrs.join(QStringLiteral(", ")));
 }
 
-bool openPorts(const Status &status, const QList<quint16> &tcpPorts, QString &errorOut) {
-    if (!status.active)
-        return true;
+void openPortsAsync(const Status &status, const QList<quint16> &tcpPorts, QObject *context,
+                    std::function<void(bool, QString)> done) {
+    if (!status.active) {
+        done(true, QString());
+        return;
+    }
 
     g_backend = status.backend;
 
@@ -135,15 +141,52 @@ bool openPorts(const Status &status, const QList<quint16> &tcpPorts, QString &er
         }
     }
 
-    if (commands.isEmpty())
-        return true;
+    if (commands.isEmpty()) {
+        done(true, QString());
+        return;
+    }
 
-    if (!runPrivilegedBatch(commands, errorOut))
-        return false;
+    auto *proc = new QProcess(context);
+    auto finished = std::make_shared<bool>(false);
+    auto finish = [proc, finished, portsToOpen, done = std::move(done)](bool ok, const QString &err) {
+        if (*finished)
+            return;
+        *finished = true;
+        if (ok) {
+            for (quint16 port : portsToOpen)
+                g_openedPorts.insert(port);
+        }
+        proc->deleteLater();
+        done(ok, err);
+    };
 
-    for (quint16 port : portsToOpen)
-        g_openedPorts.insert(port);
-    return true;
+    QObject::connect(proc, &QProcess::errorOccurred, proc, [proc, finish](QProcess::ProcessError e) {
+        if (e == QProcess::FailedToStart)
+            finish(false, QObject::tr("Could not start %1").arg(proc->program()));
+    });
+    QObject::connect(proc, &QProcess::finished, proc, [proc, finish](int exitCode, QProcess::ExitStatus) {
+        if (exitCode == 0) {
+            finish(true, QString());
+            return;
+        }
+        const QString stderrText = QString::fromUtf8(proc->readAllStandardError()).trimmed();
+        const QString stdoutText = QString::fromUtf8(proc->readAllStandardOutput()).trimmed();
+        QString err = stderrText.isEmpty() ? stdoutText : stderrText;
+        if (err.isEmpty())
+            err = QObject::tr("%1 exited with code %2").arg(proc->program()).arg(exitCode);
+        finish(false, err);
+    });
+
+    auto *timeout = new QTimer(proc);
+    timeout->setSingleShot(true);
+    QObject::connect(timeout, &QTimer::timeout, proc, [proc, finish]() {
+        finish(false, QObject::tr("Command timed out: %1").arg(proc->program()));
+        proc->kill();
+    });
+    timeout->start(120000);
+
+    proc->start(QStringLiteral("pkexec"),
+                {QStringLiteral("sh"), QStringLiteral("-c"), commands.join(QStringLiteral(" && "))});
 }
 
 void releasePorts(const QList<quint16> &tcpPorts) {
@@ -203,7 +246,9 @@ Status detect() { return {}; }
 
 QString promptText(const Status &, const QList<quint16> &, const QString &) { return {}; }
 
-bool openPorts(const Status &, const QList<quint16> &, QString &) { return true; }
+void openPortsAsync(const Status &, const QList<quint16> &, QObject *, std::function<void(bool, QString)> done) {
+    done(true, QString());
+}
 
 void releasePorts(const QList<quint16> &tcpPorts) {
     Q_UNUSED(tcpPorts);

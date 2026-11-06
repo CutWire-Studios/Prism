@@ -1,8 +1,13 @@
 #pragma once
 
 #include <QList>
+#include <QSize>
 #include <QString>
 #include <cstdint>
+
+extern "C" {
+#include <libavutil/rational.h>
+}
 
 // Metadata for a single stream inside a probed media file.
 struct StreamInfo {
@@ -17,6 +22,8 @@ struct StreamInfo {
     int height = 0;
     double fps = 0.0;
     int rotationDegrees = 0;
+    int sarNum = 1;
+    int sarDen = 1;
 
     // True for cover-art / thumbnail streams (e.g. embedded album art in
     // MP3/FLAC). These are exposed as video streams by libav but must not be
@@ -65,3 +72,7 @@ struct AVStream;
 // The stream's display-matrix rotation, normalized to 0/90/180/270 the way players
 // interpret it. Anything that decodes pixels has to apply this itself.
 int displayRotationOf(const AVStream *stream);
+
+// The size a frame is shown at: sample aspect ratio widens the coded width, then 90/270 rotation
+// swaps the axes. Both sides are rounded down to even (minimum 2) as NV12 needs.
+QSize displaySize(int codedW, int codedH, AVRational sar, int rotation);

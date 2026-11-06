@@ -112,6 +112,6 @@ ThemedDialog {
     FolderDialog {
         id: folderDialog
         title: qsTr("Select recording output folder")
-        onAccepted: RecordingPanel.outputDir = decodeURIComponent(selectedFolder.toString().replace(/^file:\/\//, ""))
+        onAccepted: RecordingPanel.outputDir = AppController.localPath(selectedFolder)
     }
 }

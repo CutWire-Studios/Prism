@@ -118,7 +118,7 @@ Item {
 
             ShapePath {
                 strokeColor: edge.splice ? Qt.alpha(Theme.foreground, 0.35)
-                                         : (edge.picked ? Qt.alpha(Theme.accent, 0.25) : "transparent")
+                                         : (edge.picked ? Qt.alpha(Theme.primary, 0.25) : "transparent")
                 strokeWidth: 8
                 fillColor: "transparent"
                 capStyle: ShapePath.RoundCap
@@ -135,7 +135,7 @@ Item {
             }
 
             ShapePath {
-                strokeColor: edge.picked ? Theme.accent : NodePalette.edgeColor(edge.edgeKind)
+                strokeColor: edge.picked ? Theme.primary : NodePalette.edgeColor(edge.edgeKind)
                 strokeWidth: edge.picked ? 3.5 : (edge.hot ? 3 : 2)
                 fillColor: "transparent"
                 capStyle: ShapePath.RoundCap

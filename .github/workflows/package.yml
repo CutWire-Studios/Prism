@@ -354,7 +354,7 @@ jobs:
             --exclude-library "libva*" \
             -d "${{ steps.appimage_meta.outputs.desktop }}" \
             -i "${{ steps.appimage_meta.outputs.icon }}" \
-            -e AppDir/usr/bin/Prism
+            -e AppDir/usr/bin/prism
           test -f "${APPIMAGE_NAME}.zsync"
           mv "${APPIMAGE_NAME}" "${APPIMAGE_NAME}.zsync" dist/
 
@@ -478,10 +478,10 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist\bin | Out-Null
-          Copy-Item build\Release\Prism.exe dist\bin -Force
+          Copy-Item build\Release\prism.exe dist\bin -Force
           Copy-Item build\Release\softcam.dll dist\bin -Force -ErrorAction SilentlyContinue
           Copy-Item build\Release\onnxruntime*.dll dist\bin -Force -ErrorAction SilentlyContinue
-          & "${{ env.QT_ROOT_DIR }}\bin\windeployqt.exe" --release --no-translations --qmldir src\qml dist\bin\Prism.exe
+          & "${{ env.QT_ROOT_DIR }}\bin\windeployqt.exe" --release --no-translations --qmldir src\qml dist\bin\prism.exe
           Copy-Item vcpkg\installed\x64-windows\bin\*.dll dist\bin -Force
           Copy-Item .deps\ffmpeg\bin\*.dll dist\bin -Force
 
@@ -718,7 +718,7 @@ jobs:
           chown -R builder:builder "${GITHUB_WORKSPACE}"
 
       # Arch is the one platform where the two channels are not co-installable — both packages own
-      # /usr/bin/Prism — so the nightly takes a distinct package name and declares the conflict, the
+      # /usr/bin/prism — so the nightly takes a distinct package name and declares the conflict, the
       # way an AUR -git package does. The PKGBUILD is derived from the stable one at build time
       # rather than committed, so a new dependency there cannot be missed here.
       - name: Generate the nightly PKGBUILD

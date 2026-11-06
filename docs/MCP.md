@@ -12,7 +12,7 @@ Prism can expose a localhost MCP server so Cursor, Claude Code, or other agents 
 {
   "mcpServers": {
     "prism": {
-      "command": "/path/to/Prism",
+      "command": "/path/to/prism",
       "args": ["--mcp-stdio"]
     }
   }

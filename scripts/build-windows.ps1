@@ -83,7 +83,7 @@ Write-Host "==> Building ($Config)"
 & $cmake --build $buildDir --config $Config --parallel
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$exe = Join-Path $buildDir "$Config\Prism.exe"
+$exe = Join-Path $buildDir "$Config\prism.exe"
 Write-Host "==> Build complete: $exe"
 
 if ($Deploy) {

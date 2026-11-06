@@ -9,6 +9,7 @@
 #include "app/common/QrCodeHelper.h"
 #ifdef PRISM_HAVE_WEBRTC
 #include "core/sources/WebRtcSource.h"
+#include "core/webrtc/FirewallUtils.h"
 #include "core/webrtc/NetworkUtils.h"
 #include "core/webrtc/WebRtcManager.h"
 #include "core/webrtc/WebRtcPairing.h"
@@ -270,38 +271,90 @@ int SourcePrompts::webrtcDefaultInterface() const
 #endif
 }
 
-QVariantMap SourcePrompts::webrtcStart(const QString &relayUrl, int interfaceIndex)
+void SourcePrompts::webrtcStart(const QString &relayUrl, int interfaceIndex)
 {
 #ifdef PRISM_HAVE_WEBRTC
-    if (!WebRtcSource::isAvailable())
-        return {{"ok", false}, {"error", tr("WebRTC is not available in this build.")}};
+    if (!WebRtcSource::isAvailable()) {
+        emit webrtcStarted(false, tr("WebRTC is not available in this build."));
+        return;
+    }
 
     QString relay;
     QString bind;
     if (!relayUrl.trimmed().isEmpty()) {
         const QUrl url(relayUrl.trimmed());
         if (!url.isValid() || url.host().isEmpty()
-            || (url.scheme() != QLatin1String("ws") && url.scheme() != QLatin1String("wss")))
-            return {{"ok", false}, {"error", tr("Enter a valid relay WebSocket URL (ws:// or wss://).")}};
+            || (url.scheme() != QLatin1String("ws") && url.scheme() != QLatin1String("wss"))) {
+            emit webrtcStarted(false, tr("Enter a valid relay WebSocket URL (ws:// or wss://)."));
+            return;
+        }
         relay = url.toString(QUrl::RemoveFragment);
         QSettings(QStringLiteral("Prism"), QStringLiteral("WebRTC")).setValue(QStringLiteral("relayUrl"), relay);
     } else {
         const auto ifaces = NetworkUtils::listIpv4Interfaces();
-        if (interfaceIndex < 0 || interfaceIndex >= ifaces.size())
-            return {{"ok", false}, {"error", tr("No active network interface with an IPv4 address was found.")}};
+        if (interfaceIndex < 0 || interfaceIndex >= ifaces.size()) {
+            emit webrtcStarted(false, tr("No active network interface with an IPv4 address was found."));
+            return;
+        }
         bind = ifaces.at(interfaceIndex).address;
     }
 
+    if (!relay.isEmpty()) {
+        webrtcCreateSession(relay, bind);
+        return;
+    }
+
+    const FirewallUtils::Status fw = FirewallUtils::detect();
+    auto *app = AppController::instance();
+    if (!fw.active || !app) {
+        webrtcCreateSession(relay, bind);
+        return;
+    }
+
+    const QList<quint16> ports = {WebRtcPairing::kDefaultSigPort, WebRtcPairing::kDefaultHttpPort};
+    const QString text = FirewallUtils::promptText(fw, ports, tr("phone pairing"));
+    app->requestConfirm(tr("Firewall Detected"), text, [this, fw, ports, relay, bind, app](bool allow) {
+        if (!allow) {
+            webrtcCreateSession(relay, bind);
+            return;
+        }
+        FirewallUtils::openPortsAsync(fw, ports, this, [this, relay, bind, app](bool ok, QString fwErr) {
+            if (ok) {
+                webrtcCreateSession(relay, bind);
+                return;
+            }
+            const QString msg = tr("Could not open firewall port(s).\n%1\n\n"
+                                   "Continue anyway? Your phone may not be able to connect.")
+                                    .arg(fwErr.isEmpty() ? tr("Permission denied or cancelled.") : fwErr);
+            app->requestConfirm(tr("Firewall"), msg, [this, relay, bind](bool cont) {
+                if (cont)
+                    webrtcCreateSession(relay, bind);
+                else
+                    emit webrtcStarted(false, tr("Firewall port(s) could not be opened."));
+            });
+        });
+    });
+#else
+    Q_UNUSED(relayUrl);
+    Q_UNUSED(interfaceIndex);
+    emit webrtcStarted(false, tr("WebRTC is not available in this build."));
+#endif
+}
+
+#ifdef PRISM_HAVE_WEBRTC
+void SourcePrompts::webrtcCreateSession(const QString &relay, const QString &bind)
+{
     webrtcCancel();
     const WebRtcPairingInfo info = relay.isEmpty()
         ? WebRtcManager::instance().createSession(bind)
         : WebRtcManager::instance().createSession({}, relay);
     if (info.token.isEmpty()) {
-        return {{"ok", false}, {"error", relay.isEmpty()
+        emit webrtcStarted(false, relay.isEmpty()
             ? tr("Could not start the WebRTC servers on %1. Check that ports %2 (signaling) and %3 (browser) are free.")
                   .arg(bind).arg(WebRtcPairing::kDefaultSigPort).arg(WebRtcPairing::kDefaultHttpPort)
             : tr("Could not connect to the relay server at %1. Check the URL and that the signaling server is running.")
-                  .arg(relay)}};
+                  .arg(relay));
+        return;
     }
 
     if (!m_peerHooked) {
@@ -322,13 +375,9 @@ QVariantMap SourcePrompts::webrtcStart(const QString &relayUrl, int interfaceInd
     m_webrtcQr = QrCodeHelper::toDataUrl(qrPayload, 5);
     m_webrtcThumb = QrCodeHelper::toImage(qrPayload, 4);
     emit webrtcPeerChanged();
-    return {{"ok", true}, {"error", QString()}};
-#else
-    Q_UNUSED(relayUrl);
-    Q_UNUSED(interfaceIndex);
-    return {{"ok", false}, {"error", tr("WebRTC is not available in this build.")}};
-#endif
+    emit webrtcStarted(true, QString());
 }
+#endif
 
 quint64 SourcePrompts::webrtcFinish()
 {

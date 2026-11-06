@@ -67,16 +67,21 @@ public:
     Q_INVOKABLE QStringList webrtcInterfaces() const;
     Q_INVOKABLE int webrtcDefaultInterface() const;
     /// Opens a pairing session. relayUrl empty = LAN on interface @p interfaceIndex.
-    /// Returns {ok, error}; on success webrtcQrImage / webrtcPeerConnected describe it.
-    Q_INVOKABLE QVariantMap webrtcStart(const QString &relayUrl, int interfaceIndex);
+    /// Asynchronous (may ask for firewall access first); completion is reported by webrtcStarted.
+    /// On success webrtcQrImage / webrtcPeerConnected describe the session.
+    Q_INVOKABLE void webrtcStart(const QString &relayUrl, int interfaceIndex);
     Q_INVOKABLE quint64 webrtcFinish();
     Q_INVOKABLE void webrtcCancel();
 
 signals:
     void webrtcPeerChanged();
+    void webrtcStarted(bool ok, const QString &error);
 
 private:
     quint64 add(SourceDescriptor desc, const QImage &thumb);
+#ifdef PRISM_HAVE_WEBRTC
+    void webrtcCreateSession(const QString &relay, const QString &bind);
+#endif
 
     QString m_webrtcToken;
     QString m_webrtcRelayUrl;

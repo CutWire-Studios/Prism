@@ -115,6 +115,7 @@ void ClipManager::loadFolder(const QString &folderPath) {
 }
 
 void ClipManager::appendClip(const QString &path, const QString &folderId) {
+    ++m_revision;
     clips.append(path);
     m_added.insert(path, ++m_addCounter);
     if (!folderId.isEmpty())
@@ -160,13 +161,14 @@ QString ClipManager::addFolder(const QString &folderPath, const QString &parentI
     return id;
 }
 
-void ClipManager::addFiles(const QStringList &filePaths) {
+void ClipManager::addFiles(const QStringList &filePaths, const QString &folderId) {
+    const QString target = hasFolder(folderId) ? folderId : QString();
     int added = 0;
     for (const QString &path : filePaths) {
         if (clips.size() >= MaxLibrarySize)
             break;
         if (isMediaFile(path) && !clips.contains(path)) {
-            appendClip(path, {});
+            appendClip(path, target);
             ++added;
         }
     }
@@ -190,7 +192,9 @@ bool ClipManager::isMediaFile(const QString &path) const {
 }
 
 void ClipManager::clear() {
+    ++m_revision;
     clips.clear();
+    m_names.clear();
     m_folders.clear();
     m_clipFolder.clear();
     m_added.clear();
@@ -199,12 +203,15 @@ void ClipManager::clear() {
 void ClipManager::removeClip(int index) {
     if (index < 0 || index >= clips.size())
         return;
+    ++m_revision;
     const QString path = clips.takeAt(index);
+    m_names.remove(path);
     m_clipFolder.remove(path);
     m_added.remove(path);
 }
 
 QString ClipManager::createFolder(const QString &name, const QString &parentId) {
+    ++m_revision;
     BinFolder f;
     f.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     f.name = name;
@@ -216,12 +223,14 @@ QString ClipManager::createFolder(const QString &name, const QString &parentId) 
 void ClipManager::restoreFolder(const BinFolder &folder) {
     if (folder.id.isEmpty() || hasFolder(folder.id))
         return;
+    ++m_revision;
     m_folders.append(folder);
 }
 
 bool ClipManager::renameFolder(const QString &id, const QString &name) {
     for (BinFolder &f : m_folders) {
         if (f.id == id) {
+            ++m_revision;
             f.name = name;
             return true;
         }
@@ -247,12 +256,14 @@ void ClipManager::removeFolder(const QString &id) {
         if (doomed.contains(m_clipFolder.value(clips.at(i))))
             removeClip(i);
     }
+    ++m_revision;
     m_folders.removeIf([&](const BinFolder &f) { return doomed.contains(f.id); });
 }
 
 bool ClipManager::moveClip(const QString &path, const QString &folderId) {
     if (!clips.contains(path) || (!folderId.isEmpty() && !hasFolder(folderId)))
         return false;
+    ++m_revision;
     if (folderId.isEmpty())
         m_clipFolder.remove(path);
     else
@@ -279,11 +290,44 @@ bool ClipManager::moveFolder(const QString &id, const QString &newParentId) {
         return false;
     for (BinFolder &f : m_folders) {
         if (f.id == id) {
+            ++m_revision;
             f.parentId = newParentId;
             return true;
         }
     }
     return false;
+}
+
+bool ClipManager::relinkClip(const QString &oldPath, const QString &newPath) {
+    const int at = clips.indexOf(oldPath);
+    if (at < 0 || oldPath == newPath || clips.contains(newPath))
+        return false;
+    ++m_revision;
+    clips[at] = newPath;
+    if (m_clipFolder.contains(oldPath))
+        m_clipFolder.insert(newPath, m_clipFolder.take(oldPath));
+    if (m_added.contains(oldPath))
+        m_added.insert(newPath, m_added.take(oldPath));
+    if (m_names.contains(oldPath))
+        m_names.insert(newPath, m_names.take(oldPath));
+    return true;
+}
+
+void ClipManager::setDisplayName(const QString &path, const QString &name) {
+    if (!clips.contains(path))
+        return;
+    const QString trimmed = name.trimmed();
+    if (trimmed.isEmpty() || trimmed == QFileInfo(path).fileName()) {
+        if (m_names.remove(path))
+            ++m_revision;
+    } else if (m_names.value(path) != trimmed) {
+        m_names.insert(path, trimmed);
+        ++m_revision;
+    }
+}
+
+QString ClipManager::displayName(const QString &path) const {
+    return m_names.value(path, QFileInfo(path).fileName());
 }
 
 QList<ClipManager::BinFolder> ClipManager::foldersIn(const QString &parentId) const {

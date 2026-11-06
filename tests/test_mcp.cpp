@@ -266,7 +266,7 @@ void TestMcp::serverRequiresBearerToken()
 {
     QTemporaryDir dir;
     qputenv("PRISM_MCP_SESSION_PATH", dir.filePath(QStringLiteral("s.json")).toUtf8());
-    AppController window;
+    AppController window(nullptr);
     window.setMcpEnabled(true);
     QVERIFY2(window.mcpEnabled(), qPrintable(window.mcpServer() ? window.mcpServer()->error() : QStringLiteral("no server")));
     int status = 0;
@@ -281,7 +281,7 @@ void TestMcp::serverInitializeWithToken()
 {
     QTemporaryDir dir;
     qputenv("PRISM_MCP_SESSION_PATH", dir.filePath(QStringLiteral("s.json")).toUtf8());
-    AppController window;
+    AppController window(nullptr);
     window.setMcpEnabled(true);
     QVERIFY(window.mcpEnabled());
     const QByteArray auth = "Bearer " + window.mcpServer()->token().toUtf8();
@@ -301,7 +301,7 @@ void TestMcp::serverInitializeWithToken()
 
 void TestMcp::applyUnknownOp()
 {
-    AppController window;
+    AppController window(nullptr);
     prism::mcp::McpDispatcher dispatcher(&window);
     const QJsonObject result = dispatcher.applyOne(QStringLiteral("nope"), {});
     QCOMPARE(result.value(QStringLiteral("ok")).toBool(), false);
@@ -310,7 +310,7 @@ void TestMcp::applyUnknownOp()
 
 void TestMcp::addSourceAndInspect()
 {
-    AppController window;
+    AppController window(nullptr);
     prism::mcp::McpDispatcher dispatcher(&window);
     const QJsonObject added = dispatcher.applyOne(
         QStringLiteral("add_source"),
@@ -341,7 +341,7 @@ void TestMcp::addSourceAndInspect()
 
 void TestMcp::applyBatchStops()
 {
-    AppController window;
+    AppController window(nullptr);
     prism::mcp::McpDispatcher dispatcher(&window);
     const QJsonObject result = dispatcher.apply(QJsonObject{
         {QStringLiteral("ops"),
@@ -360,7 +360,7 @@ void TestMcp::applyBatchStops()
 
 void TestMcp::addProcessNodeAndConnect()
 {
-    AppController window;
+    AppController window(nullptr);
     prism::mcp::McpDispatcher dispatcher(&window);
 
     const QJsonObject graphBox = prism::mcp::toolboxPayload(QStringLiteral("graph"));

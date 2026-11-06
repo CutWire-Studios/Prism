@@ -57,7 +57,7 @@ ApplicationWindow {
     function popOverlayModal() { modalDepth = Math.max(0, modalDepth - 1) }
 
     function localPath(url) {
-        return decodeURIComponent(url.toString().replace(/^file:\/\//, ""))
+        return AppController.localPath(url)
     }
 
     function importDropped(urls) {
@@ -233,17 +233,17 @@ ApplicationWindow {
             }
         }
 
-        WorkspaceHost {
+        EditorWorkspace {
             Layout.fillWidth: true
             Layout.fillHeight: true
             pool: pool
-            workspaceId: Workspaces.activeId
         }
     }
 
     LazyLoader {
         id: settingsLoader
         sourceComponent: ThemedDialog {
+            id: settingsDialog
             title: qsTr("Settings")
             preferredWidth: 960
             acceptText: qsTr("Done")
@@ -251,7 +251,7 @@ ApplicationWindow {
             padding: 0
             contentItem: SettingsPane {
                 implicitWidth: 960
-                implicitHeight: Math.min(680, parent ? parent.height : 680)
+                implicitHeight: Math.min(680, settingsDialog.availableContentHeight)
             }
         }
     }
@@ -300,7 +300,7 @@ ApplicationWindow {
         id: openDialog
         onAccepted: {
             const urls = selectedFiles.length > 0 ? selectedFiles : [selectedFile]
-            AppController.filePicked(window.pendingPickId, urls.map(u => u.toString().replace(/^file:\/\//, "")))
+            AppController.filePicked(window.pendingPickId, urls.map(u => AppController.localPath(u)))
         }
         onRejected: AppController.filePicked(window.pendingPickId, [])
     }
@@ -308,7 +308,7 @@ ApplicationWindow {
     FolderDialog {
         id: folderDialog
         onAccepted: AppController.filePicked(window.pendingPickId,
-                                             [selectedFolder.toString().replace(/^file:\/\//, "")])
+                                             [AppController.localPath(selectedFolder)])
         onRejected: AppController.filePicked(window.pendingPickId, [])
     }
 

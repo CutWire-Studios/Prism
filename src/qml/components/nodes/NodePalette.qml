@@ -34,7 +34,8 @@ QtObject {
     readonly property color mixedHue: "#e88030"
     readonly property color scriptHue: "#70c0a8"
 
-    function desat(c, keep) {
+    function desat(value, keep) {
+        const c = Qt.color(value)
         return Qt.hsva(c.hsvHue < 0 ? 0 : c.hsvHue, c.hsvSaturation * keep, c.hsvValue, c.a)
     }
 

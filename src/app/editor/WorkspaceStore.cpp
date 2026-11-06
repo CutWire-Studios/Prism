@@ -24,6 +24,7 @@ struct PanelType
 };
 
 const PanelType kPanelTypes[] = {
+    {"control", QT_TRANSLATE_NOOP("WorkspaceStore", "Control Panel")},
     {"decks", QT_TRANSLATE_NOOP("WorkspaceStore", "Decks")},
     {"program", QT_TRANSLATE_NOOP("WorkspaceStore", "Program")},
     {"nodeGraph", QT_TRANSLATE_NOOP("WorkspaceStore", "Node Graph")},

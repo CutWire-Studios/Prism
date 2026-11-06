@@ -44,6 +44,8 @@ public:
     void setThumbnail(NodeId id, const QImage &image);
     /// Bumped on every setThumbnail; QML appends it as a cache-buster (?v=<rev>).
     int thumbnailRevision(NodeId id) const;
+    /// Generates thumbnails on the thread pool for every Input node that lacks one.
+    void generateMissingThumbnails();
     /// For image://nodethumb/<id>. Ownership passes to the caller (QQmlEngine::addImageProvider).
     /// The provider keeps working only while this GraphRuntime is alive and reads it thread-safely.
     QQuickImageProvider *createImageProvider();
@@ -67,9 +69,11 @@ public:
                              NodeId deckBClip, double timeB, bool playingB, double speedB);
 
 signals:
+    /// id 0 means every thumbnail was dropped (graph reset).
     void thumbnailChanged(NodeId id);
 
 private:
+    void requestThumbnail(NodeId id);
     struct Impl;
     std::unique_ptr<Impl> d;
     ClipGraph *m_graph;

@@ -100,7 +100,7 @@ int main(int argc, char *argv[]) {
         app.setFont(f);
     }
 
-    AppController controller;
+    AppController controller(nullptr);
     AppCompositor::setInstance(controller.compositor());
 
     QQmlApplicationEngine engine;

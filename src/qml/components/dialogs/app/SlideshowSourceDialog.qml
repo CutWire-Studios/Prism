@@ -53,6 +53,6 @@ ThemedDialog {
     FolderDialog {
         id: folderDialog
         title: qsTr("Select image folder for slideshow")
-        onAccepted: folderField.text = decodeURIComponent(selectedFolder.toString().replace(/^file:\/\//, ""))
+        onAccepted: folderField.text = AppController.localPath(selectedFolder)
     }
 }

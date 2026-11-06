@@ -1,5 +1,6 @@
 #include "core/sources/VideoFileSource.h"
 #include "core/media/GpuVideoUploader.h"
+#include "core/media/MediaProbe.h"
 
 #include <QFileInfo>
 #include <QImage>
@@ -26,13 +27,6 @@ QSet<VideoFileSource *> &liveSources()
 {
     static QSet<VideoFileSource *> sources;
     return sources;
-}
-
-QSize displaySize(int w, int h, int rotation)
-{
-    w &= ~1;
-    h &= ~1;
-    return (rotation == 90 || rotation == 270) ? QSize(h, w) : QSize(w, h);
 }
 
 } // namespace
@@ -68,7 +62,7 @@ bool VideoFileSource::open(const QString &filePath)
     if (!m_decoder.open(filePath))
         return false;
     const QSize coded = m_decoder.codedSize();
-    m_size = displaySize(coded.width(), coded.height(), m_decoder.rotation());
+    m_size = displaySize(coded.width(), coded.height(), m_decoder.sampleAspect(), m_decoder.rotation());
     // Black until the first frame lands, so frameData() is never null for a ready source.
     m_rgb = QByteArray(m_size.width() * m_size.height() * 3, '\0');
     m_rgbStale = false;
@@ -128,10 +122,11 @@ bool VideoFileSource::present(DecodedVideoFrame &frame)
 
     bool ok = false;
     if (!m_useCpu) {
-        const GLuint tex = prism::GpuVideoUploader::instance().render(av, rotation, m_target);
+        const QSize size = displaySize(av->width, av->height, m_decoder.sampleAspect(), rotation);
+        const GLuint tex = prism::GpuVideoUploader::instance().render(av, rotation, m_target, size);
         if (tex) {
             m_texture = tex;
-            m_size = displaySize(av->width, av->height, rotation);
+            m_size = size;
             m_rgbStale = true;
             ok = true;
         }
@@ -162,8 +157,12 @@ bool VideoFileSource::convertOnCpu(const AVFrame *frame)
         frame = transferred;
     }
 
-    const int w = frame->width & ~1;
-    const int h = frame->height & ~1;
+    const int rotation = m_decoder.rotation();
+    QSize target = displaySize(frame->width, frame->height, m_decoder.sampleAspect(), rotation);
+    if (rotation == 90 || rotation == 270)
+        target.transpose();
+    const int w = target.width();
+    const int h = target.height();
     m_sws = sws_getCachedContext(m_sws, frame->width, frame->height,
                                  AVPixelFormat(frame->format), w, h, AV_PIX_FMT_RGB24,
                                  SWS_BILINEAR, nullptr, nullptr, nullptr);
@@ -177,7 +176,7 @@ bool VideoFileSource::convertOnCpu(const AVFrame *frame)
     sws_scale(m_sws, frame->data, frame->linesize, 0, frame->height, dst, dstStride);
     av_frame_free(&transferred);
 
-    if (const int rotation = m_decoder.rotation())
+    if (rotation)
         rgb = rgb.transformed(QTransform().rotate(rotation));
 
     m_size = rgb.size();

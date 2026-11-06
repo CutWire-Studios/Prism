@@ -340,8 +340,8 @@ cmake --build build --config Release --parallel
 **4. Deploy Qt DLLs and run**
 
 ```powershell
-C:\Qt\6.8.0\msvc2022_64\bin\windeployqt.exe --no-translations build\Release\Prism.exe
-.\build\Release\Prism.exe
+C:\Qt\6.8.0\msvc2022_64\bin\windeployqt.exe --no-translations build\Release\prism.exe
+.\build\Release\prism.exe
 ```
 
 Or use the helper script (installs vcpkg deps, configures, builds):
@@ -357,7 +357,7 @@ Or use the helper script (installs vcpkg deps, configures, builds):
 | Video, images, shaders, SVG templates, webcam | Supported |
 | Screen / window capture | `QScreenCapture` / `QWindowCapture` |
 | NDI | Supported when [NDI SDK](https://ndi.video/) is installed (`-DNDI_ROOT="C:\Program Files\NDI\NDI 6 SDK"`) |
-| Virtual camera output | Built-in via [softcam](https://github.com/tshino/softcam) (MIT) — appears as **DirectShow Softcam**; `softcam.dll` is copied next to `Prism.exe` at build time |
+| Virtual camera output | Built-in via [softcam](https://github.com/tshino/softcam) (MIT) — appears as **DirectShow Softcam**; `softcam.dll` is copied next to `prism.exe` at build time |
 | WebRTC phone camera | Build with `-DPRISM_WITH_WEBRTC=ON` + OpenSSL; firewall rules are not auto-opened yet |
 
 Enable virtual camera output from **View → Virtual Camera Output**. In OBS, Zoom, or a browser, pick the camera named **DirectShow Softcam**. Only one softcam sender can run at a time on the system.
@@ -374,9 +374,9 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 
 # Run
-./build/Prism                # Linux
+./build/prism                # Linux
 open build/Prism.app         # macOS  (or: ./build/Prism.app/Contents/MacOS/Prism)
-# build\Release\Prism.exe    # Windows
+# build\Release\prism.exe    # Windows
 ```
 
 #### CMake Options
@@ -503,7 +503,7 @@ Windows or macOS (those use Qt Multimedia's `QScreenCapture`).
 
 ### Missing DLLs at runtime (Windows)
 
-Run `windeployqt` on `Prism.exe` after building (see Windows build steps). FFmpeg and other vcpkg DLLs may need to be copied from `vcpkg\installed\x64-windows\bin` into the same folder as the executable.
+Run `windeployqt` on `prism.exe` after building (see Windows build steps). FFmpeg and other vcpkg DLLs may need to be copied from `vcpkg\installed\x64-windows\bin` into the same folder as the executable.
 
 ### NDI or OBS features disabled
 

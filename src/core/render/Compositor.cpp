@@ -42,6 +42,18 @@ Compositor::~Compositor() {
     }
 }
 
+namespace {
+// Letterbox/pillarbox the visible (cropped) part of a source inside `bounds` at its own aspect.
+QRectF fitSourceRect(const QRectF &bounds, const MediaSource *src, float cw, float ch) {
+    const QSize sz = src->frameSize();
+    if (sz.isEmpty() || cw <= 0.f || ch <= 0.f || bounds.isEmpty()) return bounds;
+    const double srcAR = (sz.width() * double(cw)) / (sz.height() * double(ch));
+    const double s = std::min(bounds.width() / srcAR, bounds.height());
+    const double w = s * srcAR, h = s;
+    return QRectF(bounds.x() + (bounds.width() - w) / 2.0, bounds.y() + (bounds.height() - h) / 2.0, w, h);
+}
+} // namespace
+
 void Compositor::shutdownPlayback() {
     releaseMediaSources();
 }
@@ -304,10 +316,12 @@ void Compositor::renderDeckToFbo(bool deckA) {
             canvasBounds = QRectF((rw - canvasRW) / 2, (rh - canvasRH) / 2, canvasRW, canvasRH);
         }
 
-        const QRectF bounds(canvasBounds.left() + baseX * canvasBounds.width(),
-                            canvasBounds.top()  + baseY * canvasBounds.height(),
-                            baseW * canvasBounds.width(),
-                            baseH * canvasBounds.height());
+        QRectF bounds(canvasBounds.left() + baseX * canvasBounds.width(),
+                      canvasBounds.top()  + baseY * canvasBounds.height(),
+                      baseW * canvasBounds.width(),
+                      baseH * canvasBounds.height());
+        if (canvasW <= 0 || canvasH <= 0)
+            bounds = fitSourceRect(bounds, src, cw, ch);
         outRect = bounds;
 
         const bool flipH = deckA ? m_flipHA : m_flipHB;
@@ -1027,10 +1041,12 @@ void Compositor::drawChainSources(std::vector<NodeChainSource> &chain,
         if (!tex) continue;
         const float cx = chain[i].cropX, cy = chain[i].cropY;
         const float cw = chain[i].cropW, ch = chain[i].cropH;
-        const QRectF placement(canvasBounds.left() + chain[i].baseX * canvasBounds.width(),
-                               canvasBounds.top()  + chain[i].baseY * canvasBounds.height(),
-                               chain[i].baseW * canvasBounds.width(),
-                               chain[i].baseH * canvasBounds.height());
+        QRectF placement(canvasBounds.left() + chain[i].baseX * canvasBounds.width(),
+                         canvasBounds.top()  + chain[i].baseY * canvasBounds.height(),
+                         chain[i].baseW * canvasBounds.width(),
+                         chain[i].baseH * canvasBounds.height());
+        if (canvasW <= 0 || canvasH <= 0)
+            placement = fitSourceRect(placement, src, cw, ch);
         glColor4f(1.f, 1.f, 1.f, alpha);
         renderTexture(tex, cx, cy, cw, ch,
                       (float)placement.x(), (float)placement.y(), (float)placement.width(), (float)placement.height(),

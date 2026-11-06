@@ -1,6 +1,7 @@
 #include <QCameraDevice>
 #include "app/AppController.h"
 
+#include "app/bin/MediaThumbnailProvider.h"
 #include "app/common/ThumbHelper.h"
 #include "app/graph/GraphRuntime.h"
 #include "app/mainwindow/DeckController.h"
@@ -127,6 +128,7 @@ AppController::AppController(QObject *parent)
     m_graph = new ClipGraph(this);
     m_graphController = new ClipGraphController(m_graph, this);
     m_runtime = new GraphRuntime(m_graph, this);
+    connect(m_runtime, &GraphRuntime::thumbnailChanged, this, &AppController::nodeThumbnailChanged);
 
     const RecordingOptions recOpts = RecordingOptions::loadSaved();
     m_outputHub = new OutputHub(this);
@@ -178,10 +180,23 @@ AppController::~AppController()
     }
 }
 
+QString AppController::localPath(const QUrl &url) const
+{
+    return url.isLocalFile() ? url.toLocalFile() : url.toString();
+}
+
 void AppController::setEngine(QQmlEngine *engine)
 {
     m_engine = engine;
     m_outputHub->setQmlEngine(engine);
+    // ── Media library ──
+    engine->addImageProvider(QStringLiteral("mediabin"), new MediaThumbnailProvider);
+}
+
+// ── Media library ──
+void AppController::notifyLibraryChanged()
+{
+    markDirty();
 }
 
 void AppController::connectSignals()
@@ -905,7 +920,7 @@ void AppController::renameNode(quint64 nodeId, const QString &name)
 {
     SourceDescriptor desc = m_graph->sourceDescriptor(nodeId);
     desc.displayName = name;
-    m_graph->setSourceDescriptor(nodeId, desc);
+    m_graphController->setSourceDescriptor(nodeId, desc);
     mcpBumpRevision();
 }
 
@@ -913,8 +928,10 @@ void AppController::linkNodeObsScene(quint64 nodeId, const QString &sceneName)
 {
     SourceDescriptor desc = m_graph->sourceDescriptor(nodeId);
     desc.obsSceneName = sceneName;
-    m_graph->setSourceDescriptor(nodeId, desc);
+    m_graphController->setSourceDescriptor(nodeId, desc);
 }
+
+int AppController::nodeThumbnailRevision(quint64 nodeId) const { return m_runtime->thumbnailRevision(nodeId); }
 
 bool AppController::runScript(quint64 nodeId) { return m_runtime->runScript(nodeId); }
 
@@ -1303,7 +1320,7 @@ bool AppController::setOutputEnabled(const QString &id, bool on)
 #else
             emit errorOccurred(tr("Could not start virtual camera output (%1).\n\n"
                                   "Another application may already be using the virtual camera, "
-                                  "or softcam.dll may be missing next to Prism.exe.")
+                                  "or softcam.dll may be missing next to prism.exe.")
                                    .arg(dev.isEmpty() ? QStringLiteral("DirectShow Softcam") : dev));
 #endif
         }

@@ -23,7 +23,7 @@ PanelFrame {
         onRunScriptRequested: nodeId => AppController.runScript(nodeId)
         onPulseTriggerRequested: nodeId => AppController.pulseTrigger(nodeId)
         onOutputWindowRequested: AppController.showOutputWindow()
-        onFilesDropped: (urls, x, y) => AppController.importFiles(urls.map(u => decodeURIComponent(u.toString().replace(/^file:\/\//, ""))))
+        onFilesDropped: (urls, x, y) => AppController.importFiles(urls.map(u => AppController.localPath(u)))
     }
 
     AddSourceMenu {

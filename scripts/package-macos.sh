@@ -104,7 +104,7 @@ if [[ $SKIP_BUILD -eq 0 ]]; then
     -DPRISM_WITH_SEGMENTATION=ON \
     -DPRISM_CHANNEL="$CHANNEL" \
     -DPRISM_BUILD_ID="$BUILD_ID"
-  cmake --build "$BUILD_DIR" --target Prism --parallel "$(sysctl -n hw.ncpu)"
+  cmake --build "$BUILD_DIR" --target prism --parallel "$(sysctl -n hw.ncpu)"
 fi
 
 if [[ ! -d "$APP" ]]; then

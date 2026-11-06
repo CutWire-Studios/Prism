@@ -19,10 +19,15 @@ Item {
         "square-dashed", "app-window", "sparkles", "film", "radio", "smartphone", "type",
         "music", "shapes", "shapes"]
 
-    // Bumped when the source changes so the image provider is asked for a fresh thumbnail.
-    property int thumbVersion: 0
-    readonly property string sourceKey: JSON.stringify(source)
-    onSourceKeyChanged: ++thumbVersion
+    property int thumbRevision: AppController.nodeThumbnailRevision(node.nodeId)
+
+    Connections {
+        target: AppController
+        function onNodeThumbnailChanged(id) {
+            if (id === 0 || Number(id) === Number(root.node.nodeId))
+                root.thumbRevision = AppController.nodeThumbnailRevision(root.node.nodeId)
+        }
+    }
 
     Rectangle {
         id: thumb
@@ -41,7 +46,7 @@ Item {
             glyph: root.kindIcons[root.source.kind] || "film"
             iconSize: Theme.iconSizeXl
             iconColor: Theme.mutedForeground
-            visible: image.status !== Image.Ready
+            visible: root.thumbRevision === 0 || image.status !== Image.Ready
         }
 
         Image {
@@ -50,7 +55,8 @@ Item {
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             cache: false
-            source: "image://nodethumb/" + root.node.nodeId + "?v=" + root.thumbVersion
+            source: root.thumbRevision > 0
+                    ? "image://nodethumb/" + root.node.nodeId + "?v=" + root.thumbRevision : ""
         }
     }
 

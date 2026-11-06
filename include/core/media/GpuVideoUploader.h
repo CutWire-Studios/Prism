@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QSize>
 #include <QString>
 #include <QtGui/qopengl.h>
 
@@ -55,7 +56,7 @@ public:
     // Draws `frame` into `target` (created or resized as needed) at its display size. Returns the
     // target's texture, or 0 on failure.
     GLuint render(const AVFrame *frame, int rotation,
-                  std::unique_ptr<QOpenGLFramebufferObject> &target);
+                  std::unique_ptr<QOpenGLFramebufferObject> &target, QSize displaySize = {});
 
     // Packed RGB24 rows, top first, of what render() last drew into `target`.
     bool readback(QOpenGLFramebufferObject *target, uint8_t *rgb);
