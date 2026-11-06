@@ -40,6 +40,11 @@ public:
     void stop();
 
     bool isCapturing() const;
+    /// True while the portal handshake is still in flight.
+    bool isPending() const;
+
+    quint64 generation() const { return m_gen; }
+    const QImage &frame() const { return m_frame; }
 
     /// Stable id used to remember the OS capture selection across recreations.
     /// On Linux this keys the xdg-desktop-portal restore token so the source
@@ -105,6 +110,7 @@ private:
 
     QImage  m_frame;
     bool    m_dirty = false;
+    quint64 m_gen   = 0;
     QString m_name;
     QString m_captureId;
     bool    m_pickOnly = false;

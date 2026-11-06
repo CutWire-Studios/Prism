@@ -1,11 +1,11 @@
 #include "core/sources/CameraSource.h"
 #include "core/platform/ErrorReporter.h"
+#include "core/sources/SharedSourcePool.h"
 #include <QCamera>
 #include <QMediaCaptureSession>
 #include <QVideoSink>
 #include <QVideoFrame>
 #include <QMediaDevices>
-#include <QHash>
 #include <QDebug>
 
 namespace {
@@ -31,9 +31,8 @@ QString friendlyCameraError(QCamera::Error err, const QString &msg) {
 
 // ── Shared device backend ───────────────────────────────────────────────────────
 // Owns the QCamera/session/sink for one physical device and holds the latest
-// decoded frame. Shared between every CameraSource pointing at the same device;
-// the device is opened on the first acquire and closed when the last consumer
-// drops its reference.
+// decoded frame. Shared between every CameraSource pointing at the same device
+// through SharedSourcePool.
 class CameraBackend {
 public:
     CameraBackend(const QCameraDevice &device, QString name)
@@ -105,26 +104,6 @@ private:
     QString m_name;
 };
 
-namespace {
-
-// Live backends keyed by device. weak_ptr so a backend is destroyed (and its
-// camera closed) as soon as the last CameraSource referencing it is gone.
-QHash<QString, std::weak_ptr<CameraBackend>> g_backends;
-
-std::shared_ptr<CameraBackend> acquireBackend(const QString &key,
-                                              const QCameraDevice &device,
-                                              const QString &name) {
-    if (auto it = g_backends.find(key); it != g_backends.end()) {
-        if (auto sp = it->lock())
-            return sp;   // reuse the already-open device
-    }
-    auto sp = std::make_shared<CameraBackend>(device, name);
-    g_backends.insert(key, sp);
-    return sp;
-}
-
-}
-
 // ── CameraSource ────────────────────────────────────────────────────────────────
 
 CameraSource::CameraSource() = default;
@@ -151,7 +130,9 @@ bool CameraSource::start(const QCameraDevice &device) {
         key = QStringLiteral("@default");
     }
 
-    m_backend = acquireBackend(key, device, m_name);
+    m_backend = SharedSourcePool::instance().acquire<CameraBackend>(
+        QStringLiteral("camera:") + key,
+        [&] { return std::make_shared<CameraBackend>(device, m_name); });
     m_lastGen = 0;
     m_frame   = {};
     return true;  // starting is async — success is confirmed when frames arrive

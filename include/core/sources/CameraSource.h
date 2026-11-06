@@ -36,6 +36,7 @@ public:
     Type    type()        const override { return Type::Camera; }
     bool    isReady()     const override;
     bool    hasFailed()   const;
+    bool    isMissing()   const override { return hasFailed(); }
     QString lastError()   const;
     QSize   frameSize()   const override { return m_frame.size(); }
     const uint8_t *frameData() const override {

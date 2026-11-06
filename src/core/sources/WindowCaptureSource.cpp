@@ -56,6 +56,7 @@ void WindowCaptureSource::onVideoFrameChanged(const QVideoFrame &frame) {
     if (!img.isNull()) {
         m_frame = std::move(img);
         m_dirty = true;
+        ++m_gen;
     }
 }
 

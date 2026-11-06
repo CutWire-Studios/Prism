@@ -12,8 +12,7 @@
 #include "core/render/Compositor.h"
 #include "app/output/OutputHub.h"
 #include "core/media/AudioPlayer.h"
-#include "core/media/AudioInputCapture.h"
-#include "core/media/AudioLoopbackCapture.h"
+#include "core/media/SharedAudioCapture.h"
 
 /// Owns Live-deck and Staging-deck state: source assignment and audio players.
 class DeckController : public QObject {
@@ -99,11 +98,6 @@ private:
 
     QString physicalDevice(const QString &logical) const;
 
-    template <class Capture> struct CaptureEntry {
-        std::unique_ptr<Capture> capture;
-        QVector<std::pair<GraphRuntime *, NodeId>> consumers;
-    };
-
     Compositor   *m_compositor;
     OutputHub    *m_outputHub;
     ClipGraph    *m_deckGraph[2] = {nullptr, nullptr};
@@ -119,6 +113,6 @@ private:
     bool m_audioFollowsFaderStaging = false;
     std::unique_ptr<AudioPlayer> m_audioPlayerLive;
     std::unique_ptr<AudioPlayer> m_audioPlayerStaging;
-    std::unordered_map<QString, CaptureEntry<AudioInputCapture>> m_inputCaptures;
-    std::unordered_map<QString, CaptureEntry<AudioLoopbackCapture>> m_loopbackCaptures;
+    std::unordered_map<QString, std::unique_ptr<SharedAudioCapture>> m_inputCaptures;
+    std::unordered_map<QString, std::unique_ptr<SharedAudioCapture>> m_loopbackCaptures;
 };

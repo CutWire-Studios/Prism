@@ -26,6 +26,9 @@ public:
 
     bool isCapturing() const { return m_capture != nullptr; }
 
+    quint64 generation() const { return m_gen; }
+    const QImage &frame() const { return m_frame; }
+
     // Returns all windows currently capturable on this system.
     static QList<QCapturableWindow> capturableWindows();
 
@@ -48,5 +51,6 @@ private:
 
     QImage  m_frame;
     bool    m_dirty = false;
+    quint64 m_gen   = 0;
     QString m_name;
 };

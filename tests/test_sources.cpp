@@ -137,7 +137,8 @@ private slots:
         ndi.kind = SourceDescriptor::Kind::Ndi;
         ndi.path = QStringLiteral("Fake NDI Source");
         auto ndiSrc = SourceFactory::create(ndi);
-        QVERIFY(!ndiSrc);
+        QVERIFY(ndiSrc);
+        QVERIFY(ndiSrc->isMissing());
 
 #ifndef PRISM_HAVE_WEBRTC
         SourceDescriptor webrtc;

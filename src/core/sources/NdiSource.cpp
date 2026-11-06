@@ -101,6 +101,7 @@ void NdiSource::storeVideoFrame(const QImage &img) {
     if (img.isNull()) return;
     m_frame = img.convertToFormat(QImage::Format_RGB888);
     m_dirty = true;
+    ++m_gen;
 }
 
 bool NdiSource::nextFrame() {

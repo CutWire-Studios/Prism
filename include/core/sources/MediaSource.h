@@ -56,6 +56,10 @@ public:
 
     virtual QString displayName() const { return {}; }
 
+    // True for a stand-in rendering black because its device is absent or failed to open.
+    // Decorators do not forward this; query innermost().
+    virtual bool isMissing() const { return false; }
+
     // Level-triggered: VideoWidget reports every tick whether the deck holding this source
     // contributes to program. Animated sources restart their In phase on the false -> true edge.
     virtual void setOnAir(bool) {}

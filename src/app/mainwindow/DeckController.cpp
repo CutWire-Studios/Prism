@@ -8,7 +8,6 @@
 #include "core/sources/SvgTemplateSource.h"
 #include "core/sources/TextSource.h"
 #include "core/graph/ProcessEffects.h"
-#include "core/media/AudioInputCapture.h"
 #include "core/media/AudioInputMixRegistry.h"
 #include <QMediaDevices>
 #include <QCameraDevice>
@@ -156,73 +155,42 @@ void DeckController::syncMasterAudioInputs() {
         return group.first();
     };
 
-    for (auto it = inputs.cbegin(); it != inputs.cend(); ++it) {
-        const CaptureSource &driver = driverOf(it.value());
-        auto &entry = m_inputCaptures[it.key()];
-        if (!entry.capture)
-            entry.capture = std::make_unique<AudioInputCapture>(this);
-        AudioInputCapture *capture = entry.capture.get();
+    const auto sync = [&](const QMap<QString, QVector<CaptureSource>> &groups,
+                          std::unordered_map<QString, std::unique_ptr<SharedAudioCapture>> &captures,
+                          bool loopback) {
+        for (auto it = groups.cbegin(); it != groups.cend(); ++it) {
+            const CaptureSource &driver = driverOf(it.value());
+            auto &capture = captures[it.key()];
+            if (!capture) {
+                const auto program = [this](const QByteArray &pcm) {
+                    if (m_outputHub)
+                        m_outputHub->submitMicProgramAudioChunk(pcm);
+                };
+                capture = loopback ? SharedAudioCapture::loopback(program)
+                                   : SharedAudioCapture::input(program);
+            }
+            QVector<SharedAudioCapture::PcmFn> consumers;
+            for (const CaptureSource &src : it.value())
+                consumers.append([runtime = src.runtime, id = src.id](const QByteArray &pcm) {
+                    runtime->feedLiveAudioForProducer(id, pcm);
+                });
+            capture->setConsumers(std::move(consumers));
 
-        const bool needsRestart = !capture->isRunning()
-            || capture->inputDeviceId() != it.key()
-            || capture->targetOutputDeviceId() != driver.outputDeviceId;
-
-        capture->setInputDeviceId(it.key());
-        capture->setTargetOutputDeviceId(driver.outputDeviceId);
-        capture->setVolumePercent(driver.settings.volume);
-        capture->setMuted(driver.settings.muted || !driver.live);
-        capture->setEffectChain(driver.routed ? driver.route.effects : QVector<AudioEffectRef>{});
-        entry.consumers.clear();
-        for (const CaptureSource &src : it.value())
-            entry.consumers.append({src.runtime, src.id});
-        const QString key = it.key();
-        capture->setProgramRecordingTap([this, key](const QByteArray &pcm) {
-            if (m_outputHub)
-                m_outputHub->submitMicProgramAudioChunk(pcm);
-            for (const auto &[runtime, id] : m_inputCaptures[key].consumers)
-                runtime->feedLiveAudioForProducer(id, pcm);
-        });
-
-        if (needsRestart)
-            capture->start();
-    }
-
-    for (auto it = captures.cbegin(); it != captures.cend(); ++it) {
-        const CaptureSource &driver = driverOf(it.value());
-        auto &entry = m_loopbackCaptures[it.key()];
-        if (!entry.capture)
-            entry.capture = std::make_unique<AudioLoopbackCapture>(this);
-        AudioLoopbackCapture *capture = entry.capture.get();
-
-        const bool needsRestart = !capture->isRunning()
-            || capture->playbackDeviceId() != it.key()
-            || capture->targetOutputDeviceId() != driver.outputDeviceId;
-
-        capture->setPlaybackDeviceId(it.key());
-        capture->setTargetOutputDeviceId(driver.outputDeviceId);
-        capture->setVolumePercent(driver.settings.volume);
-        capture->setMuted(driver.settings.muted || !driver.live);
-        capture->setEffectChain(driver.routed ? driver.route.effects : QVector<AudioEffectRef>{});
-        entry.consumers.clear();
-        for (const CaptureSource &src : it.value())
-            entry.consumers.append({src.runtime, src.id});
-        const QString key = it.key();
-        capture->setProgramRecordingTap([this](const QByteArray &pcm) {
-            if (m_outputHub)
-                m_outputHub->submitMicProgramAudioChunk(pcm);
-        });
-        capture->setAnalysisTap([this, key](const QByteArray &pcm) {
-            for (const auto &[runtime, id] : m_loopbackCaptures[key].consumers)
-                runtime->feedLiveAudioForProducer(id, pcm);
-        });
-
-        if (needsRestart)
-            capture->start();
-    }
+            SharedAudioCapture::Settings settings;
+            settings.outputDeviceId = driver.outputDeviceId;
+            settings.volume = driver.settings.volume;
+            settings.muted = driver.settings.muted || !driver.live;
+            if (driver.routed)
+                settings.effects = driver.route.effects;
+            capture->update(it.key(), settings);
+        }
+    };
+    sync(inputs, m_inputCaptures, false);
+    sync(captures, m_loopbackCaptures, true);
 
     for (auto it = m_inputCaptures.begin(); it != m_inputCaptures.end(); ) {
         if (!inputs.contains(it->first)) {
-            it->second.capture->stop();
+            it->second->stop();
             it = m_inputCaptures.erase(it);
         } else {
             ++it;
@@ -231,7 +199,7 @@ void DeckController::syncMasterAudioInputs() {
 
     for (auto it = m_loopbackCaptures.begin(); it != m_loopbackCaptures.end(); ) {
         if (!captures.contains(it->first)) {
-            it->second.capture->stop();
+            it->second->stop();
             it = m_loopbackCaptures.erase(it);
         } else {
             ++it;

@@ -145,6 +145,11 @@ bool ScreenSource::isCapturing() const {
     return m_state == State::Capturing;
 }
 
+bool ScreenSource::isPending() const {
+    return m_state == State::CreatingSession || m_state == State::SelectingSources
+        || m_state == State::Starting;
+}
+
 bool ScreenSource::nextFrame() {
     if (!m_dirty) return false;
     m_dirty = false;
@@ -353,6 +358,7 @@ GstFlowReturn ScreenSource::onNewSample(GstAppSink *sink, gpointer userData) {
                 QMetaObject::invokeMethod(self, [self, frame = std::move(copy)]() mutable {
                     self->m_frame = applyOrientation(std::move(frame), self->m_orientation);
                     self->m_dirty = true;
+                    ++self->m_gen;
                 }, Qt::QueuedConnection);
             } else {
                 gst_video_frame_unmap(&vframe);

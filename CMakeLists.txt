@@ -309,6 +309,7 @@ set(SOURCES
     src/core/media/AudioAnalyzer.cpp
     src/core/media/AudioPlayer.cpp
     src/core/media/AudioInputCapture.cpp
+    src/core/media/SharedAudioCapture.cpp
     src/core/media/AudioLoopbackCapture.cpp
     src/core/media/AudioInputMixRegistry.cpp
     src/core/media/PcmResampler.cpp
@@ -316,6 +317,7 @@ set(SOURCES
     src/core/sources/SlideshowSource.cpp
     src/core/sources/CanvasSource.cpp
     src/core/sources/CameraSource.cpp
+    src/core/sources/SharedSourcePool.cpp
     src/core/sources/WindowCaptureSource.cpp
     src/core/sources/ScreenCapturePersist.cpp
     src/core/project/ClipManager.cpp
@@ -456,6 +458,7 @@ set(HEADERS
     include/core/media/AudioAnalyzer.h
     include/core/media/AudioPlayer.h
     include/core/media/AudioInputCapture.h
+    include/core/media/SharedAudioCapture.h
     include/core/media/AudioLoopbackCapture.h
     include/core/media/AudioLoopbackCaptureGStreamer.h
     include/core/media/AudioInputMixRegistry.h
@@ -463,6 +466,7 @@ set(HEADERS
     include/core/sources/SlideshowSource.h
     include/core/sources/CanvasSource.h
     include/core/sources/CameraSource.h
+    include/core/sources/SharedSourcePool.h
     include/core/sources/ScreenSource.h
     include/core/sources/ScreenCapturePersist.h
     include/core/sources/WindowCaptureSource.h

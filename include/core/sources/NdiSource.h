@@ -15,6 +15,9 @@ public:
     static QStringList discoverSources(int waitMs = 2000);
 
     bool connectTo(const QString &ndiName);
+    bool isConnected() const { return m_connected; }
+    quint64 generation() const { return m_gen; }
+    const QImage &frame() const { return m_frame; }
     void disconnect();
     void setName(const QString &name) { m_name = name; }
 
@@ -35,6 +38,7 @@ private:
 #endif
     QImage  m_frame;
     bool    m_dirty     = false;
+    quint64 m_gen       = 0;
     bool    m_connected = false;
     QString m_name;
     QString m_ndiName;

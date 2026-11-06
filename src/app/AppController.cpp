@@ -13,6 +13,7 @@
 #include "app/show/CueListModel.h"
 #include "app/show/ShowManager.h"
 #include "app/show/VenueProfile.h"
+#include "core/sources/SharedSourcePool.h"
 #include "app/transitions/TransitionController.h"
 #include "core/graph/ProcessEffects.h"
 #include "core/media/MediaFormats.h"
@@ -142,6 +143,7 @@ AppController::AppController(QObject *parent)
     m_obsIntegration = new ObsIntegration(this);
     m_deckController = new DeckController(m_compositor.get(), m_outputHub, this);
     m_deckController->setDeviceResolver([this](const QString &logical) { return m_venue->resolveDevice(logical); });
+    SharedSourcePool::instance().setDeviceResolver([this](const QString &logical) { return m_venue->resolveDevice(logical); });
     m_hotkeyManager = new HotkeyManager(m_show, this);
     m_sessionManager = new SessionManager(m_show, m_compositor.get(), &m_clipManager, this);
     m_transitionCtrl = new TransitionController(m_compositor.get(), this);

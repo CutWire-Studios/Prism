@@ -76,6 +76,10 @@ bool ScreenSource::isCapturing() const {
     return m_capturing;
 }
 
+bool ScreenSource::isPending() const {
+    return false;
+}
+
 bool ScreenSource::nextFrame() {
     if (!m_dirty) return false;
     m_dirty = false;
@@ -88,5 +92,6 @@ void ScreenSource::onVideoFrameChanged(const QVideoFrame &frame) {
     if (!img.isNull()) {
         m_frame = std::move(img);
         m_dirty = true;
+        ++m_gen;
     }
 }

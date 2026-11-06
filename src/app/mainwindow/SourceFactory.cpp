@@ -12,6 +12,7 @@
 #include "core/sources/TextSource.h"
 #include "core/sources/LayerCompositorSource.h"
 #include "core/sources/NdiSource.h"
+#include "core/sources/SharedSourcePool.h"
 #ifdef PRISM_HAVE_WEBRTC
 #include "core/sources/WebRtcSource.h"
 #endif
@@ -21,6 +22,42 @@
 #include <QtGlobal>
 #include <QMediaDevices>
 #include <QCameraDevice>
+
+namespace {
+
+std::unique_ptr<MediaSource> screenView(MediaSource::Type type, const std::shared_ptr<ScreenSource> &backend,
+                                        const QString &name) {
+    SharedFrameSource::Producer p;
+    p.keepAlive = backend;
+    p.poll = [b = backend.get()] { return b->generation(); };
+    p.frame = [b = backend.get()]() -> const QImage & { return b->frame(); };
+    p.missing = [b = backend.get()] { return !b->isCapturing() && !b->isPending(); };
+    return std::make_unique<SharedFrameSource>(type, std::move(p), name);
+}
+
+#ifdef Q_OS_LINUX
+// The portal session is shared per captureId; an empty id has no restore token to key on,
+// so it gets a private session.
+std::unique_ptr<MediaSource> sharedScreen(const QString &captureId, const QString &name) {
+    const auto make = [captureId]() -> std::shared_ptr<ScreenSource> {
+        auto s = std::make_shared<ScreenSource>();
+        s->setCaptureId(captureId);
+        if (!s->start(ScreenSource::CaptureType::Any)) return nullptr;
+        return s;
+    };
+    std::shared_ptr<ScreenSource> backend;
+    if (captureId.isEmpty())
+        backend = make();
+    else
+        backend = SharedSourcePool::instance().acquire<ScreenSource>(
+            QStringLiteral("screen:") + SharedSourcePool::instance().resolve(captureId), make);
+    if (!backend)
+        return std::make_unique<MissingSource>(MediaSource::Type::Screen, name);
+    return screenView(MediaSource::Type::Screen, backend, name);
+}
+#endif
+
+}
 
 std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc) {
     using Kind = SourceDescriptor::Kind;
@@ -45,56 +82,77 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
         return src;
     }
     case Kind::Camera: {
+        const QString path = SharedSourcePool::instance().resolve(desc.path);
+        const QString name = desc.displayName.isEmpty() ? path : desc.displayName;
         auto src = std::make_unique<CameraSource>();
-        if (desc.path.isEmpty()) {
+        if (path.isEmpty()) {
             src->start({});
         } else {
+            const auto devices = QMediaDevices::videoInputs();
             bool matched = false;
-            for (const auto &dev : QMediaDevices::videoInputs()) {
-                if (QString::fromUtf8(dev.id()) == desc.path) {
+            for (const auto &dev : devices) {
+                if (QString::fromUtf8(dev.id()) == path) {
                     src->start(dev);
                     matched = true;
                     break;
                 }
             }
+            // An empty device list is the IPU6/MIPI case where only the default camera opens.
+            if (!matched && !devices.isEmpty())
+                return std::make_unique<MissingSource>(MediaSource::Type::Camera, name);
             if (!matched)
-                src->startDevice(desc.path);
+                src->startDevice(path);
         }
         return src;
     }
     case Kind::Screen: {
-        auto src = std::make_unique<ScreenSource>();
+        const QString name = desc.displayName.isEmpty() ? QObject::tr("Screen") : desc.displayName;
 #ifdef Q_OS_LINUX
-        // Linux capture goes through xdg-desktop-portal, which remembers the
-        // chosen monitor/window via the restore token keyed by captureId.
-        src->setCaptureId(desc.captureId);
-        if (!src->start(ScreenSource::CaptureType::Any)) return nullptr;
+        return sharedScreen(desc.captureId, name);
 #else
         // macOS: QScreenCapture silently yields black frames without the Screen
-        // Recording grant. Trigger the prompt; bail if not yet granted so the
-        // caller can tell the user to grant it and relaunch.
-        if (!MacPermissions::ensureScreenCaptureAccess()) return nullptr;
-        if (!src->start(desc.screenIndex)) return nullptr;
+        // Recording grant. Trigger the prompt; show a black stand-in if not yet granted.
+        if (!MacPermissions::ensureScreenCaptureAccess())
+            return std::make_unique<MissingSource>(MediaSource::Type::Screen, name);
+        const int index = desc.screenIndex;
+        auto backend = SharedSourcePool::instance().acquire<ScreenSource>(
+            QStringLiteral("screen:#%1").arg(index), [&]() -> std::shared_ptr<ScreenSource> {
+                auto s = std::make_shared<ScreenSource>();
+                if (!s->start(index)) return nullptr;
+                return s;
+            });
+        if (!backend)
+            return std::make_unique<MissingSource>(MediaSource::Type::Screen, name);
+        return screenView(MediaSource::Type::Screen, backend, name);
 #endif
-        return src;
     }
     case Kind::Window: {
+        const QString name = desc.displayName.isEmpty() ? QObject::tr("Window") : desc.displayName;
 #ifdef Q_OS_LINUX
         // On Linux there is no reliable per-window capture outside the portal, so
         // window capture uses the same portal-backed ScreenSource with a
         // remembered selection.
-        auto src = std::make_unique<ScreenSource>();
-        src->setCaptureId(desc.captureId);
-        if (!src->start(ScreenSource::CaptureType::Any)) return nullptr;
-        return src;
+        return sharedScreen(desc.captureId, name);
 #else
-        if (!MacPermissions::ensureScreenCaptureAccess()) return nullptr;
-        auto src = std::make_unique<WindowCaptureSource>();
+        if (!MacPermissions::ensureScreenCaptureAccess())
+            return std::make_unique<MissingSource>(MediaSource::Type::Window, name);
         const auto windows = WindowCaptureSource::capturableWindows();
-        if (windows.isEmpty()) return nullptr;
+        if (windows.isEmpty())
+            return std::make_unique<MissingSource>(MediaSource::Type::Window, name);
         const int idx = qBound(0, desc.windowIndex, windows.size() - 1);
-        if (!src->start(windows.at(idx))) return nullptr;
-        return src;
+        auto backend = SharedSourcePool::instance().acquire<WindowCaptureSource>(
+            QStringLiteral("window:#%1").arg(idx), [&]() -> std::shared_ptr<WindowCaptureSource> {
+                auto w = std::make_shared<WindowCaptureSource>();
+                if (!w->start(windows.at(idx))) return nullptr;
+                return w;
+            });
+        if (!backend)
+            return std::make_unique<MissingSource>(MediaSource::Type::Window, name);
+        SharedFrameSource::Producer p;
+        p.keepAlive = backend;
+        p.poll = [b = backend.get()] { return b->generation(); };
+        p.frame = [b = backend.get()]() -> const QImage & { return b->frame(); };
+        return std::make_unique<SharedFrameSource>(MediaSource::Type::Window, std::move(p), name);
 #endif
     }
     case Kind::Canvas:
@@ -124,14 +182,25 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
         return src;
     }
     case Kind::Ndi: {
-        auto src = std::make_unique<NdiSource>();
-        if (!src->connectTo(desc.path)) return nullptr;
-        src->setName(desc.displayName.isEmpty() ? desc.path : desc.displayName);
-        return src;
+        const QString path = SharedSourcePool::instance().resolve(desc.path);
+        const QString name = desc.displayName.isEmpty() ? path : desc.displayName;
+        auto backend = SharedSourcePool::instance().acquire<NdiSource>(
+            QStringLiteral("ndi:") + path, [&]() -> std::shared_ptr<NdiSource> {
+                auto n = std::make_shared<NdiSource>();
+                if (!n->connectTo(path)) return nullptr;
+                return n;
+            });
+        if (!backend)
+            return std::make_unique<MissingSource>(MediaSource::Type::Ndi, name);
+        SharedFrameSource::Producer p;
+        p.keepAlive = backend;
+        p.poll = [b = backend.get()] { b->nextFrame(); return b->generation(); };
+        p.frame = [b = backend.get()]() -> const QImage & { return b->frame(); };
+        return std::make_unique<SharedFrameSource>(MediaSource::Type::Ndi, std::move(p), name);
     }
     case Kind::WebRtc: {
 #ifdef PRISM_HAVE_WEBRTC
-        auto src = std::make_unique<WebRtcSource>(desc.path);
+        auto src = std::make_unique<WebRtcSource>(SharedSourcePool::instance().resolve(desc.path));
         src->setName(desc.displayName.isEmpty() ? QObject::tr("Phone Camera") : desc.displayName);
         return src;
 #else
