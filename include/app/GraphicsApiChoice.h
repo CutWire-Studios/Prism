@@ -17,7 +17,7 @@ QString storedApi();
 // Takes effect on the next launch.
 void storeApi(const QString &id);
 
-// For main(), after the application and organization names are set and before QApplication.
+// For main(), after the application and organization names are set and before QGuiApplication.
 // Picks the API — --graphics-api=<id> for this run, otherwise the stored choice — and applies it.
 //
 // A stored non-OpenGL choice is guarded: it is marked pending until markStarted(), and a launch

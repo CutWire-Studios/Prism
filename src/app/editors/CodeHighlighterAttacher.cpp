@@ -1,6 +1,6 @@
 #include "app/editors/CodeHighlighterAttacher.h"
 
-#include "ui/common/CodeHighlighter.h"
+#include "app/common/CodeHighlighter.h"
 
 #include <QQuickTextDocument>
 #include <QTextDocument>

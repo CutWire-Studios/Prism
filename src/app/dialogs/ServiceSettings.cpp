@@ -3,9 +3,9 @@
 #include "app/AppController.h"
 #include "mcp/McpCatalog.h"
 #include "mcp/McpServer.h"
-#include "ui/obs/ObsIntegration.h"
-#include "ui/obs/ObsWebSocketClient.h"
-#include "ui/remote/OscServer.h"
+#include "app/obs/ObsIntegration.h"
+#include "app/obs/ObsWebSocketClient.h"
+#include "app/remote/OscServer.h"
 
 #include <QClipboard>
 #include <QGuiApplication>

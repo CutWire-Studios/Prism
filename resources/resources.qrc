@@ -231,7 +231,6 @@
         <file>fonts/ubuntu/Ubuntu-700italic.ttf</file>
         <file>fonts/ubuntu/Ubuntu-700.ttf</file>
         <file>fonts/ubuntu/UFL.txt</file>
-        <file>styles/prism.qss</file>
         <file>shaders/neon_kaleidoscope.glsl</file>
         <file>shaders/cyberpunk_horizon_grid.glsl</file>
         <file>shaders/audio_reactive_wave.glsl</file>

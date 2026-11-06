@@ -62,7 +62,7 @@ class PreferencesController : public QObject
 
     // QSettings("ui/scale"), 1.0..2.0 in 0.25 steps. Extra scale on top of the OS display scale,
     // except where applyStoredUiScale is given the OS scale (Windows): there it is the absolute
-    // size, 1.0 being 96 DPI. Applied as QT_SCALE_FACTOR before QApplication; a change needs a
+    // size, 1.0 being 96 DPI. Applied as QT_SCALE_FACTOR before QGuiApplication; a change needs a
     // restart.
     Q_PROPERTY(double uiScale READ uiScale WRITE setUiScale NOTIFY uiScaleChanged)
     Q_PROPERTY(double appliedUiScale READ appliedUiScale CONSTANT)
@@ -113,9 +113,9 @@ public:
     static void autoUiScaleOnce(int shortSide, double osDisplayScale);
     // Writes QT_SCALE_FACTOR from ui/scale unless the environment already set one. With
     // osDisplayScale, ui/scale is the absolute size and the factor is divided by it.
-    // Call once before QApplication; organization/application names must already be set.
+    // Call once before QGuiApplication; organization/application names must already be set.
     static void applyStoredUiScale(double osDisplayScale = 0.0);
-    // Installs the .qm for ui/language (or the system locale). Call once after QApplication
+    // Installs the .qm for ui/language (or the system locale). Call once after QGuiApplication
     // is named, and again from setUiLanguage. Safe before any PreferencesController exists.
     static void installUiTranslators();
 

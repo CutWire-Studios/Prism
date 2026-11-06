@@ -1,6 +1,6 @@
 #include "app/editors/AudioDeviceCatalog.h"
 
-#include "ui/common/AudioLoopbackEnumerator.h"
+#include "core/media/AudioLoopbackEnumerator.h"
 
 #include <QAudioDevice>
 #include <QMediaDevices>

@@ -7,7 +7,7 @@
 #include "core/media/VideoDecoder.h"
 #include "core/media/GpuVideoUploader.h"
 #include "core/sources/VideoFileSource.h"
-#include "ui/recording/ProgramRecorder.h"
+#include "app/recording/ProgramRecorder.h"
 
 extern "C" {
 #include <libavcodec/avcodec.h>

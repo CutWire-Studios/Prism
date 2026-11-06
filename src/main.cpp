@@ -3,17 +3,17 @@
 #include "app/gpu/GpuPreference.h"
 #include "app/graph/GraphRuntime.h"
 #include "app/preview/AppCompositor.h"
-#include "ui/common/Icons.h"
-#include "ui/common/Theme.h"
 #include "core/platform/MacPermissions.h"
+#include "core/render/TextLayout.h"
 #include "mcp/McpStdio.h"
 #include "core/media/GpuVideoUploader.h"
 #include "core/media/VideoDecoder.h"
 #include "release.h"
 #include "app/editor/PreferencesController.h"
 
-#include <QApplication>
 #include <QByteArray>
+#include <QFont>
+#include <QGuiApplication>
 #include <QIcon>
 #include <QProcess>
 #include <QQmlApplicationEngine>
@@ -49,23 +49,18 @@ int main(int argc, char *argv[]) {
     av_log_set_level(AV_LOG_ERROR);
 
 #ifdef Q_OS_LINUX
-    // The app themes itself with a global qApp stylesheet. On a normal desktop
-    // (non-Flatpak) QFileDialog uses the platform theme's *in-process* native
-    // dialog (e.g. KDE/GTK), so that stylesheet bleeds into it and produces a
-    // broken, half-styled file picker. Routing dialogs through the out-of-process
-    // xdg-desktop-portal chooser leaves them as the clean, unstyled native picker
-    // — the same path the Flatpak build already takes. Only set when the user or
-    // distro hasn't chosen a platform theme themselves.
+    // Route file dialogs through the xdg-desktop-portal chooser, as the Flatpak build already
+    // does, unless the user or distro chose a platform theme.
     if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORMTHEME"))
         qputenv("QT_QPA_PLATFORMTHEME", "xdgdesktopportal");
 #endif
 
     // Let offscreen GL contexts (e.g. SlideshowSource's transition FBO) share
-    // textures with the VideoWidget QOpenGLWidget contexts, so rendered frames
+    // textures with the preview scene-graph contexts, so rendered frames
     // can be drawn directly without a GPU→CPU→GPU readback.
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 
-    // Settings are read before QApplication exists: VAAPI zero-copy needs Qt's xcb plugin on
+    // Settings are read before QGuiApplication exists: VAAPI zero-copy needs Qt's xcb plugin on
     // EGL, which has to be chosen before the platform plugin loads.
     QCoreApplication::setOrganizationName(QStringLiteral("Prism"));
     QCoreApplication::setApplicationName(QStringLiteral(PRISM_APP_NAME));
@@ -79,7 +74,7 @@ int main(int argc, char *argv[]) {
 #endif
     qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
 
-    QApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
     app.setOrganizationName("Prism");
     app.setApplicationName(PRISM_APP_NAME);
     VideoDecoder::applyModeSetting(VideoDecoder::modeSetting());
@@ -97,9 +92,13 @@ int main(int argc, char *argv[]) {
             appIcon = QIcon(QStringLiteral(":/Prism_icon.png"));
         app.setWindowIcon(appIcon);
     }
-    Icons::init();
-    Theme::loadFonts();
-    Theme::instance().apply();
+    prism::text::registerBundledFonts();
+    {
+        QFont f = app.font();
+        f.setFamily(QStringLiteral("Inter"));
+        f.setPixelSize(13);
+        app.setFont(f);
+    }
 
     AppController controller;
     AppCompositor::setInstance(controller.compositor());

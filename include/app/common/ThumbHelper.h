@@ -5,12 +5,22 @@
 #include <QColor>
 #include "core/sources/SourceDescriptor.h"
 
-/// Static thumbnail-generation helpers extracted from MainWindow.
-/// These are pure utility functions with no Qt widget dependencies
-/// except QImage/QPainter.
+/// Static thumbnail-generation helpers built on QImage/QPainter.
 class ThumbHelper {
 public:
     ThumbHelper() = delete;
+
+    struct Names {
+        Names() = delete;
+        inline static constexpr const char *DesktopWindows = "monitor";
+        inline static constexpr const char *Folder = "folder";
+        inline static constexpr const char *Grain = "sparkles";
+        inline static constexpr const char *GridView = "layout-grid";
+        inline static constexpr const char *Link = "link";
+        inline static constexpr const char *PhotoCamera = "camera";
+        inline static constexpr const char *SelectWindow = "app-window";
+        inline static constexpr const char *Sensors = "radio";
+    };
 
     static QImage makeIconThumb(const QString &symbolName, int w = 110, int h = 65);
 

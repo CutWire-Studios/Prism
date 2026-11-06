@@ -5,7 +5,7 @@
 #include "core/media/ThumbnailExtractor.h"
 #include "core/project/ClipManager.h"
 #include "core/scripting/ScriptRuntime.h"
-#include "ui/common/AudioLoopbackEnumerator.h"
+#include "core/media/AudioLoopbackEnumerator.h"
 
 #include <QDate>
 #include <QDateTime>

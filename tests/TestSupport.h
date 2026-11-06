@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ui/recording/ProgramRecorder.h"
+#include "app/recording/ProgramRecorder.h"
 #include "core/render/Compositor.h"
 
 #include <QDir>

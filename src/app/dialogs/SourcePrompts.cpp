@@ -5,9 +5,8 @@
 #include "core/media/ThumbnailExtractor.h"
 #include "core/sources/NdiSource.h"
 #include "core/sources/WindowCaptureSource.h"
-#include "ui/common/CameraEnumerator.h"
-#include "ui/common/Icons.h"
-#include "ui/common/QrCodeHelper.h"
+#include "core/media/CameraEnumerator.h"
+#include "app/common/QrCodeHelper.h"
 #ifdef PRISM_HAVE_WEBRTC
 #include "core/sources/WebRtcSource.h"
 #include "core/webrtc/NetworkUtils.h"
@@ -89,7 +88,7 @@ quint64 SourcePrompts::addSlideshow(const QString &folder, int intervalSeconds)
     if (!imgs.isEmpty())
         thumb = ThumbnailExtractor::extract(dir.absoluteFilePath(imgs.first()), 110, 65).toImage();
     if (thumb.isNull())
-        thumb = ThumbHelper::makeIconThumb(Icons::Names::Folder);
+        thumb = ThumbHelper::makeIconThumb(ThumbHelper::Names::Folder);
 
     SourceDescriptor desc;
     desc.kind = SourceDescriptor::Kind::Slideshow;
@@ -132,7 +131,7 @@ quint64 SourcePrompts::addCamera(int index)
             }
         }
     }
-    return add(desc, ThumbHelper::makeIconThumb(Icons::Names::PhotoCamera));
+    return add(desc, ThumbHelper::makeIconThumb(ThumbHelper::Names::PhotoCamera));
 }
 
 quint64 SourcePrompts::addPortalCapture(const QString &kind)
@@ -144,8 +143,8 @@ quint64 SourcePrompts::addPortalCapture(const QString &kind)
     desc.screenIndex = 0;
     desc.windowIndex = 0;
     desc.captureId = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    return add(desc, ThumbHelper::makeIconThumb(window ? Icons::Names::SelectWindow
-                                                       : Icons::Names::DesktopWindows));
+    return add(desc, ThumbHelper::makeIconThumb(window ? ThumbHelper::Names::SelectWindow
+                                                       : ThumbHelper::Names::DesktopWindows));
 }
 
 QStringList SourcePrompts::screenLabels() const
@@ -173,7 +172,7 @@ quint64 SourcePrompts::addScreen(int index)
     desc.kind = SourceDescriptor::Kind::Screen;
     desc.screenIndex = index;
     desc.displayName = tr("Screen %1").arg(index + 1);
-    return add(desc, ThumbHelper::makeIconThumb(Icons::Names::DesktopWindows));
+    return add(desc, ThumbHelper::makeIconThumb(ThumbHelper::Names::DesktopWindows));
 }
 
 quint64 SourcePrompts::addWindow(int index)
@@ -185,7 +184,7 @@ quint64 SourcePrompts::addWindow(int index)
     desc.kind = SourceDescriptor::Kind::Window;
     desc.windowIndex = index;
     desc.displayName = windows.at(index).description();
-    return add(desc, ThumbHelper::makeIconThumb(Icons::Names::SelectWindow));
+    return add(desc, ThumbHelper::makeIconThumb(ThumbHelper::Names::SelectWindow));
 }
 
 quint64 SourcePrompts::addShader(const QString &code)
@@ -249,7 +248,7 @@ quint64 SourcePrompts::addNdi(const QString &name)
     desc.kind = SourceDescriptor::Kind::Ndi;
     desc.path = name;
     desc.displayName = name;
-    return add(desc, ThumbHelper::makeIconThumb(Icons::Names::Sensors));
+    return add(desc, ThumbHelper::makeIconThumb(ThumbHelper::Names::Sensors));
 }
 
 QStringList SourcePrompts::webrtcInterfaces() const

@@ -17,14 +17,13 @@
 #include "mcp/McpJson.h"
 #include "mcp/McpServer.h"
 #include "core/platform/ErrorReporter.h"
-#include "ui/common/Icons.h"
-#include "ui/hotkeys/HotkeyManager.h"
-#include "ui/mainwindow/MainWindowUtils.h"
-#include "ui/obs/ObsIntegration.h"
-#include "ui/obs/ObsWebSocketClient.h"
-#include "ui/recording/RecordingOptions.h"
-#include "ui/remote/OscServer.h"
-#include "ui/remote/RemoteControlServer.h"
+#include "app/hotkeys/HotkeyManager.h"
+#include "app/common/MainWindowUtils.h"
+#include "app/obs/ObsIntegration.h"
+#include "app/obs/ObsWebSocketClient.h"
+#include "app/recording/RecordingOptions.h"
+#include "app/remote/OscServer.h"
+#include "app/remote/RemoteControlServer.h"
 
 #include <QBuffer>
 #include <QDateTime>
@@ -877,7 +876,7 @@ quint64 AppController::addVideoUrl(const QString &url, const QString &displayNam
                                .arg(trimmed));
         return 0;
     }
-    const NodeId id = m_runtime->addClipNode(trimmed, ThumbHelper::makeIconThumb(Icons::Names::Link));
+    const NodeId id = m_runtime->addClipNode(trimmed, ThumbHelper::makeIconThumb(ThumbHelper::Names::Link));
     if (id)
         renameNode(id, name);
     mcpBumpRevision();

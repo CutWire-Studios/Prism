@@ -1,4 +1,4 @@
-#include "ui/remote/OscProtocol.h"
+#include "app/remote/OscProtocol.h"
 
 #include <QtEndian>
 #include <cstring>

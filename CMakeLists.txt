@@ -12,7 +12,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
-set(CMAKE_AUTOUIC ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 include(PrismBuildSpeed)
@@ -58,7 +57,7 @@ message(STATUS "Prism distribution: ${PRISM_DISTRIBUTION}")
 find_package(Skia REQUIRED)
 
 # Qt
-set(_prism_qt_components Core Widgets Svg OpenGL OpenGLWidgets Gui Multimedia Network Qml Quick QuickControls2 QuickEffects)
+set(_prism_qt_components Core Svg OpenGL Gui Multimedia Network Qml Quick QuickControls2 QuickEffects)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND _prism_qt_components DBus)
 endif()
@@ -373,46 +372,34 @@ set(SOURCES
     src/app/graph/GraphRuntime.cpp
     src/core/graph/ProcessEffects.cpp
     src/core/graph/AudioEffects.cpp
-    src/ui/common/AssetLibrary.cpp
     src/app/output/OutputHub.cpp
     src/app/output/NdiProgramSink.cpp
     src/app/output/VirtualCameraProgramSink.cpp
     src/app/output/FrameCaptureHelper.cpp
-    src/ui/obs/ObsWebSocketClient.cpp
-    src/ui/obs/ObsIntegration.cpp
-    src/ui/recording/ProgramRecorder.cpp
-    src/ui/recording/ProgramAudioRecorder.cpp
-    src/ui/recording/RecordingOptions.cpp
-    src/ui/editors/ShaderEditDialog.cpp
-    src/ui/editors/ScriptEditDialog.cpp
-    src/ui/editors/SvgTemplateDialog.cpp
-    src/ui/editors/TextEditDialog.cpp
-    src/ui/editors/ShapeEditDialog.cpp
-    src/ui/editors/style/StyleControls.cpp
-    src/ui/editors/style/GradientEditor.cpp
-    src/ui/editors/style/EffectParamsEditor.cpp
-    src/ui/editors/style/ShadingLayerStackEditor.cpp
+    src/app/obs/ObsWebSocketClient.cpp
+    src/app/obs/ObsIntegration.cpp
+    src/app/recording/ProgramRecorder.cpp
+    src/app/recording/ProgramAudioRecorder.cpp
+    src/app/recording/RecordingOptions.cpp
     # Extracted helper / controller classes
     src/app/common/ThumbHelper.cpp
-    src/ui/common/CodeHighlighter.cpp
-    src/ui/common/CameraEnumerator.cpp
-    src/ui/common/AudioLoopbackEnumerator.cpp
-    src/ui/common/Icons.cpp
-    src/ui/common/Theme.cpp
-    src/ui/hotkeys/HotkeyManager.cpp
+    src/app/common/CodeHighlighter.cpp
+    src/core/media/CameraEnumerator.cpp
+    src/core/media/AudioLoopbackEnumerator.cpp
+    src/app/hotkeys/HotkeyManager.cpp
     src/app/session/SessionManager.cpp
     src/app/transitions/TransitionController.cpp
     src/app/mainwindow/DeckController.cpp
     src/app/mainwindow/SourceFactory.cpp
-    src/ui/remote/OscProtocol.cpp
-    src/ui/remote/RemoteProtocol.cpp
-    src/ui/mainwindow/MainWindowUtils.cpp
+    src/app/remote/OscProtocol.cpp
+    src/app/remote/RemoteProtocol.cpp
+    src/app/common/MainWindowUtils.cpp
     src/mcp/McpSession.cpp
     src/mcp/McpHttp.cpp
     src/mcp/McpProtocol.cpp
     src/mcp/McpCatalog.cpp
     src/mcp/McpStdio.cpp
-    src/ui/common/QrCodeHelper.cpp
+    src/app/common/QrCodeHelper.cpp
     src/core/platform/MacPermissions.cpp
     src/core/platform/ErrorReporter.cpp
     third_party/qrcodegen/qrcodegen.cpp
@@ -506,48 +493,36 @@ set(HEADERS
     include/app/graph/GraphRuntime.h
     include/core/graph/ProcessEffects.h
     include/core/graph/AudioEffects.h
-    include/ui/common/AssetLibrary.h
     include/app/output/OutputHub.h
     include/app/output/ProgramFrameSource.h
     include/app/output/NdiProgramSink.h
     include/app/output/VirtualCameraProgramSink.h
     include/app/output/FrameCaptureHelper.h
-    include/ui/obs/ObsWebSocketClient.h
-    include/ui/obs/ObsIntegration.h
-    include/ui/recording/ProgramRecorder.h
-    include/ui/recording/ProgramAudioRecorder.h
-    include/ui/recording/RecordingOptions.h
+    include/app/obs/ObsWebSocketClient.h
+    include/app/obs/ObsIntegration.h
+    include/app/recording/ProgramRecorder.h
+    include/app/recording/ProgramAudioRecorder.h
+    include/app/recording/RecordingOptions.h
     include/app/output/ProgramOutputSink.h
-    include/ui/editors/ShaderEditDialog.h
-    include/ui/editors/ScriptEditDialog.h
-    include/ui/editors/SvgTemplateDialog.h
-    include/ui/editors/TextEditDialog.h
-    include/ui/editors/ShapeEditDialog.h
-    include/ui/editors/style/StyleControls.h
-    include/ui/editors/style/GradientEditor.h
-    include/ui/editors/style/EffectParamsEditor.h
-    include/ui/editors/style/ShadingLayerStackEditor.h
     # Extracted helper / controller headers
     include/app/common/ThumbHelper.h
-    include/ui/common/CameraEnumerator.h
-    include/ui/common/AudioLoopbackEnumerator.h
-    include/ui/common/Icons.h
-    include/ui/common/Theme.h
-    include/ui/hotkeys/HotkeyManager.h
+    include/core/media/CameraEnumerator.h
+    include/core/media/AudioLoopbackEnumerator.h
+    include/app/hotkeys/HotkeyManager.h
     include/app/session/SessionManager.h
     include/app/transitions/TransitionController.h
     include/app/mainwindow/DeckController.h
     include/app/mainwindow/SourceFactory.h
-    include/ui/remote/OscProtocol.h
-    include/ui/remote/RemoteProtocol.h
-    include/ui/mainwindow/MainWindowUtils.h
+    include/app/remote/OscProtocol.h
+    include/app/remote/RemoteProtocol.h
+    include/app/common/MainWindowUtils.h
     include/mcp/McpJson.h
     include/mcp/McpSession.h
     include/mcp/McpHttp.h
     include/mcp/McpProtocol.h
     include/mcp/McpCatalog.h
     include/mcp/McpStdio.h
-    include/ui/common/QrCodeHelper.h
+    include/app/common/QrCodeHelper.h
     include/core/platform/MacPermissions.h
     include/core/platform/ErrorReporter.h
     include/core/text/Bezier.h
@@ -583,12 +558,6 @@ if(PRISM_HAVE_SEGMENTATION)
         include/core/sources/SegmentationSource.h)
 endif()
 
-set(UI_FILES
-    forms/ShaderEditDialog.ui
-    forms/ScriptEditDialog.ui
-    forms/SvgTemplateDialog.ui
-)
-
 # Audio effect DSP. JUCE modules compile into whatever target links them, so they live in a library
 # of their own to keep JUCE's compile definitions and build time out of prism_core. prism_core only
 # gets JUCE's headers, through prism_juce_headers.
@@ -618,7 +587,7 @@ add_library(prismaudiodsp STATIC
     src/core/audio/dsp/GraphProcessor.cpp
 )
 # Nothing here is a QObject, and AUTOMOC would otherwise scan JUCE's amalgamated sources.
-set_target_properties(prismaudiodsp PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+set_target_properties(prismaudiodsp PROPERTIES AUTOMOC OFF AUTORCC OFF)
 target_include_directories(prismaudiodsp PUBLIC include)
 target_link_libraries(prismaudiodsp PRIVATE juce::juce_dsp juce::juce_recommended_config_flags
     ${PRISM_SOUNDTOUCH_TARGET})
@@ -644,11 +613,7 @@ target_compile_definitions(prism_juce_headers INTERFACE ${PRISM_JUCE_DEFINITIONS
 target_compile_definitions(prism_juce_headers INTERFACE $<$<CONFIG:Debug>:DEBUG=1 _DEBUG=1>)
 
 # Core library (linked by the app and unit tests)
-add_library(prism_core STATIC ${SOURCES} ${HEADERS} ${UI_FILES} resources/resources.qrc)
-
-set_target_properties(prism_core PROPERTIES
-    AUTOUIC_SEARCH_PATHS "${CMAKE_CURRENT_SOURCE_DIR}/forms"
-)
+add_library(prism_core STATIC ${SOURCES} ${HEADERS} resources/resources.qrc)
 
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/include/release.h.in"
@@ -682,10 +647,8 @@ target_compile_definitions(prism_core PRIVATE QT_NO_FOREACH)
 
 target_link_libraries(prism_core PUBLIC
     Qt6::Core
-    Qt6::Widgets
     Qt6::Svg
     Qt6::OpenGL
-    Qt6::OpenGLWidgets
     Qt6::Gui
     Qt6::Multimedia
     Qt6::Network

@@ -1,7 +1,7 @@
 #include "app/dialogs/HotkeyEditor.h"
 
 #include "app/AppController.h"
-#include "ui/hotkeys/HotkeyManager.h"
+#include "app/hotkeys/HotkeyManager.h"
 
 #include <QFile>
 #include <QJsonDocument>

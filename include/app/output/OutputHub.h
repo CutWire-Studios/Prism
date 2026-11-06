@@ -14,9 +14,9 @@
 #include "app/output/NdiProgramSink.h"
 #include "app/output/VirtualCameraProgramSink.h"
 #include "app/output/ProgramFrameSource.h"
-#include "ui/recording/ProgramRecorder.h"
-#include "ui/recording/ProgramAudioRecorder.h"
-#include "ui/recording/RecordingOptions.h"
+#include "app/recording/ProgramRecorder.h"
+#include "app/recording/ProgramAudioRecorder.h"
+#include "app/recording/RecordingOptions.h"
 #include "core/graph/ClipGraph.h"
 
 class Compositor;

@@ -1,6 +1,6 @@
 #include "TestSupport.h"
-#include "ui/recording/ProgramRecorder.h"
-#include "ui/recording/ProgramAudioRecorder.h"
+#include "app/recording/ProgramRecorder.h"
+#include "app/recording/ProgramAudioRecorder.h"
 #include "app/output/OutputHub.h"
 #include "app/output/ProgramFrameSource.h"
 #include "core/render/Compositor.h"

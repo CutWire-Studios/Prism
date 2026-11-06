@@ -43,7 +43,7 @@ namespace prism::mcp { class McpServer; }
 /// non-widget logic of the old MainWindow (deck routing, transitions, panic, sessions, recording
 /// hooks, output windows, MCP/remote helper API).
 ///
-/// Dialogs are never shown from here. Anything that used to open a QMessageBox / QFileDialog is
+/// Dialogs are never shown from here. Anything that used to open a modal dialog is
 /// a signal; QML answers through confirmAnswered() / filePicked().
 class AppController : public QObject {
     Q_OBJECT
@@ -349,7 +349,7 @@ signals:
 
     // Requests for the QML shell
     void confirmRequested(const QString &id, const QString &title, const QString &text);
-    /// mode: "open" | "openMany" | "save" | "folder". nameFilters in QFileDialog syntax
+    /// mode: "open" | "openMany" | "save" | "folder". nameFilters in file dialog syntax
     /// ("Media Files (*.mp4 *.png)").
     void filePickRequested(const QString &id, const QString &title, const QString &mode,
                            const QStringList &nameFilters, const QString &defaultPath);

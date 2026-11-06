@@ -4,7 +4,7 @@
 #include "core/media/HwAccel.h"
 #include "core/media/VideoDecoder.h"
 #include "core/sources/VideoFileSource.h"
-#include "ui/recording/ProgramRecorder.h"
+#include "app/recording/ProgramRecorder.h"
 
 #include <QCoreApplication>
 #include <QDir>

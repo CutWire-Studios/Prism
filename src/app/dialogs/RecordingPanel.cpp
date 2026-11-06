@@ -3,7 +3,7 @@
 #include "app/AppController.h"
 #include "core/media/MediaProbe.h"
 #include "core/sources/SourceDescriptor.h"
-#include "ui/recording/RecordingOptions.h"
+#include "app/recording/RecordingOptions.h"
 
 #include <QVariantMap>
 

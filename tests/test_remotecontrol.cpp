@@ -1,4 +1,4 @@
-#include "ui/remote/RemoteProtocol.h"
+#include "app/remote/RemoteProtocol.h"
 
 #include <QtTest>
 #include <QJsonArray>

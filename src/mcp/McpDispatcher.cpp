@@ -6,7 +6,7 @@
 #include "core/project/ClipManager.h"
 #include "core/sources/ImageSource.h"
 #include "core/sources/NdiSource.h"
-#include "ui/common/CameraEnumerator.h"
+#include "core/media/CameraEnumerator.h"
 #include "app/common/ThumbHelper.h"
 #include "core/sources/ShapeSource.h"
 #include "core/sources/SvgTemplateSource.h"

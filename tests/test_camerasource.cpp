@@ -1,7 +1,7 @@
 #include "core/sources/CameraSource.h"
 
 #include <QtTest>
-#include <QApplication>
+#include <QGuiApplication>
 #include <QMediaDevices>
 
 class TestCameraSource : public QObject {
@@ -61,7 +61,7 @@ private slots:
 
 int main(int argc, char *argv[])
 {
-    QApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
     TestCameraSource tc;
     return QTest::qExec(&tc, argc, argv);
 }

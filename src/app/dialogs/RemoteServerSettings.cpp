@@ -2,8 +2,8 @@
 
 #include "app/AppController.h"
 #include "core/webrtc/FirewallUtils.h"
-#include "ui/common/QrCodeHelper.h"
-#include "ui/remote/RemoteControlServer.h"
+#include "app/common/QrCodeHelper.h"
+#include "app/remote/RemoteControlServer.h"
 
 #include <QNetworkInterface>
 

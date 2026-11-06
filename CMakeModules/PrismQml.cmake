@@ -73,10 +73,10 @@ qt_add_qml_module(prism_qml
         src/mcp/McpDispatcher.cpp
         include/mcp/McpServer.h
         src/mcp/McpServer.cpp
-        include/ui/remote/OscServer.h
-        src/ui/remote/OscServer.cpp
-        include/ui/remote/RemoteControlServer.h
-        src/ui/remote/RemoteControlServer.cpp
+        include/app/remote/OscServer.h
+        src/app/remote/OscServer.cpp
+        include/app/remote/RemoteControlServer.h
+        src/app/remote/RemoteControlServer.cpp
         include/app/nodes/NodeCatalog.h
         src/app/nodes/NodeCatalog.cpp
         include/app/editors/ClipFrameView.h

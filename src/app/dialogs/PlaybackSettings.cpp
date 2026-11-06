@@ -2,7 +2,7 @@
 
 #include "core/media/GpuVideoUploader.h"
 #include "core/media/VideoDecoder.h"
-#include "ui/recording/ProgramRecorder.h"
+#include "app/recording/ProgramRecorder.h"
 
 #include <QSettings>
 #include <QVariantMap>

@@ -1,9 +1,9 @@
-#include "ui/hotkeys/HotkeyManager.h"
+#include "app/hotkeys/HotkeyManager.h"
 #include "core/graph/ClipGraph.h"
 #include "core/sources/SourceDescriptor.h"
 
 #include <QtTest>
-#include <QApplication>
+#include <QGuiApplication>
 #include <QSignalSpy>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -188,7 +188,7 @@ private slots:
 
 int main(int argc, char *argv[])
 {
-    QApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
     TestHotkeys tc;
     return QTest::qExec(&tc, argc, argv);
 }

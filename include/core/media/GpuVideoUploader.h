@@ -29,7 +29,7 @@ enum class ZeroCopyMode {
 // "playback/zeroCopy" in QSettings, overridden by PRISM_ZEROCOPY=0/1. Cached after the first call.
 ZeroCopyMode zeroCopyMode();
 
-// Must run before QApplication: on an explicit On, switches Qt's xcb plugin to EGL so VAAPI
+// Must run before QGuiApplication: on an explicit On, switches Qt's xcb plugin to EGL so VAAPI
 // surfaces can be imported as dma-bufs. Auto never rewrites how the whole window renders.
 void applyZeroCopyXcbEgl();
 

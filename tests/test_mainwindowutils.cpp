@@ -1,4 +1,4 @@
-#include "ui/mainwindow/MainWindowUtils.h"
+#include "app/common/MainWindowUtils.h"
 #include "app/session/SessionManager.h"
 
 #include <QtTest>

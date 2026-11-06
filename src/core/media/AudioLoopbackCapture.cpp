@@ -1,6 +1,6 @@
 #include "core/media/AudioLoopbackCapture.h"
 #include "core/media/AudioInputMixRegistry.h"
-#include "ui/common/AudioLoopbackEnumerator.h"
+#include "core/media/AudioLoopbackEnumerator.h"
 
 #include <QAudioFormat>
 #include <QAudioSource>
