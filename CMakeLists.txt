@@ -383,7 +383,6 @@ set(SOURCES
     src/ui/recording/ProgramRecorder.cpp
     src/ui/recording/ProgramAudioRecorder.cpp
     src/ui/recording/RecordingOptions.cpp
-    src/ui/recording/RecordingSettingsDialog.cpp
     src/ui/editors/ShaderEditDialog.cpp
     src/ui/editors/ScriptEditDialog.cpp
     src/ui/editors/SvgTemplateDialog.cpp
@@ -398,11 +397,9 @@ set(SOURCES
     src/ui/common/CodeHighlighter.cpp
     src/ui/common/CameraEnumerator.cpp
     src/ui/common/AudioLoopbackEnumerator.cpp
-    src/ui/common/CapturePicker.cpp
     src/ui/common/Icons.cpp
     src/ui/common/Theme.cpp
     src/ui/hotkeys/HotkeyManager.cpp
-    src/ui/hotkeys/HotkeyEditorDialog.cpp
     src/app/session/SessionManager.cpp
     src/app/transitions/TransitionController.cpp
     src/app/mainwindow/DeckController.cpp
@@ -519,7 +516,6 @@ set(HEADERS
     include/ui/recording/ProgramRecorder.h
     include/ui/recording/ProgramAudioRecorder.h
     include/ui/recording/RecordingOptions.h
-    include/ui/recording/RecordingSettingsDialog.h
     include/app/output/ProgramOutputSink.h
     include/ui/editors/ShaderEditDialog.h
     include/ui/editors/ScriptEditDialog.h
@@ -534,11 +530,9 @@ set(HEADERS
     include/app/common/ThumbHelper.h
     include/ui/common/CameraEnumerator.h
     include/ui/common/AudioLoopbackEnumerator.h
-    include/ui/common/CapturePicker.h
     include/ui/common/Icons.h
     include/ui/common/Theme.h
     include/ui/hotkeys/HotkeyManager.h
-    include/ui/hotkeys/HotkeyEditorDialog.h
     include/app/session/SessionManager.h
     include/app/transitions/TransitionController.h
     include/app/mainwindow/DeckController.h

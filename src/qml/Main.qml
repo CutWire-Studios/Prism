@@ -46,8 +46,124 @@ ApplicationWindow {
     property string pendingConfirmId: ""
     property string pendingPickId: ""
     property var pendingPickFilters: []
+    property int modalDepth: 0
 
-    PanelPool { id: pool }
+    readonly property var focused: window.activeFocusItem
+    readonly property bool typing: !!focused && focused.hasOwnProperty("cursorPosition")
+    readonly property bool inCanvas: !!focused && focused.hasOwnProperty("spaceDown")
+    readonly property bool shortcutsLive: modalDepth === 0 && !typing
+
+    function pushOverlayModal() { modalDepth++ }
+    function popOverlayModal() { modalDepth = Math.max(0, modalDepth - 1) }
+
+    function localPath(url) {
+        return decodeURIComponent(url.toString().replace(/^file:\/\//, ""))
+    }
+
+    function importDropped(urls) {
+        const files = []
+        for (let i = 0; i < urls.length; ++i) {
+            const path = window.localPath(urls[i])
+            const name = path.split("/").pop()
+            if (name.indexOf(".") < 0)
+                AppController.importFolder(path)
+            else if (/\.psm$/i.test(name))
+                AppController.openSession(path)
+            else
+                files.push(path)
+        }
+        if (files.length > 0)
+            AppController.importFiles(files)
+    }
+
+    PanelPool {
+        id: pool
+        editors: editorRouter
+    }
+
+    EditorRouter {
+        id: editorRouter
+        host: window.contentItem
+    }
+
+    DropArea {
+        anchors.fill: parent
+        keys: ["text/uri-list"]
+        onDropped: drop => {
+            if (!drop.hasUrls)
+                return
+            window.importDropped(drop.urls)
+            drop.accept()
+        }
+    }
+
+    Shortcut { sequences: [StandardKey.New]; onActivated: AppController.newSession() }
+    Shortcut { sequences: [StandardKey.Open]; onActivated: AppController.requestOpenSession() }
+    Shortcut { sequences: [StandardKey.Save]; onActivated: AppController.saveSession() }
+    Shortcut { sequences: [StandardKey.SaveAs]; onActivated: AppController.requestSaveSessionAs() }
+    Shortcut { sequence: "Ctrl+Shift+O"; onActivated: AppController.requestAddFiles() }
+    Shortcut {
+        sequence: "Ctrl+M"
+        enabled: AppController.recording
+        onActivated: AppController.dropMarker("")
+    }
+    Shortcut {
+        sequences: [StandardKey.Undo]
+        enabled: window.shortcutsLive && !window.inCanvas
+        onActivated: AppController.graph.undo()
+    }
+    Shortcut {
+        sequences: [StandardKey.Redo]
+        enabled: window.shortcutsLive && !window.inCanvas
+        onActivated: AppController.graph.redo()
+    }
+    Shortcut {
+        sequence: "B"
+        enabled: window.shortcutsLive
+        onActivated: AppController.togglePanic("blackout")
+    }
+    Shortcut {
+        sequence: "P"
+        enabled: window.shortcutsLive
+        onActivated: AppController.togglePanic("freeze")
+    }
+    Shortcut {
+        sequence: "F9"
+        enabled: window.modalDepth === 0
+        onActivated: AppController.togglePanic("stay_tuned")
+    }
+    Shortcut {
+        sequence: "Space"
+        enabled: window.shortcutsLive && !window.inCanvas && !AppController.singleStream
+        onActivated: AppController.cut()
+    }
+    Shortcut {
+        sequences: ["Return", "Enter"]
+        enabled: window.shortcutsLive && !window.inCanvas && !AppController.singleStream
+        onActivated: AppController.autoTransition()
+    }
+
+    ThemedContextMenu {
+        id: fileMenu
+
+        ThemedMenuItem { text: qsTr("New Session"); onTriggered: AppController.newSession() }
+        ThemedMenuItem { text: qsTr("Open Session…"); onTriggered: AppController.requestOpenSession() }
+        ThemedMenuItem { text: qsTr("Save Session"); onTriggered: AppController.saveSession() }
+        ThemedMenuItem { text: qsTr("Save Session As…"); onTriggered: AppController.requestSaveSessionAs() }
+        ThemedMenuSeparator { }
+        ThemedMenuItem { text: qsTr("Add Media Files…"); onTriggered: AppController.requestAddFiles() }
+        ThemedMenuItem { text: qsTr("Add Media Folder…"); onTriggered: AppController.requestAddFolder() }
+        ThemedMenuSeparator { }
+        ThemedMenuItem { text: qsTr("Export Project…"); onTriggered: AppController.requestExportProject() }
+        ThemedMenuItem { text: qsTr("Import Project…"); onTriggered: AppController.requestImportProject() }
+        ThemedMenuSeparator { }
+        ThemedMenuItem {
+            text: qsTr("Drop Marker")
+            enabled: AppController.recording
+            onTriggered: AppController.dropMarker("")
+        }
+        ThemedMenuItem { text: qsTr("Clear Graph…"); onTriggered: AppController.clearGraph() }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -75,6 +191,29 @@ ApplicationWindow {
                 }
 
                 Item { Layout.fillWidth: true }
+
+                IconButton {
+                    id: fileButton
+                    glyph: "folder-open"
+                    variant: "ghost"
+                    text: qsTr("File")
+                    tooltip: qsTr("Session and media")
+                    onClicked: fileMenu.popup(fileButton, 0, fileButton.height)
+                }
+                IconButton {
+                    glyph: "undo"
+                    variant: "ghost"
+                    tooltip: qsTr("Undo")
+                    enabled: AppController.graph.canUndo
+                    onClicked: AppController.graph.undo()
+                }
+                IconButton {
+                    glyph: "redo"
+                    variant: "ghost"
+                    tooltip: qsTr("Redo")
+                    enabled: AppController.graph.canRedo
+                    onClicked: AppController.graph.redo()
+                }
 
                 IconButton {
                     glyph: Theme.icons.settings
@@ -147,21 +286,7 @@ ApplicationWindow {
         }
     }
 
-    ThemedDialog {
-        id: recoveryDialog
-        property string autosavePath: ""
-        property var backups: []
-        title: qsTr("Recover session")
-        acceptText: qsTr("Recover")
-        rejectText: qsTr("Start fresh")
-        preferredWidth: Theme.dialogWidthSm
-        contentItem: ThemedLabel {
-            width: parent ? parent.width : 320
-            wrapMode: Text.Wrap
-            text: qsTr("Prism did not shut down cleanly. Recover the last autosave?")
-        }
-        onAccepted: AppController.recoverFrom(autosavePath)
-    }
+    AppDialogs { anchors.fill: parent }
 
     FileDialog {
         id: openDialog
@@ -203,12 +328,6 @@ ApplicationWindow {
 
         function onStatusMessage(text, timeoutMs) {
             Toasts.info(text, timeoutMs)
-        }
-
-        function onRecoveryRequested(autosavePath, backupPaths) {
-            recoveryDialog.autosavePath = autosavePath
-            recoveryDialog.backups = backupPaths
-            recoveryDialog.open()
         }
 
         function onFilePickRequested(id, title, mode, nameFilters, defaultPath) {

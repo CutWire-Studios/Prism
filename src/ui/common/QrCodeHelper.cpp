@@ -1,6 +1,8 @@
 #include "ui/common/QrCodeHelper.h"
 #include "qrcodegen.hpp"
 
+#include <QBuffer>
+
 namespace QrCodeHelper {
 
 QImage toImage(const QString &text, int scale) {
@@ -26,6 +28,14 @@ QImage toImage(const QString &text, int scale) {
 
 QPixmap toPixmap(const QString &text, int scale) {
     return QPixmap::fromImage(toImage(text, scale));
+}
+
+QString toDataUrl(const QString &text, int scale) {
+    QByteArray png;
+    QBuffer buffer(&png);
+    buffer.open(QIODevice::WriteOnly);
+    toImage(text, scale).save(&buffer, "PNG");
+    return QStringLiteral("data:image/png;base64,") + QString::fromLatin1(png.toBase64());
 }
 
 } // namespace QrCodeHelper

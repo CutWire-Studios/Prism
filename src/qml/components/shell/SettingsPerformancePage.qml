@@ -125,4 +125,84 @@ SettingsPage {
             onToggled: PreferencesController.hardwareEncode = checked
         }
     }
+
+    SettingsRow {
+        title: qsTr("Zero-copy upload")
+        description: qsTr("Hands decoded frames to OpenGL without copying them through system memory. Automatic uses it where it has been verified. Takes effect after restarting Prism.")
+        keywords: "zero copy gpu texture opengl dma-buf cuda interop"
+        query: page.query
+
+        ThemedComboBox {
+            width: Theme.c.settingsRow.controlWidth
+            textRole: "label"
+            valueRole: "id"
+            model: [
+                { id: "auto", label: qsTr("Automatic") },
+                { id: "on", label: qsTr("On") },
+                { id: "off", label: qsTr("Off") }
+            ]
+            currentIndex: Math.max(0, indexOfValue(PlaybackSettings.zeroCopy))
+            onActivated: PlaybackSettings.zeroCopy = currentValue
+        }
+    }
+
+    SettingsRow {
+        title: qsTr("Playback status")
+        description: PlaybackSettings.uploadStatus()
+        keywords: "upload zero copy fallback decode status"
+        query: page.query
+    }
+
+    SettingsGroupHeader {
+        text: qsTr("Recording")
+        query: page.query
+    }
+
+    SettingsRow {
+        title: qsTr("Video codec")
+        description: qsTr("Codec for program and source recordings. Takes effect on the next recording.")
+        keywords: "h264 hevc h265 av1 codec record"
+        query: page.query
+
+        ThemedComboBox {
+            width: Theme.c.settingsRow.controlWidth
+            textRole: "label"
+            valueRole: "id"
+            model: PlaybackSettings.codecs
+            currentIndex: Math.max(0, indexOfValue(PlaybackSettings.codec))
+            onActivated: PlaybackSettings.codec = currentValue
+        }
+    }
+
+    SettingsRow {
+        title: qsTr("Container")
+        description: qsTr("MKV survives a crash mid-recording; MP4 is written fragmented to approximate that.")
+        keywords: "mkv mp4 container format record"
+        query: page.query
+
+        ThemedComboBox {
+            width: Theme.c.settingsRow.controlWidth
+            textRole: "label"
+            valueRole: "id"
+            model: PlaybackSettings.containers
+            currentIndex: Math.max(0, indexOfValue(PlaybackSettings.container))
+            onActivated: PlaybackSettings.container = currentValue
+        }
+    }
+
+    SettingsRow {
+        title: qsTr("Video encoder")
+        description: qsTr("Pin one encoder instead of letting Prism choose. Automatic falls back through the others to software.")
+        keywords: "encoder nvenc qsv amf vaapi videotoolbox software x264 record"
+        query: page.query
+
+        ThemedComboBox {
+            width: Theme.c.settingsRow.controlWidth
+            textRole: "label"
+            valueRole: "id"
+            model: PlaybackSettings.encoders
+            currentIndex: Math.max(0, indexOfValue(PlaybackSettings.encoder))
+            onActivated: PlaybackSettings.encoder = currentValue
+        }
+    }
 }

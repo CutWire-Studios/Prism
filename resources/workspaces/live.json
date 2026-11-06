@@ -16,7 +16,7 @@
             "children": [
               { "panels": [ { "type": "decks" } ], "active": 0 },
               { "panels": [ { "type": "program" } ], "active": 0 },
-              { "panels": [ { "type": "inspector" } ], "active": 0 }
+              { "panels": [ { "type": "inspector" }, { "type": "mixer" }, { "type": "outputs" } ], "active": 0 }
             ]
           },
           {

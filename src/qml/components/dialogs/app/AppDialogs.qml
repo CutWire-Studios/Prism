@@ -1,0 +1,62 @@
+import QtQuick
+import Prism
+
+// Opens the app-level dialogs AppController asks for. Place once in the shell:
+// `AppDialogs { anchors.fill: parent }`.
+Item {
+    id: root
+
+    function _openAddSource(kind) {
+        switch (kind) {
+        case "slideshow": slideshow.ensure().open(); break
+        case "camera": camera.ensure().open(); break
+        case "canvas": canvas.ensure().open(); break
+        case "ndi": ndi.ensure().open(); break
+        case "webrtc": webrtc.ensure().open(); break
+        case "screen":
+        case "window":
+            if (SourcePrompts.capturePickerNeeded)
+                capture.ensure().show(kind)
+            else
+                SourcePrompts.addPortalCapture(kind)
+            break
+        }
+    }
+
+    Connections {
+        target: AppController
+
+        function onAppDialogRequested(id) {
+            if (id.indexOf("addSource:") === 0) {
+                root._openAddSource(id.substring(10))
+                return
+            }
+            switch (id) {
+            case "hotkeys": hotkeys.ensure().open(); break
+            case "recording": recording.ensure().open(); break
+            case "remote": remote.ensure().open(); break
+            case "osc": osc.ensure().open(); break
+            case "agent": agent.ensure().open(); break
+            case "obs": obs.ensure().open(); break
+            }
+        }
+
+        function onRecoveryRequested(autosavePath, backupPaths) {
+            recovery.ensure().show(autosavePath, backupPaths)
+        }
+    }
+
+    LazyLoader { id: hotkeys; sourceComponent: HotkeyEditorDialog { } }
+    LazyLoader { id: recording; sourceComponent: RecordingPanelDialog { } }
+    LazyLoader { id: remote; sourceComponent: RemoteServerDialog { } }
+    LazyLoader { id: osc; sourceComponent: OscSettingsDialog { } }
+    LazyLoader { id: agent; sourceComponent: AgentAccessDialog { } }
+    LazyLoader { id: obs; sourceComponent: ObsConnectDialog { } }
+    LazyLoader { id: recovery; keepLoaded: true; sourceComponent: SessionRecoveryDialog { } }
+    LazyLoader { id: slideshow; sourceComponent: SlideshowSourceDialog { } }
+    LazyLoader { id: camera; sourceComponent: CameraSourceDialog { } }
+    LazyLoader { id: capture; sourceComponent: CaptureSourceDialog { } }
+    LazyLoader { id: canvas; sourceComponent: CanvasSourceDialog { } }
+    LazyLoader { id: ndi; sourceComponent: NdiSourceDialog { } }
+    LazyLoader { id: webrtc; sourceComponent: WebRtcSourceDialog { } }
+}

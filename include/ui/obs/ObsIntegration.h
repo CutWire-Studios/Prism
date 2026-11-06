@@ -3,11 +3,9 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
-#include <optional>
 #include "core/sources/SourceDescriptor.h"
 
 class ObsWebSocketClient;
-class QWidget;
 
 /// High-level OBS integration: connection settings, scene switching, clip hooks.
 class ObsIntegration : public QObject {
@@ -23,7 +21,9 @@ public:
     quint16 port() const { return m_port; }
     QStringList sceneNames() const;
 
-    void showConnectDialog(QWidget *parent);
+    QString password() const { return m_password; }
+    /// Stores the endpoint and starts connecting; connectedChanged / errorOccurred report the outcome.
+    void connectToObs(const QString &host, quint16 port, const QString &password);
     void disconnectFromObs();
 
     void refreshScenes();
@@ -32,13 +32,11 @@ public:
     /// If the descriptor has obsSceneName set, switch OBS to that scene.
     void onClipTriggered(const SourceDescriptor &desc);
 
-    /// nullopt = cancelled; empty string = clear link; otherwise scene name.
-    std::optional<QString> promptLinkClipObsScene(QWidget *parent, const QString &clipName,
-                                                  const QString &currentScene);
 
 signals:
     void connectedChanged(bool connected);
     void sceneListUpdated(const QStringList &scenes);
+    void errorOccurred(const QString &message);
 
 private:
     void saveSettings() const;

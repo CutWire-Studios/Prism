@@ -11,4 +11,9 @@ struct RecordingOptions {
     QString container = QStringLiteral("mkv");
 
     QString effectiveOutputDir() const;
+
+    static RecordingOptions loadSaved();
+    static void saveOutputDir(const QString &dir);
+    /// True once the user has explicitly picked an output folder.
+    static bool hasChosenOutputDir();
 };

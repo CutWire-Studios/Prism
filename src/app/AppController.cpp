@@ -17,20 +17,16 @@
 #include "mcp/McpJson.h"
 #include "mcp/McpServer.h"
 #include "ui/common/Icons.h"
-#include "ui/hotkeys/HotkeyEditorDialog.h"
 #include "ui/hotkeys/HotkeyManager.h"
 #include "ui/mainwindow/MainWindowUtils.h"
-#include "ui/mcp/McpAccessDialog.h"
 #include "ui/obs/ObsIntegration.h"
 #include "ui/obs/ObsWebSocketClient.h"
-#include "ui/recording/RecordingSettingsDialog.h"
+#include "ui/recording/RecordingOptions.h"
 #include "ui/remote/OscServer.h"
-#include "ui/remote/OscSettingsDialog.h"
 #include "ui/remote/RemoteControlServer.h"
-#include "ui/remote/RemoteServerDialog.h"
 
 #include <QBuffer>
-#include <QDialog>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -131,7 +127,7 @@ AppController::AppController(QObject *parent)
     m_graphController = new ClipGraphController(m_graph, this);
     m_runtime = new GraphRuntime(m_graph, this);
 
-    const RecordingOptions recOpts = RecordingSettingsDialog::loadSavedOptions();
+    const RecordingOptions recOpts = RecordingOptions::loadSaved();
     m_outputHub = new OutputHub(this);
     m_outputHub->setProgramSource(m_compositor.get());
     m_outputHub->setOutputDir(recOpts.effectiveOutputDir());
@@ -213,8 +209,6 @@ void AppController::connectSignals()
     connect(m_transitionCtrl, &TransitionController::runningChanged, this, &AppController::transitionRunningChanged);
 
     connect(m_outputHub, &OutputHub::recordingStateChanged, this, [this]() {
-        if (auto *panel = qobject_cast<RecordingSettingsDialog *>(m_recordingPanel.data()))
-            panel->syncFromHub();
         emit recordingChanged();
     });
     connect(m_outputHub, &OutputHub::recordingProgress, this, &AppController::recordingProgress);
@@ -436,7 +430,7 @@ void AppController::setOutputDir(const QString &dir)
 {
     if (dir.isEmpty() || dir == m_outputHub->outputDir())
         return;
-    RecordingSettingsDialog::saveOutputDir(dir);
+    RecordingOptions::saveOutputDir(dir);
     m_outputHub->setOutputDir(dir);
     emit outputDirChanged();
 }
@@ -1298,7 +1292,7 @@ bool AppController::setOutputEnabled(const QString &id, bool on)
 
 bool AppController::ensureOutputDir(const QString &followUpId)
 {
-    if (RecordingSettingsDialog::hasChosenOutputDir())
+    if (RecordingOptions::hasChosenOutputDir())
         return true;
     m_pendingAfterOutputDir = followUpId;
     emit filePickRequested(QStringLiteral("outputDir"), tr("Choose a folder to save recordings and captures"),
@@ -1311,7 +1305,7 @@ bool AppController::startRecording()
 {
     if (!ensureOutputDir(QStringLiteral("startRecording")))
         return false;
-    m_outputHub->setOutputDir(RecordingSettingsDialog::loadSavedOptions().effectiveOutputDir());
+    m_outputHub->setOutputDir(RecordingOptions::loadSaved().effectiveOutputDir());
     return m_outputHub->startProgramRecording();
 }
 
@@ -1330,14 +1324,14 @@ bool AppController::mcpStartRecording(const QString &dir, QString *error)
 {
     QString outDir = dir;
     if (outDir.isEmpty()) {
-        if (!RecordingSettingsDialog::hasChosenOutputDir()) {
+        if (!RecordingOptions::hasChosenOutputDir()) {
             if (error)
                 *error = tr("No save location. Pass dir or set it in the recording panel.");
             return false;
         }
-        outDir = RecordingSettingsDialog::loadSavedOptions().effectiveOutputDir();
+        outDir = RecordingOptions::loadSaved().effectiveOutputDir();
     } else {
-        RecordingSettingsDialog::saveOutputDir(outDir);
+        RecordingOptions::saveOutputDir(outDir);
     }
     m_outputHub->setOutputDir(outDir);
     if (!m_outputHub->startProgramRecording()) {
@@ -1374,7 +1368,7 @@ QVariantMap AppController::captureFrame(int layerIndex, bool savePng, bool addAs
         if (!ensureOutputDir(QString()))
             return {{"ok", false}, {"error", tr("No save location set.")}};
         savedPath = FrameCaptureHelper::savePng(
-            frame, layer.label, RecordingSettingsDialog::loadSavedOptions().effectiveOutputDir());
+            frame, layer.label, RecordingOptions::loadSaved().effectiveOutputDir());
         if (savedPath.isEmpty() && !holdAsStill)
             return {{"ok", false}, {"error", tr("Captured the frame but could not save it to disk.")}};
     }
@@ -1396,50 +1390,51 @@ QVariantMap AppController::captureFrame(int layerIndex, bool savePng, bool addAs
     return {{"ok", true}, {"path", savedPath}, {"held", held}, {"error", QString()}};
 }
 
-// ── Widget dialogs ────────────────────────────────────────────────────────────
+// ── App dialogs (shown by AppDialogs.qml) ─────────────────────────────────────
 
-void AppController::openHotkeyEditor()
-{
-    auto *dlg = new HotkeyEditorDialog(m_hotkeyManager, m_graph);
-    dlg->setAttribute(Qt::WA_DeleteOnClose);
-    dlg->setWindowModality(Qt::ApplicationModal);
-    dlg->show();
-}
+void AppController::openHotkeyEditor() { emit appDialogRequested(QStringLiteral("hotkeys")); }
 
 void AppController::openRecordingSettings()
 {
     if (!ensureOutputDir(QStringLiteral("recordingSettings")))
         return;
-    auto *panel = qobject_cast<RecordingSettingsDialog *>(m_recordingPanel.data());
-    if (!panel) {
-        panel = new RecordingSettingsDialog(m_outputHub, m_graph, nullptr);
-        panel->setAttribute(Qt::WA_DeleteOnClose);
-        m_recordingPanel = panel;
-    }
-    panel->show();
-    panel->raise();
-    panel->activateWindow();
-    panel->syncFromHub();
+    emit appDialogRequested(QStringLiteral("recording"));
 }
 
-void AppController::openRemoteServerDialog()
+void AppController::openRemoteServerDialog() { emit appDialogRequested(QStringLiteral("remote")); }
+
+void AppController::openOscSettings() { emit appDialogRequested(QStringLiteral("osc")); }
+
+void AppController::openAgentAccess() { emit appDialogRequested(QStringLiteral("agent")); }
+
+void AppController::connectObs() { emit appDialogRequested(QStringLiteral("obs")); }
+
+void AppController::requestAddSource(const QString &kind)
 {
-    auto *dlg = qobject_cast<RemoteServerDialog *>(m_serverDialog.data());
-    if (!dlg) {
-        dlg = new RemoteServerDialog(m_remoteServer, nullptr);
-        dlg->setAttribute(Qt::WA_DeleteOnClose);
-        m_serverDialog = dlg;
-    }
-    dlg->show();
-    dlg->raise();
-    dlg->activateWindow();
+    static const QStringList editorKinds = {QStringLiteral("shader"), QStringLiteral("svgTemplate"),
+                                            QStringLiteral("text"), QStringLiteral("shape")};
+    if (editorKinds.contains(kind))
+        emit sourceEditorRequested(kind);
+    else
+        emit appDialogRequested(QStringLiteral("addSource:") + kind);
 }
 
-void AppController::openOscSettings()
+QVariantMap AppController::describeSessionFile(const QString &path) const
 {
-    OscSettingsDialog dlg;
-    if (dlg.exec() == QDialog::Accepted)
-        applyOscSettings();
+    QVariantMap out{{QStringLiteral("exists"), QFile::exists(path)},
+                    {QStringLiteral("name"), QFileInfo(path).fileName()},
+                    {QStringLiteral("savedAt"), QString()}};
+    QFile file(path);
+    QDateTime when;
+    if (file.open(QIODevice::ReadOnly)) {
+        const QString savedAt = QJsonDocument::fromJson(file.readAll()).object()
+                                    .value(QStringLiteral("savedAt")).toString();
+        when = QDateTime::fromString(savedAt, Qt::ISODate);
+    }
+    if (!when.isValid())
+        when = QFileInfo(path).lastModified();
+    out[QStringLiteral("savedAt")] = when.toString(QStringLiteral("yyyy-MM-dd hh:mm:ss"));
+    return out;
 }
 
 void AppController::applyOscSettings()
@@ -1448,20 +1443,6 @@ void AppController::applyOscSettings()
         emit statusMessage(tr("OSC: could not listen on UDP port %1").arg(m_oscServer->port()), 8000);
 }
 
-void AppController::openAgentAccess()
-{
-    auto *dlg = qobject_cast<McpAccessDialog *>(m_mcpDialog.data());
-    if (!dlg) {
-        dlg = new McpAccessDialog(this, nullptr);
-        dlg->setAttribute(Qt::WA_DeleteOnClose);
-        m_mcpDialog = dlg;
-    }
-    dlg->show();
-    dlg->raise();
-    dlg->activateWindow();
-}
-
-void AppController::connectObs() { m_obsIntegration->showConnectDialog(nullptr); }
 void AppController::switchObsScene(const QString &scene) { m_obsIntegration->switchProgramScene(scene); }
 void AppController::refreshObsScenes() { m_obsIntegration->refreshScenes(); }
 

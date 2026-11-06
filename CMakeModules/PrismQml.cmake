@@ -57,24 +57,62 @@ qt_add_qml_module(prism_qml
         src/app/online/updates/UpdateChecker.cpp
         include/app/AppController.h
         src/app/AppController.cpp
+        include/app/dialogs/HotkeyEditor.h
+        src/app/dialogs/HotkeyEditor.cpp
+        include/app/dialogs/RecordingPanel.h
+        src/app/dialogs/RecordingPanel.cpp
+        include/app/dialogs/RemoteServerSettings.h
+        src/app/dialogs/RemoteServerSettings.cpp
+        include/app/dialogs/ServiceSettings.h
+        src/app/dialogs/ServiceSettings.cpp
+        include/app/dialogs/SourcePrompts.h
+        src/app/dialogs/SourcePrompts.cpp
+        include/app/dialogs/PlaybackSettings.h
+        src/app/dialogs/PlaybackSettings.cpp
         include/mcp/McpDispatcher.h
         src/mcp/McpDispatcher.cpp
         include/mcp/McpServer.h
         src/mcp/McpServer.cpp
-        include/ui/mcp/McpAccessDialog.h
-        src/ui/mcp/McpAccessDialog.cpp
         include/ui/remote/OscServer.h
         src/ui/remote/OscServer.cpp
-        include/ui/remote/OscSettingsDialog.h
-        src/ui/remote/OscSettingsDialog.cpp
         include/ui/remote/RemoteControlServer.h
         src/ui/remote/RemoteControlServer.cpp
-        include/ui/remote/RemoteServerDialog.h
-        src/ui/remote/RemoteServerDialog.cpp
         include/app/nodes/NodeCatalog.h
         src/app/nodes/NodeCatalog.cpp
+        include/app/editors/ClipFrameView.h
+        src/app/editors/ClipFrameView.cpp
+        include/app/editors/ClipEditTools.h
+        src/app/editors/ClipEditTools.cpp
+        include/app/editors/TransformTools.h
+        src/app/editors/TransformTools.cpp
+        include/app/editors/PedalboardModel.h
+        src/app/editors/PedalboardModel.cpp
+        include/app/editors/AudioDeviceCatalog.h
+        src/app/editors/AudioDeviceCatalog.cpp
+        include/app/editors/AudioGraphParams.h
+        src/app/editors/AudioGraphParams.cpp
+        include/app/editors/CodeHighlighterAttacher.h
+        src/app/editors/CodeHighlighterAttacher.cpp
+        include/app/editors/MixerChannels.h
+        src/app/editors/MixerChannels.cpp
+        include/app/editors/ScriptPreview.h
+        src/app/editors/ScriptPreview.cpp
+        include/app/editors/ShaderPreview.h
+        src/app/editors/ShaderPreview.cpp
         include/app/nodes/NodeGridItem.h
         src/app/nodes/NodeGridItem.cpp
+        include/app/editors/StyleLayers.h
+        src/app/editors/StyleLayers.cpp
+        include/app/editors/EditorImageItem.h
+        src/app/editors/EditorImageItem.cpp
+        include/app/editors/TextSourceBackend.h
+        src/app/editors/TextSourceBackend.cpp
+        include/app/editors/ShapeSourceBackend.h
+        src/app/editors/ShapeSourceBackend.cpp
+        include/app/editors/SvgTemplateBackend.h
+        src/app/editors/SvgTemplateBackend.cpp
+        include/app/panels/AssetLibraryModel.h
+        src/app/panels/AssetLibraryModel.cpp
     QML_FILES
         ${PRISM_QML_FILES}
     RESOURCES
@@ -97,9 +135,12 @@ target_include_directories(prism_qml PRIVATE
     include/app/theme
     include/app/editor
     include/app/preview
+    include/app/editors
     include/app/online/updates
     include/app/gpu
+    include/app/dialogs
     include/app/nodes
+    include/app/panels
     include/app
 )
 

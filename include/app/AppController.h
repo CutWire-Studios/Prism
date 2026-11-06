@@ -262,13 +262,18 @@ public:
     Q_INVOKABLE QVariantList captureLayers() const;
     Q_INVOKABLE QVariantMap captureFrame(int layerIndex, bool savePng, bool addAsElement, bool holdAsStill);
 
-    // ── Widget dialogs that still exist (parentless) ──────────────────────────
+    // ── App-level dialogs: each emits appDialogRequested, AppDialogs.qml shows it ──
     Q_INVOKABLE void openHotkeyEditor();
     Q_INVOKABLE void openRecordingSettings();
     Q_INVOKABLE void openRemoteServerDialog();
     Q_INVOKABLE void openOscSettings();
     Q_INVOKABLE void openAgentAccess();
     Q_INVOKABLE void connectObs();
+    /// kind: "slideshow" | "camera" | "screen" | "window" | "canvas" | "ndi" | "webrtc" open an
+    /// app dialog; "shader" | "svgTemplate" | "text" | "shape" emit sourceEditorRequested.
+    Q_INVOKABLE void requestAddSource(const QString &kind);
+    /// {exists, name, savedAt} of a session / autosave file, for the recovery dialog.
+    Q_INVOKABLE QVariantMap describeSessionFile(const QString &path) const;
     Q_INVOKABLE void switchObsScene(const QString &scene);
     Q_INVOKABLE void refreshObsScenes();
 
@@ -301,6 +306,8 @@ public:
     void mcpBumpRevision() { ++m_mcpEditRevision; }
     Compositor::OutputScaleMode outputScaleMode() const;
     void setOutputScaleMode(Compositor::OutputScaleMode mode);
+    /// Re-reads the osc/* settings and (re)starts or stops the OSC server.
+    void applyOscSettings();
 
     /// Rebuilds the compositor decks from the graph (MainWindow::pushDecks).
     void pushDecks();
@@ -339,6 +346,10 @@ signals:
     void statusMessage(const QString &text, int timeoutMs);
     /// Unclean shutdown detected: offer autosave / backups; answer with recoverFrom(path) or ignore to start fresh.
     void recoveryRequested(const QString &autosavePath, const QStringList &backupPaths);
+    /// id: "hotkeys" | "recording" | "remote" | "osc" | "agent" | "obs" | "addSource:<kind>".
+    void appDialogRequested(const QString &id);
+    /// The node editors for these source kinds are not app dialogs; the editor owner handles them.
+    void sourceEditorRequested(const QString &kind);
     /// A session finished loading (after the decks, hotkeys, fader were restored).
     void sessionLoaded();
 
@@ -359,7 +370,6 @@ private:
     void setSessionPath(const QString &path);
     void addRecent(const QString &path);
     void performAutosave();
-    void applyOscSettings();
     bool ensureOutputDir(const QString &followUpId);
     void doOpenSession(const QString &path);
     void doNewSession();
@@ -404,9 +414,6 @@ private:
     double m_lastTime[2] = {0.0, 0.0};
     QString m_sessionPath;
     QStringList m_obsScenes;
-    QPointer<QObject> m_recordingPanel;
-    QPointer<QObject> m_serverDialog;
-    QPointer<QObject> m_mcpDialog;
     QString m_pendingAfterOutputDir;
     int m_mcpEditRevision = 0;
 };
