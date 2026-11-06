@@ -68,13 +68,11 @@ void DeckController::swapDeckAudio() {
     std::swap(m_audioFollowsFaderLive, m_audioFollowsFaderStaging);
     std::swap(m_liveNodeId, m_stagingNodeId);
     std::swap(m_lastTimeLive, m_lastTimeStaging);
-    std::swap(m_speedLive, m_speedStaging);
 }
 
-void DeckController::setDeckSpeed(Deck deck, double speed) {
-    (isLive(deck) ? m_speedLive : m_speedStaging) = speed;
-    m_compositor->setDeckSpeed(deck, speed);
+void DeckController::applyClipSpeed(Deck deck) {
     const NodeId nodeId = isLive(deck) ? m_liveNodeId : m_stagingNodeId;
+    m_compositor->setDeckSpeed(deck, m_graph->clipSettings(nodeId).speed);
     // Re-seek the audio to the video position so both resume in sync at the
     // new rate.
     if (nodeId)
@@ -269,7 +267,7 @@ void DeckController::updateDeckAudio(Deck deck, NodeId clipId,
     const bool deviceChanged = (player->outputDeviceId() != outputDeviceId);
     player->setOutputDeviceId(outputDeviceId);
     player->setDelayMs(audioDelayMs);
-    player->setSpeed(isLive(deck) ? m_speedLive : m_speedStaging);
+    player->setSpeed(m_graph->clipSettings(clipId).speed);
 
     ClipGraph::ResolvedAudioRoute route;
     if (m_graph->resolveAudioStreamRoute(clipId, route))
@@ -330,8 +328,8 @@ void DeckController::refreshShaderAudioForActiveDecks() {
     // audio data is produced whether it feeds a shader, a script chain, or a
     // switcher.
     m_runtime->syncAllAudioScripts(
-        m_liveNodeId, out->getCurrentTimeLive(), out->isPlayingLive(), m_speedLive,
-        m_stagingNodeId, out->getCurrentTimeStaging(), out->isPlayingStaging(), m_speedStaging);
+        m_liveNodeId, out->getCurrentTimeLive(), out->isPlayingLive(), m_graph->clipSettings(m_liveNodeId).speed,
+        m_stagingNodeId, out->getCurrentTimeStaging(), out->isPlayingStaging(), m_graph->clipSettings(m_stagingNodeId).speed);
 
     // Point each active shader at its (possibly merged) JSON data feed. Shaders
     // are now purely JSON-driven: their uniforms come from the script graph.
@@ -380,7 +378,6 @@ DeckController::DeckUiState DeckController::deckUiState(const SourceDescriptor &
     DeckUiState st;
     st.name = name;
     st.hasTransport = desc.isPausable();
-    st.hasSpeed = desc.hasSpeedControl();
     return st;
 }
 
@@ -390,6 +387,7 @@ void DeckController::assignNodeToDeck(NodeId nodeId, Deck deck,
     if (!m_graph->hasNode(nodeId)) return;
     const ClipSettings clip = m_graph->clipSettings(nodeId);
     const bool repeat = m_graph->clipRepeat(nodeId);
+    m_compositor->setDeckSpeed(deck, clip.speed);
 
     // Record which node feeds the deck so later audio updates (seek, play/pause,
     // crossfade, loop restart) can find it again.
@@ -497,6 +495,7 @@ void DeckController::assignCompositeToDeck(std::unique_ptr<MediaSource> src, Nod
                                            Deck deck, bool startPlayback) {
     auto *out = m_compositor;
     if (isLive(deck)) m_liveNodeId = primaryNodeId; else m_stagingNodeId = primaryNodeId;
+    out->setDeckSpeed(deck, m_graph->clipSettings(primaryNodeId).speed);
 
     const ClipGraph::Node *primary = primaryNodeId ? m_graph->node(primaryNodeId) : nullptr;
     if (!primary || primary->type != ClipGraph::NodeType::Input) {

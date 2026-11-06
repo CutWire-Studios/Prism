@@ -39,6 +39,8 @@ private slots:
     void applyUnknownOp();
     void addSourceAndInspect();
     void applyBatchStops();
+    void setSpeedByClip();
+    void renameNonInputNode();
     void addProcessNodeAndConnect();
     void stagedDeckIsPausedUntilTake();
     void cutIsImmediateAndTakeIgnoresEmptyStaging();
@@ -341,6 +343,46 @@ void TestMcp::addSourceAndInspect()
         {{QStringLiteral("clip"), id}, {QStringLiteral("name"), QStringLiteral("Title")}});
     QVERIFY(renamed.value(QStringLiteral("ok")).toBool());
     QCOMPARE(renamed.value(QStringLiteral("name")).toString(), QStringLiteral("Title"));
+}
+
+void TestMcp::setSpeedByClip()
+{
+    AppController window(nullptr);
+    prism::mcp::McpDispatcher dispatcher(&window);
+    SourceDescriptor desc;
+    desc.kind = SourceDescriptor::Kind::VideoFile;
+    desc.path = QStringLiteral("/nonexistent.mp4");
+    const quint64 video = window.clipGraph()->addNode(ClipGraph::NodeType::Input, QPointF(0, 0),
+                                                      {{"source", ClipGraph::sourceToMap(desc)}});
+    const QJsonObject set = dispatcher.applyOne(
+        QStringLiteral("set_speed"),
+        {{QStringLiteral("clip"), QString::number(video)}, {QStringLiteral("speed"), 8.0}});
+    QVERIFY(set.value(QStringLiteral("ok")).toBool());
+    QCOMPARE(set.value(QStringLiteral("speed")).toDouble(), 4.0);
+    QCOMPARE(window.clipGraph()->clipSettings(video).speed, 4.0);
+
+    desc.kind = SourceDescriptor::Kind::Canvas;
+    const quint64 canvas = window.clipGraph()->addNode(ClipGraph::NodeType::Input, QPointF(0, 0),
+                                                       {{"source", ClipGraph::sourceToMap(desc)}});
+    const QJsonObject bad = dispatcher.applyOne(
+        QStringLiteral("set_speed"),
+        {{QStringLiteral("clip"), QString::number(canvas)}, {QStringLiteral("speed"), 2.0}});
+    QCOMPARE(bad.value(QStringLiteral("error")).toString(), QStringLiteral("type_mismatch"));
+}
+
+void TestMcp::renameNonInputNode()
+{
+    AppController window(nullptr);
+    ClipGraph *graph = window.clipGraph();
+    const quint64 layer = graph->addNode(ClipGraph::NodeType::Layer, QPointF(0, 0), {});
+    const QString original = graph->node(layer)->title;
+    window.renameNode(layer, QStringLiteral("Main Layer"));
+    QCOMPARE(graph->node(layer)->title, QStringLiteral("Main Layer"));
+    ClipGraph copy;
+    QVERIFY(copy.fromJson(graph->toJson()));
+    QCOMPARE(copy.node(layer)->title, QStringLiteral("Main Layer"));
+    window.graphController()->undo();
+    QCOMPARE(graph->node(layer)->title, original);
 }
 
 void TestMcp::applyBatchStops()

@@ -30,8 +30,8 @@ InspectorForm {
         set({ source: Object.assign({}, source, patch) })
     }
 
-    function setSettings(patch) {
-        set({ settings: Object.assign({}, settings, patch) })
+    function setSettings(patch, coalesce) {
+        set({ settings: Object.assign({}, settings, patch) }, coalesce)
     }
 
     function refreshNdi() {
@@ -369,14 +369,14 @@ InspectorForm {
 
     StyleSliderRow {
         Layout.fillWidth: true
-        visible: !!root.params.speedControl && root.deck >= 0
+        visible: !!root.params.speedControl
         label: qsTr("Speed")
         from: 0.25
         to: 4
         step: 0.05
         decimals: 2
-        value: root.deck === 0 ? AppController.deckSpeedLive : AppController.deckSpeedStaging
-        onEdited: v => AppController.setDeckSpeedValue(root.deck, v)
+        value: root.settings.speed || 1
+        onEdited: v => root.setSettings({ speed: v }, true)
     }
 
     ThemedLabel {

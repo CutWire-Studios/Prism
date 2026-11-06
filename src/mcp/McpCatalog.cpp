@@ -147,12 +147,13 @@ const QList<Op> &ops()
          objectSchema({{QStringLiteral("deck"), enumProp(QStringLiteral("Which deck"), kDecks)},
                        {QStringLiteral("at"), numberProp(QStringLiteral("Seconds from start"))}},
                       {QStringLiteral("deck"), QStringLiteral("at")})},
-        {"set_speed", "decks", "Change a deck's playback rate",
-         "Set deck speed. Clamped to 0.25–4.0. Only affects seekable file sources.",
-         objectSchema({{QStringLiteral("deck"), enumProp(QStringLiteral("Which deck"), kDecks)},
-                       {QStringLiteral("speed"),
-                        numberProp(QStringLiteral("Playback rate (1 = normal)"))}},
-                      {QStringLiteral("deck"), QStringLiteral("speed")})},
+        {"set_speed", "sources", "Change a clip's playback rate",
+         "Set the clip's speed setting. Clamped to 0.25–4.0. Fails type_mismatch unless the clip is a "
+         "video or audio file. Applied live if the clip is on a deck.",
+         objectSchema(mergeProps(clipRefProps(),
+                                 {{QStringLiteral("speed"),
+                                   numberProp(QStringLiteral("Playback rate (1 = normal)"))}}),
+                      {QStringLiteral("clip"), QStringLiteral("speed")})},
 
         {"set_transition_progress", "transition", "Move the T-bar",
          "Set transition progress from Live toward Staging: 0 = Live fully on air, 100 = Staging fully on "
@@ -370,7 +371,7 @@ QJsonObject catalogPayload()
     };
     static const Box boxes[] = {
         {"sources", "Add, list, rename, and edit input clips (files, text, SVG templates, shaders, cameras)."},
-        {"decks", "Stage clips, play/pause/seek the Live and Staging decks, deck speed."},
+        {"decks", "Stage clips, play/pause/seek the Live and Staging decks."},
         {"transition", "Transition progress, CUT, TAKE, transition look and duration."},
         {"panic", "Emergency program output: blackout, freeze, stay-tuned slate."},
         {"output", "Record program, NDI, virtual camera."},
@@ -457,7 +458,7 @@ QJsonArray homepageTools()
     tools.append(toolDef(
         QStringLiteral("inspect"),
         QStringLiteral(
-            "When: Read mixer state. Returns revision, fader (transition progress, 0 = Live, 100 = Staging), decks {live, staging} each {clip, name, playing, time, duration, speed}, transition, panic, recording, "
+            "When: Read mixer state. Returns revision, fader (transition progress, 0 = Live, 100 = Staging), decks {live, staging} each {clip, name, playing, time, duration}, transition, panic, recording, "
             "NDI, virtual camera, program size. clips=true adds the clip list. detail=true expands "
             "each clip with kind/path/content. graph=true adds nodes and connections. "
             "since=<revision> returns {unchanged:true, revision} when nothing changed."),

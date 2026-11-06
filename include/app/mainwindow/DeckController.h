@@ -35,7 +35,7 @@ public:
 
     /// Assign a pre-built flattened Layer-group (composite) source to a deck. The
     /// composite delegates its timeline to its bottom (primary) clip, so the deck's
-    /// scrub/speed/play/audio bind to @p primaryNodeId. When it is 0 or not an Input node
+    /// scrub/play/audio bind to @p primaryNodeId. When it is 0 or not an Input node
     /// (bottom is not a plain clip), the deck runs LIVE with no scrub.
     void assignCompositeToDeck(std::unique_ptr<MediaSource> src, NodeId primaryNodeId, Deck deck,
                                bool startPlayback = true);
@@ -67,13 +67,11 @@ public:
     struct DeckUiState {
         QString name;
         bool hasTransport = false;
-        bool hasSpeed = false;
     };
     static DeckUiState deckUiState(const SourceDescriptor &desc, const QString &name);
 
-    // ── Playback speed (per deck, applied to video pacing and audio) ────────
-    void   setDeckSpeed(Deck deck, double speed);
-    double deckSpeed(Deck deck) const { return isLive(deck) ? m_speedLive : m_speedStaging; }
+    // Re-applies the loaded clip's speed setting to the deck's video pacing and audio.
+    void applyClipSpeed(Deck deck);
 
     // ── Active node IDs ──────────────────────────────────────────────────────
     NodeId activeNode(Deck deck) const { return isLive(deck) ? m_liveNodeId : m_stagingNodeId; }
@@ -97,8 +95,6 @@ private:
     NodeId m_stagingNodeId = 0;
     double m_lastTimeLive   = 0.0;
     double m_lastTimeStaging   = 0.0;
-    double m_speedLive      = 1.0;
-    double m_speedStaging      = 1.0;
 
     bool m_audioFollowsFaderLive = false;
     bool m_audioFollowsFaderStaging = false;

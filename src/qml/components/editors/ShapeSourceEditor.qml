@@ -9,6 +9,8 @@ import Prism
 ThemedDialog {
     id: root
 
+    onClosed: AppController.cancelPendingSourcePos()
+
     title: qsTr("Shape")
     preferredWidth: 1020
     showFooter: false

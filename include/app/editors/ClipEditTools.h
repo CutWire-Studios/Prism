@@ -22,8 +22,6 @@ public:
     explicit ClipEditTools(QObject *parent = nullptr);
     ~ClipEditTools() override;
 
-    /// ClipGraph::NodeType value, -1 for an unknown id.
-    Q_INVOKABLE int nodeType(quint64 id) const;
     Q_INVOKABLE QVariantMap nodeParams(quint64 id) const;
     /// The Input node feeding a Process node's input (its reference frame), 0 when unwired.
     Q_INVOKABLE quint64 referenceInput(quint64 processId) const;
@@ -43,9 +41,6 @@ public:
 
     /// Regenerates the node thumbnail for kinds whose look follows their descriptor (Canvas).
     Q_INVOKABLE void refreshThumbnail(quint64 nodeId);
-
-signals:
-    void captureFinished(quint64 nodeId, bool ok);
 
 private:
     QPointer<ScreenSource> m_picker;

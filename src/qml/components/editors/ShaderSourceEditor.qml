@@ -10,6 +10,8 @@ import Prism
 ThemedDialog {
     id: root
 
+    onClosed: AppController.cancelPendingSourcePos()
+
     title: qsTr("Shader Editor")
     preferredWidth: Theme.dialogWidthLg
     acceptOnReturn: false

@@ -10,6 +10,8 @@ import Prism
 ThemedDialog {
     id: root
 
+    onClosed: AppController.cancelPendingSourcePos()
+
     title: qsTr("SVG Template")
     preferredWidth: 1000
     showFooter: false

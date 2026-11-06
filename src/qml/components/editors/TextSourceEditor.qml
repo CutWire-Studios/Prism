@@ -10,6 +10,8 @@ import Prism
 ThemedDialog {
     id: root
 
+    onClosed: AppController.cancelPendingSourcePos()
+
     title: qsTr("Text Source")
     preferredWidth: 1120
     showFooter: false

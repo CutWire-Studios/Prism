@@ -46,6 +46,7 @@ ThemedDialog {
         if (!finished)
             SourcePrompts.webrtcCancel()
         finished = false
+        AppController.cancelPendingSourcePos()
     }
 
     contentItem: Column {

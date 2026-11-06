@@ -55,7 +55,7 @@ See [all releases](https://github.com/CutWire-Studios/Prism/releases) for previo
 - **Process & Layer Nodes**: Crop, flip, and ML background removal in Process nodes; stack and layout multiple inputs in Layer nodes with canvas sizing and transform editing
 - **AI Background Removal**: Remove-Background process node runs MediaPipe's selfie-segmentation model (via ONNX Runtime) to key out a webcam's background live, compositing the subject over the layers below
 - **Multiple Media Source Types**: Video files, images, slideshows, webcams, screen/window capture, custom canvases, GLSL shaders, SVG templates, text, NDI inputs, and phone cameras (WebRTC)
-- **Live/Staging Deck Mixing**: Stage a clip, then **TAKE** or **CUT** it to Live, with per-deck speed, and many transition modes (wipes, slides, dips, 3D cube/flip, and more)
+- **Live/Staging Deck Mixing**: Stage a clip, then **TAKE** or **CUT** it to Live, with per-clip speed, and many transition modes (wipes, slides, dips, 3D cube/flip, and more)
 - **Master Audio Routing**: Master audio-input and master audio-output nodes for per-device capture and mixing inside the graph
 - **Asset Library**: Reusable sidebar of imported media — drag assets onto the node canvas or double-click to add files
 - **Dockable Control Panel**: Deck previews, crossfader, transitions, and panic controls in a dock widget that can be floated or repositioned
@@ -419,7 +419,7 @@ The workflow uploads the artifacts to the run; it does not create a GitHub Relea
 2. **Add sources**: Click **Add Element** on the canvas (or **Media → Add Element**) to insert video, photos, slideshows, cameras, screen/window capture, canvases, shaders, SVG templates, or NDI sources
 3. **Wire the graph**: Connect **Input → Process → Layer → Switcher → Output** nodes to build your pipeline
 4. **Assign decks**: Use **Switcher** node slots (or hotkeys — **View → Edit Hotkeys**) to route sources to the Staging or Live deck
-5. **Mix live**: Blend decks with the crossfader, **AUTO** / **CUT**, and per-deck speed controls in the control panel
+5. **Mix live**: Blend decks with the crossfader, **AUTO** / **CUT**; set per-clip speed in the Inspector
 6. **Edit a source**: Open node edit dialogs for trim, crop, transform, and layout
 7. **Open output**: Use **View → Show Output** for projection, or enable NDI, virtual camera, or recording from **View**
 8. **Save your show**: Use **Media → Save Session**; sessions autosave and relink missing assets on load

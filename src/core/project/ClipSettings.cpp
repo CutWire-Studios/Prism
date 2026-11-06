@@ -10,6 +10,7 @@ QJsonObject ClipSettings::toJson() const {
     QJsonObject o;
     o["startTime"] = startTime;
     o["endTime"]   = endTime;
+    o["speed"]     = speed;
     o["cropX"]     = static_cast<double>(cropX);
     o["cropY"]     = static_cast<double>(cropY);
     o["cropW"]     = static_cast<double>(cropW);
@@ -21,6 +22,7 @@ ClipSettings ClipSettings::fromJson(const QJsonObject &o) {
     ClipSettings s;
     s.startTime = o["startTime"].toDouble(0.0);
     s.endTime   = o["endTime"].toDouble(-1.0);
+    s.speed     = qBound(0.25, o["speed"].toDouble(1.0), 4.0);
     s.cropX     = static_cast<float>(o["cropX"].toDouble(0.0));
     s.cropY     = static_cast<float>(o["cropY"].toDouble(0.0));
     s.cropW     = static_cast<float>(o["cropW"].toDouble(1.0));

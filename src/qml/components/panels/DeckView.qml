@@ -10,11 +10,9 @@ ColumnLayout {
 
     readonly property string deckName: staging ? AppController.deckNameStaging : AppController.deckNameLive
     readonly property bool hasTransport: staging ? AppController.deckHasTransportStaging : AppController.deckHasTransportLive
-    readonly property bool hasSpeed: staging ? AppController.deckHasSpeedStaging : AppController.deckHasSpeedLive
     readonly property bool playing: staging ? AppController.deckPlayingStaging : AppController.deckPlayingLive
     readonly property real time: staging ? AppController.deckTimeStaging : AppController.deckTimeLive
     readonly property real duration: staging ? AppController.deckDurationStaging : AppController.deckDurationLive
-    readonly property real speed: staging ? AppController.deckSpeedStaging : AppController.deckSpeedLive
     readonly property bool isLive: !staging
     readonly property bool ready: staging ? AppController.deckReadyStaging : AppController.deckReadyLive
     readonly property bool onAir: AppController.onAirDeck === (staging ? 1 : 0)
@@ -121,35 +119,6 @@ ColumnLayout {
         ThemedLabel {
             font.family: Theme.monoFontFamily
             text: root.fmt(root.time) + " / " + root.fmt(root.duration)
-        }
-    }
-
-    RowLayout {
-        Layout.fillWidth: true
-        visible: root.hasSpeed
-        spacing: Theme.spacingSm
-
-        ThemedLabel { text: qsTr("Speed") }
-        ThemedSlider {
-            id: speedSlider
-            Layout.fillWidth: true
-            label: qsTr("Speed")
-            from: 0.25
-            to: 4
-            valueFormatter: v => Number(v).toFixed(2) + "x"
-            onMoved: AppController.setDeckSpeedValue(root.deckIndex, value)
-            Binding {
-                target: speedSlider
-                property: "value"
-                value: root.speed
-                when: !speedSlider.pressed
-            }
-        }
-        ThemedLabel {
-            Layout.preferredWidth: 40
-            font.family: Theme.monoFontFamily
-            horizontalAlignment: Text.AlignRight
-            text: root.speed.toFixed(2) + "x"
         }
     }
 }

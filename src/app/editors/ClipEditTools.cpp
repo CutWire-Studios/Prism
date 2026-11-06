@@ -36,13 +36,6 @@ ClipEditTools::~ClipEditTools()
         delete m_picker.data();
 }
 
-int ClipEditTools::nodeType(quint64 id) const
-{
-    const ClipGraph *g = graph();
-    const ClipGraph::Node *n = g ? g->node(id) : nullptr;
-    return n ? int(n->type) : -1;
-}
-
 QVariantMap ClipEditTools::nodeParams(quint64 id) const
 {
     const ClipGraph *g = graph();
@@ -111,10 +104,8 @@ void ClipEditTools::pickCapture(quint64 nodeId)
 #ifdef Q_OS_LINUX
     ClipGraph *g = graph();
     auto *app = AppController::instance();
-    if (!g || !app || !app->graphController() || m_picker) {
-        emit captureFinished(nodeId, false);
+    if (!g || !app || !app->graphController() || m_picker)
         return;
-    }
 
     auto *picker = new ScreenSource;
     picker->setPickOnly(true);
@@ -138,16 +129,14 @@ void ClipEditTools::pickCapture(quint64 nodeId)
                 app->graphController()->setParams(nodeId, {{"source", source}});
             }
         }
-        emit captureFinished(nodeId, ok);
     }, Qt::QueuedConnection);
 
     if (!picker->start(ScreenSource::CaptureType::Any)) {
         m_picker.clear();
         delete picker;
-        emit captureFinished(nodeId, false);
     }
 #else
-    emit captureFinished(nodeId, false);
+    Q_UNUSED(nodeId)
 #endif
 }
 

@@ -45,7 +45,7 @@ Pinned endpoints (`/mcp/sources`, `/mcp/decks`, `/mcp/transition`, `/mcp/panic`,
 | Adding sources | `add_clip` / `add_source` only put a node on the graph. Call `stage` to put it on the Staging deck |
 | Process / graph | `add_process_node` / `add_layer_node` / `add_ab_select` only place nodes. Call `connect` to wire. `list_nodes` or `inspect({graph:true})` for ids. Output cannot take a video chain and a Switcher at once |
 | Take | `stage` the clip, `capture()` to check, then `take` (animated) or `cut` (instant) |
-| Per-deck ops | `play`, `pause`, `seek`, and `set_speed` take `deck: "live"` or `"staging"` |
+| Per-deck ops | `play`, `pause`, and `seek` take `deck: "live"` or `"staging"` |
 | Atomicity | `apply` is **not** atomic: on failure the ops before it stay applied. Check `stopped` / `failed` / `done` |
 | Undo | None. Live takes are immediate |
 | Errors | `{ok:false, error:<code>, detail:<text>}` — `bad_args`, `not_found`, `type_mismatch`, `unknown_op`, `unknown_toolbox`, `wrong_endpoint`, `wrong_toolbox`, `apply_failed`, `capture_failed`, `conflict` |
@@ -55,8 +55,8 @@ Pinned endpoints (`/mcp/sources`, `/mcp/decks`, `/mcp/transition`, `/mcp/panic`,
 
 | Toolbox | When to use |
 |---------|-------------|
-| `sources` | Add/list/rename clips; text/SVG template/shader updates; cameras and NDI |
-| `decks` | Stage clips, play/pause/seek per deck, speed |
+| `sources` | Add/list/rename clips; set clip speed; text/SVG template/shader updates; cameras and NDI |
+| `decks` | Stage clips, play/pause/seek per deck |
 | `transition` | `set_transition_progress`, `cut`, `take`, look and duration |
 | `panic` | Blackout, freeze, stay-tuned slate |
 | `output` | Record program, NDI, virtual camera |

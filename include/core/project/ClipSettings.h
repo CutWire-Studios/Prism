@@ -5,6 +5,7 @@
 struct ClipSettings {
     double startTime = 0.0;
     double endTime   = -1.0;
+    double speed     = 1.0;
 
     // Spatial crop: normalized [0,1]. Default = full frame.
     float cropX = 0.0f, cropY = 0.0f;

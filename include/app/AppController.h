@@ -61,14 +61,10 @@ class AppController : public QObject {
     Q_PROPERTY(quint64 activeNodeStaging READ activeNodeStaging NOTIFY decksChanged)
     Q_PROPERTY(QString deckNameLive READ deckNameLive NOTIFY decksChanged)
     Q_PROPERTY(QString deckNameStaging READ deckNameStaging NOTIFY decksChanged)
-    /// The deck has a seekable timeline / a speed control (what the old progress slider,
-    /// play button and speed slider visibility tracked).
+    /// The deck has a seekable timeline (what the old progress slider and play button
+    /// visibility tracked).
     Q_PROPERTY(bool deckHasTransportLive READ deckHasTransportLive NOTIFY decksChanged)
     Q_PROPERTY(bool deckHasTransportStaging READ deckHasTransportStaging NOTIFY decksChanged)
-    Q_PROPERTY(bool deckHasSpeedLive READ deckHasSpeedLive NOTIFY decksChanged)
-    Q_PROPERTY(bool deckHasSpeedStaging READ deckHasSpeedStaging NOTIFY decksChanged)
-    Q_PROPERTY(double deckSpeedLive READ deckSpeedLive NOTIFY decksChanged)
-    Q_PROPERTY(double deckSpeedStaging READ deckSpeedStaging NOTIFY decksChanged)
     Q_PROPERTY(bool deckPlayingLive READ isPlayingLive NOTIFY deckClockChanged)
     Q_PROPERTY(bool deckPlayingStaging READ isPlayingStaging NOTIFY deckClockChanged)
     Q_PROPERTY(double deckTimeLive READ deckTimeLive NOTIFY deckClockChanged)
@@ -165,10 +161,6 @@ public:
     QString deckNameStaging() const { return m_deckUi[1].name; }
     bool deckHasTransportLive() const { return m_deckUi[0].hasTransport; }
     bool deckHasTransportStaging() const { return m_deckUi[1].hasTransport; }
-    bool deckHasSpeedLive() const { return m_deckUi[0].hasSpeed; }
-    bool deckHasSpeedStaging() const { return m_deckUi[1].hasSpeed; }
-    double deckSpeedLive() const;
-    double deckSpeedStaging() const;
     bool isPlayingLive() const;
     bool isPlayingStaging() const;
     double deckTimeLive() const;
@@ -232,7 +224,6 @@ public:
     Q_INVOKABLE void seekDeck(int deck, double seconds);
     /// 0..1 of the deck's duration; also re-seeks the deck audio (the old progress-slider release).
     Q_INVOKABLE void seekDeckFraction(int deck, double fraction);
-    Q_INVOKABLE void setDeckSpeedValue(int deck, double speed);
     Q_INVOKABLE void cut();
     /// Animates Live -> Staging with the configured transition, then the Staging content becomes Live.
     Q_INVOKABLE void take();
@@ -303,6 +294,8 @@ public:
     /// kind: "url" | "webrtc" open an app dialog; "slideshow" | "camera" | "screen" | "window" |
     /// "canvas" | "ndi" are added with defaults by AppDialogs; "shader" | "svgTemplate" | "text" | "shape" emit sourceEditorRequested.
     /// x/y: graph position for the new node (NaN = automatic); kept until a source is added.
+    /// Forgets the canvas position remembered for a source dialog that was cancelled.
+    Q_INVOKABLE void cancelPendingSourcePos();
     Q_INVOKABLE void requestAddSource(const QString &kind, qreal x = qQNaN(), qreal y = qQNaN());
     /// {exists, name, savedAt} of a session / autosave file, for the recovery dialog.
     Q_INVOKABLE QVariantMap describeSessionFile(const QString &path) const;
@@ -399,7 +392,6 @@ private:
     struct DeckUi {
         QString name;
         bool hasTransport = false;
-        bool hasSpeed = false;
     };
 
     void connectSignals();

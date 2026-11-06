@@ -10,6 +10,7 @@ ThemedDialog {
 
     onAboutToShow: urlField.text = ""
     onOpened: urlField.forceActiveFocus()
+    onClosed: AppController.cancelPendingSourcePos()
     onAccepted: {
         const url = urlField.text.trim()
         if (url.length > 0)

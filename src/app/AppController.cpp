@@ -333,8 +333,6 @@ void AppController::shutdown(bool saveAndMarkClean)
 
 quint64 AppController::activeNodeLive() const { return m_deckController ? m_deckController->activeNode(Deck::Live) : 0; }
 quint64 AppController::activeNodeStaging() const { return m_deckController ? m_deckController->activeNode(Deck::Staging) : 0; }
-double AppController::deckSpeedLive() const { return m_deckController->deckSpeed(Deck::Live); }
-double AppController::deckSpeedStaging() const { return m_deckController->deckSpeed(Deck::Staging); }
 bool AppController::isPlayingLive() const { return m_compositor && m_compositor->isPlayingLive(); }
 bool AppController::isPlayingStaging() const { return m_compositor && m_compositor->isPlayingStaging(); }
 double AppController::deckTimeLive() const { return m_compositor->getCurrentTimeLive(); }
@@ -558,13 +556,6 @@ void AppController::seekDeckFraction(int deck, double fraction)
         m_deckController->updateDeckAudio(d, id, t, true);
 }
 
-void AppController::setDeckSpeedValue(int deck, double speed)
-{
-    const double clamped = qBound(0.25, speed, 4.0);
-    m_deckController->setDeckSpeed(static_cast<Deck>(deck), clamped);
-    emit decksChanged();
-}
-
 void AppController::stageNode(quint64 nodeId)
 {
     selectNode(nodeId, Deck::Staging);
@@ -692,10 +683,12 @@ void AppController::onNodeChanged(NodeId id)
     if (isLiveNode) {
         m_compositor->setRepeatLive(repeat);
         m_compositor->setTrimPointsLive(s.startTime, s.endTime);
+        m_deckController->applyClipSpeed(Deck::Live);
     }
     if (isStagingNode) {
         m_compositor->setRepeatStaging(repeat);
         m_compositor->setTrimPointsStaging(s.startTime, s.endTime);
+        m_deckController->applyClipSpeed(Deck::Staging);
     }
 }
 
@@ -820,7 +813,7 @@ void AppController::pushDecks()
             if (primaryId && m_graph->hasNode(primaryId)) {
                 const SourceDescriptor pd = m_graph->sourceDescriptor(primaryId);
                 const auto st = DeckController::deckUiState(pd, m_graph->sourceName(primaryId));
-                ui.name = st.name; ui.hasTransport = st.hasTransport; ui.hasSpeed = st.hasSpeed;
+                ui.name = st.name; ui.hasTransport = st.hasTransport;
             } else {
                 ui = DeckUi{};
             }
@@ -847,7 +840,7 @@ void AppController::pushDecks()
         const SourceDescriptor desc = m_graph->sourceDescriptor(base.inputNodeId);
         const QString name = m_graph->sourceName(base.inputNodeId);
         const auto st = DeckController::deckUiState(desc, name);
-        ui.name = st.name; ui.hasTransport = st.hasTransport; ui.hasSpeed = st.hasSpeed;
+        ui.name = st.name; ui.hasTransport = st.hasTransport;
 
         auto applyOverlayPlacements = [&]() {
             for (int i = 1; i < stream.layers.size(); ++i) {
@@ -994,9 +987,16 @@ void AppController::removeNode(quint64 nodeId)
 
 void AppController::renameNode(quint64 nodeId, const QString &name)
 {
-    SourceDescriptor desc = m_graph->sourceDescriptor(nodeId);
-    desc.displayName = name;
-    m_graphController->setSourceDescriptor(nodeId, desc);
+    const ClipGraph::Node *n = m_graph->node(nodeId);
+    if (!n)
+        return;
+    if (n->type == ClipGraph::NodeType::Input) {
+        SourceDescriptor desc = m_graph->sourceDescriptor(nodeId);
+        desc.displayName = name;
+        m_graphController->setSourceDescriptor(nodeId, desc);
+    } else {
+        m_graphController->setParams(nodeId, {{"name", name.trimmed()}});
+    }
     mcpBumpRevision();
 }
 
@@ -1296,8 +1296,10 @@ void AppController::confirmAnswered(const QString &id, bool accepted)
 
 void AppController::filePicked(const QString &id, const QStringList &paths)
 {
-    if (paths.isEmpty())
+    if (paths.isEmpty()) {
+        cancelPendingSourcePos();
         return;
+    }
     const QString first = paths.first();
     if (id == QLatin1String("openSession")) {
         openSession(first);
@@ -1527,6 +1529,11 @@ void AppController::openAgentAccess() { emit appDialogRequested(QStringLiteral("
 
 void AppController::connectObs() { emit appDialogRequested(QStringLiteral("obs")); }
 
+void AppController::cancelPendingSourcePos()
+{
+    m_pendingSourcePos = QPointF(qQNaN(), qQNaN());
+}
+
 void AppController::requestAddSource(const QString &kind, qreal x, qreal y)
 {
     m_pendingSourcePos = QPointF(x, y);
@@ -1581,7 +1588,6 @@ QJsonObject AppController::mcpInspect(bool includeClips, bool detail, int sinceR
             {QStringLiteral("playing"), isLive(deck) ? isPlayingLive() : isPlayingStaging()},
             {QStringLiteral("time"), isLive(deck) ? deckTimeLive() : deckTimeStaging()},
             {QStringLiteral("duration"), isLive(deck) ? deckDurationLive() : deckDurationStaging()},
-            {QStringLiteral("speed"), m_deckController->deckSpeed(deck)},
         };
     };
 

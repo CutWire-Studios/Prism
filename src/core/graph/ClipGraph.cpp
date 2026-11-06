@@ -633,6 +633,10 @@ void ClipGraph::refreshNode(Node &n) {
     case NT::AudioScript:       n.title = QStringLiteral("Audio Script"); break;
     case NT::Trigger:           n.title = QStringLiteral("Trigger"); break;
     }
+    if (n.type != NT::Input) {
+        const QString custom = n.params.value("name").toString();
+        if (!custom.isEmpty()) n.title = custom;
+    }
     n.size = nodeSize(n);
 }
 
@@ -1877,6 +1881,11 @@ QJsonObject ClipGraph::toJson() const {
         case NT::AudioMixer:        audioMixerNodes.append(o); break;
         case NT::Output:
             root["outputNode"] = QJsonObject{{"id", (qint64)n.id}, {"posX", n.pos.x()}, {"posY", n.pos.y()}};
+            if (n.params.contains("name")) {
+                QJsonObject out = root["outputNode"].toObject();
+                out["name"] = n.params.value("name").toString();
+                root["outputNode"] = out;
+            }
             break;
         case NT::Script:
         case NT::AudioScript:
@@ -1943,6 +1952,7 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         n.type = type;
         n.pos = QPointF(obj["posX"].toDouble(), obj["posY"].toDouble());
         n.params = params;
+        if (type != NT::Input && !obj["name"].toString().isEmpty()) n.params["name"] = obj["name"].toString();
         refreshNode(n);
         m_nodes.insert(id, n);
         m_order.append(id);

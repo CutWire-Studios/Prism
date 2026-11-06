@@ -192,16 +192,19 @@ private slots:
         settings.endTime = 10.0;
         settings.cropX = 0.1f;
         settings.cropW = 0.8f;
+        settings.speed = 2.5;
 
         const QJsonObject json = settings.toJson();
         const ClipSettings restored = ClipSettings::fromJson(json);
         QCOMPARE(restored.startTime, settings.startTime);
         QCOMPARE(restored.endTime, settings.endTime);
+        QCOMPARE(restored.speed, 2.5);
         QVERIFY(restored.hasCrop());
 
         const ClipSettings defaults = ClipSettings::fromJson(QJsonObject{});
         QCOMPARE(defaults.startTime, 0.0);
         QCOMPARE(defaults.endTime, -1.0);
+        QCOMPARE(defaults.speed, 1.0);
         QVERIFY(!defaults.hasCrop());
     }
 

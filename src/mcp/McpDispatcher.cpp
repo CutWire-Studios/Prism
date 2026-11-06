@@ -764,16 +764,20 @@ QJsonObject McpDispatcher::opSeekDeck(const QJsonObject &args)
 
 QJsonObject McpDispatcher::opSetSpeed(const QJsonObject &args)
 {
-    Deck deck;
     QJsonObject error;
-    if (!parseDeck(args, deck, &error))
+    const NodeId node = resolveClip(m_window, args, &error);
+    if (!node)
         return error;
     if (!args.contains(QStringLiteral("speed")))
         return err("bad_args", QStringLiteral("speed is required"));
-    const double speed = jsonNumber(args.value(QStringLiteral("speed")), 1.0);
-    m_window->setDeckSpeedValue(static_cast<int>(deck), speed);
+    ClipGraph *graph = m_window->clipGraph();
+    if (!graph->sourceDescriptor(node).hasSpeedControl())
+        return err("type_mismatch", QStringLiteral("Clip has no speed control"));
+    ClipSettings settings = graph->clipSettings(node);
+    settings.speed = qBound(0.25, jsonNumber(args.value(QStringLiteral("speed")), 1.0), 4.0);
+    graph->setClipSettings(node, settings);
     m_window->mcpBumpRevision();
-    return ok({{QStringLiteral("deck"), deckName(deck)}, {QStringLiteral("speed"), speed}});
+    return clipOk(graph, node, {{QStringLiteral("speed"), settings.speed}});
 }
 
 QJsonObject McpDispatcher::opSetFader(const QJsonObject &args)

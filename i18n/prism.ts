@@ -843,10 +843,6 @@ low/mid/high · beat</source>
         <source>Position</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>Speed</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 <context>
     <name>DesignerSlot</name>
