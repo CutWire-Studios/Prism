@@ -8,6 +8,7 @@
 #include "core/media/GpuVideoUploader.h"
 #include "core/media/VideoDecoder.h"
 #include "release.h"
+#include "app/editor/PreferencesController.h"
 
 #include <QApplication>
 #include <QByteArray>
@@ -64,6 +65,7 @@ int main(int argc, char *argv[]) {
     VideoDecoder::applyModeSetting(VideoDecoder::modeSetting());
     // Resources must be registered before using :/ icons (Windows has no theme icon).
     Q_INIT_RESOURCE(resources);
+    PreferencesController::installUiTranslators();
     // Wayland compositors resolve the window icon by matching the surface's
     // app_id to an installed .desktop file. Qt derives app_id from the desktop
     // file name, so this must equal the installed desktop file (named after PRISM_APP_ID) or

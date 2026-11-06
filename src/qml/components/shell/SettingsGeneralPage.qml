@@ -22,9 +22,9 @@ SettingsPage {
             width: Theme.c.settingsRow.controlWidth
             textRole: "label"
             valueRole: "id"
-            model: PreferencesController.uiLanguages
+            model: PreferencesController.availableLanguages
             currentIndex: {
-                const langs = PreferencesController.uiLanguages
+                const langs = PreferencesController.availableLanguages
                 for (var i = 0; i < langs.length; ++i) {
                     if (langs[i].id === PreferencesController.uiLanguage)
                         return i
@@ -32,7 +32,7 @@ SettingsPage {
                 return 0
             }
             onActivated: {
-                const langs = PreferencesController.uiLanguages
+                const langs = PreferencesController.availableLanguages
                 if (currentIndex >= 0 && currentIndex < langs.length)
                     PreferencesController.uiLanguage = langs[currentIndex].id
             }

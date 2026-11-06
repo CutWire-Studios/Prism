@@ -188,7 +188,7 @@ void PreferencesController::installUiTranslators()
         app->installTranslator(&g_appTranslator);
 }
 
-QVariantList PreferencesController::uiLanguages() const
+QVariantList PreferencesController::availableLanguages() const
 {
     QVariantList languages;
 

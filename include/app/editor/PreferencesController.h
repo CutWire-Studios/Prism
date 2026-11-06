@@ -42,7 +42,7 @@ class PreferencesController : public QObject
     // App-wide interface language, QSettings("ui/language"). Empty means follow the OS locale.
     // "en" is the source catalog (no .qm). Other codes match i18n/prism_<code>.qm.
     Q_PROPERTY(QString uiLanguage READ uiLanguage WRITE setUiLanguage NOTIFY uiLanguageChanged)
-    Q_PROPERTY(QVariantList uiLanguages READ uiLanguages NOTIFY uiLanguageChanged)
+    Q_PROPERTY(QVariantList availableLanguages READ availableLanguages NOTIFY uiLanguageChanged)
 
     // QSettings("ui/scale"), 1.0..2.0 in 0.25 steps. Extra scale on top of the OS display scale,
     // except where applyStoredUiScale is given the OS scale (Windows): there it is the absolute
@@ -74,7 +74,7 @@ public:
     void setAutosaveIntervalSeconds(int seconds);
 
     QString uiLanguage() const { return m_uiLanguage; }
-    QVariantList uiLanguages() const;
+    QVariantList availableLanguages() const;
     void setUiLanguage(const QString &language);
 
     double uiScale() const { return m_uiScale; }

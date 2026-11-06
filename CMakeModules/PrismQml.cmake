@@ -41,6 +41,14 @@ qt_add_qml_module(prism_qml
         src/app/editor/LayoutStore.cpp
         include/app/GraphicsApiChoice.h
         src/app/GraphicsApiChoice.cpp
+        include/app/preview/AppCompositor.h
+        src/app/preview/AppCompositor.cpp
+        include/app/preview/PreviewItem.h
+        src/app/preview/PreviewItem.cpp
+        include/app/online/updates/UpdateAsset.h
+        src/app/online/updates/UpdateAsset.cpp
+        include/app/online/updates/UpdateChecker.h
+        src/app/online/updates/UpdateChecker.cpp
     QML_FILES
         ${PRISM_QML_FILES}
     RESOURCES
@@ -62,6 +70,8 @@ qt_add_qml_module(prism_qml
 target_include_directories(prism_qml PRIVATE
     include/app/theme
     include/app/editor
+    include/app/preview
+    include/app/online/updates
     include/app
 )
 

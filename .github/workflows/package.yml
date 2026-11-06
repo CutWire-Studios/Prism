@@ -249,6 +249,7 @@ jobs:
             -DCMAKE_C_COMPILER=clang-15 \
             -DCMAKE_CXX_COMPILER=clang++-15 \
             -DPRISM_LINKER=lld \
+            -DPRISM_DISTRIBUTION=appimage \
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR};${GITHUB_WORKSPACE}/.deps/ffmpeg" \
             -DFETCHCONTENT_BASE_DIR="${FETCHCONTENT_BASE_DIR}" \
             -DPRISM_WITH_NDI=OFF \
@@ -445,6 +446,7 @@ jobs:
         run: |
           cmake -B build -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
+            -DPRISM_DISTRIBUTION=windows `
             -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake `
             -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }};${{ github.workspace }}\.deps\ffmpeg;${{ github.workspace }}\vcpkg\installed\x64-windows-static-md" `
             -DFETCHCONTENT_BASE_DIR=${{ env.FETCHCONTENT_BASE_DIR }} `
@@ -580,6 +582,7 @@ jobs:
           export PKG_CONFIG_PATH="$(brew --prefix lua@5.4)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
           cmake -B build-macos -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DPRISM_DISTRIBUTION=macos \
             -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$(brew --prefix openssl@3);$(brew --prefix)" \
             -DFETCHCONTENT_BASE_DIR="${FETCHCONTENT_BASE_DIR}" \
             -DPRISM_WITH_NDI=OFF \

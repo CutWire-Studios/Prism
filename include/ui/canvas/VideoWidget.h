@@ -3,19 +3,13 @@
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions>
 #include <QImage>
-#include <QHash>
-#include <QPixmap>
-#include <QElapsedTimer>
 #include <memory>
 #include <vector>
-#include "core/sources/MediaSource.h"
-#include "core/project/OverlayItem.h"
-#include "ui/output/ProgramFrameSource.h"
-#include "ui/transitions/Transition.h"
+#include "core/render/Compositor.h"
 
-/// OpenGL deck surface: composites two A/B MediaSources through a Transition plus
-/// an overlay chain, and exposes the composited result as a ProgramFrameSource
-/// for the program output (preview/record/NDI).
+/// Widgets-UI shim over Compositor: all compositing lives in the Compositor this widget owns;
+/// the widget only draws its program texture, paints the QPainter overlays/panic text on top,
+/// and handles frameless-window chrome, drag/drop and the context menu.
 class VideoWidget : public QOpenGLWidget, public ProgramFrameSource, protected QOpenGLFunctions {
     Q_OBJECT
 
@@ -23,187 +17,131 @@ public:
     explicit VideoWidget(QWidget *parent = nullptr);
     ~VideoWidget();
 
-    // ── Dual-source A/B API ──────────────────────────────────────────────────
+    using NodeChainSource  = Compositor::NodeChainSource;
+    using PanicOverlay     = Compositor::PanicOverlay;
+    using TransitionMode   = Compositor::TransitionMode;
+    using OutputScaleMode  = Compositor::OutputScaleMode;
 
-    // Convenience loaders — detect video vs. static image automatically.
-    void loadVideoA(const QString &filePath);
-    void loadVideoB(const QString &filePath);
+    Compositor *compositor() const { return m_comp; }
 
-    // Direct source injection — used by future source types (slideshow, camera…).
-    void setSourceA(std::unique_ptr<MediaSource> source);
-    void setSourceB(std::unique_ptr<MediaSource> source);
+    void loadVideoA(const QString &filePath) { m_comp->loadVideoA(filePath); }
+    void loadVideoB(const QString &filePath) { m_comp->loadVideoB(filePath); }
+    void setSourceA(std::unique_ptr<MediaSource> source) { m_comp->setSourceA(std::move(source)); }
+    void setSourceB(std::unique_ptr<MediaSource> source) { m_comp->setSourceB(std::move(source)); }
+    void clearDeckA() { m_comp->clearDeckA(); }
+    void clearDeckB() { m_comp->clearDeckB(); }
+    void adoptSourceA(std::unique_ptr<MediaSource> source) { m_comp->adoptSourceA(std::move(source)); }
+    void adoptSourceB(std::unique_ptr<MediaSource> source) { m_comp->adoptSourceB(std::move(source)); }
 
-    /// Drop the primary source and overlay chain for a deck (e.g. when its node is deleted).
-    void clearDeckA();
-    void clearDeckB();
+    void playA()  { m_comp->playA(); }
+    void pauseA() { m_comp->pauseA(); }
+    void playB()  { m_comp->playB(); }
+    void pauseB() { m_comp->pauseB(); }
+    void seekA(double seconds) { m_comp->seekA(seconds); }
+    void seekB(double seconds) { m_comp->seekB(seconds); }
+    void setRepeatA(bool repeat) { m_comp->setRepeatA(repeat); }
+    void setRepeatB(bool repeat) { m_comp->setRepeatB(repeat); }
+    void   setDeckSpeed(bool deckA, double speed) { m_comp->setDeckSpeed(deckA, speed); }
+    double deckSpeed(bool deckA) const { return m_comp->deckSpeed(deckA); }
+    void setTrimPointsA(double startSec, double endSec) { m_comp->setTrimPointsA(startSec, endSec); }
+    void setTrimPointsB(double startSec, double endSec) { m_comp->setTrimPointsB(startSec, endSec); }
 
-    /// Assign a deck source without GL texture upload (safe before `initializeGL`).
-    void adoptSourceA(std::unique_ptr<MediaSource> source);
-    void adoptSourceB(std::unique_ptr<MediaSource> source);
+    void setCropA(float x, float y, float w, float h) { m_comp->setCropA(x, y, w, h); }
+    void setCropB(float x, float y, float w, float h) { m_comp->setCropB(x, y, w, h); }
+    void setBaseA(float x, float y, float w, float h) { m_comp->setBaseA(x, y, w, h); }
+    void setBaseB(float x, float y, float w, float h) { m_comp->setBaseB(x, y, w, h); }
+    void setCanvasSizeA(int width, int height) { m_comp->setCanvasSizeA(width, height); }
+    void setCanvasSizeB(int width, int height) { m_comp->setCanvasSizeB(width, height); }
+    void setOverlaysA(const QList<OverlayItem> &overlays) { m_comp->setOverlaysA(overlays); }
+    void setOverlaysB(const QList<OverlayItem> &overlays) { m_comp->setOverlaysB(overlays); }
 
-    void playA();
-    void pauseA();
-    void playB();
-    void pauseB();
-
-    void seekA(double seconds);
-    void seekB(double seconds);
-
-    void setRepeatA(bool repeat) { m_repeatA = repeat; }
-    void setRepeatB(bool repeat) { m_repeatB = repeat; }
-
-    // Playback rate for the deck's wall-clock pacing (1.0 = normal).
-    void   setDeckSpeed(bool deckA, double speed);
-    double deckSpeed(bool deckA) const { return deckA ? m_speedA : m_speedB; }
-    void setTrimPointsA(double startSec, double endSec);
-    void setTrimPointsB(double startSec, double endSec);
-
-    // Spatial crop (normalised 0..1; default 0,0,1,1 = full frame)
-    void setCropA(float x, float y, float w, float h);
-    void setCropB(float x, float y, float w, float h);
-
-    // Base placement inside the canvas (normalised 0..1; default 0,0,1,1).
-    void setBaseA(float x, float y, float w, float h);
-    void setBaseB(float x, float y, float w, float h);
-
-    // Canvas size for transform context (0 = no context, use full window)
-    void setCanvasSizeA(int width, int height);
-    void setCanvasSizeB(int width, int height);
-
-    // Overlays drawn on top of the output
-    void setOverlaysA(const QList<OverlayItem> &overlays);
-    void setOverlaysB(const QList<OverlayItem> &overlays);
-
-    // ── Node chain compositing ────────────────────────────────────────────────
-    // Sources from upstream nodes are rendered on top of the base deck source,
-    // in order (index 0 = directly above base, last index = topmost).
-    struct NodeChainSource {
-        std::unique_ptr<MediaSource> source;
-        float cropX = 0.f, cropY = 0.f, cropW = 1.f, cropH = 1.f;
-        bool  flipH = false, flipV = false;
-        float baseX = 0.f, baseY = 0.f, baseW = 1.f, baseH = 1.f;
-        bool  playing = false;   // whether to advance the source each tick
-        QElapsedTimer clock;     // play clock for sources with a timeline
-        double anchor = 0.0;     // source time at clock start
-        bool  visible = true;    // Layer-node eye toggle (hidden layers are skipped, still advanced)
-        int   canvasWidth = 0, canvasHeight = 0;  // canvas size from Layer node (0 = no canvas)
-    };
-    void setNodeChainA(std::vector<NodeChainSource> chain);
-    void setNodeChainB(std::vector<NodeChainSource> chain);
-
-    // In-place layer edits that avoid rebuilding/re-decoding MediaSources.
-    void reorderChain(bool deckA, const std::vector<int> &perm);
-    void setChainVisibility(bool deckA, int chainIndex, bool visible);
+    void setNodeChainA(std::vector<NodeChainSource> chain) { m_comp->setNodeChainA(std::move(chain)); }
+    void setNodeChainB(std::vector<NodeChainSource> chain) { m_comp->setNodeChainB(std::move(chain)); }
+    void reorderChain(bool deckA, const std::vector<int> &perm) { m_comp->reorderChain(deckA, perm); }
+    void setChainVisibility(bool deckA, int chainIndex, bool visible) {
+        m_comp->setChainVisibility(deckA, chainIndex, visible);
+    }
     void setChainPlacement(bool deckA, int chainIndex,
                            float cropX, float cropY, float cropW, float cropH,
                            bool flipH, bool flipV,
                            float baseX, float baseY, float baseW, float baseH,
-                           bool visible);
+                           bool visible) {
+        m_comp->setChainPlacement(deckA, chainIndex, cropX, cropY, cropW, cropH, flipH, flipV,
+                                  baseX, baseY, baseW, baseH, visible);
+    }
 
-    // Deck-primary flip (folded from process nodes on the base layer).
-    void setFlipA(bool flipH, bool flipV);
-    void setFlipB(bool flipH, bool flipV);
+    void setFlipA(bool flipH, bool flipV) { m_comp->setFlipA(flipH, flipV); }
+    void setFlipB(bool flipH, bool flipV) { m_comp->setFlipB(flipH, flipV); }
+    void setSingleStreamMode(bool enabled) { m_comp->setSingleStreamMode(enabled); }
+    bool singleStreamMode() const { return m_comp->singleStreamMode(); }
+    void swapDeckContents() { m_comp->swapDeckContents(); }
+    double requestDeckOut(bool deckA) { return m_comp->requestDeckOut(deckA); }
 
-    // Single-stream output: show deck A directly with no crossfade/transition.
-    void setSingleStreamMode(bool enabled);
-    bool singleStreamMode() const { return m_singleStream; }
+    bool   isPlayingA()      const { return m_comp->isPlayingA(); }
+    bool   isPlayingB()      const { return m_comp->isPlayingB(); }
+    MediaSource *sourceA()   const { return m_comp->sourceA(); }
+    MediaSource *sourceB()   const { return m_comp->sourceB(); }
+    double getCurrentTimeA() const { return m_comp->getCurrentTimeA(); }
+    double getDurationA()    const { return m_comp->getDurationA(); }
+    double getCurrentTimeB() const { return m_comp->getCurrentTimeB(); }
+    double getDurationB()    const { return m_comp->getDurationB(); }
 
-    // Exchange all A/B deck content (sources, textures, chains, placement, playback
-    // clocks) so a clip can move between decks without re-decoding from disk.
-    void swapDeckContents();
+    void  setCrossfade(float mixB) { m_comp->setCrossfade(mixB); }
+    float crossfade() const { return m_comp->crossfade(); }
 
-    // Starts the Out animation of every source on the deck (primary and overlay chain) and returns
-    // the longest one in seconds; 0 when nothing animates out. The caller keeps the deck on air
-    // for that long.
-    double requestDeckOut(bool deckA);
+    void setPanicOverlay(PanicOverlay overlay) { m_comp->setPanicOverlay(overlay); update(); }
+    PanicOverlay panicOverlay() const { return m_comp->panicOverlay(); }
+    void setOutputFrozen(bool frozen) { m_comp->setOutputFrozen(frozen); }
+    bool isOutputFrozen() const { return m_comp->isOutputFrozen(); }
 
-    bool   isPlayingA()      const { return m_playingA; }
-    bool   isPlayingB()      const { return m_playingB; }
-    MediaSource *sourceA()   const { return m_sourceA.get(); }
-    MediaSource *sourceB()   const { return m_sourceB.get(); }
-    double getCurrentTimeA() const;
-    double getDurationA()    const;
-    double getCurrentTimeB() const;
-    double getDurationB()    const;
+    void           setTransitionMode(TransitionMode mode) { m_comp->setTransitionMode(mode); }
+    TransitionMode transitionMode() const { return m_comp->transitionMode(); }
 
-    // Crossfade mix: 0.0 = full A, 1.0 = full B
-    void  setCrossfade(float mixB);
-    float crossfade() const { return m_crossfadeB; }
+    QImage getFrameA() const { return m_comp->getFrameA(); }
+    QImage getFrameB() const { return m_comp->getFrameB(); }
 
-    // ── Panic / emergency output controls ─────────────────────────────────────
-    enum class PanicOverlay { None, Blackout, StayTuned };
-
-    void setPanicOverlay(PanicOverlay overlay);
-    PanicOverlay panicOverlay() const { return m_panicOverlay; }
-
-    /// Freeze program output on the current frame (does not change deck play state).
-    void setOutputFrozen(bool frozen);
-    bool isOutputFrozen() const { return m_outputFrozen; }
-
-    // ── Transition mode ───────────────────────────────────────────────────────
-    // Transition strategies live in Transition.h; the enum is aliased here so
-    // existing call sites can keep using VideoWidget::TransitionMode.
-    using TransitionMode = ::TransitionMode;
-    void           setTransitionMode(TransitionMode mode) { m_transitionMode = mode; update(); }
-    TransitionMode transitionMode() const { return m_transitionMode; }
-
-    // Current frame as QImage for deck preview labels
-    QImage getFrameA() const;
-    QImage getFrameB() const;
-
-    // ── Backward-compat single-source API (delegates to source A) ────────────
     void   loadVideo(const QString &path)    { loadVideoA(path); }
     void   play()                            { playA(); }
     void   pause()                           { pauseA(); }
-    void   stop();
+    void   stop()                            { m_comp->stop(); }
     void   seek(double s)                    { seekA(s); }
     void   setRepeat(bool r)                 { setRepeatA(r); }
     void   setTrimPoints(double s, double e) { setTrimPointsA(s, e); }
-    bool   isPlaying()    const              { return m_playingA; }
+    bool   isPlaying()    const              { return isPlayingA(); }
     double getCurrentTime() const            { return getCurrentTimeA(); }
     double getDuration()    const            { return getDurationA(); }
 
     QSize sizeHint() const override { return QSize(1280, 720); }
 
-    // ── Program output (offscreen compositor) ─────────────────────────────────
-    // The A/B mix is rendered to a configurable-size FBO; the widget displays a
-    // scaled blit. Future outputs (NDI, recording, second monitor) read the same FBO.
-    static int programWidth()  { return s_programWidth; }
-    static int programHeight() { return s_programHeight; }
-    /// Change the compositor's render resolution, reallocating the program/deck FBOs.
-    void setProgramResolution(int width, int height);
-    static int deckPreviewWidth()  { return s_deckPreviewWidth; }
-    static int deckPreviewHeight() { return s_deckPreviewHeight; }
+    static int programWidth()  { return Compositor::programWidth(); }
+    static int programHeight() { return Compositor::programHeight(); }
+    void setProgramResolution(int width, int height) { m_comp->setProgramResolution(width, height); update(); }
+    static int deckPreviewWidth()  { return Compositor::deckPreviewWidth(); }
+    static int deckPreviewHeight() { return Compositor::deckPreviewHeight(); }
 
-    enum class OutputScaleMode { Stretch, Fit, Crop };
-    static OutputScaleMode outputScaleMode() { return s_outputScaleMode; }
-    void setOutputScaleMode(OutputScaleMode mode);
-    /// Where the whole program frame lands on a surface of the given size.
-    static QRectF programRectOnSurface(const QSizeF &surface, const QSizeF &program, OutputScaleMode mode);
+    static OutputScaleMode outputScaleMode() { return Compositor::outputScaleMode(); }
+    void setOutputScaleMode(OutputScaleMode mode) { m_comp->setOutputScaleMode(mode); update(); }
+    static QRectF programRectOnSurface(const QSizeF &surface, const QSizeF &program, OutputScaleMode mode) {
+        return Compositor::programRectOnSurface(surface, program, mode);
+    }
 
-    GLuint programColorTexture() const { return m_programColorTex; }
-    QSize  programFrameSize()    const { return {s_programWidth, s_programHeight}; }
+    GLuint programColorTexture() const { return m_comp->programTexture(); }
+    QSize  programFrameSize()    const { return m_comp->programFrameSize(); }
 
-    /// Enable CPU readback of the program FBO for mirror outputs / recording.
-    void addProgramFrameConsumer();
-    void removeProgramFrameConsumer();
-    void setProgramFrameConsumerCount(int count) override;
-    QImage programFrame() const override { return m_programFrameCache; }
+    void addProgramFrameConsumer()    { m_comp->addProgramFrameConsumer(); }
+    void removeProgramFrameConsumer() { m_comp->removeProgramFrameConsumer(); }
+    void setProgramFrameConsumerCount(int count) override { m_comp->setProgramFrameConsumerCount(count); }
+    QImage programFrame() const override { return m_comp->programFrame(); }
 
-    /// Enable CPU readback of per-deck FBOs for A/B preview labels.
-    void addDeckPreviewConsumer();
-    void removeDeckPreviewConsumer();
-    void setDeckPreviewConsumerCount(int count);
+    void addDeckPreviewConsumer()    { m_comp->addDeckPreviewConsumer(); }
+    void removeDeckPreviewConsumer() { m_comp->removeDeckPreviewConsumer(); }
+    void setDeckPreviewConsumerCount(int count) { m_comp->setDeckPreviewConsumerCount(count); }
 
-    /// Full-resolution deck iso frames (1280×720, with overlays) for recording.
-    void setDeckFrameConsumerCount(int count) override;
-    QImage deckProgramFrame(bool deckA) const override;
+    void setDeckFrameConsumerCount(int count) override { m_comp->setDeckFrameConsumerCount(count); }
+    QImage deckProgramFrame(bool deckA) const override { return m_comp->deckProgramFrame(deckA); }
 
-    /// Read back the current program compositor frame (1280×720 RGBA).
-    QImage captureProgramFrame();
-
-    /// Compose and emit programFrameReady when mirror/NDI/recording consumers are active.
-    void captureOutputFrameNow() override;
+    QImage captureProgramFrame() { return m_comp->captureProgramFrame(); }
+    void captureOutputFrameNow() override { m_comp->captureOutputFrameNow(); }
 
     /// Enable drag-to-move, double-click, and context menu for frameless windows.
     void setFramelessWindowChrome(bool enabled) {
@@ -213,14 +151,14 @@ public:
     }
     bool framelessWindowChrome() const { return m_framelessWindowChrome; }
 
-    /// Replace a deck base source or overlay chain entry with a still image.
-    void holdLayerAsStill(bool deckA, int chainIndex, const QImage &frame);
+    void holdLayerAsStill(bool deckA, int chainIndex, const QImage &frame) {
+        m_comp->holdLayerAsStill(deckA, chainIndex, frame);
+    }
 
-    const std::vector<NodeChainSource> &chainSourcesA() const { return m_chainA; }
-    const std::vector<NodeChainSource> &chainSourcesB() const { return m_chainB; }
+    const std::vector<NodeChainSource> &chainSourcesA() const { return m_comp->chainSourcesA(); }
+    const std::vector<NodeChainSource> &chainSourcesB() const { return m_comp->chainSourcesB(); }
 
-    /// Stop timers and release live sources (safe to call before window teardown).
-    void shutdownPlayback();
+    void shutdownPlayback() { m_comp->shutdownPlayback(); }
 
 signals:
     void programFrameReady();
@@ -240,167 +178,14 @@ protected:
     void dragEnterEvent(QDragEnterEvent *) override;
     void dropEvent(QDropEvent *)   override;
 
-private slots:
-    void updateFrame();
-
 private:
-    /// Stop live sources before GL context teardown (~VideoWidget ordering).
-    void releaseMediaSources();
-
-    /// Render program/deck FBOs and optional CPU readback (mirror, NDI, recording).
-    void composeProgramFrame();
-
-    std::unique_ptr<MediaSource> m_sourceA;
-    std::unique_ptr<MediaSource> m_sourceB;
-    GLuint m_textureA       = 0;
-    GLuint m_textureB       = 0;
-    bool   m_playingA       = false;
-    bool   m_playingB       = false;
-    float  m_crossfadeB = 0.f;
-    // Which deck is the incoming one. Committed when the fader leaves an end
-    // stop so directional transitions animate correctly in both directions
-    // and mid-fader reversals simply rewind instead of swapping roles.
-    bool   m_transitionTowardB = true;
-    bool   m_repeatA = false;
-    bool   m_repeatB = false;
-    double m_trimStartA = 0.0,  m_trimEndA = -1.0;
-    double m_trimStartB = 0.0,  m_trimEndB = -1.0;
-
-    // Wall-clock playback pacing for the A/B decks. The video timeline is driven
-    // by elapsed real time (not one-frame-per-tick) so it tracks the real-time
-    // audio regardless of the source's native frame rate. Re-anchored on
-    // play/seek (m_clockDirty*).
-    QElapsedTimer m_playClockA, m_playClockB;
-    double m_clockAnchorA = 0.0, m_clockAnchorB = 0.0;
-    bool   m_clockDirtyA = true, m_clockDirtyB = true;
-    double m_speedA = 1.0, m_speedB = 1.0;
-
-    // Crop: normalised [0, 1]
-    float m_cropXA = 0.f, m_cropYA = 0.f, m_cropWA = 1.f, m_cropHA = 1.f;
-    float m_cropXB = 0.f, m_cropYB = 0.f, m_cropWB = 1.f, m_cropHB = 1.f;
-
-    // Deck-primary flip (folded from process nodes)
-    bool m_flipHA = false, m_flipVA = false;
-    bool m_flipHB = false, m_flipVB = false;
-
-    // Single-stream output mode (deck A only, no crossfade)
-    bool m_singleStream = false;
-
-    // Base placement: normalised [0, 1]
-    float m_baseXA = 0.f, m_baseYA = 0.f, m_baseWA = 1.f, m_baseHA = 1.f;
-    float m_baseXB = 0.f, m_baseYB = 0.f, m_baseWB = 1.f, m_baseHB = 1.f;
-
-    // Canvas size (from transform context node)
-    int m_canvasWidthA = 0, m_canvasHeightA = 0;
-    int m_canvasWidthB = 0, m_canvasHeightB = 0;
-
-    // Overlays
-    QList<OverlayItem>       m_overlaysA;
-    QList<OverlayItem>       m_overlaysB;
-    QHash<QString, QPixmap>  m_overlayPixCache;       // original images, keyed by path
-    QHash<QString, QPixmap>  m_overlayScaledCache;    // scaled to draw size, keyed by path@WxH
-
-    // Tracks each source texture's allocated size so uploadSourceFrameGL can
-    // detect resize without a per-frame glGet (which forces a GPU sync stall).
-    QHash<GLuint, QSize>     m_texSizes;
-
-    // Node chain sources (upstream overlays)
-    std::vector<NodeChainSource> m_chainA;
-    std::vector<NodeChainSource> m_chainB;
-    std::vector<GLuint>          m_chainTexA;
-    std::vector<GLuint>          m_chainTexB;
-
-    TransitionMode m_transitionMode = TransitionMode::Crossfade;
-
-    PanicOverlay m_panicOverlay = PanicOverlay::None;
-    bool         m_outputFrozen = false;
-
-    QTimer *m_frameTimer = nullptr;
-    QRectF  m_videoRectA;
-    QRectF  m_videoRectB;
-
-    // ── GL helpers ────────────────────────────────────────────────────────────
-    void   setupTextureGL(GLuint &tex, QSize sz, bool alpha = false);
-    // Takes tex by reference so it can recreate the texture if the frame size changes.
-    void   uploadSourceFrameGL(GLuint &tex, MediaSource *source);
-    QRectF computeContainedRect(QSize frameSize, float cw, float ch,
-                                const QRectF &bounds) const;
-    void   renderTexture(GLuint tex, float cx, float cy, float cw, float ch,
-                         float dstX, float dstY, float dstW, float dstH,
-                         bool flipH = false, bool flipV = false);
-    void   renderFboTexture(GLuint tex, float dstX, float dstY, float dstW, float dstH,
-                            float alpha);
-    void   renderOverlays(QPainter &p, const QList<OverlayItem> &overlays,
-                          const QRectF &videoRect, float globalAlpha);
-    bool   advanceSource(MediaSource *source, bool &playing, bool repeat,
-                         double trimStart, double trimEnd);
-    // Wall-clock paced advance for deck A/B; falls back to advanceSource() for
-    // live/static sources that have no real timeline.
-    bool   advanceDeckPaced(bool deckA);
-    void   loadSourceInternal(const QString &filePath,
-                              std::unique_ptr<MediaSource> &target,
-                              GLuint &tex, bool &playing);
-
-    // Returns {alphaA, alphaB} for the current crossfader position and mode.
-    // Used by both paintGL() and paintEvent() to keep overlay rendering consistent.
-    std::pair<float,float> computeDeckAlphas() const;
-
-    void syncOnAir();
-
-    void clearChainTextures(std::vector<GLuint> &texList);
-    void primeChainSources(std::vector<NodeChainSource> &chain,
-                           std::vector<GLuint> &texList);
-    void drawChainSources(std::vector<NodeChainSource> &chain,
-                          std::vector<GLuint> &texList, float alpha,
-                          int canvasW, int canvasH);
-    void advanceChainSources(std::vector<NodeChainSource> &chain,
-                             std::vector<GLuint> &texList, bool &anyDecoded);
-
-    // Composition dimensions — set during FBO render, fallback to widget size.
-    int renderW() const { return m_compW > 0 ? m_compW : width(); }
-    int renderH() const { return m_compH > 0 ? m_compH : height(); }
-
-    void ensureProgramFbo();
-    void ensureDeckFbos();
-    void destroyProgramFbo();
-    void renderDeckToFbo(bool deckA);
-    void renderCompositionGL();
-    void blitProgramToScreen(int surfaceW = 0, int surfaceH = 0);
-    void cacheProgramFrameFromFbo();
-    void cacheDeckPreviewFromFbo(bool deckA);
-    void cacheDeckFrameFromFbo(bool deckA);
+    void blitProgramToScreen(int surfaceW, int surfaceH);
     QRectF scaleRectToWidget(const QRectF &programRect) const;
-    QImage deckPreviewWithOverlays(bool deckA) const;
-    QImage deckProgramFrameWithOverlays(bool deckA) const;
-
     Qt::Edges resizeEdgesAt(const QPointF &pos) const;
 
-    static int s_programWidth;
-    static int s_deckPreviewWidth;
-    static int s_deckPreviewHeight;
-    static OutputScaleMode s_outputScaleMode;
-    static int s_programHeight;
-
-    GLuint m_programFbo      = 0;
-    GLuint m_programColorTex = 0;
-    GLuint m_deckFboA        = 0;
-    GLuint m_deckColorTexA   = 0;
-    GLuint m_deckFboB        = 0;
-    GLuint m_deckColorTexB   = 0;
-    int    m_compW           = 0;
-    int    m_compH           = 0;
-    int    m_glWidth         = 0;
-    int    m_glHeight        = 0;
-    int    m_programFrameConsumers = 0;
-    int    m_deckPreviewConsumers  = 0;
-    int    m_deckFrameConsumers    = 0;
-    QImage m_programFrameCache;
-    QImage m_deckPreviewA;
-    QImage m_deckPreviewB;
-    QImage m_deckFrameCacheA;
-    QImage m_deckFrameCacheB;
-    QRectF m_videoRectProgramA;
-    QRectF m_videoRectProgramB;
+    Compositor *m_comp = nullptr;
+    int    m_glWidth  = 0;
+    int    m_glHeight = 0;
 
     bool   m_framelessWindowChrome = false;
     bool   m_windowDragActive      = false;

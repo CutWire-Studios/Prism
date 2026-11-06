@@ -1,0 +1,48 @@
+#pragma once
+
+#include <QJsonArray>
+#include <QString>
+
+namespace prism {
+
+// The one file from a GitHub release this build can download and install itself.
+// Empty url means there is nothing for this platform — the dialog falls back to the release page.
+struct ReleaseAsset
+{
+    QString name;
+    QString url;
+    QString sha256;
+    qint64 size = 0;
+
+    bool isValid() const { return !url.isEmpty(); }
+};
+
+// platform is "windows", "macos" or "linux". arch is QSysInfo::currentCpuArchitecture()
+// ("x86_64", "arm64"). Only the formats those packages can replace themselves with:
+// Prism-Setup-*-x64.exe, Prism-*-arm64.dmg and Prism-*-x86_64.AppImage.
+// The portable zip is a different product.
+ReleaseAsset selectReleaseAsset(const QJsonArray &assets, const QString &platform, const QString &arch);
+
+// A TXT value from prism-version.cutwire.org. Accepts "0.7.5" and "v0.7.5"; anything else
+// is empty so a stray record cannot advertise a non-version.
+QString parseVersionText(const QByteArray &raw);
+
+// Dotted numeric comparison: -1, 0 or 1. Trailing pre-release text is ignored, so 0.2.0-rc1
+// compares equal to 0.2.0. That is fine here because releases/latest never returns a pre-release.
+int compareVersions(const QString &a, const QString &b);
+
+// feedUrl is the configured GitHub releases/latest endpoint. These rebuild the tag, page and
+// file URLs for the version the DNS record named, without asking /releases/latest.
+QString releaseTagApiUrl(const QString &feedUrl, const QString &version);
+QString releasePageUrl(const QString &feedUrl, const QString &version);
+QString releaseDownloadUrl(const QString &feedUrl, const QString &version, const QString &fileName);
+
+// The hash for fileName in a `sha256sum` listing (the release's SHA256SUMS), lower-case hex, or
+// empty when the file is not listed.
+QString sha256FromSums(const QByteArray &sums, const QString &fileName);
+
+// File name the packaging workflow uploads for this platform, or empty when it ships nothing
+// this build can install. version is the bare release version, without a leading "v".
+QString installerFileName(const QString &platform, const QString &arch, const QString &version);
+
+} // namespace prism

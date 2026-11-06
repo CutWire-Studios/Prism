@@ -59,6 +59,7 @@ build() {
     cmake -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr \
+        -DPRISM_DISTRIBUTION=arch \
         -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath,/usr/lib/prism" \
         -DPRISM_WITH_NDI=OFF \
         -DPRISM_WITH_WEBRTC=ON \

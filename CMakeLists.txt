@@ -44,6 +44,16 @@ if(PRISM_CHANNEL STREQUAL "nightly")
 endif()
 message(STATUS "Prism channel: ${PRISM_CHANNEL} (${PRISM_VERSION_STRING}, ${PRISM_APP_ID})")
 
+# Which package this build ships as. The updater only self-installs where it owns the install
+# (Windows installer, macOS DMG, AppImage); package-manager builds just get the notification.
+set(PRISM_DISTRIBUTIONS source windows macos appimage flatpak arch)
+set(PRISM_DISTRIBUTION "source" CACHE STRING "Package type: ${PRISM_DISTRIBUTIONS}")
+set_property(CACHE PRISM_DISTRIBUTION PROPERTY STRINGS ${PRISM_DISTRIBUTIONS})
+if(NOT PRISM_DISTRIBUTION IN_LIST PRISM_DISTRIBUTIONS)
+    message(FATAL_ERROR "PRISM_DISTRIBUTION must be one of ${PRISM_DISTRIBUTIONS}, not '${PRISM_DISTRIBUTION}'")
+endif()
+message(STATUS "Prism distribution: ${PRISM_DISTRIBUTION}")
+
 # Skia draws text and shapes on the CPU (see third_party/build-skia.sh for the prebuilt)
 find_package(Skia REQUIRED)
 
@@ -337,6 +347,7 @@ set(SOURCES
     src/core/render/SkiaFonts.cpp
     src/core/render/SkiaPath.cpp
     src/core/render/SkiaRender.cpp
+    src/core/render/Compositor.cpp
     src/core/render/SkiaRuntime.cpp
     src/core/render/SkiaShading.cpp
     src/core/render/SkiaShapePainter.cpp
@@ -519,6 +530,7 @@ set(HEADERS
     include/core/sources/WebRtcSource.h
     include/ui/mainwindow/MainWindow.h
     include/ui/mainwindow/GetStartedDialog.h
+    include/core/render/Compositor.h
     include/ui/canvas/VideoWidget.h
     include/ui/transitions/Transition.h
     include/ui/nodes/ClipCard.h
@@ -840,6 +852,90 @@ endif()
 
 target_link_libraries(Prism PRIVATE prism_core)
 include(PrismQml)
+
+# Translations. English is the source language; i18n/prism.ts is the catalog lupdate maintains.
+# prism_core's own sources supply the C++ tr() strings and the QML files supply qsTr(). Locale
+# catalogs go in i18n/prism_<code>.ts; see docs/i18n.md.
+option(PRISM_AUTO_UPDATE_TRANSLATIONS "Run lupdate as part of the default build" OFF)
+find_package(Qt6 QUIET COMPONENTS LinguistTools)
+if(Qt6LinguistTools_FOUND)
+    file(GLOB PRISM_TS_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/i18n/prism_*.ts")
+    qt_add_translations(prism_core
+        TS_FILES
+            "${CMAKE_SOURCE_DIR}/i18n/prism.ts"
+            ${PRISM_TS_FILES}
+        RESOURCE_PREFIX "/i18n"
+        SOURCES ${PRISM_QML_FILES}
+        # -locations none: source line numbers in .ts files churn on every edit and make
+        # i18n/*.ts conflict across PRs. Translators keep the context and source text.
+        LUPDATE_OPTIONS -no-obsolete -locations none
+    )
+    if(NOT TARGET update_translations AND TARGET prism_core_lupdate)
+        add_custom_target(update_translations DEPENDS prism_core_lupdate)
+    endif()
+
+    # An lupdate without qtdeclarative's QML parser warns, skips every .qml, and -no-obsolete
+    # then deletes every QML string from i18n/*.ts. Probe once and keep auto-update off there.
+    if(NOT DEFINED PRISM_LUPDATE_HAS_QML AND TARGET Qt6::lupdate)
+        get_target_property(_prism_lupdate_exe Qt6::lupdate IMPORTED_LOCATION)
+        if(NOT _prism_lupdate_exe)
+            get_target_property(_prism_lupdate_cfgs Qt6::lupdate IMPORTED_CONFIGURATIONS)
+            foreach(_prism_cfg IN LISTS _prism_lupdate_cfgs)
+                get_target_property(_prism_lupdate_exe Qt6::lupdate IMPORTED_LOCATION_${_prism_cfg})
+                if(_prism_lupdate_exe)
+                    break()
+                endif()
+            endforeach()
+        endif()
+        set(_prism_probe_dir "${CMAKE_CURRENT_BINARY_DIR}/lupdate-qml-probe")
+        file(REMOVE_RECURSE "${_prism_probe_dir}")
+        file(WRITE "${_prism_probe_dir}/probe.qml"
+            "import QtQuick\nItem { property string s: qsTr(\"prism_lupdate_qml_probe\") }\n")
+        if(_prism_lupdate_exe)
+            execute_process(
+                COMMAND "${_prism_lupdate_exe}" probe.qml -ts probe.ts
+                WORKING_DIRECTORY "${_prism_probe_dir}"
+                OUTPUT_QUIET ERROR_QUIET)
+        endif()
+        set(_prism_probe_ts "")
+        if(EXISTS "${_prism_probe_dir}/probe.ts")
+            file(READ "${_prism_probe_dir}/probe.ts" _prism_probe_ts)
+        endif()
+        string(FIND "${_prism_probe_ts}" "prism_lupdate_qml_probe" _prism_probe_hit)
+        if(_prism_probe_hit GREATER -1)
+            set(PRISM_LUPDATE_HAS_QML ON CACHE INTERNAL "lupdate can parse QML")
+        else()
+            set(PRISM_LUPDATE_HAS_QML OFF CACHE INTERNAL "lupdate can parse QML")
+        endif()
+    endif()
+
+    if(PRISM_AUTO_UPDATE_TRANSLATIONS AND NOT PRISM_LUPDATE_HAS_QML)
+        message(WARNING
+            "lupdate has no QML/JavaScript support; running it would delete every QML string from "
+            "i18n/*.ts. Not running lupdate as part of this build.")
+        set(PRISM_AUTO_UPDATE_TRANSLATIONS OFF)
+    endif()
+
+    # Order lupdate ahead of lrelease so the .qm files come from the refreshed catalogs. DEFER
+    # because qt_add_translations only creates the lrelease target at the end of this scope.
+    if(PRISM_AUTO_UPDATE_TRANSLATIONS)
+        cmake_language(DEFER CALL add_dependencies prism_core_lrelease update_translations)
+    endif()
+
+    if(PRISM_LUPDATE_HAS_QML)
+        add_test(NAME Translations
+            COMMAND ${CMAKE_COMMAND}
+                -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+                -DBINARY_DIR=${CMAKE_BINARY_DIR}
+                -DCONFIG=$<CONFIG>
+                -P ${CMAKE_SOURCE_DIR}/CMakeModules/CheckTranslations.cmake
+        )
+    else()
+        message(STATUS "lupdate has no QML support; skipping the Translations test.")
+    endif()
+else()
+    message(STATUS "Qt6 LinguistTools not found; translations will not be built.")
+endif()
 
 if(WIN32)
     add_custom_command(TARGET Prism POST_BUILD

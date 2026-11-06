@@ -159,6 +159,7 @@ modules:
         CC=clang CXX=clang++ JOBS=${FLATPAK_BUILDER_N_JOBS} third_party/build-skia.sh "$t"
       - cmake -S . -B build -G Ninja -DCMAKE_INSTALL_PREFIX=/app -DCMAKE_INSTALL_LIBDIR=lib
         -DCMAKE_BUILD_TYPE=Release
+        -DPRISM_DISTRIBUTION=flatpak
         -DPRISM_WITH_NDI=OFF
         -DPRISM_WITH_LUA=ON
         -DPRISM_WITH_WEBRTC=ON
