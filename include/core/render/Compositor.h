@@ -10,7 +10,6 @@
 #include <memory>
 #include <vector>
 #include "core/sources/MediaSource.h"
-#include "core/project/OverlayItem.h"
 #include "app/output/ProgramFrameSource.h"
 #include "app/transitions/Transition.h"
 
@@ -78,10 +77,6 @@ public:
     // Canvas size for transform context (0 = no context, use full window)
     void setCanvasSizeA(int width, int height);
     void setCanvasSizeB(int width, int height);
-
-    // Overlays drawn on top of the output
-    void setOverlaysA(const QList<OverlayItem> &overlays);
-    void setOverlaysB(const QList<OverlayItem> &overlays);
 
     // ── Node chain compositing ────────────────────────────────────────────────
     // Sources from upstream nodes are rendered on top of the base deck source,
@@ -190,7 +185,7 @@ public:
 
     GLuint programColorTexture() const { return m_programColorTex; }
     GLuint programTexture()      const { return m_programColorTex; }
-    /// Deck preview FBO texture (no overlays; GL-upright, row 0 is the image bottom).
+    /// Deck preview FBO texture (GL-upright, row 0 is the image bottom).
     GLuint deckTexture(bool deckA) const;
     QSize  programFrameSize()    const { return {s_programWidth, s_programHeight}; }
     QSize  programTextureSize()  const;
@@ -210,9 +205,6 @@ public:
 
     std::pair<float,float> computeDeckAlphas() const;
     QRectF videoRectProgram(bool deckA) const { return deckA ? m_videoRectProgramA : m_videoRectProgramB; }
-    const QList<OverlayItem> &overlays(bool deckA) const { return deckA ? m_overlaysA : m_overlaysB; }
-    void renderOverlays(QPainter &p, const QList<OverlayItem> &overlays,
-                        const QRectF &videoRect, float globalAlpha);
 
     /// Enable CPU readback of the program FBO for mirror outputs / recording.
     void addProgramFrameConsumer();
@@ -225,7 +217,7 @@ public:
     void removeDeckPreviewConsumer();
     void setDeckPreviewConsumerCount(int count);
 
-    /// Full-resolution deck iso frames (1280×720, with overlays) for recording.
+    /// Full-resolution deck iso frames (program resolution) for recording.
     void setDeckFrameConsumerCount(int count) override;
     QImage deckProgramFrame(bool deckA) const override;
 
@@ -314,11 +306,6 @@ private:
     int m_canvasWidthA = 0, m_canvasHeightA = 0;
     int m_canvasWidthB = 0, m_canvasHeightB = 0;
 
-    // Overlays
-    QList<OverlayItem>       m_overlaysA;
-    QList<OverlayItem>       m_overlaysB;
-    QHash<QString, QPixmap>  m_overlayPixCache;       // original images, keyed by path
-    QHash<QString, QPixmap>  m_overlayScaledCache;    // scaled to draw size, keyed by path@WxH
 
     // Tracks each source texture's allocated size so uploadSourceFrameGL can
     // detect resize without a per-frame glGet (which forces a GPU sync stall).
@@ -380,8 +367,6 @@ private:
     void cacheProgramFrameFromFbo();
     void cacheDeckPreviewFromFbo(bool deckA);
     void cacheDeckFrameFromFbo(bool deckA);
-    QImage deckPreviewWithOverlays(bool deckA) const;
-    QImage deckProgramFrameWithOverlays(bool deckA) const;
 
     static int s_programWidth;
     static int s_deckPreviewWidth;

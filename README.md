@@ -59,11 +59,10 @@ See [all releases](https://github.com/CutWire-Studios/Prism/releases) for previo
 - **Master Audio Routing**: Master audio-input and master audio-output nodes for per-device capture and mixing inside the graph
 - **Asset Library**: Reusable sidebar of imported media — drag assets onto the node canvas or double-click to add files
 - **Dockable Control Panel**: Deck previews, crossfader, transitions, and panic controls in a dock widget that can be floated or repositioned
-- **Source Editing**: Per-input trim, crop, transform, and composited text/image overlays via dedicated edit dialogs
+- **Source Editing**: Per-input trim, crop, and transform via dedicated edit dialogs
   - **Trim**: Set in/out points with frame-accurate playback preview
   - **Crop**: Visual move/resize crop selector with numeric spinbox controls
   - **Base Canvas**: Drag/resize the source inside a fixed canvas
-  - **Overlays**: Composited text and image overlays with font size, color, opacity, and visibility controls
 - **GLSL Shader Sources**: Built-in visual generators plus custom fragment shaders, including audio-reactive presets
 - **SVG Templates**: Data-driven scoreboards, clocks, countdown timers, lower thirds, and bugs from SVG files with `{token}` placeholders, rendered with Skia
 - **Lua Scripting**: Script nodes that generate live text/data overlays via an embedded Lua runtime (sol2, optional at build time)
@@ -176,7 +175,7 @@ src/
   │   │     TextSource, ShapeSource, SvgTemplateSource, NdiSource, WebRtcSource
   │   ├── media/          # VideoPlayer, AudioDecoder, AudioPlayer,
   │   │                   # AudioAnalyzer (FFT), ThumbnailExtractor
-  │   ├── project/        # ClipManager, OverlayItem, AssetPathResolver,
+  │   ├── project/        # ClipManager, ClipSettings, AssetPathResolver,
   │   │                   # ProjectPackager (portable .prism session bundles)
   │   ├── scripting/      # Lua script runtime (sol2) for Script nodes
   │   └── webrtc/         # Phone-camera signaling, pairing, TLS, RTP depack
@@ -421,7 +420,7 @@ The workflow uploads the artifacts to the run; it does not create a GitHub Relea
 3. **Wire the graph**: Connect **Input → Process → Layer → A/B Select → Output** nodes to build your pipeline
 4. **Assign decks**: Use **A/B Select** node slots (or hotkeys — **View → Edit Hotkeys**) to route sources to Deck A or B
 5. **Mix live**: Blend decks with the crossfader, **AUTO** / **CUT**, and per-deck speed controls in the control panel
-6. **Edit a source**: Open node edit dialogs for trim, crop, transform, layout, and overlays
+6. **Edit a source**: Open node edit dialogs for trim, crop, transform, and layout
 7. **Open output**: Use **View → Show Output** for projection, or enable NDI, virtual camera, or recording from **View**
 8. **Save your show**: Use **Media → Save Session**; sessions autosave and relink missing assets on load
 9. **Panic if needed**: Use **Blackout**, **Pause**, or **Stay Tuned** during live events

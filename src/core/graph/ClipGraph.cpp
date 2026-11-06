@@ -2,7 +2,7 @@
 
 #include "core/audio/AudioRack.h"
 #include "core/media/AudioAnalyzer.h"
-#include "core/project/OverlayItem.h"
+#include "core/project/ClipSettings.h"
 
 #include <QColor>
 #include <QFileInfo>
@@ -86,7 +86,7 @@ QVariantMap defaultDevicePort() {
 QVariantMap defaultParams(NT type) {
     switch (type) {
     case NT::Layer:
-        return {{"canvasW", 1280}, {"canvasH", 720},
+        return {{"canvasCustom", false}, {"canvasW", 1280}, {"canvasH", 720},
                 {"slots", QVariantList{defaultSlot(NT::Layer)}}};
     case NT::AbSelect:
         return {{"slots", QVariantList{defaultSlot(NT::AbSelect)}}};
@@ -1267,8 +1267,8 @@ ClipGraph::ResolvedStream ClipGraph::evaluateGuarded(NodeId producerNode, QSet<N
         // Flatten into one composited stream so a downstream process effect acts
         // on the composite rather than on each layer independently.
         auto sub = std::make_shared<ResolvedStream>();
-        const int canvasW = n->params.value("canvasW").toInt();
-        const int canvasH = n->params.value("canvasH").toInt();
+        int canvasW = 0, canvasH = 0;
+        layerCanvasSize(producerNode, canvasW, canvasH);
         sub->canvasWidth = canvasW;
         sub->canvasHeight = canvasH;
         const QVariantList slotList = n->params.value("slots").toList();
@@ -1363,19 +1363,53 @@ bool ClipGraph::setLayerSlotVisible(NodeId layerId, int index, bool visible) {
 bool ClipGraph::layerCanvasSize(NodeId layerId, int &w, int &h) const {
     const Node *n = node(layerId);
     if (!n || n->type != NT::Layer) return false;
-    w = n->params.value("canvasW").toInt();
-    h = n->params.value("canvasH").toInt();
+    if (n->params.value("canvasCustom").toBool()) {
+        w = n->params.value("canvasW").toInt();
+        h = n->params.value("canvasH").toInt();
+    } else {
+        w = m_outputCanvasW;
+        h = m_outputCanvasH;
+    }
     return true;
 }
 
 bool ClipGraph::setLayerCanvasSize(NodeId layerId, int w, int h) {
     Node *n = mutableNode(layerId);
     if (!n || n->type != NT::Layer) return false;
+    n->params["canvasCustom"] = true;
     n->params["canvasW"] = w;
     n->params["canvasH"] = h;
     notifyNode(layerId);
     notifyChanged();
     return true;
+}
+
+bool ClipGraph::layerCanvasCustom(NodeId layerId) const {
+    const Node *n = node(layerId);
+    return n && n->type == NT::Layer && n->params.value("canvasCustom").toBool();
+}
+
+bool ClipGraph::setLayerCanvasCustom(NodeId layerId, bool custom) {
+    Node *n = mutableNode(layerId);
+    if (!n || n->type != NT::Layer) return false;
+    n->params["canvasCustom"] = custom;
+    notifyNode(layerId);
+    notifyChanged();
+    return true;
+}
+
+void ClipGraph::setOutputCanvasSize(int w, int h) {
+    if (w == m_outputCanvasW && h == m_outputCanvasH) return;
+    m_outputCanvasW = w;
+    m_outputCanvasH = h;
+    bool anyFollowing = false;
+    for (const Node &n : m_nodes) {
+        if (n.type == NT::Layer && !n.params.value("canvasCustom").toBool()) {
+            notifyNode(n.id);
+            anyFollowing = true;
+        }
+    }
+    if (anyFollowing) notifyChanged();
 }
 
 // ── A/B select and decks ────────────────────────────────────────────────────
@@ -1870,8 +1904,14 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
 
     for (const QJsonValue &val : state["layerNodes"].toArray()) {
         const QJsonObject obj = val.toObject();
-        restore(obj, NT::Layer, {{"canvasW", obj["canvasW"].toInt(1280)},
-                                 {"canvasH", obj["canvasH"].toInt(720)},
+        const int canvasW = obj["canvasW"].toInt(1280);
+        const int canvasH = obj["canvasH"].toInt(720);
+        // Sessions from before the override existed: anything but the old 1280x720 default was a deliberate choice.
+        const bool custom = obj.contains("canvasCustom") ? obj["canvasCustom"].toBool()
+                                                         : (canvasW != 1280 || canvasH != 720);
+        restore(obj, NT::Layer, {{"canvasCustom", custom},
+                                 {"canvasW", canvasW},
+                                 {"canvasH", canvasH},
                                  {"slots", readSlots(obj, NT::Layer)}});
     }
 

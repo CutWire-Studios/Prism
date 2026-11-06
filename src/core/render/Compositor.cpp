@@ -18,7 +18,7 @@
 int Compositor::s_programWidth  = 1280;
 int Compositor::s_deckPreviewWidth  = 640;
 int Compositor::s_deckPreviewHeight = 360;
-Compositor::OutputScaleMode Compositor::s_outputScaleMode = Compositor::OutputScaleMode::Stretch;
+Compositor::OutputScaleMode Compositor::s_outputScaleMode = Compositor::OutputScaleMode::Fit;
 int Compositor::s_programHeight = 720;
 
 Compositor::Compositor(QObject *parent)
@@ -613,51 +613,6 @@ void Compositor::renderFboTexture(GLuint tex, float dstX, float dstY, float dstW
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-void Compositor::renderOverlays(QPainter &p, const QList<OverlayItem> &overlays,
-                                 const QRectF &videoRect, float globalAlpha) {
-    if (globalAlpha <= 0.f) return;
-
-    const QRectF &vr = videoRect.isEmpty()
-                     ? QRectF(0, 0, p.device()->width(), p.device()->height())
-                     : videoRect;
-
-    for (const auto &ov : overlays) {
-        if (!ov.visible) continue;
-        QRectF r(vr.left() + ov.x * vr.width(),
-                 vr.top()  + ov.y * vr.height(),
-                 ov.w * vr.width(),
-                 ov.h * vr.height());
-        p.setOpacity(static_cast<double>(ov.opacity * globalAlpha));
-        if (ov.type == OverlayItem::Type::Text) {
-            QFont f;
-            f.setPixelSize(std::max(8, static_cast<int>(ov.fontSize * vr.width() / 1280.0)));
-            p.setFont(f);
-            p.setPen(ov.color);
-            p.drawText(r, Qt::AlignCenter | Qt::TextWordWrap, ov.content);
-        } else {
-            const QSize targetSize = r.size().toSize();
-            if (!targetSize.isEmpty()) {
-                const QString key = ov.content + QLatin1Char('@')
-                                  + QString::number(targetSize.width()) + QLatin1Char('x')
-                                  + QString::number(targetSize.height());
-                auto it = m_overlayScaledCache.constFind(key);
-                if (it == m_overlayScaledCache.constEnd()) {
-                    if (!m_overlayPixCache.contains(ov.content))
-                        m_overlayPixCache.insert(ov.content, QPixmap(ov.content));
-                    const QPixmap &orig = m_overlayPixCache[ov.content];
-                    QPixmap scaled = orig.isNull()
-                        ? QPixmap()
-                        : orig.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-                    it = m_overlayScaledCache.insert(key, scaled);
-                }
-                if (!it.value().isNull())
-                    p.drawPixmap(r.toRect(), it.value());
-            }
-        }
-    }
-    p.setOpacity(1.0);
-}
-
 // ── Load ─────────────────────────────────────────────────────────────────────
 
 // Private helper: detect type, construct the right MediaSource, upload first frame.
@@ -884,7 +839,6 @@ void Compositor::swapDeckContents() {
     swap(m_baseWA, m_baseWB); swap(m_baseHA, m_baseHB);
     swap(m_canvasWidthA, m_canvasWidthB);
     swap(m_canvasHeightA, m_canvasHeightB);
-    swap(m_overlaysA, m_overlaysB);
     swap(m_chainA, m_chainB);
     swap(m_chainTexA, m_chainTexB);
     markDirty();
@@ -899,22 +853,6 @@ void Compositor::setCanvasSizeA(int width, int height) {
 void Compositor::setCanvasSizeB(int width, int height) {
     m_canvasWidthB = width;
     m_canvasHeightB = height;
-    markDirty();
-}
-
-// ── Overlays ─────────────────────────────────────────────────────────────────
-
-void Compositor::setOverlaysA(const QList<OverlayItem> &overlays) {
-    m_overlaysA = overlays;
-    m_overlayPixCache.clear();
-    m_overlayScaledCache.clear();
-    markDirty();
-}
-
-void Compositor::setOverlaysB(const QList<OverlayItem> &overlays) {
-    m_overlaysB = overlays;
-    m_overlayPixCache.clear();
-    m_overlayScaledCache.clear();
     markDirty();
 }
 
@@ -1188,57 +1126,16 @@ void Compositor::holdLayerAsStill(bool deckA, int chainIndex, const QImage &fram
     markDirty();
 }
 
-QImage Compositor::deckPreviewWithOverlays(bool deckA) const {
-    const QImage &base = deckA ? m_deckPreviewA : m_deckPreviewB;
-    if (base.isNull()) return {};
-
-    const QList<OverlayItem> &overlays = deckA ? m_overlaysA : m_overlaysB;
-    if (overlays.isEmpty()) return base;
-
-    QImage frame = base.copy();
-    QPainter p(&frame);
-    p.setRenderHint(QPainter::Antialiasing);
-
-    const QRectF &programRect = deckA ? m_videoRectProgramA : m_videoRectProgramB;
-    const double sx = (double)s_deckPreviewWidth  / s_programWidth;
-    const double sy = (double)s_deckPreviewHeight / s_programHeight;
-    const QRectF vr = programRect.isEmpty()
-        ? QRectF(0, 0, s_deckPreviewWidth, s_deckPreviewHeight)
-        : QRectF(programRect.x() * sx, programRect.y() * sy,
-                 programRect.width() * sx, programRect.height() * sy);
-    const_cast<Compositor *>(this)->renderOverlays(p, overlays, vr, 1.f);
-    return frame;
-}
-
-QImage Compositor::deckProgramFrameWithOverlays(bool deckA) const {
-    const QImage &base = deckA ? m_deckFrameCacheA : m_deckFrameCacheB;
-    if (base.isNull()) return {};
-
-    const QList<OverlayItem> &overlays = deckA ? m_overlaysA : m_overlaysB;
-    if (overlays.isEmpty()) return base;
-
-    QImage frame = base.copy();
-    QPainter p(&frame);
-    p.setRenderHint(QPainter::Antialiasing);
-
-    const QRectF &programRect = deckA ? m_videoRectProgramA : m_videoRectProgramB;
-    const QRectF vr = programRect.isEmpty()
-        ? QRectF(0, 0, s_programWidth, s_programHeight)
-        : programRect;
-    const_cast<Compositor *>(this)->renderOverlays(p, overlays, vr, 1.f);
-    return frame;
-}
-
 QImage Compositor::deckProgramFrame(bool deckA) const {
-    return deckProgramFrameWithOverlays(deckA);
+    return deckA ? m_deckFrameCacheA : m_deckFrameCacheB;
 }
 
 QImage Compositor::getFrameA() const {
-    return deckPreviewWithOverlays(true);
+    return m_deckPreviewA;
 }
 
 QImage Compositor::getFrameB() const {
-    return deckPreviewWithOverlays(false);
+    return m_deckPreviewB;
 }
 
 // ── GL helpers ────────────────────────────────────────────────────────────────

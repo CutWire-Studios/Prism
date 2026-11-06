@@ -178,18 +178,6 @@ void SessionManager::relativizeGraphPaths(QJsonObject &graph, const QDir &sessio
             source["svgTemplateId"] = AssetPathResolver::storePath(svgId, sessionDir);
         node["source"] = source;
 
-        QJsonObject settings = node["settings"].toObject();
-        QJsonArray overlays = settings["overlays"].toArray();
-        for (int i = 0; i < overlays.size(); ++i) {
-            QJsonObject ov = overlays.at(i).toObject();
-            if (ov["type"].toString() == QLatin1String("image")) {
-                ov["content"] = AssetPathResolver::storePath(ov["content"].toString(), sessionDir);
-                overlays[i] = ov;
-            }
-        }
-        settings["overlays"] = overlays;
-        node["settings"] = settings;
-
         nodes[n] = node;
     }
     graph["inputNodes"] = nodes;
@@ -339,8 +327,6 @@ bool SessionManager::loadFromFile(const QString &path) {
     for (const NodeId id : m_graph->nodeIdsOfType(ClipGraph::NodeType::Input)) {
         m_graph->setSourceDescriptor(id, AssetPathResolver::relinkDescriptor(
             m_graph->sourceDescriptor(id), relinkOpts, &relinkReport));
-        m_graph->setClipSettings(id, AssetPathResolver::relinkSettings(
-            m_graph->clipSettings(id), relinkOpts, &relinkReport));
     }
 
     if (relinkReport.stillMissing > 0)

@@ -65,7 +65,8 @@ Item {
         case NodePalette.nodeType.Input:
             return params.audioOnly ? qsTr("Audio") : qsTr("Input")
         case NodePalette.nodeType.Layer:
-            return model.title + "  " + params.canvasW + "×" + params.canvasH
+            return model.title + "  " + (params.canvasCustom ? params.canvasW + "×" + params.canvasH
+                                                              : AppController.programWidth + "×" + AppController.programHeight)
         }
         return model.title
     }

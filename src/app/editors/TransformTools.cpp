@@ -66,6 +66,18 @@ bool TransformTools::setCanvasSize(quint64 layerId, int w, int h)
     return g && g->setLayerCanvasSize(layerId, w, h);
 }
 
+bool TransformTools::canvasCustom(quint64 layerId) const
+{
+    const ClipGraph *g = graph();
+    return g && g->layerCanvasCustom(layerId);
+}
+
+bool TransformTools::setCanvasCustom(quint64 layerId, bool custom)
+{
+    ClipGraph *g = graph();
+    return g && g->setLayerCanvasCustom(layerId, custom);
+}
+
 QMatrix4x4 TransformTools::quadMatrix(qreal w, qreal h, const QVariantList &corners) const
 {
     if (corners.size() != 4)

@@ -109,15 +109,3 @@ SourceDescriptor AssetPathResolver::relinkDescriptor(const SourceDescriptor &des
 
     return out;
 }
-
-ClipSettings AssetPathResolver::relinkSettings(const ClipSettings &settings, const Options &opts,
-                                               RelinkReport *report) {
-    ClipSettings out = settings;
-    for (OverlayItem &ov : out.overlays) {
-        if (ov.type != OverlayItem::Type::Image || ov.content.isEmpty()) continue;
-        const QString resolved = resolvePath(ov.content, opts, false);
-        noteRelink(report, ov.content, pathExists(resolved, false));
-        ov.content = resolved;
-    }
-    return out;
-}

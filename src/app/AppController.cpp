@@ -126,6 +126,7 @@ AppController::AppController(QObject *parent)
 
     m_compositor = std::make_unique<Compositor>();
     m_graph = new ClipGraph(this);
+    m_graph->setOutputCanvasSize(Compositor::programWidth(), Compositor::programHeight());
     m_graphController = new ClipGraphController(m_graph, this);
     m_runtime = new GraphRuntime(m_graph, this);
     connect(m_runtime, &GraphRuntime::thumbnailChanged, this, &AppController::nodeThumbnailChanged);
@@ -488,7 +489,11 @@ void AppController::setProgramResolution(int width, int height)
 {
     if (width == Compositor::programWidth() && height == Compositor::programHeight())
         return;
+    // Recorders keep the size they started with; a change would stretch every later frame.
+    if (m_outputHub->isRecording())
+        return;
     m_compositor->setProgramResolution(width, height);
+    m_graph->setOutputCanvasSize(width, height);
     emit programResolutionChanged();
 }
 
@@ -1031,6 +1036,8 @@ void AppController::onSessionLoaded()
     const NodeId savedB = m_sessionManager->restoredActiveNodeB();
     if (savedA) selectNodeA(savedA);
     if (savedB) selectNodeB(savedB);
+
+    m_graph->setOutputCanvasSize(Compositor::programWidth(), Compositor::programHeight());
 
     m_dirty = false;
     emit sessionDirtyChanged();

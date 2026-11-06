@@ -23,51 +23,61 @@ ColumnLayout {
 
     spacing: Theme.spacingSm
 
-    Rectangle {
+    Item {
+        id: monitorCell
+
+        readonly property real aspect: AppController.programWidth / Math.max(1, AppController.programHeight)
+
         Layout.fillWidth: true
         Layout.fillHeight: true
         Layout.minimumHeight: 40
-        color: "black"
-        radius: Theme.radiusSm
-        border.width: root.onAir ? 2 : 1
-        border.color: root.onAir ? Theme.destructive : Theme.panelBorder
-        clip: true
-
-        PreviewItem {
-            anchors.fill: parent
-            anchors.margins: 1
-            compositor: AppController.compositor
-            source: root.deckA ? PreviewItem.DeckA : PreviewItem.DeckB
-        }
 
         Rectangle {
-            x: Theme.spacingSm
-            y: Theme.spacingSm
-            width: badge.implicitWidth + Theme.spacingLg
-            height: badge.implicitHeight + Theme.spacingXs * 2
+            anchors.centerIn: parent
+            width: Math.min(parent.width, parent.height * monitorCell.aspect)
+            height: width / monitorCell.aspect
+            color: "black"
             radius: Theme.radiusSm
-            color: root.onAir ? Theme.destructive : Qt.rgba(0, 0, 0, 0.6)
+            border.width: root.onAir ? 2 : 1
+            border.color: root.onAir ? Theme.destructive : Theme.panelBorder
+            clip: true
+
+            PreviewItem {
+                anchors.fill: parent
+                anchors.margins: 1
+                compositor: AppController.compositor
+                source: root.deckA ? PreviewItem.DeckA : PreviewItem.DeckB
+            }
+
+            Rectangle {
+                x: Theme.spacingSm
+                y: Theme.spacingSm
+                width: badge.implicitWidth + Theme.spacingLg
+                height: badge.implicitHeight + Theme.spacingXs * 2
+                radius: Theme.radiusSm
+                color: root.onAir ? Theme.destructive : Qt.rgba(0, 0, 0, 0.6)
+
+                ThemedLabel {
+                    id: badge
+                    anchors.centerIn: parent
+                    tone: "default"
+                    text: (root.deckA ? qsTr("A") : qsTr("B")) + (root.onAir ? "  " + qsTr("ON AIR") : "")
+                }
+            }
 
             ThemedLabel {
-                id: badge
-                anchors.centerIn: parent
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.margins: Theme.spacingSm
+                visible: root.deckName.length > 0
                 tone: "default"
-                text: (root.deckA ? qsTr("A") : qsTr("B")) + (root.onAir ? "  " + qsTr("ON AIR") : "")
+                elide: Text.ElideRight
+                wrapMode: Text.NoWrap
+                text: root.deckName
+                style: Text.Outline
+                styleColor: "black"
             }
-        }
-
-        ThemedLabel {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            anchors.margins: Theme.spacingSm
-            visible: root.deckName.length > 0
-            tone: "default"
-            elide: Text.ElideRight
-            wrapMode: Text.NoWrap
-            text: root.deckName
-            style: Text.Outline
-            styleColor: "black"
         }
     }
 

@@ -1304,6 +1304,10 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Custom size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Preset</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1335,7 +1339,7 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Canvas</source>
+        <source>Custom canvas</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

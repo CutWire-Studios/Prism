@@ -320,7 +320,7 @@ set(SOURCES
     src/core/sources/ScreenCapturePersist.cpp
     src/core/project/ClipManager.cpp
     src/core/media/ThumbnailExtractor.cpp
-    src/core/project/OverlayItem.cpp
+    src/core/project/ClipSettings.cpp
     src/core/project/AssetPathResolver.cpp
     src/core/project/ProjectPackager.cpp
     src/core/sources/ShaderSource.cpp
@@ -463,7 +463,7 @@ set(HEADERS
     include/core/sources/WindowCaptureSource.h
     include/core/project/ClipManager.h
     include/core/media/ThumbnailExtractor.h
-    include/core/project/OverlayItem.h
+    include/core/project/ClipSettings.h
     include/core/project/AssetPathResolver.h
     include/core/project/ProjectPackager.h
     include/core/sources/ShaderSource.h

@@ -1,6 +1,6 @@
 #include "core/project/ProjectPackager.h"
 
-#include "core/project/OverlayItem.h"
+#include "core/project/ClipSettings.h"
 #include "core/sources/SourceDescriptor.h"
 #include "core/sources/SvgTemplates.h"
 #include "core/graph/ClipGraph.h"
@@ -133,17 +133,6 @@ void collectFromDescriptor(const SourceDescriptor &desc,
     }
 }
 
-void collectFromSettings(const ClipSettings &settings,
-                         QSet<QString> &files,
-                         QSet<QString> &directories,
-                         QStringList *warnings) {
-    Q_UNUSED(directories);
-    for (const OverlayItem &overlay : settings.overlays) {
-        if (overlay.type == OverlayItem::Type::Image)
-            collectFilePath(overlay.content, files, warnings);
-    }
-}
-
 QString assignUniqueFilePath(const QString &absolutePath,
                              QMap<QString, QString> &assigned,
                              QSet<QString> &usedRelPaths) {
@@ -202,27 +191,6 @@ void rewriteSourcePath(QJsonObject &source, const QMap<QString, QString> &pathMa
         source.insert(QStringLiteral("path"), it.value());
 }
 
-void rewriteSettingsPaths(QJsonObject &settings, const QMap<QString, QString> &pathMap) {
-    QJsonArray overlays = settings.value(QStringLiteral("overlays")).toArray();
-    for (int i = 0; i < overlays.size(); ++i) {
-        QJsonObject overlay = overlays.at(i).toObject();
-        if (overlay.value(QStringLiteral("type")).toString() != QLatin1String("image"))
-            continue;
-
-        const QString stored = overlay.value(QStringLiteral("content")).toString();
-        if (stored.isEmpty())
-            continue;
-
-        const QFileInfo fi(stored);
-        const QString key = fi.isAbsolute() ? fi.absoluteFilePath() : stored;
-        const auto it = pathMap.constFind(key);
-        if (it != pathMap.constEnd())
-            overlay.insert(QStringLiteral("content"), it.value());
-        overlays[i] = overlay;
-    }
-    settings.insert(QStringLiteral("overlays"), overlays);
-}
-
 QJsonObject rewriteSessionPaths(const QJsonObject &session,
                                 const QMap<QString, QString> &pathMap) {
     QJsonObject out = session;
@@ -235,10 +203,6 @@ QJsonObject rewriteSessionPaths(const QJsonObject &session,
         QJsonObject source = node.value(QStringLiteral("source")).toObject();
         rewriteSourcePath(source, pathMap);
         node.insert(QStringLiteral("source"), source);
-
-        QJsonObject settings = node.value(QStringLiteral("settings")).toObject();
-        rewriteSettingsPaths(settings, pathMap);
-        node.insert(QStringLiteral("settings"), settings);
 
         clipNodes[i] = node;
     }
@@ -425,7 +389,6 @@ ProjectPackager::Report ProjectPackager::exportPackage(const QJsonObject &sessio
     QSet<QString> directories;
     for (NodeId id : graph.nodeIdsOfType(ClipGraph::NodeType::Input)) {
         collectFromDescriptor(graph.sourceDescriptor(id), files, directories, &report.warnings);
-        collectFromSettings(graph.clipSettings(id), files, directories, &report.warnings);
     }
 
     QTemporaryDir staging;

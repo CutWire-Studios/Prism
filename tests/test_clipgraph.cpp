@@ -188,7 +188,7 @@ private slots:
                 {"id": 1, "posX": 20, "posY": 20, "hasAudio": false, "audioOnly": false,
                  "repeat": false,
                  "settings": {"startTime": 0, "endTime": -1, "cropX": 0, "cropY": 0,
-                              "cropW": 1, "cropH": 1, "overlays": []},
+                              "cropW": 1, "cropH": 1},
                  "source": {"kind": 5, "path": "", "displayName": "Cam 1", "color": "\u0023ffffffff",
                             "cameraIndex": 0, "screenIndex": 0, "windowIndex": 0,
                             "captureId": "", "slideshowIntervalMs": 3000,

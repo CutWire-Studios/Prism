@@ -9,6 +9,7 @@ ThemedDialog {
     property var nodeId: 0
     property int canvasW: 1280
     property int canvasH: 720
+    property bool canvasCustom: false
 
     readonly property var presets: [
         { label: qsTr("Custom"), w: 0, h: 0 },
@@ -23,21 +24,37 @@ ThemedDialog {
     function openFor(id, kind) {
         const size = TransformTools.canvasSize(id)
         nodeId = id
-        canvasW = size.width > 0 ? size.width : 1280
-        canvasH = size.height > 0 ? size.height : 720
+        canvasW = size.width
+        canvasH = size.height
+        canvasCustom = TransformTools.canvasCustom(id)
         open()
     }
 
-    onAccepted: AppController.graph.setParams(nodeId, { canvasW: canvasW, canvasH: canvasH })
+    onAccepted: AppController.graph.setParams(nodeId, canvasCustom
+                                              ? { canvasCustom: true, canvasW: canvasW, canvasH: canvasH }
+                                              : { canvasCustom: false })
 
     contentItem: GridLayout {
         columns: 2
         columnSpacing: Theme.spacingLg
         rowSpacing: Theme.spacingLg
 
+        ThemedLabel { text: qsTr("Custom size") }
+        ThemedSwitch {
+            checked: root.canvasCustom
+            onToggled: {
+                root.canvasCustom = checked
+                if (!checked) {
+                    root.canvasW = AppController.programWidth
+                    root.canvasH = AppController.programHeight
+                }
+            }
+        }
+
         ThemedLabel { text: qsTr("Preset") }
         ThemedComboBox {
             Layout.fillWidth: true
+            enabled: root.canvasCustom
             textRole: "label"
             model: root.presets
             currentIndex: {
@@ -58,6 +75,7 @@ ThemedDialog {
         ThemedLabel { text: qsTr("Width") }
         ThemedNumberField {
             Layout.fillWidth: true
+            enabled: root.canvasCustom
             from: 1
             to: 7680
             unit: "px"
@@ -68,6 +86,7 @@ ThemedDialog {
         ThemedLabel { text: qsTr("Height") }
         ThemedNumberField {
             Layout.fillWidth: true
+            enabled: root.canvasCustom
             from: 1
             to: 4320
             unit: "px"

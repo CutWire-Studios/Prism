@@ -18,7 +18,7 @@
 #include <optional>
 
 #include "core/sources/SourceDescriptor.h"
-#include "core/project/OverlayItem.h"
+#include "core/project/ClipSettings.h"
 #include "core/graph/AudioEffects.h"
 #include "core/graph/ProcessEffects.h"
 
@@ -263,8 +263,13 @@ public:
     QVector<LayerSlotView> layerSlotViews(NodeId layerId) const;
     bool setLayerSlotRect(NodeId layerId, int index, float x, float y, float w, float h);
     bool setLayerSlotVisible(NodeId layerId, int index, bool visible);
+    /// Effective canvas: the output size unless the layer's "canvasCustom" param is set.
     bool layerCanvasSize(NodeId layerId, int &w, int &h) const;
+    /// Sets an explicit size and turns the custom override on.
     bool setLayerCanvasSize(NodeId layerId, int w, int h);
+    bool layerCanvasCustom(NodeId layerId) const;
+    bool setLayerCanvasCustom(NodeId layerId, bool custom);
+    void setOutputCanvasSize(int w, int h);
 
     // ── A/B select and decks ─────────────────────────────────────────────────
     void setActiveDeckClip(NodeId clipId, bool deckA);
@@ -383,4 +388,6 @@ private:
     NodeId m_nextId = 1;
     EdgeId m_nextEdgeId = 1;
     bool m_restoring = false;
+    int m_outputCanvasW = 1280;
+    int m_outputCanvasH = 720;
 };

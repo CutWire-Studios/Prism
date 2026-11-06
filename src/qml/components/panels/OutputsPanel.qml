@@ -156,6 +156,7 @@ PanelFrame {
                 ThemedLabel { text: qsTr("Resolution") }
                 ThemedComboBox {
                     Layout.fillWidth: true
+                    enabled: !AppController.recording
                     model: root.resolutions.map(r => r.w + " x " + r.h)
                     currentIndex: root.resolutionIndex()
                     onActivated: index => AppController.setProgramResolution(root.resolutions[index].w,

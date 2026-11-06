@@ -5,7 +5,6 @@
 #include <QDir>
 
 #include "core/sources/SourceDescriptor.h"
-#include "core/project/OverlayItem.h"
 
 /// Resolves media paths when loading session files and stores them portably on save.
 class AssetPathResolver {
@@ -29,6 +28,4 @@ public:
 
     static SourceDescriptor relinkDescriptor(const SourceDescriptor &desc, const Options &opts,
                                              RelinkReport *report = nullptr);
-    static ClipSettings relinkSettings(const ClipSettings &settings, const Options &opts,
-                                       RelinkReport *report = nullptr);
 };

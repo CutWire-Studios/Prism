@@ -1,7 +1,7 @@
 #include "TestSupport.h"
 #include "core/project/AssetPathResolver.h"
 #include "core/project/ProjectPackager.h"
-#include "core/project/OverlayItem.h"
+#include "core/project/ClipSettings.h"
 #include "core/project/ClipManager.h"
 #include "core/sources/SourceDescriptor.h"
 #include "core/webrtc/NetworkUtils.h"
@@ -93,14 +93,6 @@ private slots:
         cam.path = QStringLiteral("/dev/video0");
         const SourceDescriptor camOut = AssetPathResolver::relinkDescriptor(cam, opts);
         QCOMPARE(camOut.path, cam.path);
-
-        ClipSettings settings;
-        OverlayItem img;
-        img.type = OverlayItem::Type::Image;
-        img.content = QStringLiteral("clip.mp4");
-        settings.overlays.append(img);
-        const ClipSettings settingsOut = AssetPathResolver::relinkSettings(settings, opts, &report);
-        QCOMPARE(settingsOut.overlays.first().content, relinked.path);
     }
 
     void projectPackager_importErrors() {
@@ -193,30 +185,17 @@ private slots:
         }
     }
 
-    void overlayAndClipSettings_json() {
+    void clipSettings_json() {
         ClipSettings settings;
         settings.startTime = 1.5;
         settings.endTime = 10.0;
         settings.cropX = 0.1f;
         settings.cropW = 0.8f;
 
-        OverlayItem text;
-        text.type = OverlayItem::Type::Text;
-        text.content = QStringLiteral("Hello");
-        text.color = QColor(Qt::yellow);
-        settings.overlays.append(text);
-
-        OverlayItem image;
-        image.type = OverlayItem::Type::Image;
-        image.content = QStringLiteral("/tmp/logo.png");
-        settings.overlays.append(image);
-
         const QJsonObject json = settings.toJson();
         const ClipSettings restored = ClipSettings::fromJson(json);
         QCOMPARE(restored.startTime, settings.startTime);
         QCOMPARE(restored.endTime, settings.endTime);
-        QCOMPARE(restored.overlays.size(), 2);
-        QCOMPARE(restored.overlays[0].content, text.content);
         QVERIFY(restored.hasCrop());
 
         const ClipSettings defaults = ClipSettings::fromJson(QJsonObject{});

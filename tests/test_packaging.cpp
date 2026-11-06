@@ -3,7 +3,7 @@
 #include "core/project/ProjectPackager.h"
 #include "core/webrtc/NetworkUtils.h"
 #include "core/sources/SourceDescriptor.h"
-#include "core/project/OverlayItem.h"
+#include "core/project/ClipSettings.h"
 #include "core/graph/ClipGraph.h"
 
 #include <QtTest>
@@ -77,17 +77,6 @@ private slots:
         const SourceDescriptor missingOut = AssetPathResolver::relinkDescriptor(missingImage, opts, &report);
         QCOMPARE(missingOut.path, QStringLiteral("missing.png"));
         QCOMPARE(report.stillMissing, 1);
-
-        ClipSettings settings;
-        OverlayItem text;
-        text.type = OverlayItem::Type::Text;
-        text.content = QStringLiteral("label");
-        settings.overlays.append(text);
-        report = {};
-        const ClipSettings textOnly = AssetPathResolver::relinkSettings(settings, opts, &report);
-        QCOMPARE(textOnly.overlays.first().content, QStringLiteral("label"));
-        QCOMPARE(report.resolved, 0);
-        QCOMPARE(report.stillMissing, 0);
     }
 
     void projectPackager_exportImportRoundTrip() {

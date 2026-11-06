@@ -398,11 +398,7 @@ void DeckController::assignNodeToDeck(NodeId nodeId, bool deckA,
     auto *out = m_compositor;
 
     // Base placement / crop / flip are applied by AppController from the
-    // resolved stream; here we only wire overlays and the deck source/audio.
-    auto applyTransform = [&](bool a) {
-        if (a) out->setOverlaysA(clip.overlays);
-        else   out->setOverlaysB(clip.overlays);
-    };
+    // resolved stream; here we only wire the deck source/audio.
 
     // Decorator effects on the deck primary: the source must be a wrappable
     // MediaSource, so route every kind (including VideoFile/Image, which
@@ -424,7 +420,6 @@ void DeckController::assignNodeToDeck(NodeId nodeId, bool deckA,
             }
             src = ProcessEffects::applySourceEffects(std::move(src), sourceEffects);
         }
-        applyTransform(deckA);
         if (deckA) {
             out->setRepeatA(repeat);
             out->setTrimPointsA(clip.startTime, clip.endTime);
@@ -442,7 +437,6 @@ void DeckController::assignNodeToDeck(NodeId nodeId, bool deckA,
 
     case Kind::VideoFile:
     case Kind::Image: {
-        applyTransform(deckA);
         if (deckA) {
             out->setRepeatA(repeat);
             out->setTrimPointsA(clip.startTime, clip.endTime);
@@ -475,7 +469,6 @@ void DeckController::assignNodeToDeck(NodeId nodeId, bool deckA,
             if (auto data = m_runtime->scriptOutputForDataNode(nodeId))
                 static_cast<SvgTemplateSource *>(src.get())->setDataSource(data);
         }
-        applyTransform(deckA);
         if (deckA) {
             out->setSourceA(std::move(src));
             if (desc.kind != Kind::Canvas) out->playA();
@@ -501,7 +494,6 @@ void DeckController::assignCompositeToDeck(std::unique_ptr<MediaSource> src, Nod
                                            bool deckA) {
     auto *out = m_compositor;
     if (deckA) m_aClipNodeId = primaryNodeId; else m_bClipNodeId = primaryNodeId;
-    if (deckA) out->setOverlaysA({}); else out->setOverlaysB({});
 
     const ClipGraph::Node *primary = primaryNodeId ? m_graph->node(primaryNodeId) : nullptr;
     if (!primary || primary->type != ClipGraph::NodeType::Input) {

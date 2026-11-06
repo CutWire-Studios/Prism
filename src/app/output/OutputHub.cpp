@@ -805,13 +805,12 @@ bool OutputHub::needsDeckFrameReadback() const {
 
 void OutputHub::placeOnSecondaryScreen(QQuickWindow *window) {
     const auto screens = QGuiApplication::screens();
-    if (screens.size() < 2) {
-        window->setGeometry(100, 100, 800, 600);
-        return;
-    }
-
-    QScreen *secondary = screens.at(1);
-    window->setScreen(secondary);
-    const QRect geo = secondary->availableGeometry();
-    window->setGeometry(QRect(geo.topLeft() + QPoint(40, 40), QSize(800, 600)));
+    QScreen *screen = screens.size() < 2 ? window->screen() : screens.at(1);
+    if (screens.size() >= 2)
+        window->setScreen(screen);
+    const QRect geo = screen ? screen->availableGeometry() : QRect(0, 0, 1280, 720);
+    const QSize box = QSize(960, 960).boundedTo(geo.size() - QSize(80, 80));
+    const QSize size = QSize(Compositor::programWidth(), Compositor::programHeight())
+                           .scaled(box, Qt::KeepAspectRatio);
+    window->setGeometry(QRect(geo.topLeft() + QPoint(40, 40), size));
 }

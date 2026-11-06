@@ -16,6 +16,8 @@ ThemedDialog {
     property int canvasH: 1080
     property int origW: 1920
     property int origH: 1080
+    property bool canvasCustom: false
+    property bool origCustom: false
     property int selected: -1
     property bool confirmed: false
 
@@ -42,8 +44,9 @@ ThemedDialog {
     function openFor(id, kind) {
         const size = TransformTools.canvasSize(id)
         nodeId = id
-        canvasW = origW = size.width > 0 ? size.width : 1920
-        canvasH = origH = size.height > 0 ? size.height : 1080
+        canvasW = origW = size.width
+        canvasH = origH = size.height
+        canvasCustom = origCustom = TransformTools.canvasCustom(id)
         slots = TransformTools.layerSlots(id)
         original = slots.map(s => Object.assign({}, s))
         selected = slots.length > 0 ? slots[0].slot : -1
@@ -77,6 +80,19 @@ ThemedDialog {
         canvasW = w
         canvasH = h
         TransformTools.setCanvasSize(nodeId, w, h)
+        canvasCustom = true
+    }
+
+    function setCanvasCustom(on) {
+        if (on) {
+            setCanvas(canvasW, canvasH)
+            return
+        }
+        TransformTools.setCanvasCustom(nodeId, false)
+        canvasCustom = false
+        const size = TransformTools.canvasSize(nodeId)
+        canvasW = size.width
+        canvasH = size.height
     }
 
     function fit() {
@@ -96,6 +112,7 @@ ThemedDialog {
 
     function revert() {
         TransformTools.setCanvasSize(nodeId, origW, origH)
+        TransformTools.setCanvasCustom(nodeId, origCustom)
         for (const s of original) {
             TransformTools.setSlotRect(nodeId, s.slot, s.x, s.y, s.w, s.h)
             TransformTools.setSlotVisible(nodeId, s.slot, s.visible)
@@ -141,9 +158,14 @@ ThemedDialog {
                 Layout.fillWidth: true
                 text: qsTr("Changes apply to the output in real time")
             }
-            ThemedLabel { text: qsTr("Canvas") }
+            ThemedSwitch {
+                text: qsTr("Custom canvas")
+                checked: root.canvasCustom
+                onToggled: root.setCanvasCustom(checked)
+            }
             ThemedNumberField {
                 Layout.preferredWidth: 84
+                enabled: root.canvasCustom
                 from: 16
                 to: 8192
                 value: root.canvasW
@@ -152,6 +174,7 @@ ThemedDialog {
             ThemedLabel { text: "×" }
             ThemedNumberField {
                 Layout.preferredWidth: 84
+                enabled: root.canvasCustom
                 from: 16
                 to: 8192
                 value: root.canvasH
@@ -159,6 +182,7 @@ ThemedDialog {
             }
             ThemedComboBox {
                 Layout.preferredWidth: 140
+                enabled: root.canvasCustom
                 textRole: "label"
                 model: root.presets
                 currentIndex: 0
