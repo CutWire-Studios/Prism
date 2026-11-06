@@ -1,5 +1,5 @@
 #include "ui/mainwindow/MainWindowUtils.h"
-#include "ui/session/SessionManager.h"
+#include "app/session/SessionManager.h"
 
 #include <QtTest>
 

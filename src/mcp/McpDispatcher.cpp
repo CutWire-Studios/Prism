@@ -6,20 +6,17 @@
 #include "core/project/ClipManager.h"
 #include "core/sources/ImageSource.h"
 #include "core/sources/NdiSource.h"
-#include "ui/canvas/VideoWidget.h"
 #include "ui/common/CameraEnumerator.h"
-#include "ui/common/ThumbHelper.h"
+#include "app/common/ThumbHelper.h"
 #include "core/sources/ShapeSource.h"
 #include "core/sources/SvgTemplateSource.h"
 #include "core/sources/TextSource.h"
-#include "ui/mainwindow/MainWindow.h"
-#include "ui/nodes/ClipNodeEditor.h"
-#include "ui/nodes/ClipNodeModel.h"
-#include "ui/nodes/ProcessEffects.h"
-#include "ui/output/OutputHub.h"
-#include "ui/output/OutputWindow.h"
-#include "ui/session/SessionManager.h"
-#include "ui/transitions/TransitionController.h"
+#include "app/AppController.h"
+#include "core/graph/ClipGraph.h"
+#include "core/graph/ProcessEffects.h"
+#include "app/output/OutputHub.h"
+#include "app/session/SessionManager.h"
+#include "app/transitions/TransitionController.h"
 
 #include <QColor>
 #include <QDir>
@@ -146,7 +143,7 @@ QString defaultShader()
         "}\n");
 }
 
-QPixmap thumbFor(const SourceDescriptor &desc)
+QImage thumbFor(const SourceDescriptor &desc)
 {
     using K = SourceDescriptor::Kind;
     switch (desc.kind) {
@@ -154,7 +151,7 @@ QPixmap thumbFor(const SourceDescriptor &desc)
     case K::Image:
     case K::AudioFile:
         if (!desc.path.isEmpty())
-            return ThumbnailExtractor::extract(desc.path, 110, 65);
+            return ThumbnailExtractor::extract(desc.path, 110, 65).toImage();
         break;
     case K::Canvas:
         return ThumbHelper::makeCanvasThumb(QStringLiteral("%1x%2").arg(desc.canvasWidth).arg(desc.canvasHeight),
@@ -179,19 +176,19 @@ QPixmap thumbFor(const SourceDescriptor &desc)
     return ThumbHelper::makeIconThumb(QStringLiteral("movie"));
 }
 
-QJsonObject clipOk(ClipNodeModel *node, QJsonObject extra = {})
+QJsonObject clipOk(const ClipGraph *graph, NodeId id, QJsonObject extra = {})
 {
     extra.insert(QStringLiteral("ok"), true);
-    extra.insert(QStringLiteral("id"), QString::number(node->nodeId()));
-    extra.insert(QStringLiteral("name"), node->sourceName());
-    extra.insert(QStringLiteral("kind"), kindName(node->sourceDescriptor().kind));
+    extra.insert(QStringLiteral("id"), QString::number(id));
+    extra.insert(QStringLiteral("name"), graph->sourceName(id));
+    extra.insert(QStringLiteral("kind"), kindName(graph->sourceDescriptor(id).kind));
     return extra;
 }
 
 } // namespace
 
-McpDispatcher::McpDispatcher(MainWindow *window)
-    : m_window(window)
+McpDispatcher::McpDispatcher(AppController *app)
+    : m_window(app)
 {
 }
 
@@ -336,7 +333,7 @@ QJsonObject McpDispatcher::capture(const QJsonObject &args)
     return m_window->mcpCaptureFrame(jsonBool(args.value(QStringLiteral("full"))));
 }
 
-ClipNodeModel *resolveClip(MainWindow *w, const QJsonObject &args, QJsonObject *error)
+NodeId resolveClip(AppController *w, const QJsonObject &args, QJsonObject *error)
 {
     const QJsonValue v = args.value(QStringLiteral("clip"));
     qint64 id = 0;
@@ -351,16 +348,16 @@ ClipNodeModel *resolveClip(MainWindow *w, const QJsonObject &args, QJsonObject *
     if (id <= 0) {
         if (error)
             *error = err("bad_args", QStringLiteral("clip is required"));
-        return nullptr;
+        return 0;
     }
-    ClipNodeEditor *editor = w->clipNodeEditor();
-    ClipNodeModel *node = editor ? editor->nodeAt(static_cast<NodeId>(id)) : nullptr;
-    if (!node || !node->hasSource()) {
+    const ClipGraph *graph = w->clipGraph();
+    const ClipGraph::Node *node = graph ? graph->node(static_cast<NodeId>(id)) : nullptr;
+    if (!node || node->type != ClipGraph::NodeType::Input) {
         if (error)
             *error = err("not_found", QStringLiteral("No clip %1").arg(id));
-        return nullptr;
+        return 0;
     }
-    return node;
+    return static_cast<NodeId>(id);
 }
 
 qint64 parseNodeId(const QJsonValue &v)
@@ -500,10 +497,10 @@ QJsonObject McpDispatcher::opAddClip(const QJsonObject &args)
     if (desc.displayName.isEmpty())
         desc.displayName = QFileInfo(path).completeBaseName();
 
-    ClipNodeModel *node = m_window->addSourceFromDescriptor(desc, thumbFor(desc));
+    const NodeId node = m_window->addSourceFromDescriptor(desc, thumbFor(desc));
     if (!node)
         return err("not_found", QStringLiteral("Could not add clip"));
-    return clipOk(node);
+    return clipOk(m_window->clipGraph(), node);
 }
 
 QJsonObject McpDispatcher::opAddSource(const QJsonObject &args)
@@ -631,19 +628,19 @@ QJsonObject McpDispatcher::opAddSource(const QJsonObject &args)
         return err("bad_args", QStringLiteral("Unsupported kind: %1").arg(kindStr));
     }
 
-    ClipNodeModel *node = m_window->addSourceFromDescriptor(desc, thumbFor(desc));
+    const NodeId node = m_window->addSourceFromDescriptor(desc, thumbFor(desc));
     if (!node)
         return err("not_found", QStringLiteral("Could not add source"));
-    return clipOk(node);
+    return clipOk(m_window->clipGraph(), node);
 }
 
 QJsonObject McpDispatcher::opRemoveClip(const QJsonObject &args)
 {
     QJsonObject error;
-    ClipNodeModel *node = resolveClip(m_window, args, &error);
+    const NodeId node = resolveClip(m_window, args, &error);
     if (!node)
         return error;
-    const NodeId id = node->nodeId();
+    const NodeId id = node;
     if (!m_window->mcpRemoveClip(id))
         return err("not_found", QStringLiteral("Could not remove clip"));
     return ok({{QStringLiteral("id"), QString::number(id)}});
@@ -652,83 +649,83 @@ QJsonObject McpDispatcher::opRemoveClip(const QJsonObject &args)
 QJsonObject McpDispatcher::opRenameClip(const QJsonObject &args)
 {
     QJsonObject error;
-    ClipNodeModel *node = resolveClip(m_window, args, &error);
+    const NodeId node = resolveClip(m_window, args, &error);
     if (!node)
         return error;
     const QString name = args.value(QStringLiteral("name")).toString().trimmed();
     if (name.isEmpty())
         return err("bad_args", QStringLiteral("name is required"));
-    if (!m_window->mcpRenameClip(node->nodeId(), name))
+    if (!m_window->mcpRenameClip(node, name))
         return err("not_found");
-    return clipOk(node);
+    return clipOk(m_window->clipGraph(), node);
 }
 
 QJsonObject McpDispatcher::opSetText(const QJsonObject &args)
 {
     QJsonObject error;
-    ClipNodeModel *node = resolveClip(m_window, args, &error);
+    const NodeId node = resolveClip(m_window, args, &error);
     if (!node)
         return error;
-    if (node->sourceDescriptor().kind != SourceDescriptor::Kind::Text)
+    if (m_window->clipGraph()->sourceDescriptor(node).kind != SourceDescriptor::Kind::Text)
         return err("type_mismatch", QStringLiteral("Clip is not a text source"));
-    SourceDescriptor desc = node->sourceDescriptor();
+    SourceDescriptor desc = m_window->clipGraph()->sourceDescriptor(node);
     desc.textTemplate = args.value(QStringLiteral("text")).toString();
     if (args.contains(QStringLiteral("color"))) {
         prism::TextStyle style = TextSource::styleFromDescriptor(desc);
         style.setPrimaryColor(parseColor(args.value(QStringLiteral("color")).toString(), style.primaryColor()));
         desc.textStyleJson = TextSource::styleToJson(style);
     }
-    if (!m_window->mcpUpdateSource(node->nodeId(), desc, thumbFor(desc)))
+    if (!m_window->mcpUpdateSource(node, desc, thumbFor(desc)))
         return err("not_found");
-    return clipOk(node);
+    return clipOk(m_window->clipGraph(), node);
 }
 
 QJsonObject McpDispatcher::opSetSvgParams(const QJsonObject &args)
 {
     QJsonObject error;
-    ClipNodeModel *node = resolveClip(m_window, args, &error);
+    const NodeId node = resolveClip(m_window, args, &error);
     if (!node)
         return error;
-    if (node->sourceDescriptor().kind != SourceDescriptor::Kind::SvgTemplate)
+    if (m_window->clipGraph()->sourceDescriptor(node).kind != SourceDescriptor::Kind::SvgTemplate)
         return err("type_mismatch", QStringLiteral("Clip is not an SVG template source"));
-    SourceDescriptor desc = node->sourceDescriptor();
+    SourceDescriptor desc = m_window->clipGraph()->sourceDescriptor(node);
     QJsonObject params = SvgTemplateSource::paramsFromDescriptor(desc);
     const QJsonObject changes = args.value(QStringLiteral("params")).toObject();
     for (auto it = changes.begin(); it != changes.end(); ++it)
         params.insert(it.key(), it.value());
     desc.svgParamsJson = SvgTemplateSource::paramsToJson(params);
-    if (!m_window->mcpUpdateSource(node->nodeId(), desc, thumbFor(desc)))
+    if (!m_window->mcpUpdateSource(node, desc, thumbFor(desc)))
         return err("not_found");
-    return clipOk(node);
+    return clipOk(m_window->clipGraph(), node);
 }
 
 QJsonObject McpDispatcher::opSetShader(const QJsonObject &args)
 {
     QJsonObject error;
-    ClipNodeModel *node = resolveClip(m_window, args, &error);
+    const NodeId node = resolveClip(m_window, args, &error);
     if (!node)
         return error;
-    if (node->sourceDescriptor().kind != SourceDescriptor::Kind::Shader)
+    if (m_window->clipGraph()->sourceDescriptor(node).kind != SourceDescriptor::Kind::Shader)
         return err("type_mismatch", QStringLiteral("Clip is not a shader source"));
-    SourceDescriptor desc = node->sourceDescriptor();
+    SourceDescriptor desc = m_window->clipGraph()->sourceDescriptor(node);
     desc.shaderCode = args.value(QStringLiteral("code")).toString();
-    if (!m_window->mcpUpdateSource(node->nodeId(), desc, thumbFor(desc)))
+    if (!m_window->mcpUpdateSource(node, desc, thumbFor(desc)))
         return err("not_found");
-    return clipOk(node);
+    return clipOk(m_window->clipGraph(), node);
 }
 
 QJsonObject McpDispatcher::opSelectDeck(const QJsonObject &args, bool deckA)
 {
     QJsonObject error;
-    ClipNodeModel *node = resolveClip(m_window, args, &error);
+    const NodeId node = resolveClip(m_window, args, &error);
     if (!node)
         return error;
     if (deckA)
-        m_window->selectNodeA(node->nodeId());
+        m_window->selectNodeA(node);
     else
-        m_window->selectNodeB(node->nodeId());
+        m_window->selectNodeB(node);
     m_window->mcpBumpRevision();
-    return clipOk(node, {{QStringLiteral("deck"), deckA ? QStringLiteral("a") : QStringLiteral("b")}});
+    return clipOk(m_window->clipGraph(), node, {{QStringLiteral("deck"), deckA ? QStringLiteral("a") : QStringLiteral("b")}});
 }
 
 QJsonObject McpDispatcher::opPlayDeck(bool deckA, bool play)
@@ -775,7 +772,7 @@ QJsonObject McpDispatcher::opSetFader(const QJsonObject &args)
 QJsonObject McpDispatcher::opCut()
 {
     if (auto *t = m_window->transitionController())
-        t->onCutTransitionClicked();
+        t->cutTransition();
     m_window->mcpBumpRevision();
     return ok({{QStringLiteral("fader"), m_window->faderValue()}});
 }
@@ -783,7 +780,7 @@ QJsonObject McpDispatcher::opCut()
 QJsonObject McpDispatcher::opAuto()
 {
     if (auto *t = m_window->transitionController())
-        t->onAutoTransitionClicked();
+        t->autoTransition();
     m_window->mcpBumpRevision();
     return ok({{QStringLiteral("fader"), m_window->faderValue()}});
 }
@@ -954,17 +951,17 @@ QJsonObject McpDispatcher::opListProcessEffects() const
 
 QJsonObject McpDispatcher::opListNodes() const
 {
-    auto *editor = m_window->clipNodeEditor();
+    auto *editor = m_window->clipGraph();
     if (!editor)
         return err("not_found", QStringLiteral("No node editor"));
-    QJsonObject snap = editor->graphSnapshot();
+    QJsonObject snap = editor->snapshot();
     snap.insert(QStringLiteral("ok"), true);
     return snap;
 }
 
 QJsonObject McpDispatcher::opAddProcessNode(const QJsonObject &args)
 {
-    auto *editor = m_window->clipNodeEditor();
+    auto *editor = m_window->clipGraph();
     if (!editor)
         return err("not_found", QStringLiteral("No node editor"));
     const ProcessEffectDescriptor *desc = resolveEffect(args.value(QStringLiteral("effect")));
@@ -975,11 +972,13 @@ QJsonObject McpDispatcher::opAddProcessNode(const QJsonObject &args)
     const bool hasY = args.contains(QStringLiteral("y"));
     const double x = hasX ? jsonNumber(args.value(QStringLiteral("x")), 0) : qQNaN();
     const double y = hasY ? jsonNumber(args.value(QStringLiteral("y")), 0) : qQNaN();
-    const NodeId id = editor->addProcessNode(desc->id, params, x, y);
+    const NodeId id = editor->addNode(ClipGraph::NodeType::Process, QPointF(x, y),
+                                      {{QStringLiteral("effect"), desc->id},
+                                       {QStringLiteral("params"), params.toVariantMap()}});
     if (!id)
         return err("conflict", QStringLiteral("Could not add process node"));
     m_window->mcpBumpRevision();
-    const QJsonObject snap = editor->graphSnapshot();
+    const QJsonObject snap = editor->snapshot();
     QJsonObject row;
     for (const QJsonValue &v : snap.value(QStringLiteral("nodes")).toArray()) {
         const QJsonObject n = v.toObject();
@@ -997,7 +996,7 @@ QJsonObject McpDispatcher::opAddProcessNode(const QJsonObject &args)
 
 QJsonObject McpDispatcher::opAddLayerNode(const QJsonObject &args)
 {
-    auto *editor = m_window->clipNodeEditor();
+    auto *editor = m_window->clipGraph();
     if (!editor)
         return err("not_found", QStringLiteral("No node editor"));
     const double x = args.contains(QStringLiteral("x"))
@@ -1006,7 +1005,7 @@ QJsonObject McpDispatcher::opAddLayerNode(const QJsonObject &args)
     const double y = args.contains(QStringLiteral("y"))
                          ? jsonNumber(args.value(QStringLiteral("y")), 0)
                          : qQNaN();
-    const NodeId id = editor->addLayerNode(x, y);
+    const NodeId id = editor->addNode(ClipGraph::NodeType::Layer, QPointF(x, y));
     if (!id)
         return err("conflict", QStringLiteral("Could not add layer node"));
     m_window->mcpBumpRevision();
@@ -1016,7 +1015,7 @@ QJsonObject McpDispatcher::opAddLayerNode(const QJsonObject &args)
 
 QJsonObject McpDispatcher::opAddAbSelect(const QJsonObject &args)
 {
-    auto *editor = m_window->clipNodeEditor();
+    auto *editor = m_window->clipGraph();
     if (!editor)
         return err("not_found", QStringLiteral("No node editor"));
     const double x = args.contains(QStringLiteral("x"))
@@ -1025,7 +1024,7 @@ QJsonObject McpDispatcher::opAddAbSelect(const QJsonObject &args)
     const double y = args.contains(QStringLiteral("y"))
                          ? jsonNumber(args.value(QStringLiteral("y")), 0)
                          : qQNaN();
-    const NodeId id = editor->addAbSelectNode(x, y);
+    const NodeId id = editor->addNode(ClipGraph::NodeType::AbSelect, QPointF(x, y));
     if (!id)
         return err("conflict", QStringLiteral("Could not add A/B select node"));
     m_window->mcpBumpRevision();
@@ -1035,16 +1034,16 @@ QJsonObject McpDispatcher::opAddAbSelect(const QJsonObject &args)
 
 QJsonObject McpDispatcher::opConnect(const QJsonObject &args)
 {
-    auto *editor = m_window->clipNodeEditor();
+    auto *editor = m_window->clipGraph();
     if (!editor)
         return err("not_found", QStringLiteral("No node editor"));
     const NodeId from = static_cast<NodeId>(parseNodeId(args.value(QStringLiteral("from"))));
     const NodeId to = static_cast<NodeId>(parseNodeId(args.value(QStringLiteral("to"))));
     if (!from || !to)
         return err("bad_args", QStringLiteral("from and to are required node ids"));
-    if (!editor->hasGraphNode(from))
+    if (!editor->hasNode(from))
         return err("not_found", QStringLiteral("No node %1").arg(from));
-    if (!editor->hasGraphNode(to))
+    if (!editor->hasNode(to))
         return err("not_found", QStringLiteral("No node %1").arg(to));
     const int kind = parseConnectionKind(args.value(QStringLiteral("kind")));
     if (kind == -2)
@@ -1057,7 +1056,7 @@ QJsonObject McpDispatcher::opConnect(const QJsonObject &args)
                                   "input first, or splice into an existing chain."));
     m_window->mcpBumpRevision();
     QString kindName;
-    for (const QJsonValue &v : editor->graphSnapshot().value(QStringLiteral("connections")).toArray()) {
+    for (const QJsonValue &v : editor->snapshot().value(QStringLiteral("connections")).toArray()) {
         const QJsonObject c = v.toObject();
         if (c.value(QStringLiteral("from")).toString() == QString::number(from)
             && c.value(QStringLiteral("to")).toString() == QString::number(to)) {
@@ -1072,7 +1071,7 @@ QJsonObject McpDispatcher::opConnect(const QJsonObject &args)
 
 QJsonObject McpDispatcher::opDisconnect(const QJsonObject &args)
 {
-    auto *editor = m_window->clipNodeEditor();
+    auto *editor = m_window->clipGraph();
     if (!editor)
         return err("not_found", QStringLiteral("No node editor"));
     const NodeId from = static_cast<NodeId>(parseNodeId(args.value(QStringLiteral("from"))));
@@ -1089,18 +1088,19 @@ QJsonObject McpDispatcher::opDisconnect(const QJsonObject &args)
 
 QJsonObject McpDispatcher::opSetProcessParams(const QJsonObject &args)
 {
-    auto *editor = m_window->clipNodeEditor();
+    auto *editor = m_window->clipGraph();
     if (!editor)
         return err("not_found", QStringLiteral("No node editor"));
     const NodeId id = static_cast<NodeId>(parseNodeId(args.value(QStringLiteral("node"))));
     if (!id)
         return err("bad_args", QStringLiteral("node is required"));
-    if (!editor->hasGraphNode(id))
+    if (!editor->hasNode(id))
         return err("not_found", QStringLiteral("No node %1").arg(id));
     const QJsonObject params = args.value(QStringLiteral("params")).toObject();
     if (params.isEmpty())
         return err("bad_args", QStringLiteral("params is required"));
-    if (!editor->setProcessParams(id, params, true))
+    if (editor->node(id)->type != ClipGraph::NodeType::Process
+        || !editor->setEffectParams(id, params.toVariantMap(), true))
         return err("type_mismatch", QStringLiteral("Node is not a process node"));
     m_window->mcpBumpRevision();
     return ok({{QStringLiteral("id"), QString::number(id)}, {QStringLiteral("params"), params}});
@@ -1108,7 +1108,7 @@ QJsonObject McpDispatcher::opSetProcessParams(const QJsonObject &args)
 
 QJsonObject McpDispatcher::opRemoveNode(const QJsonObject &args)
 {
-    auto *editor = m_window->clipNodeEditor();
+    auto *editor = m_window->clipGraph();
     if (!editor)
         return err("not_found", QStringLiteral("No node editor"));
     QJsonValue nodeVal = args.value(QStringLiteral("node"));
@@ -1117,12 +1117,12 @@ QJsonObject McpDispatcher::opRemoveNode(const QJsonObject &args)
     const NodeId id = static_cast<NodeId>(parseNodeId(nodeVal));
     if (!id)
         return err("bad_args", QStringLiteral("node is required"));
-    if (!editor->hasGraphNode(id))
+    if (!editor->hasNode(id))
         return err("not_found", QStringLiteral("No node %1").arg(id));
     if (id == editor->outputNodeId())
         return err("conflict", QStringLiteral("Output node cannot be removed while the graph has other nodes"));
     editor->removeNode(id);
-    if (editor->hasGraphNode(id))
+    if (editor->hasNode(id))
         return err("conflict", QStringLiteral("Could not remove node"));
     m_window->mcpBumpRevision();
     return ok({{QStringLiteral("id"), QString::number(id)}});

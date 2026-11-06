@@ -18,8 +18,9 @@
 #include <optional>
 
 #include "core/sources/SourceDescriptor.h"
-#include "ui/nodes/AudioEffects.h"
-#include "ui/nodes/ProcessEffects.h"
+#include "core/project/OverlayItem.h"
+#include "core/graph/AudioEffects.h"
+#include "core/graph/ProcessEffects.h"
 
 using NodeId = quint64;
 using EdgeId = quint64;
@@ -202,6 +203,12 @@ public:
     NodeId deckAInput() const { return m_deckAInput; }
     NodeId deckBInput() const { return m_deckBInput; }
     QString sourceName(NodeId inputNodeId) const;
+    /// Input-node payload accessors (defaults for non-Input / unknown ids).
+    SourceDescriptor sourceDescriptor(NodeId inputNodeId) const;
+    ClipSettings clipSettings(NodeId inputNodeId) const;
+    bool clipRepeat(NodeId inputNodeId) const;
+    bool setSourceDescriptor(NodeId inputNodeId, const SourceDescriptor &desc);
+    bool setClipSettings(NodeId inputNodeId, const ClipSettings &settings);
 
     QVector<Port> inputPorts(NodeId id) const;
     QVector<Port> outputPorts(NodeId id) const;

@@ -1,5 +1,5 @@
 #include "ui/hotkeys/HotkeyManager.h"
-#include "ui/nodes/ClipNodeEditor.h"
+#include "core/graph/ClipGraph.h"
 #include "core/sources/SourceDescriptor.h"
 
 #include <QtTest>
@@ -12,19 +12,16 @@
 class TestHotkeys : public QObject {
     Q_OBJECT
 
-    QWidget *m_parent = nullptr;
-    ClipNodeEditor *m_editor = nullptr;
+    ClipGraph *m_graph = nullptr;
 
 private slots:
     void init() {
-        m_parent = new QWidget;
-        m_editor = new ClipNodeEditor(m_parent);
+        m_graph = new ClipGraph;
     }
 
     void cleanup() {
-        delete m_parent;
-        m_parent = nullptr;
-        m_editor = nullptr;
+        delete m_graph;
+        m_graph = nullptr;
     }
 
     // Two canvas inputs (ids 1, 2) wired into a 3-slot A/B Select (id 3),
@@ -80,11 +77,11 @@ private slots:
     }
 
     void syncAssignsKeysToSwitcherInputs() {
-        m_editor->restoreState(makeGraph());
-        const QVector<AbSlotInfo> inputs = m_editor->abSelectInputs();
+        QVERIFY(m_graph->fromJson(makeGraph()));
+        const QVector<ClipGraph::AbSlotInfo> inputs = m_graph->abSelectInputs();
         QCOMPARE(inputs.size(), 2);
 
-        HotkeyManager mgr(m_parent, m_editor);
+        HotkeyManager mgr(m_graph);
         mgr.syncWithGraph();
 
         const Qt::Key k1 = mgr.bindingForSlot(inputs[0].ref);
@@ -94,8 +91,8 @@ private slots:
         QVERIFY(k1 != k2);
         QVERIFY(mgr.slotForKey(k1) == inputs[0].ref);
 
-        QCOMPARE(m_editor->abSlotHotkeyLabel(inputs[0].ref), QKeySequence(k1).toString());
-        QCOMPARE(m_editor->abSlotHotkeyLabel(inputs[1].ref), QKeySequence(k2).toString());
+        QCOMPARE(m_graph->abSlotHotkeyLabel(inputs[0].ref), QKeySequence(k1).toString());
+        QCOMPARE(m_graph->abSlotHotkeyLabel(inputs[1].ref), QKeySequence(k2).toString());
 
         // A key taken by another input is rejected.
         QVERIFY(!mgr.setBinding(inputs[0].ref, k2));
@@ -107,23 +104,23 @@ private slots:
     }
 
     void triggerAbSlotAssignsDecks() {
-        m_editor->restoreState(makeGraph());
-        const QVector<AbSlotInfo> inputs = m_editor->abSelectInputs();
+        QVERIFY(m_graph->fromJson(makeGraph()));
+        const QVector<ClipGraph::AbSlotInfo> inputs = m_graph->abSelectInputs();
         QCOMPARE(inputs.size(), 2);
 
-        QVERIFY(m_editor->triggerAbSlot(inputs[0].ref, true));
-        QCOMPARE(m_editor->deckAInput(), inputs[0].producer);
-        QVERIFY(m_editor->triggerAbSlot(inputs[1].ref, false));
-        QCOMPARE(m_editor->deckBInput(), inputs[1].producer);
+        QVERIFY(m_graph->triggerAbSlot(inputs[0].ref, true));
+        QCOMPARE(m_graph->deckAInput(), inputs[0].producer);
+        QVERIFY(m_graph->triggerAbSlot(inputs[1].ref, false));
+        QCOMPARE(m_graph->deckBInput(), inputs[1].producer);
 
-        QVERIFY(!m_editor->triggerAbSlot(AbSlotRef{999, 0}, true));
+        QVERIFY(!m_graph->triggerAbSlot(ClipGraph::AbSlotRef{999, 0}, true));
     }
 
     void restoreMapsLegacyClipBindings() {
-        m_editor->restoreState(makeGraph());
-        const QVector<AbSlotInfo> inputs = m_editor->abSelectInputs();
+        QVERIFY(m_graph->fromJson(makeGraph()));
+        const QVector<ClipGraph::AbSlotInfo> inputs = m_graph->abSelectInputs();
 
-        HotkeyManager mgr(m_parent, m_editor);
+        HotkeyManager mgr(m_graph);
         QJsonArray legacy;
         legacy.append(QJsonObject{{"nodeId", 1}, {"key", (int)Qt::Key_G}});
         mgr.restoreHotkeys(legacy);
@@ -141,10 +138,10 @@ private slots:
     }
 
     void exportImportProfile() {
-        m_editor->restoreState(makeGraph());
-        const QVector<AbSlotInfo> inputs = m_editor->abSelectInputs();
+        QVERIFY(m_graph->fromJson(makeGraph()));
+        const QVector<ClipGraph::AbSlotInfo> inputs = m_graph->abSelectInputs();
 
-        HotkeyManager mgr(m_parent, m_editor);
+        HotkeyManager mgr(m_graph);
         mgr.syncWithGraph();
         const Qt::Key key = mgr.bindingForSlot(inputs[0].ref);
         QVERIFY(HotkeyManager::isBindableKey(key));
@@ -158,24 +155,24 @@ private slots:
     }
 
     void mainWindowOrderShowsLabelsOnGraphRestore() {
-        HotkeyManager mgr(m_parent, m_editor);
-        connect(m_editor, &ClipNodeEditor::clipChainChanged, &mgr, &HotkeyManager::syncWithGraph);
-        m_editor->restoreState(makeGraph());
+        HotkeyManager mgr(m_graph);
+        connect(m_graph, &ClipGraph::changed, &mgr, &HotkeyManager::syncWithGraph);
+        QVERIFY(m_graph->fromJson(makeGraph()));
 
-        const QVector<AbSlotInfo> inputs = m_editor->abSelectInputs();
+        const QVector<ClipGraph::AbSlotInfo> inputs = m_graph->abSelectInputs();
         QCOMPARE(inputs.size(), 2);
-        for (const AbSlotInfo &info : inputs) {
+        for (const ClipGraph::AbSlotInfo &info : inputs) {
             const Qt::Key key = mgr.bindingForSlot(info.ref);
             QVERIFY(HotkeyManager::isBindableKey(key));
-            QCOMPARE(m_editor->abSlotHotkeyLabel(info.ref), QKeySequence(key).toString());
+            QCOMPARE(m_graph->abSlotHotkeyLabel(info.ref), QKeySequence(key).toString());
         }
     }
 
     void sessionJsonRoundTrip() {
-        m_editor->restoreState(makeGraph());
-        const QVector<AbSlotInfo> inputs = m_editor->abSelectInputs();
+        QVERIFY(m_graph->fromJson(makeGraph()));
+        const QVector<ClipGraph::AbSlotInfo> inputs = m_graph->abSelectInputs();
 
-        HotkeyManager mgr(m_parent, m_editor);
+        HotkeyManager mgr(m_graph);
         QVERIFY(mgr.setBinding(inputs[0].ref, Qt::Key_5));
         QVERIFY(mgr.setBinding(inputs[1].ref, Qt::Key_K));
 

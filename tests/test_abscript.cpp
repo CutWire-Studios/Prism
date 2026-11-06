@@ -1,4 +1,5 @@
-#include "ui/nodes/ClipNodeEditor.h"
+#include "core/graph/ClipGraph.h"
+#include "app/graph/GraphRuntime.h"
 #include "core/sources/SourceDescriptor.h"
 
 #include <QtTest>
@@ -11,19 +12,20 @@
 class TestAbScript : public QObject {
     Q_OBJECT
 
-    QWidget *m_parent = nullptr;
-    ClipNodeEditor *m_editor = nullptr;
+    ClipGraph *m_graph = nullptr;
+    GraphRuntime *m_runtime = nullptr;
 
 private slots:
     void init() {
-        m_parent = new QWidget;
-        m_editor = new ClipNodeEditor(m_parent);
+        m_graph = new ClipGraph;
+        m_runtime = new GraphRuntime(m_graph);
     }
 
     void cleanup() {
-        delete m_parent;
-        m_parent = nullptr;
-        m_editor = nullptr;
+        delete m_runtime;
+        delete m_graph;
+        m_runtime = nullptr;
+        m_graph = nullptr;
     }
 
     // Clip(1) --slot0--\                                   Script(4) --dataIn--\
@@ -62,7 +64,7 @@ private slots:
             c["kind"] = kind; c["toPortIndex"] = toPortIndex;
             return c;
         };
-        // Chain=0, ScriptToData=6, AbToOutput=8 (ConnectionItem::EdgeKind).
+        // Chain=0, ScriptToData=6, AbToOutput=8 (ClipGraph::EdgeKind).
         QJsonArray connections{
             conn(1, 3, 0, 0),
             conn(2, 3, 0, 1),
@@ -81,20 +83,20 @@ private slots:
     }
 
     void scriptDrivesDeckAssignment() {
-        m_editor->restoreState(makeGraph(
-            "return { a = \"Camera A\", b = \"Camera B\" }"));
+        QVERIFY(m_graph->fromJson(makeGraph(
+            "return { a = \"Camera A\", b = \"Camera B\" }")));
 
         // Script runs OnStart on its own thread, then the editor's poll timer
         // (100ms) applies the result; give both a generous window.
-        QTRY_COMPARE_WITH_TIMEOUT(m_editor->deckAInput(), (NodeId)1, 3000);
-        QCOMPARE(m_editor->deckBInput(), (NodeId)2);
+        QTRY_COMPARE_WITH_TIMEOUT(m_graph->deckAInput(), NodeId(1), 3000);
+        QCOMPARE(m_graph->deckBInput(), NodeId(2));
     }
 
     void scriptResolvesSlotsByOneBasedIndex() {
-        m_editor->restoreState(makeGraph("return { a = 2, b = 1 }"));
+        QVERIFY(m_graph->fromJson(makeGraph("return { a = 2, b = 1 }")));
 
-        QTRY_COMPARE_WITH_TIMEOUT(m_editor->deckAInput(), (NodeId)2, 3000);
-        QCOMPARE(m_editor->deckBInput(), (NodeId)1);
+        QTRY_COMPARE_WITH_TIMEOUT(m_graph->deckAInput(), NodeId(2), 3000);
+        QCOMPARE(m_graph->deckBInput(), NodeId(1));
     }
 };
 

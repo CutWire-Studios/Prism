@@ -3,7 +3,7 @@
 #include "core/media/HwAccel.h"
 #include "core/sources/ImageSource.h"
 #include "core/sources/VideoFileSource.h"
-#include "ui/transitions/Transition.h"
+#include "app/transitions/Transition.h"
 #include <QCoreApplication>
 #include <QEvent>
 #include <QOpenGLContext>

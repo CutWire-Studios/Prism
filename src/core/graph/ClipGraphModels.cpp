@@ -1,5 +1,6 @@
 #include "core/graph/ClipGraphModels.h"
 
+#include <QJsonArray>
 #include <QUndoCommand>
 
 namespace {
@@ -46,6 +47,37 @@ private:
     NodeId m_id;
     QPointF m_from;
     QPointF m_to;
+    const bool *m_mergeFlag;
+};
+
+class MultiMoveCommand : public QUndoCommand {
+public:
+    struct Entry { NodeId id; QPointF from; QPointF to; };
+
+    MultiMoveCommand(ClipGraph *graph, const QVector<Entry> &entries, const bool *mergeFlag)
+        : QUndoCommand(QStringLiteral("Move nodes")), m_graph(graph), m_entries(entries),
+          m_mergeFlag(mergeFlag) {}
+
+    int id() const override { return 2; }
+    void undo() override {
+        for (const Entry &e : std::as_const(m_entries)) m_graph->moveNode(e.id, e.from);
+    }
+    void redo() override {
+        for (const Entry &e : std::as_const(m_entries)) m_graph->moveNode(e.id, e.to);
+    }
+    bool mergeWith(const QUndoCommand *other) override {
+        if (!*m_mergeFlag || other->id() != id()) return false;
+        const auto *o = static_cast<const MultiMoveCommand *>(other);
+        if (o->m_entries.size() != m_entries.size()) return false;
+        for (qsizetype i = 0; i < m_entries.size(); ++i)
+            if (m_entries[i].id != o->m_entries[i].id) return false;
+        for (qsizetype i = 0; i < m_entries.size(); ++i) m_entries[i].to = o->m_entries[i].to;
+        return true;
+    }
+
+private:
+    ClipGraph *m_graph;
+    QVector<Entry> m_entries;
     const bool *m_mergeFlag;
 };
 
@@ -259,6 +291,11 @@ void ClipGraphController::init() {
         if (m_selection.remove(id)) emit selectionChanged();
         if (m_pending.node == id) cancelConnection();
     });
+    auto bump = [this] { ++m_revision; emit revisionChanged(); };
+    connect(m_graph, &ClipGraph::changed, this, bump);
+    connect(m_graph, &ClipGraph::deckAChanged, this, bump);
+    connect(m_graph, &ClipGraph::deckBChanged, this, bump);
+    connect(m_graph, &ClipGraph::graphReset, this, bump);
 }
 
 void ClipGraphController::pushSnapshot(const QString &text, const QJsonObject &before) {
@@ -389,4 +426,81 @@ void ClipGraphController::redo() {
 
 void ClipGraphController::clearHistory() {
     m_undo.clear();
+}
+
+void ClipGraphController::selectAll() {
+    QSet<NodeId> next;
+    for (NodeId id : m_graph->nodeIds()) next.insert(id);
+    if (next == m_selection) return;
+    m_selection = next;
+    emit selectionChanged();
+}
+
+void ClipGraphController::moveNodes(const QVariantList &ids, const QVariantList &coords) {
+    QVector<MultiMoveCommand::Entry> entries;
+    for (qsizetype i = 0; i < ids.size() && i * 2 + 1 < coords.size(); ++i) {
+        const NodeId id = ids[i].toULongLong();
+        const ClipGraph::Node *n = m_graph->node(id);
+        if (!n) continue;
+        const QPointF to(coords[i * 2].toReal(), coords[i * 2 + 1].toReal());
+        if (n->pos != to) entries.append({id, n->pos, to});
+    }
+    if (entries.isEmpty()) return;
+    m_undo.push(new MultiMoveCommand(m_graph, entries, &m_mergeMoves));
+    m_mergeMoves = true;
+}
+
+bool ClipGraphController::swapSlots(quint64 id, int a, int b) {
+    const ClipGraph::Node *n = m_graph->node(id);
+    if (!n || a == b || a < 0 || b < 0) return false;
+    const char *key = nullptr;
+    switch (n->type) {
+    case ClipGraph::NodeType::Layer:      key = "layerNodes"; break;
+    case ClipGraph::NodeType::AbSelect:   key = "abSelectNodes"; break;
+    case ClipGraph::NodeType::AudioMixer: key = "audioMixerNodes"; break;
+    default: return false;
+    }
+    const QJsonObject before = m_graph->toJson();
+    QJsonObject state = before;
+    QJsonArray nodes = state[key].toArray();
+    bool swapped = false;
+    for (qsizetype i = 0; i < nodes.size(); ++i) {
+        QJsonObject o = nodes[i].toObject();
+        if (quint64(o["id"].toInteger()) != id) continue;
+        QJsonArray slotList = o["slots"].toArray();
+        if (a >= slotList.size() || b >= slotList.size()) return false;
+        const QJsonValue tmp = slotList[a];
+        slotList[a] = slotList[b];
+        slotList[b] = tmp;
+        o["slots"] = slotList;
+        nodes[i] = o;
+        swapped = true;
+        break;
+    }
+    if (!swapped) return false;
+    state[key] = nodes;
+    QJsonArray conns = state["connections"].toArray();
+    for (qsizetype i = 0; i < conns.size(); ++i) {
+        QJsonObject c = conns[i].toObject();
+        if (quint64(c["to"].toInteger()) != id) continue;
+        const int port = c["toPortIndex"].toInt(-1);
+        if (port == a) c["toPortIndex"] = b;
+        else if (port == b) c["toPortIndex"] = a;
+        else continue;
+        conns[i] = c;
+    }
+    state["connections"] = conns;
+    m_graph->fromJson(state);
+    pushSnapshot(QStringLiteral("Reorder"), before);
+    return true;
+}
+
+bool ClipGraphController::triggerAbSlot(quint64 node, int slot, bool deckA) {
+    return m_graph->triggerAbSlot({node, slot}, deckA);
+}
+
+QVariantMap ClipGraphController::abState(quint64 node) const {
+    int a = -1, b = -1;
+    m_graph->abDeckSlots(node, a, b);
+    return {{"a", a}, {"b", b}, {"outputConnected", m_graph->abOutputConnected(node)}};
 }

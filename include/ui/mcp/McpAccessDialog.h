@@ -3,7 +3,7 @@
 #include <QDialog>
 #include <QPointer>
 
-class MainWindow;
+class AppController;
 class QCheckBox;
 class QLabel;
 class QLineEdit;
@@ -13,7 +13,7 @@ class QWidget;
 class McpAccessDialog : public QDialog {
     Q_OBJECT
 public:
-    explicit McpAccessDialog(MainWindow *window, QWidget *parent = nullptr);
+    explicit McpAccessDialog(AppController *window, QWidget *parent = nullptr);
 
 private slots:
     void refresh();
@@ -24,7 +24,7 @@ private slots:
     void copyGuide();
 
 private:
-    QPointer<MainWindow> m_window;
+    QPointer<AppController> m_window;
     QCheckBox *m_enable = nullptr;
     QLabel *m_status = nullptr;
     QLabel *m_error = nullptr;

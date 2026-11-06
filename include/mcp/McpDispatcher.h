@@ -3,14 +3,14 @@
 #include <QJsonObject>
 #include <QString>
 
-class MainWindow;
+class AppController;
 
 namespace prism::mcp {
 
 class McpDispatcher
 {
 public:
-    explicit McpDispatcher(MainWindow *window);
+    explicit McpDispatcher(AppController *app);
 
     QJsonObject inspect(const QJsonObject &args) const;
     QJsonObject apply(const QJsonObject &args);
@@ -57,7 +57,7 @@ private:
     QJsonObject opSetProcessParams(const QJsonObject &args);
     QJsonObject opRemoveNode(const QJsonObject &args);
 
-    MainWindow *m_window = nullptr;
+    AppController *m_window = nullptr;
 };
 
 } // namespace prism::mcp

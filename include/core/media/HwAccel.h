@@ -4,11 +4,14 @@
 #include <QList>
 #include <QString>
 
+#include <functional>
+
 extern "C" {
 #include <libavcodec/codec_id.h>
 #include <libavutil/hwcontext.h>
 #include <libavutil/pixfmt.h>
 struct AVCodec;
+struct AVFrame;
 }
 
 // Hardware video device selection, shared by the preview decoder, the recorder and the
@@ -89,8 +92,11 @@ Backend backendFromId(const QString &id);
 const char *scaleFilter(Backend backend);
 
 // Cached: creating a device context is expensive, and the answer cannot change while the
-// process runs.
+// process runs. The first form asks deviceString() which device to open — the decode answer,
+// which on Windows means the adapter OpenGL draws on. Encoders want a different adapter, so
+// they pass their own string; the cache is keyed on both, so the two do not collide.
 bool deviceAvailable(AVHWDeviceType type);
+bool deviceAvailable(AVHWDeviceType type, const QByteArray &device);
 
 // PRISM_NO_HWACCEL is the escape hatch for a driver that decodes garbage or crashes.
 bool disabledByEnv();
@@ -99,5 +105,35 @@ bool disabledByEnv();
 // preferred software decoder, which for AV1 is libdav1d — it has no hardware config at
 // all, so looking at that codec alone would skip hardware the native `av1` decoder drives.
 const AVCodec *findDecoder(AVCodecID codecId, AVHWDeviceType type, AVPixelFormat *pixFmt);
+
+// vaSyncSurface on a VAAPI frame; a no-op for anything else. Call it on the thread that owns the
+// decoder or VPP graph that wrote the surface, while that context is still alive: iHD's status
+// check dereferences the last context to touch the surface, and nothing clears that pointer when
+// the context is destroyed — so a sync after a seek tore the decoder down is a use-after-free.
+void syncVaapiFrame(const AVFrame *frame);
+
+// Hardware acceleration that was asked for and did not work, reported by the decoder and the
+// recorder so the shell can offer to turn it off (app/gpu/GpuStatus). The text is raw driver
+// output, never translated.
+struct AccelerationFailure
+{
+    enum class Stage { None, Decode, Encode };
+
+    Stage stage = Stage::None;
+    QString backend; // display name: "NVDEC", "VAAPI", "NVIDIA NVENC"...
+    QString detail;
+    quint64 serial = 0; // 0 means nothing has failed yet
+
+    bool isValid() const { return serial != 0; }
+};
+
+// Thread-safe; callable from decoder and encoder threads. Stores the report as lastFailure() and
+// calls the listener, if one is set, on the calling thread.
+void reportFailure(AccelerationFailure::Stage stage, const QString &backend, const QString &detail);
+AccelerationFailure lastFailure();
+
+// One listener, for the GUI-side status object; an empty function clears it. Failures that came
+// in before it was set are still there in lastFailure().
+void setFailureListener(std::function<void()> listener);
 
 } // namespace prism::hwaccel

@@ -1,7 +1,7 @@
 #include "ui/remote/OscServer.h"
 
-#include "ui/mainwindow/MainWindow.h"
-#include "ui/transitions/TransitionController.h"
+#include "app/AppController.h"
+#include "app/transitions/TransitionController.h"
 
 #include <QHostInfo>
 #include <QNetworkDatagram>
@@ -39,7 +39,7 @@ bool isFloat(const QVariant &v)
 
 } // namespace
 
-OscServer::OscServer(MainWindow *mainWindow, QObject *parent)
+OscServer::OscServer(AppController *mainWindow, QObject *parent)
     : QObject(parent), m_mainWindow(mainWindow)
 {
     m_pollTimer = new QTimer(this);
@@ -127,10 +127,10 @@ void OscServer::dispatch(const OscProtocol::OscMessage &msg)
         handleDeck(cmd == QLatin1String("a"), parts.at(2), args);
     } else if (parts.size() == 2 && cmd == QLatin1String("cut")) {
         if (transition)
-            transition->onCutTransitionClicked();
+            transition->cutTransition();
     } else if (parts.size() == 2 && cmd == QLatin1String("auto")) {
         if (transition)
-            transition->onAutoTransitionClicked();
+            transition->autoTransition();
     } else if (parts.size() == 2 && cmd == QLatin1String("fader")) {
         if (!args.isEmpty() && isNumber(args.first())) {
             const double v = args.first().toDouble();
@@ -160,10 +160,10 @@ void OscServer::dispatch(const OscProtocol::OscMessage &msg)
 void OscServer::handleDeck(bool deckA, const QString &cmd, const QVariantList &args)
 {
     if (cmd == QLatin1String("slot")) {
-        ClipNodeEditor *editor = m_mainWindow->clipNodeEditor();
+        ClipGraph *editor = m_mainWindow->clipGraph();
         if (!editor || args.isEmpty() || !isNumber(args.first()))
             return;
-        const QVector<AbSlotInfo> inputs = editor->abSelectInputs();
+        const QVector<ClipGraph::AbSlotInfo> inputs = editor->abSelectInputs();
         const int index = args.first().toInt() - 1;
         if (index >= 0 && index < inputs.size())
             editor->triggerAbSlot(inputs.at(index).ref, deckA);
@@ -194,7 +194,7 @@ OscServer::State OscServer::captureState() const
         s.duration = transition->currentDurationSecs();
     }
 
-    ClipNodeEditor *editor = m_mainWindow->clipNodeEditor();
+    ClipGraph *editor = m_mainWindow->clipGraph();
     if (!editor)
         return s;
     s.a.input = editor->deckAInput();
@@ -210,7 +210,7 @@ OscServer::State OscServer::captureState() const
         return s;
 
     // abSelectInputs() resolves every slot's stream, so only walk it when a deck input changed.
-    const QVector<AbSlotInfo> inputs = editor->abSelectInputs();
+    const QVector<ClipGraph::AbSlotInfo> inputs = editor->abSelectInputs();
     auto resolve = [&](Deck &deck) {
         deck.slot = 0;
         deck.name.clear();
@@ -221,8 +221,8 @@ OscServer::State OscServer::captureState() const
                 return;
             }
         }
-        if (ClipNodeModel *node = editor->nodeAt(deck.input))
-            deck.name = node->sourceName();
+        if (editor->hasNode(deck.input))
+            deck.name = editor->sourceName(deck.input);
     };
     if (aChanged) resolve(s.a);
     if (bChanged) resolve(s.b);

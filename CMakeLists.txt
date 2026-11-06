@@ -367,32 +367,17 @@ set(SOURCES
     src/core/webrtc/FirewallUtils.cpp
     src/core/webrtc/WebRtcManager.cpp
     src/core/sources/WebRtcSource.cpp
-    src/ui/mainwindow/MainWindow.cpp
-    src/ui/mainwindow/GetStartedDialog.cpp
-    src/ui/canvas/VideoWidget.cpp
-    src/ui/transitions/Transition.cpp
-    src/ui/nodes/ClipCard.cpp
-    src/ui/nodes/ClipNodeModel.cpp
-    src/ui/nodes/ClipNodeEditor.cpp
+    src/app/transitions/Transition.cpp
     src/core/graph/ClipGraph.cpp
     src/core/graph/ClipGraphModels.cpp
-    src/ui/nodes/ProcessEffects.cpp
-    src/ui/nodes/AudioEffects.cpp
-    src/ui/nodes/PedalboardDialog.cpp
+    src/app/graph/GraphRuntime.cpp
+    src/core/graph/ProcessEffects.cpp
+    src/core/graph/AudioEffects.cpp
     src/ui/common/AssetLibrary.cpp
-    src/ui/nodes/ClipEditDialog.cpp
-    src/ui/canvas/CropSelectorWidget.cpp
-    src/ui/canvas/PerspectiveSelectorWidget.cpp
-    src/ui/canvas/PolygonSelectorWidget.cpp
-    src/ui/canvas/TransformCanvasWidget.cpp
-    src/ui/canvas/TransformEditorDialog.cpp
-    src/ui/output/OutputWindow.cpp
-    src/ui/output/ProgramMirrorWidget.cpp
-    src/ui/output/MirrorOutputWindow.cpp
-    src/ui/output/OutputHub.cpp
-    src/ui/output/NdiProgramSink.cpp
-    src/ui/output/VirtualCameraProgramSink.cpp
-    src/ui/output/FrameCaptureHelper.cpp
+    src/app/output/OutputHub.cpp
+    src/app/output/NdiProgramSink.cpp
+    src/app/output/VirtualCameraProgramSink.cpp
+    src/app/output/FrameCaptureHelper.cpp
     src/ui/obs/ObsWebSocketClient.cpp
     src/ui/obs/ObsIntegration.cpp
     src/ui/recording/ProgramRecorder.cpp
@@ -409,8 +394,7 @@ set(SOURCES
     src/ui/editors/style/EffectParamsEditor.cpp
     src/ui/editors/style/ShadingLayerStackEditor.cpp
     # Extracted helper / controller classes
-    src/ui/common/ThumbHelper.cpp
-    src/ui/common/PreferencesDialog.cpp
+    src/app/common/ThumbHelper.cpp
     src/ui/common/CodeHighlighter.cpp
     src/ui/common/CameraEnumerator.cpp
     src/ui/common/AudioLoopbackEnumerator.cpp
@@ -419,27 +403,17 @@ set(SOURCES
     src/ui/common/Theme.cpp
     src/ui/hotkeys/HotkeyManager.cpp
     src/ui/hotkeys/HotkeyEditorDialog.cpp
-    src/ui/session/SessionManager.cpp
-    src/ui/session/SessionRecoveryDialog.cpp
-    src/ui/transitions/TransitionController.cpp
-    src/ui/mainwindow/DeckController.cpp
-    src/ui/mainwindow/SourceFactory.cpp
-    src/ui/mainwindow/SourcePrompt.cpp
-    src/ui/mainwindow/PrismSplashScreen.cpp
+    src/app/session/SessionManager.cpp
+    src/app/transitions/TransitionController.cpp
+    src/app/mainwindow/DeckController.cpp
+    src/app/mainwindow/SourceFactory.cpp
     src/ui/remote/OscProtocol.cpp
-    src/ui/remote/OscServer.cpp
-    src/ui/remote/OscSettingsDialog.cpp
-    src/ui/remote/RemoteControlServer.cpp
     src/ui/remote/RemoteProtocol.cpp
     src/ui/mainwindow/MainWindowUtils.cpp
-    src/ui/remote/RemoteServerDialog.cpp
-    src/ui/mcp/McpAccessDialog.cpp
     src/mcp/McpSession.cpp
     src/mcp/McpHttp.cpp
     src/mcp/McpProtocol.cpp
     src/mcp/McpCatalog.cpp
-    src/mcp/McpDispatcher.cpp
-    src/mcp/McpServer.cpp
     src/mcp/McpStdio.cpp
     src/ui/common/QrCodeHelper.cpp
     src/core/platform/MacPermissions.cpp
@@ -450,23 +424,23 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND SOURCES
         src/core/sources/ScreenSource_linux.cpp
         src/core/media/AudioLoopbackCapture_gst_linux.cpp
-        src/ui/output/VirtualCameraProgramSink_linux.cpp)
+        src/app/output/VirtualCameraProgramSink_linux.cpp)
 elseif(WIN32)
     list(APPEND SOURCES
         src/core/media/D3d11GlInterop.cpp
         src/core/sources/ScreenSource_qt.cpp
-        src/ui/output/VirtualCameraProgramSink_win.cpp
+        src/app/output/VirtualCameraProgramSink_win.cpp
         src/core/media/AudioLoopbackCapture_wasapi_win.cpp)
 elseif(APPLE)
     # macOS: Qt QScreenCapture/QWindowCapture for screen+window capture; no
     # built-in virtual-camera loopback (would need a signed Camera Extension).
     list(APPEND SOURCES
         src/core/sources/ScreenSource_qt.cpp
-        src/ui/output/VirtualCameraProgramSink_mac.cpp)
+        src/app/output/VirtualCameraProgramSink_mac.cpp)
 else()
     list(APPEND SOURCES
         src/core/sources/ScreenSource_qt.cpp
-        src/ui/output/VirtualCameraProgramSink_win.cpp)
+        src/app/output/VirtualCameraProgramSink_win.cpp)
 endif()
 
 if(PRISM_HAVE_SEGMENTATION)
@@ -485,7 +459,6 @@ set(HEADERS
     include/core/media/GpuDevice.h
     include/core/media/GpuVideoUploader.h
     include/core/media/VideoDecoder.h
-    include/ui/common/PreferencesDialog.h
     include/core/sources/VideoFileSource.h
     include/core/media/AudioDecoder.h
     include/core/media/AudioEffectChain.h
@@ -528,42 +501,26 @@ set(HEADERS
     include/core/webrtc/FirewallUtils.h
     include/core/webrtc/WebRtcManager.h
     include/core/sources/WebRtcSource.h
-    include/ui/mainwindow/MainWindow.h
-    include/ui/mainwindow/GetStartedDialog.h
     include/core/render/Compositor.h
-    include/ui/canvas/VideoWidget.h
-    include/ui/transitions/Transition.h
-    include/ui/nodes/ClipCard.h
-    include/ui/nodes/ClipNodeModel.h
-    include/ui/nodes/ClipNodeEditor.h
+    include/app/transitions/Transition.h
     include/core/graph/ClipGraph.h
     include/core/graph/ClipGraphModels.h
-    include/ui/nodes/ProcessEffects.h
-    include/ui/nodes/AudioEffects.h
-    include/ui/nodes/PedalboardDialog.h
+    include/app/graph/GraphRuntime.h
+    include/core/graph/ProcessEffects.h
+    include/core/graph/AudioEffects.h
     include/ui/common/AssetLibrary.h
-    include/ui/nodes/ClipEditDialog.h
-    include/ui/canvas/CanvasGeometry.h
-    include/ui/canvas/CropSelectorWidget.h
-    include/ui/canvas/PerspectiveSelectorWidget.h
-    include/ui/canvas/PolygonSelectorWidget.h
-    include/ui/canvas/TransformCanvasWidget.h
-    include/ui/canvas/TransformEditorDialog.h
-    include/ui/output/OutputWindow.h
-    include/ui/output/ProgramMirrorWidget.h
-    include/ui/output/MirrorOutputWindow.h
-    include/ui/output/OutputHub.h
-    include/ui/output/ProgramFrameSource.h
-    include/ui/output/NdiProgramSink.h
-    include/ui/output/VirtualCameraProgramSink.h
-    include/ui/output/FrameCaptureHelper.h
+    include/app/output/OutputHub.h
+    include/app/output/ProgramFrameSource.h
+    include/app/output/NdiProgramSink.h
+    include/app/output/VirtualCameraProgramSink.h
+    include/app/output/FrameCaptureHelper.h
     include/ui/obs/ObsWebSocketClient.h
     include/ui/obs/ObsIntegration.h
     include/ui/recording/ProgramRecorder.h
     include/ui/recording/ProgramAudioRecorder.h
     include/ui/recording/RecordingOptions.h
     include/ui/recording/RecordingSettingsDialog.h
-    include/ui/output/ProgramOutputSink.h
+    include/app/output/ProgramOutputSink.h
     include/ui/editors/ShaderEditDialog.h
     include/ui/editors/ScriptEditDialog.h
     include/ui/editors/SvgTemplateDialog.h
@@ -574,7 +531,7 @@ set(HEADERS
     include/ui/editors/style/EffectParamsEditor.h
     include/ui/editors/style/ShadingLayerStackEditor.h
     # Extracted helper / controller headers
-    include/ui/common/ThumbHelper.h
+    include/app/common/ThumbHelper.h
     include/ui/common/CameraEnumerator.h
     include/ui/common/AudioLoopbackEnumerator.h
     include/ui/common/CapturePicker.h
@@ -582,28 +539,18 @@ set(HEADERS
     include/ui/common/Theme.h
     include/ui/hotkeys/HotkeyManager.h
     include/ui/hotkeys/HotkeyEditorDialog.h
-    include/ui/session/SessionManager.h
-    include/ui/session/SessionRecoveryDialog.h
-    include/ui/transitions/TransitionController.h
-    include/ui/mainwindow/DeckController.h
-    include/ui/mainwindow/SourceFactory.h
-    include/ui/mainwindow/SourcePrompt.h
-    include/ui/mainwindow/PrismSplashScreen.h
+    include/app/session/SessionManager.h
+    include/app/transitions/TransitionController.h
+    include/app/mainwindow/DeckController.h
+    include/app/mainwindow/SourceFactory.h
     include/ui/remote/OscProtocol.h
-    include/ui/remote/OscServer.h
-    include/ui/remote/OscSettingsDialog.h
-    include/ui/remote/RemoteControlServer.h
     include/ui/remote/RemoteProtocol.h
     include/ui/mainwindow/MainWindowUtils.h
-    include/ui/remote/RemoteServerDialog.h
-    include/ui/mcp/McpAccessDialog.h
     include/mcp/McpJson.h
     include/mcp/McpSession.h
     include/mcp/McpHttp.h
     include/mcp/McpProtocol.h
     include/mcp/McpCatalog.h
-    include/mcp/McpDispatcher.h
-    include/mcp/McpServer.h
     include/mcp/McpStdio.h
     include/ui/common/QrCodeHelper.h
     include/core/platform/MacPermissions.h
@@ -641,16 +588,9 @@ if(PRISM_HAVE_SEGMENTATION)
 endif()
 
 set(UI_FILES
-    forms/MainWindow.ui
-    forms/ClipCard.ui
-    forms/ClipEditDialog.ui
-    forms/OutputWindow.ui
     forms/ShaderEditDialog.ui
     forms/ScriptEditDialog.ui
     forms/SvgTemplateDialog.ui
-    # New dialog UI files extracted from inline widget construction
-    forms/ContextNodeDialog.ui
-    forms/AudioNodeDialog.ui
 )
 
 # Audio effect DSP. JUCE modules compile into whatever target links them, so they live in a library
@@ -754,6 +694,7 @@ target_link_libraries(prism_core PUBLIC
     Qt6::Multimedia
     Qt6::Network
     Qt6::Qml
+    Qt6::Quick
     re2::re2
     ${FFMPEG_LIBRARIES}
     kissfft::kissfft

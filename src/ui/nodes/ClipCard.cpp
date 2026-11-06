@@ -5,7 +5,7 @@
 #include "ui/editors/ShapeEditDialog.h"
 #include "ui/editors/SvgTemplateDialog.h"
 #include "ui/editors/TextEditDialog.h"
-#include "ui/common/ThumbHelper.h"
+#include "app/common/ThumbHelper.h"
 #include "ui/common/Icons.h"
 #include "ui/common/Theme.h"
 #include "ui/common/CameraEnumerator.h"

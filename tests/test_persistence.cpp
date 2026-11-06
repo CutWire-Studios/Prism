@@ -5,7 +5,7 @@
 #include "core/project/ClipManager.h"
 #include "core/sources/SourceDescriptor.h"
 #include "core/webrtc/NetworkUtils.h"
-#include "ui/session/SessionManager.h"
+#include "app/session/SessionManager.h"
 
 #include <QtTest>
 #include <QTemporaryDir>

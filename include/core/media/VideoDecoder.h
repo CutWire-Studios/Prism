@@ -105,6 +105,7 @@ private:
     bool openHardwareDecoderWith(prism::hwaccel::Backend backend);
     bool tryOpenHardwareDecoder();
     bool hardwareDecodeIsWorthIt() const;
+    static bool zeroCopyProven();
     void teardownDecoder();
     bool fallbackToSoftware(const QString &why);
     void recordHardwareFailure(const QString &what);

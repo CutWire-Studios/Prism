@@ -4,7 +4,7 @@
 #include <QString>
 #include <QVector>
 #include "core/audio/AudioRack.h"
-#include "ui/nodes/AudioEffects.h"
+#include "core/graph/AudioEffects.h"
 
 #include <memory>
 #include <vector>

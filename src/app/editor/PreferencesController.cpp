@@ -1,5 +1,10 @@
 #include "app/editor/PreferencesController.h"
 #include "app/GraphicsApiChoice.h"
+#include "app/gpu/GpuPreference.h"
+#include "core/media/HwAccel.h"
+#include "core/media/VideoDecoder.h"
+#include "core/sources/VideoFileSource.h"
+#include "ui/recording/ProgramRecorder.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -83,8 +88,13 @@ PreferencesController::PreferencesController(QObject *parent)
     : QObject(parent)
 {
     QSettings settings;
-    m_hardwareDecode = settings.value(QStringLiteral("decode/hardware"), true).toBool();
-    m_hardwareEncode = settings.value(QStringLiteral("export/hardware"), false).toBool();
+    const QString decodeMode = VideoDecoder::modeSetting();
+    m_hardwareDecode = decodeMode != QLatin1String("software");
+    if (decodeMode.startsWith(QLatin1String("hw:"))
+        && prism::hwaccel::backendFromId(decodeMode.mid(3)) != prism::hwaccel::Backend::None)
+        m_decodeBackend = decodeMode.mid(3);
+    m_hardwareEncode = ProgramRecorder::encoderSetting() != QLatin1String("software");
+    m_gpuPreference = prism::gpu::preferenceId(prism::gpu::storedPreference());
     m_uiGraphicsApi = prism::graphics::storedApi();
     m_autosaveIntervalSeconds =
         normalizedAutosaveInterval(settings.value(QStringLiteral("editor/autosaveIntervalSeconds"), 15).toInt());
@@ -115,14 +125,66 @@ void PreferencesController::clearDarkModePreference()
     emit darkModePreferenceChanged();
 }
 
+void PreferencesController::applyDecodeMode()
+{
+    const QString mode = !m_hardwareDecode ? QStringLiteral("software")
+        : m_decodeBackend == QLatin1String("auto") ? QStringLiteral("auto")
+                                                   : QStringLiteral("hw:") + m_decodeBackend;
+    if (mode == VideoDecoder::modeSetting())
+        return;
+    VideoDecoder::storeModeSetting(mode);
+    VideoDecoder::applyModeSetting(mode);
+    VideoFileSource::reopenAll();
+}
+
 void PreferencesController::setHardwareDecode(bool enabled)
 {
     if (m_hardwareDecode == enabled)
         return;
     m_hardwareDecode = enabled;
-    QSettings().setValue(QStringLiteral("decode/hardware"), m_hardwareDecode);
+    applyDecodeMode();
     emit hardwareDecodeChanged();
-    emit restartNoticeRequested(tr("Hardware decoding takes effect after you restart Prism."));
+}
+
+void PreferencesController::setDecodeBackend(const QString &id)
+{
+    const QString normalized = prism::hwaccel::backendFromId(id) == prism::hwaccel::Backend::None
+        ? QStringLiteral("auto") : id;
+    if (m_decodeBackend == normalized)
+        return;
+    m_decodeBackend = normalized;
+    applyDecodeMode();
+    emit hardwareDecodeChanged();
+}
+
+QVariantList PreferencesController::decodeBackends() const
+{
+    static const QVariantList backends = [] {
+        QVariantList list;
+        for (const prism::hwaccel::Backend backend : prism::hwaccel::availableDecodeBackends()) {
+            list.append(QVariantMap{
+                {QStringLiteral("id"), prism::hwaccel::id(backend)},
+                {QStringLiteral("label"), QString::fromLatin1(prism::hwaccel::name(backend))},
+            });
+        }
+        return list;
+    }();
+    return backends;
+}
+
+QString PreferencesController::decodeBackendWarning() const
+{
+    const prism::hwaccel::Backend backend = prism::hwaccel::backendFromId(m_decodeBackend);
+    if (!m_hardwareDecode || backend == prism::hwaccel::Backend::None)
+        return {};
+    const prism::hwaccel::RenderMatchInfo match = prism::hwaccel::describeRenderMatch(backend);
+    if (match.match != prism::hwaccel::RenderMatch::Mismatch)
+        return {};
+    return tr("%1 decodes on %2 while Prism draws on %3, so every frame crosses between GPUs. "
+              "Automatic avoids this.")
+        .arg(QString::fromLatin1(prism::hwaccel::name(backend)),
+             match.decodeGpu.isEmpty() ? tr("another GPU") : match.decodeGpu,
+             match.renderGpu.isEmpty() ? tr("this GPU") : match.renderGpu);
 }
 
 void PreferencesController::setHardwareEncode(bool enabled)
@@ -130,8 +192,31 @@ void PreferencesController::setHardwareEncode(bool enabled)
     if (m_hardwareEncode == enabled)
         return;
     m_hardwareEncode = enabled;
-    QSettings().setValue(QStringLiteral("export/hardware"), m_hardwareEncode);
+    ProgramRecorder::setEncoderSetting(enabled ? QStringLiteral("auto") : QStringLiteral("software"));
     emit hardwareEncodeChanged();
+}
+
+void PreferencesController::setGpuPreference(const QString &id)
+{
+    const prism::gpu::Preference preference = prism::gpu::preferenceFromId(id);
+    const QString normalized = prism::gpu::preferenceId(preference);
+    if (m_gpuPreference == normalized)
+        return;
+    m_gpuPreference = normalized;
+    prism::gpu::storePreference(preference);
+    emit gpuPreferenceChanged();
+    // Not conservative advice: the driver chose this process's GPU when it loaded.
+    emit restartNoticeRequested(tr("The graphics card choice takes effect after you restart Prism."));
+}
+
+bool PreferencesController::gpuPreferenceSupported() const
+{
+    return prism::gpu::preferenceSupported();
+}
+
+bool PreferencesController::gpuPreferenceInSystemSettings() const
+{
+    return prism::gpu::multipleAdapters() && prism::gpu::packagedApp();
 }
 
 void PreferencesController::setUiGraphicsApi(const QString &id)

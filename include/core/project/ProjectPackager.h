@@ -5,7 +5,7 @@
 #include <QStringList>
 #include <QVector>
 
-class ClipNodeModel;
+class ClipGraph;
 
 /// Bundles a CutWire Prism session and its media into a portable `.prism` ZIP archive.
 ///
@@ -33,7 +33,7 @@ public:
     static constexpr const char *kAssetsDirName  = "assets";
 
     static Report exportPackage(const QJsonObject &sessionJson,
-                                const QVector<ClipNodeModel *> &nodes,
+                                const ClipGraph &graph,
                                 const QString &outputPath);
 
     static ImportResult importPackage(const QString &packagePath,

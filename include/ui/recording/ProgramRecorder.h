@@ -15,8 +15,9 @@ struct SwsContext;
 struct AVFrame;
 struct AVPacket;
 
-/// Encodes the program compositor feed to disk via FFmpeg (H.264/MKV), on a hardware encoder
-/// where one is available and chosen, falling back to x264.
+/// Encodes the program compositor feed to disk via FFmpeg (H.264 by default; HEVC and AV1 on
+/// request; MKV by default, MP4 on request), on a hardware encoder where one is available and
+/// chosen, falling back through the other vendors to the software encoder for the codec.
 class ProgramRecorder : public QObject {
     Q_OBJECT
 
@@ -27,21 +28,44 @@ public:
     };
 
     struct EncoderOption {
-        QString id;     // settings value: "x264", "nvenc", "qsv", "amf", "vaapi"
+        QString id;     // settings value: "auto", "nvenc", "qsv", "amf", "vaapi", "videotoolbox",
+                        // "software"
         QString label;
     };
 
-    /// "auto" first, then the H.264 encoders that open on this machine.
-    static QList<EncoderOption> availableEncoders();
-    /// QSettings "recording/videoEncoder"; "auto" when unset.
+    struct CodecOption {
+        QString id;     // settings value: "h264", "hevc", "av1"
+        QString label;
+    };
+
+    /// "auto" first, then the encoders for `codec` that open on this machine, in fallback order
+    /// (NVENC, Quick Sync, AMF, VAAPI, VideoToolbox, software). An empty `codec` means
+    /// codecSetting().
+    static QList<EncoderOption> availableEncoders(const QString &codec = {});
+    /// QSettings "recording/videoEncoder"; "auto" when unset. The legacy id "x264" reads as
+    /// "software".
     static QString encoderSetting();
     static void setEncoderSetting(const QString &id);
+
+    /// The codecs this FFmpeg build has any encoder for, H.264 first.
+    static QList<CodecOption> availableCodecs();
+    /// QSettings "recording/videoCodec"; "h264" when unset or unknown.
+    static QString codecSetting();
+    static void setCodecSetting(const QString &id);
+
+    /// QSettings "recording/container": "mkv" (default) or "mp4".
+    static QString containerSetting();
+    static void setContainerSetting(const QString &id);
+    /// "mkv" or "mp4"; anything else is "mkv". Both carry H.264, HEVC and AV1. MKV is the default
+    /// because it survives a crash mid-recording; MP4 is written fragmented to approximate that.
+    static QString resolveContainer(const QString &requested);
 
     explicit ProgramRecorder(QObject *parent = nullptr);
     ~ProgramRecorder() override;
 
     static QString defaultOutputDir();
     static QString defaultOutputPath();
+    /// Extension follows the stored container choice (MKV unless the user picked MP4).
     static QString makeOutputPath(const QString &dir, const QString &stem, const QString &suffix);
 
     static QJsonDocument buildMarkersJson(const QString &videoPath, const QVector<Marker> &markers,
@@ -73,7 +97,7 @@ private:
     void writeMarkersFile() const;
     bool flushEncoder();
     bool openPipeline();
-    bool openEncoder(int encoderIndex);
+    bool openEncoder(int vendorIndex);
     bool sendFrame(AVFrame *frame);
 
     bool     m_recording = false;
@@ -93,7 +117,9 @@ private:
     AVPacket        *m_packet     = nullptr;
     AVBufferRef     *m_hwDevice   = nullptr;
     AVFrame         *m_hwFrame    = nullptr;   // upload target when the encoder takes GPU frames
-    QList<int>       m_candidates;             // indexes into the encoder table, in try order
+    QList<int>       m_candidates;             // indexes into the vendor table, in try order
+    int              m_codec      = 0;         // index of the codec this recording uses
+    bool             m_mp4        = false;
     int              m_candidate  = -1;
     QString          m_encoderLabel;
     int64_t          m_frameIndex = 0;

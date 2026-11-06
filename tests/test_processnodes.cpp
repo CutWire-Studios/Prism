@@ -1,6 +1,6 @@
-#include "ui/nodes/ClipNodeEditor.h"
-#include "ui/nodes/ProcessEffects.h"
-#include "ui/nodes/AudioEffects.h"
+#include "core/graph/ClipGraph.h"
+#include "core/graph/ProcessEffects.h"
+#include "core/graph/AudioEffects.h"
 #include "core/audio/AudioRack.h"
 #include "core/sources/SourceDescriptor.h"
 
@@ -11,19 +11,16 @@
 class TestProcessNodes : public QObject {
     Q_OBJECT
 
-    QWidget *m_parent = nullptr;
-    ClipNodeEditor *m_editor = nullptr;
+    ClipGraph *m_graph = nullptr;
 
 private slots:
     void init() {
-        m_parent = new QWidget;
-        m_editor = new ClipNodeEditor(m_parent);
+        m_graph = new ClipGraph;
     }
 
     void cleanup() {
-        delete m_parent;
-        m_parent = nullptr;
-        m_editor = nullptr;
+        delete m_graph;
+        m_graph = nullptr;
     }
 
     // Input(1) -> Crop(2) -> FlipH(3) -> Segment(4) -> Output(5), with the
@@ -76,10 +73,10 @@ private slots:
         return state;
     }
 
-    void verifyStream(const ResolvedStream &stream) {
+    void verifyStream(const ClipGraph::ResolvedStream &stream) {
         QCOMPARE(stream.layers.size(), 1);
-        const ResolvedLayer &l = stream.layers.first();
-        QCOMPARE(l.inputNodeId, (NodeId)1);
+        const ClipGraph::ResolvedLayer &l = stream.layers.first();
+        QCOMPARE(l.inputNodeId, NodeId(1));
         // Crop and Flip are now ordered decorator effects (not draw-time folds), so
         // the resolved layer keeps identity placement and records every effect, in
         // upstream→downstream order: Crop(0), FlipH(1), Segment(3).
@@ -99,13 +96,13 @@ private slots:
     }
 
     void legacyLoadAndFold() {
-        m_editor->restoreState(makeLegacyGraph());
-        verifyStream(m_editor->evaluateVideoInput(4));
+        QVERIFY(m_graph->fromJson(makeLegacyGraph()));
+        verifyStream(m_graph->evaluateVideoInput(4));
     }
 
     void saveWritesParamsAndLegacyMirror() {
-        m_editor->restoreState(makeLegacyGraph());
-        const QJsonObject saved = m_editor->saveState();
+        QVERIFY(m_graph->fromJson(makeLegacyGraph()));
+        const QJsonObject saved = m_graph->toJson();
         const QJsonArray procs = saved["processNodes"].toArray();
         QCOMPARE(procs.size(), 3);
 
@@ -123,14 +120,12 @@ private slots:
     }
 
     void newFormatRoundTrip() {
-        m_editor->restoreState(makeLegacyGraph());
-        const QJsonObject saved = m_editor->saveState();
+        QVERIFY(m_graph->fromJson(makeLegacyGraph()));
+        const QJsonObject saved = m_graph->toJson();
 
-        auto *parent2 = new QWidget;
-        auto *editor2 = new ClipNodeEditor(parent2);
-        editor2->restoreState(saved);
-        verifyStream(editor2->evaluateVideoInput(4));
-        delete parent2;
+        ClipGraph graph2;
+        QVERIFY(graph2.fromJson(saved));
+        verifyStream(graph2.evaluateVideoInput(4));
     }
 
     void unknownEffectIsSkipped() {
@@ -141,13 +136,13 @@ private slots:
         procs.replace(1, bogus);
         state["processNodes"] = procs;
 
-        m_editor->restoreState(state);
+        QVERIFY(m_graph->fromJson(state));
         // FlipH(3) is gone, so the chain is broken at node 3; evaluating the
         // remaining downstream Segment(4) yields no layers but must not crash.
-        const ResolvedStream broken = m_editor->evaluateVideoInput(4);
+        const ClipGraph::ResolvedStream broken = m_graph->evaluateVideoInput(4);
         QVERIFY(broken.layers.isEmpty());
         // The upstream part still evaluates.
-        const ResolvedStream upstream = m_editor->evaluateVideoInput(2);
+        const ClipGraph::ResolvedStream upstream = m_graph->evaluateVideoInput(2);
         QCOMPARE(upstream.layers.size(), 1);
         QCOMPARE(upstream.layers.first().sourceEffects.size(), 1);
         QCOMPARE(upstream.layers.first().sourceEffects.first().effectId, 0);
@@ -196,22 +191,22 @@ private slots:
         state["outputNode"] = QJsonObject{{"id", 5}};
         state["connections"] = QJsonArray{chain(1, 10, 0), chain(2, 10, 1), chain(10, 5, -1)};
 
-        m_editor->restoreState(state);
+        QVERIFY(m_graph->fromJson(state));
 
-        const ResolvedStream stream = m_editor->evaluateVideoInput(10);
+        const ClipGraph::ResolvedStream stream = m_graph->evaluateVideoInput(10);
         QCOMPARE(stream.layers.size(), 1);
-        const ResolvedLayer &l = stream.layers.first();
+        const ClipGraph::ResolvedLayer &l = stream.layers.first();
         QVERIFY(l.composite != nullptr);
-        QCOMPARE(l.layerNodeId, (NodeId)10);
+        QCOMPARE(l.layerNodeId, NodeId(10));
         QCOMPARE(stream.canvasWidth, 1920);
         QCOMPARE(stream.canvasHeight, 1080);
         QCOMPARE(l.composite->canvasWidth, 1920);
         QCOMPARE(l.composite->canvasHeight, 1080);
         QCOMPARE(l.composite->layers.size(), 2);
         QSet<NodeId> ids;
-        for (const ResolvedLayer &sl : l.composite->layers) ids.insert(sl.inputNodeId);
-        QVERIFY(ids.contains((NodeId)1));
-        QVERIFY(ids.contains((NodeId)2));
+        for (const ClipGraph::ResolvedLayer &sl : l.composite->layers) ids.insert(sl.inputNodeId);
+        QVERIFY(ids.contains(NodeId(1)));
+        QVERIFY(ids.contains(NodeId(2)));
     }
 
     void registryIsConsistent() {
@@ -232,15 +227,15 @@ private slots:
         SourceDescriptor src;
         src.kind = SourceDescriptor::Kind::Canvas;
         src.displayName = QStringLiteral("Clip");
-        ClipNodeModel *input = m_editor->addSourceNode(src, QPixmap());
-        QVERIFY(input);
-        const NodeId inId = input->nodeId();
-        const NodeId cropId = m_editor->addProcessNode(0);
+        const NodeId inId = m_graph->addInputNode(src);
+        QVERIFY(inId != 0);
+        const NodeId cropId = m_graph->addNode(ClipGraph::NodeType::Process, {},
+                                               {{QStringLiteral("effect"), 0}});
         QVERIFY(cropId != 0);
-        QVERIFY(m_editor->connectNodes(inId, cropId, 0));
-        QVERIFY(m_editor->connectNodes(cropId, m_editor->outputNodeId(), 0));
-        QVERIFY(m_editor->setProcessParams(cropId, QJsonObject{{QStringLiteral("x"), 0.25}}));
-        const ResolvedStream stream = m_editor->evaluateVideoInput(cropId);
+        QVERIFY(m_graph->connectNodes(inId, cropId, 0));
+        QVERIFY(m_graph->connectNodes(cropId, m_graph->outputNodeId(), 0));
+        QVERIFY(m_graph->setEffectParams(cropId, {{QStringLiteral("x"), 0.25}}));
+        const ClipGraph::ResolvedStream stream = m_graph->evaluateVideoInput(cropId);
         QCOMPARE(stream.layers.size(), 1);
         QCOMPARE(stream.layers.first().sourceEffects.size(), 1);
         QCOMPARE(stream.layers.first().sourceEffects.first().effectId, 0);
@@ -251,16 +246,17 @@ private slots:
         SourceDescriptor src;
         src.kind = SourceDescriptor::Kind::Canvas;
         src.displayName = QStringLiteral("Clip");
-        ClipNodeModel *input = m_editor->addSourceNode(src, QPixmap());
-        QVERIFY(input);
-        const NodeId abId = m_editor->addAbSelectNode();
+        const NodeId inId = m_graph->addInputNode(src);
+        QVERIFY(inId != 0);
+        const NodeId abId = m_graph->addNode(ClipGraph::NodeType::AbSelect);
         QVERIFY(abId != 0);
-        QVERIFY(m_editor->connectNodes(input->nodeId(), abId, 0, 0));
-        QVERIFY(m_editor->connectNodes(abId, m_editor->outputNodeId(), 8));
+        QVERIFY(m_graph->connectNodes(inId, abId, 0, 0));
+        QVERIFY(m_graph->connectNodes(abId, m_graph->outputNodeId(), 8));
 
-        const NodeId cropId = m_editor->addProcessNode(0);
-        QVERIFY(m_editor->connectNodes(input->nodeId(), cropId, 0));
-        QVERIFY(!m_editor->connectNodes(cropId, m_editor->outputNodeId(), 0));
+        const NodeId cropId = m_graph->addNode(ClipGraph::NodeType::Process, {},
+                                               {{QStringLiteral("effect"), 0}});
+        QVERIFY(m_graph->connectNodes(inId, cropId, 0));
+        QVERIFY(!m_graph->connectNodes(cropId, m_graph->outputNodeId(), 0));
     }
 
     void audioEffectRegistryIsConsistent() {
@@ -285,11 +281,11 @@ private slots:
     }
 
     void audioOutputSingletonOnAdd() {
-        QMetaObject::invokeMethod(m_editor, "onAddMasterAudioOutput", Qt::DirectConnection);
-        const NodeId first = m_editor->audioOutputNodeId();
+        const NodeId first = m_graph->addNode(ClipGraph::NodeType::MasterAudioOutput);
         QVERIFY(first != 0);
-        QMetaObject::invokeMethod(m_editor, "onAddMasterAudioOutput", Qt::DirectConnection);
-        QCOMPARE(m_editor->audioOutputNodeId(), first);
+        QCOMPARE(m_graph->audioOutputNodeId(), first);
+        QCOMPARE(m_graph->addNode(ClipGraph::NodeType::MasterAudioOutput), NodeId(0));
+        QCOMPARE(m_graph->audioOutputNodeId(), first);
     }
 
     void audioFileRoundTripInGraph() {
@@ -310,8 +306,8 @@ private slots:
         state["outputNode"] = QJsonObject{{"id", 2}};
         state["connections"] = QJsonArray{};
 
-        m_editor->restoreState(state);
-        const QJsonObject saved = m_editor->saveState();
+        QVERIFY(m_graph->fromJson(state));
+        const QJsonObject saved = m_graph->toJson();
         const QJsonObject savedInput = saved["inputNodes"].toArray().first().toObject();
         QCOMPARE(savedInput["source"].toObject()["kind"].toInt(),
                  (int)SourceDescriptor::Kind::AudioFile);

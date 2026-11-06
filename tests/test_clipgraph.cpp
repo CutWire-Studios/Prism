@@ -1,7 +1,6 @@
 #include "core/graph/ClipGraph.h"
 #include "core/graph/ClipGraphModels.h"
-#include "ui/nodes/ClipNodeEditor.h"
-#include "ui/nodes/AudioEffects.h"
+#include "core/graph/AudioEffects.h"
 
 #include <QtTest>
 #include <QJsonArray>
@@ -45,9 +44,7 @@ QString firstDiff(const QJsonValue &a, const QJsonValue &b, const QString &path 
         + " vs " + QString::fromUtf8(QJsonDocument(QJsonArray{b}).toJson(QJsonDocument::Compact));
 }
 
-// The editor enumerates live audio devices for the output node's ports and, when restoring,
-// leaves nextId at the last restored id + 1 (which can collide); the graph keeps what it was
-// given and always allocates past the highest id.
+// nextId is dropped because the first load keeps whatever the file said while a reload derives it.
 QJsonObject withoutVolatile(QJsonObject state, bool devices) {
     state.remove("nextId");
     if (devices) {
@@ -164,41 +161,116 @@ class TestClipGraph : public QObject {
     }
 
 private slots:
-    void jsonRoundTripAgainstEditor() {
-        QWidget parent;
-        ClipNodeEditor editor(&parent);
-        editor.restoreState(realisticState());
-        const QJsonObject saved = editor.saveState();
-        QVERIFY(!saved["inputNodes"].toArray().isEmpty());
+    void jsonMatchesStoredFixture() {
+        const QJsonObject input = QJsonDocument::fromJson(QByteArray(R"json({
+            "graphVersion": 3,
+            "deckAInput": 0,
+            "deckBInput": 0,
+            "inputNodes": [
+                {"id": 1, "posX": 20, "posY": 20, "hasAudio": false,
+                 "source": {"kind": 5, "displayName": "Cam 1"}}
+            ],
+            "processNodes": [
+                {"id": 2, "posX": 200.5, "posY": 20, "effect": 4, "params": {"direction": 0}}
+            ],
+            "outputNode": {"id": 3, "posX": 700, "posY": 50},
+            "connections": [
+                {"from": 1, "to": 2, "kind": 0, "toPortIndex": 0},
+                {"from": 2, "to": 3, "kind": 0, "toPortIndex": -1}
+            ]
+        })json")).object();
+        const QJsonObject expectedGraph = QJsonDocument::fromJson(QByteArray(R"json({
+            "graphVersion": 3,
+            "nextId": 4,
+            "deckAInput": 0,
+            "deckBInput": 0,
+            "inputNodes": [
+                {"id": 1, "posX": 20, "posY": 20, "hasAudio": false, "audioOnly": false,
+                 "repeat": false,
+                 "settings": {"startTime": 0, "endTime": -1, "cropX": 0, "cropY": 0,
+                              "cropW": 1, "cropH": 1, "overlays": []},
+                 "source": {"kind": 5, "path": "", "displayName": "Cam 1", "color": "\u0023ffffffff",
+                            "cameraIndex": 0, "screenIndex": 0, "windowIndex": 0,
+                            "captureId": "", "slideshowIntervalMs": 3000,
+                            "slideshowEffect": 0, "slideshowTransitionMs": 800,
+                            "canvasWidth": 1280, "canvasHeight": 720, "canvasFill": 0,
+                            "shaderCode": "", "obsSceneName": "", "textTemplate": "",
+                            "textStyle": "", "shapeStyle": "", "svgTemplateId": "",
+                            "svgParams": "", "webrtcRelayUrl": ""}}
+            ],
+            "processNodes": [
+                {"id": 2, "posX": 200.5, "posY": 20, "effect": 4, "params": {"direction": 0}}
+            ],
+            "audioEffectNodes": [],
+            "layerNodes": [],
+            "abSelectNodes": [],
+            "audioMixerNodes": [],
+            "scriptNodes": [],
+            "masterAudioNodes": [],
+            "masterAudioInputNodes": [],
+            "masterAudioCaptureNodes": [],
+            "outputNode": {"id": 3, "posX": 700, "posY": 50},
+            "connections": [
+                {"from": 1, "to": 2, "kind": 0, "toPortIndex": 0},
+                {"from": 2, "to": 3, "kind": 0, "toPortIndex": 0}
+            ]
+        })json")).object();
+        const QJsonObject expectedSnapshot = QJsonDocument::fromJson(QByteArray(R"json({
+            "output": "3",
+            "nodes": [
+                {"id": "1", "type": "input", "x": 20, "y": 20, "name": "Cam 1", "kind": "canvas"},
+                {"id": "2", "type": "process", "x": 200.5, "y": 20, "effect": 4, "name": "Flip",
+                 "params": {"direction": 0}},
+                {"id": "3", "type": "output", "x": 700, "y": 50}
+            ],
+            "connections": [
+                {"from": "1", "to": "2", "kind": 0, "kindName": "chain", "toPort": 0},
+                {"from": "2", "to": "3", "kind": 0, "kindName": "chain", "toPort": 0}
+            ]
+        })json")).object();
+        QVERIFY(!input.isEmpty() && !expectedGraph.isEmpty() && !expectedSnapshot.isEmpty());
 
         ClipGraph graph;
-        QVERIFY(graph.fromJson(saved));
+        QVERIFY(graph.fromJson(input));
         const QJsonObject out = graph.toJson();
-        QVERIFY2(withoutVolatile(out, false) == withoutVolatile(saved, false),
-                 qPrintable("graph vs editor: " + firstDiff(out, saved)));
-        QVERIFY(out["nextId"].toInteger() > 20);
-        QVERIFY2(graph.snapshot() == editor.graphSnapshot(),
-                 qPrintable("graph vs editor: " + firstDiff(graph.snapshot(), editor.graphSnapshot())));
+        QVERIFY2(out == expectedGraph, qPrintable("graph vs fixture: " + firstDiff(out, expectedGraph)));
+        const QJsonObject snap = graph.snapshot();
+        QVERIFY2(snap == expectedSnapshot,
+                 qPrintable("snapshot vs fixture: " + firstDiff(snap, expectedSnapshot)));
 
-        ClipNodeEditor editor2(&parent);
-        editor2.restoreState(out);
-        const QJsonObject resaved = editor2.saveState();
-        QVERIFY2(withoutVolatile(resaved, false) == withoutVolatile(out, false),
-                 qPrintable("editor2 vs graph: " + firstDiff(resaved, out)));
+        ClipGraph again;
+        QVERIFY(again.fromJson(expectedGraph));
+        QVERIFY2(again.toJson() == expectedGraph,
+                 qPrintable("reload vs fixture: " + firstDiff(again.toJson(), expectedGraph)));
     }
 
     void jsonRoundTripFromRawState() {
-        QWidget parent;
-        ClipNodeEditor editor(&parent);
         ClipGraph graph;
-        const QJsonObject raw = realisticState();
-        editor.restoreState(raw);
-        QVERIFY(graph.fromJson(raw));
-        const QJsonObject a = withoutVolatile(graph.toJson(), true);
-        const QJsonObject b = withoutVolatile(editor.saveState(), true);
-        QVERIFY2(a == b, qPrintable("graph vs editor: " + firstDiff(a, b)));
+        QVERIFY(graph.fromJson(realisticState()));
+        QCOMPARE(graph.nodeIds().size(), 11);
         QCOMPARE(graph.deckAInput(), NodeId(3));
         QCOMPARE(graph.deckBInput(), NodeId(4));
+
+        const QJsonObject out = graph.toJson();
+        QVERIFY(out["nextId"].toInteger() > 20);
+        QCOMPARE(out["inputNodes"].toArray().size(), 4);
+        QCOMPARE(out["processNodes"].toArray().size(), 1);
+        QCOMPARE(out["layerNodes"].toArray().size(), 1);
+        QCOMPARE(out["abSelectNodes"].toArray().size(), 1);
+        QCOMPARE(out["audioMixerNodes"].toArray().size(), 1);
+        QCOMPARE(out["masterAudioInputNodes"].toArray().size(), 1);
+        QCOMPARE(out["masterAudioNodes"].toArray().size(), 1);
+        QCOMPARE(out["outputNode"].toObject()["id"].toInt(), 20);
+        QCOMPARE(out["deckAInput"].toInteger(), 3);
+        QCOMPARE(out["deckBInput"].toInteger(), 4);
+
+        ClipGraph second;
+        QVERIFY(second.fromJson(out));
+        const QJsonObject resaved = second.toJson();
+        QVERIFY2(withoutVolatile(resaved, false) == withoutVolatile(out, false),
+                 qPrintable("reload vs first save: " + firstDiff(resaved, out)));
+        QVERIFY2(second.snapshot() == graph.snapshot(),
+                 qPrintable("snapshot: " + firstDiff(second.snapshot(), graph.snapshot())));
     }
 
     void rejectsLegacyVersion() {

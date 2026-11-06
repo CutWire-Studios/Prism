@@ -1,7 +1,7 @@
 #include "ui/mcp/McpAccessDialog.h"
 #include "mcp/McpCatalog.h"
 #include "mcp/McpServer.h"
-#include "ui/mainwindow/MainWindow.h"
+#include "app/AppController.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -13,7 +13,7 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-McpAccessDialog::McpAccessDialog(MainWindow *window, QWidget *parent)
+McpAccessDialog::McpAccessDialog(AppController *window, QWidget *parent)
     : QDialog(parent)
     , m_window(window)
 {

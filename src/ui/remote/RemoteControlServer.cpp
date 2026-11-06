@@ -1,8 +1,8 @@
 #include "ui/remote/RemoteControlServer.h"
 #include "core/webrtc/FirewallUtils.h"
-#include "ui/mainwindow/MainWindow.h"
-#include "ui/nodes/ClipNodeEditor.h"
-#include "ui/nodes/ClipNodeModel.h"
+#include "app/AppController.h"
+#include "app/transitions/TransitionController.h"
+#include "core/graph/ClipGraph.h"
 #include "ui/remote/RemoteProtocol.h"
 #include "core/webrtc/WebRtcPairing.h"
 #include "core/webrtc/WebRtcCamPage.h"
@@ -12,15 +12,16 @@
 #include <QTcpSocket>
 #include <QUrl>
 #include <QUrlQuery>
-#include <QSlider>
 #include <QMetaObject>
 
-RemoteControlServer::RemoteControlServer(MainWindow *mainWindow, TransitionController *transitionCtrl, QSlider *faderSlider, QObject *parent)
+RemoteControlServer::RemoteControlServer(AppController *app, QObject *parent)
     : QTcpServer(parent)
-    , m_mainWindow(mainWindow)
-    , m_transitionCtrl(transitionCtrl)
-    , m_faderSlider(faderSlider)
+    , m_mainWindow(app)
 {
+}
+
+TransitionController *RemoteControlServer::transitions() const {
+    return m_mainWindow ? m_mainWindow->transitionController() : nullptr;
 }
 
 RemoteControlServer::~RemoteControlServer() {
@@ -89,7 +90,7 @@ void RemoteControlServer::onReadyRead() {
 
     case RemoteProtocol::Route::Status: {
         RemoteProtocol::StatusData status;
-        status.fader = m_faderSlider ? m_faderSlider->value() : 0;
+        status.fader = m_mainWindow ? m_mainWindow->faderValue() : 0;
 
         if (m_mainWindow) {
             status.hasDeck = true;
@@ -98,25 +99,23 @@ void RemoteControlServer::onReadyRead() {
             status.isPlayingA = m_mainWindow->isPlayingA();
             status.isPlayingB = m_mainWindow->isPlayingB();
 
-            if (auto *editor = m_mainWindow->clipNodeEditor()) {
-                for (auto *node : editor->allNodes()) {
-                    if (node && node->hasSource()) {
-                        RemoteProtocol::ClipInfo clip;
-                        clip.id = node->nodeId();
-                        clip.name = node->sourceName();
-                        clip.activeA = (node->nodeId() == m_mainWindow->activeNodeA());
-                        clip.activeB = (node->nodeId() == m_mainWindow->activeNodeB());
-                        status.clips.append(clip);
-                    }
+            if (auto *graph = m_mainWindow->clipGraph()) {
+                for (NodeId id : graph->nodeIdsOfType(ClipGraph::NodeType::Input)) {
+                    RemoteProtocol::ClipInfo clip;
+                    clip.id = id;
+                    clip.name = graph->sourceName(id);
+                    clip.activeA = (id == m_mainWindow->activeNodeA());
+                    clip.activeB = (id == m_mainWindow->activeNodeB());
+                    status.clips.append(clip);
                 }
             }
         }
 
-        if (m_transitionCtrl) {
+        if (auto *tc = transitions()) {
             status.hasTransition = true;
-            status.transitionMode = m_transitionCtrl->currentModeIndex();
-            status.transitionDuration = m_transitionCtrl->currentDurationSecs();
-            status.transitionModes = m_transitionCtrl->transitionModeNames();
+            status.transitionMode = tc->currentModeIndex();
+            status.transitionDuration = tc->currentDurationSecs();
+            status.transitionModes = tc->transitionModeNames();
         }
 
         sendJsonResponse(socket, RemoteProtocol::buildStatusJson(status));
@@ -125,21 +124,21 @@ void RemoteControlServer::onReadyRead() {
 
     case RemoteProtocol::Route::Fader: {
         int val = 0;
-        if (RemoteProtocol::intParam(request.path, QStringLiteral("val"), val) && m_faderSlider)
-            m_faderSlider->setValue(val);
+        if (RemoteProtocol::intParam(request.path, QStringLiteral("val"), val) && m_mainWindow)
+            m_mainWindow->setFaderValue(val);
         sendJsonResponse(socket, "{\"status\": \"ok\"}");
         break;
     }
 
     case RemoteProtocol::Route::Cut:
-        if (m_transitionCtrl)
-            m_transitionCtrl->onCutTransitionClicked();
+        if (auto *tc = transitions())
+            tc->cutTransition();
         sendJsonResponse(socket, "{\"status\": \"ok\"}");
         break;
 
     case RemoteProtocol::Route::Auto:
-        if (m_transitionCtrl)
-            m_transitionCtrl->onAutoTransitionClicked();
+        if (auto *tc = transitions())
+            tc->autoTransition();
         sendJsonResponse(socket, "{\"status\": \"ok\"}");
         break;
 
@@ -173,16 +172,16 @@ void RemoteControlServer::onReadyRead() {
 
     case RemoteProtocol::Route::SetTransitionMode: {
         int index = 0;
-        if (RemoteProtocol::intParam(request.path, QStringLiteral("index"), index) && m_transitionCtrl)
-            m_transitionCtrl->setTransitionModeIndex(index);
+        if (RemoteProtocol::intParam(request.path, QStringLiteral("index"), index) && transitions())
+            transitions()->setTransitionModeIndex(index);
         sendJsonResponse(socket, "{\"status\": \"ok\"}");
         break;
     }
 
     case RemoteProtocol::Route::SetDuration: {
         double val = 0.0;
-        if (RemoteProtocol::doubleParam(request.path, QStringLiteral("val"), val) && m_transitionCtrl)
-            m_transitionCtrl->setTransitionDuration(val);
+        if (RemoteProtocol::doubleParam(request.path, QStringLiteral("val"), val) && transitions())
+            transitions()->setTransitionDuration(val);
         sendJsonResponse(socket, "{\"status\": \"ok\"}");
         break;
     }

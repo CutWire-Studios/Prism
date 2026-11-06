@@ -8,9 +8,14 @@
 #include <QMutexLocker>
 #include <QtGlobal>
 
+#include <cstdint>
+#include <utility>
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavcodec/codec.h>
+#include <libavutil/frame.h>
+#include <libavutil/hwcontext.h>
 #include <libavutil/log.h>
 }
 
@@ -327,15 +332,20 @@ const char *scaleFilter(Backend backend)
 
 bool deviceAvailable(AVHWDeviceType type)
 {
+    return deviceAvailable(type, deviceString(type));
+}
+
+bool deviceAvailable(AVHWDeviceType type, const QByteArray &device)
+{
     if (type == AV_HWDEVICE_TYPE_NONE)
         return false;
 #if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
     if (type == AV_HWDEVICE_TYPE_VAAPI && !vaapiLoadable())
         return false;
 #endif
-    // Keyed on the device string too: it follows the render vendor, which is only seeded once a
-    // GL context has been probed.
-    const QByteArray device = deviceString(type);
+    // Keyed on the device string too: for the decode answer it follows the render vendor, which
+    // is only seeded once a GL context has been probed, and an encoder may ask about a different
+    // adapter entirely.
     const QString key = QStringLiteral("%1:%2").arg(static_cast<int>(type)).arg(QString::fromLatin1(device));
 
     static QMutex mutex;
@@ -384,6 +394,67 @@ const AVCodec *findDecoder(AVCodecID codecId, AVHWDeviceType type, AVPixelFormat
         }
     }
     return nullptr;
+}
+
+void syncVaapiFrame(const AVFrame *frame)
+{
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+    Q_UNUSED(frame);
+#else
+    if (!frame || frame->format != AV_PIX_FMT_VAAPI || !frame->hw_frames_ctx)
+        return;
+    const auto *fc = reinterpret_cast<const AVHWFramesContext *>(frame->hw_frames_ctx->data);
+    if (!fc || !fc->device_ctx || fc->device_ctx->type != AV_HWDEVICE_TYPE_VAAPI
+        || !fc->device_ctx->hwctx)
+        return;
+    // AVVAAPIDeviceContext::display is its first member; reading it this way avoids pulling
+    // va/va.h into the build just for one pointer.
+    void *display = *reinterpret_cast<void *const *>(fc->device_ctx->hwctx);
+
+    using SyncFn = int (*)(void *, unsigned int);
+    static const SyncFn sync = [] {
+        void *va = dlopen("libva.so.2", RTLD_LAZY | RTLD_LOCAL);
+        return va ? reinterpret_cast<SyncFn>(dlsym(va, "vaSyncSurface")) : nullptr;
+    }();
+    if (sync && display)
+        sync(display, static_cast<unsigned int>(reinterpret_cast<uintptr_t>(frame->data[3])));
+#endif
+}
+
+namespace {
+
+QMutex g_failureMutex;
+AccelerationFailure g_lastFailure;
+std::function<void()> g_failureListener;
+
+} // namespace
+
+void reportFailure(AccelerationFailure::Stage stage, const QString &backend, const QString &detail)
+{
+    std::function<void()> listener;
+    {
+        QMutexLocker lock(&g_failureMutex);
+        g_lastFailure.stage = stage;
+        g_lastFailure.backend = backend;
+        g_lastFailure.detail = detail;
+        ++g_lastFailure.serial;
+        listener = g_failureListener;
+    }
+    // Outside the lock: the listener is free to call lastFailure().
+    if (listener)
+        listener();
+}
+
+AccelerationFailure lastFailure()
+{
+    QMutexLocker lock(&g_failureMutex);
+    return g_lastFailure;
+}
+
+void setFailureListener(std::function<void()> listener)
+{
+    QMutexLocker lock(&g_failureMutex);
+    g_failureListener = std::move(listener);
 }
 
 } // namespace prism::hwaccel

@@ -1,0 +1,275 @@
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Controls.Basic
+import Prism
+
+// The node graph editor panel (workspace panel type "nodeGraph"). Wraps NodeCanvas with the
+// toolbar, zoom bar, minimap, add-node menu and context menus. Editors that the old widget UI
+// ran as modal dialogs are not hosted here: the panel asks the shell via openEditorRequested.
+Item {
+    id: root
+
+    // ClipGraphController
+    property var controller: null
+
+    property alias zoom: graphCanvas.zoom
+    property bool showMinimap: true
+
+    // kind: source | audio | process | audioEffect | layerLayout | mixer | mic | capture |
+    //       script | audioScript | trigger
+    signal openEditorRequested(var nodeId, string kind)
+    // Source picker for a new Input node; x/y are graph coordinates to place it at.
+    signal addInputNodeRequested(real x, real y)
+    signal outputWindowRequested()
+    signal runScriptRequested(var nodeId)
+    signal pulseTriggerRequested(var nodeId)
+    // Local media files dropped on the canvas; x/y are graph coordinates.
+    signal filesDropped(var urls, real x, real y)
+
+    function frameAll() { graphCanvas.fitAll() }
+
+    NodeCanvas {
+        id: graphCanvas
+        anchors.fill: parent
+        controller: root.controller
+
+        onOpenEditorRequested: (nodeId, kind) => root.openEditorRequested(nodeId, kind)
+        onOutputWindowRequested: root.outputWindowRequested()
+
+        onAddMenuRequested: (screenPos, worldPos) => {
+            addMenu.pendingKind = -1
+            addMenu.worldPos = worldPos
+            addMenu.openAt(screenPos.x, screenPos.y)
+        }
+        onConnectionDropped: (screenPos, worldPos, kind, fromOutput) => {
+            addMenu.pendingKind = kind
+            addMenu.pendingIsOutput = fromOutput
+            addMenu.worldPos = worldPos
+            addMenu.openAt(screenPos.x, screenPos.y)
+        }
+        onNodeMenuRequested: (item, worldPos, screenPos) => {
+            nodeMenu.target = item
+            nodeMenu.popup(graphCanvas, screenPos.x, screenPos.y)
+        }
+        onEdgeMenuRequested: (edgeId, screenPos) => {
+            edgeMenu.edgeId = edgeId
+            edgeMenu.popup(graphCanvas, screenPos.x, screenPos.y)
+        }
+    }
+
+    DropArea {
+        anchors.fill: parent
+        keys: ["text/uri-list"]
+        onDropped: (drop) => {
+            if (!drop.hasUrls)
+                return
+            const w = graphCanvas.toWorld(drop.x, drop.y)
+            root.filesDropped(drop.urls, w.x, w.y)
+            drop.accept()
+        }
+    }
+
+    NodeLabel {
+        anchors.centerIn: parent
+        visible: graphCanvas.nodeCount <= 1
+        width: Math.min(parent.width - 48, 360)
+        muted: true
+        wrapMode: Text.WordWrap
+        maximumLineCount: 3
+        horizontalAlignment: Text.AlignHCenter
+        text: qsTr("Drop media here, drag from the Media bin, or right-click to add a node")
+    }
+
+    // Undo / add / frame.
+    Rectangle {
+        x: Theme.spacingLg
+        y: Theme.spacingLg
+        width: toolRow.width + 2 * Theme.spacingSm
+        height: toolRow.height + 2 * Theme.spacingSm
+        radius: Theme.radiusMd
+        color: Qt.alpha(Theme.panelBackground, 0.9)
+        border.width: 1
+        border.color: Theme.panelBorder
+
+        Row {
+            id: toolRow
+            anchors.centerIn: parent
+            spacing: Theme.spacingXs
+
+            IconButton {
+                glyph: "undo"
+                tooltip: qsTr("Undo (Ctrl+Z)")
+                focusPolicy: Qt.NoFocus
+                enabled: !!root.controller && root.controller.canUndo
+                onClicked: root.controller.undo()
+            }
+            IconButton {
+                glyph: "redo"
+                tooltip: qsTr("Redo (Ctrl+Shift+Z)")
+                focusPolicy: Qt.NoFocus
+                enabled: !!root.controller && root.controller.canRedo
+                onClicked: root.controller.redo()
+            }
+            IconButton {
+                glyph: "plus"
+                tooltip: qsTr("Add node")
+                focusPolicy: Qt.NoFocus
+                enabled: !!root.controller
+                onClicked: {
+                    addMenu.pendingKind = -1
+                    const c = graphCanvas.toWorld(graphCanvas.width / 2, graphCanvas.height / 2)
+                    addMenu.worldPos = Qt.point(c.x - 60, c.y - 40)
+                    addMenu.openAt(Theme.spacingLg, 52)
+                }
+            }
+            IconButton {
+                glyph: "maximize"
+                tooltip: qsTr("Frame all (F frames the selection)")
+                focusPolicy: Qt.NoFocus
+                onClicked: graphCanvas.fitAll()
+            }
+        }
+    }
+
+    // Zoom.
+    Rectangle {
+        x: Theme.spacingLg
+        y: parent.height - height - Theme.spacingLg
+        width: zoomRow.width + 2 * Theme.spacingSm
+        height: zoomRow.height + 2 * Theme.spacingSm
+        radius: Theme.radiusMd
+        color: Qt.alpha(Theme.panelBackground, 0.9)
+        border.width: 1
+        border.color: Theme.panelBorder
+
+        Row {
+            id: zoomRow
+            anchors.centerIn: parent
+            spacing: Theme.spacingXs
+
+            IconButton {
+                glyph: "zoom-out"
+                tooltip: qsTr("Zoom out (Ctrl+-)")
+                focusPolicy: Qt.NoFocus
+                enabled: graphCanvas.zoom > graphCanvas.minZoom + 0.01
+                onClicked: graphCanvas.zoomCentered(1 / 1.12)
+            }
+            NodeLabel {
+                width: 44
+                height: Theme.iconButtonSize
+                horizontalAlignment: Text.AlignHCenter
+                font.family: Theme.monoFontFamily
+                text: Math.round(graphCanvas.zoom * 100) + "%"
+            }
+            IconButton {
+                glyph: "rotate-ccw"
+                tooltip: qsTr("Reset zoom to 100% (Ctrl+0)")
+                focusPolicy: Qt.NoFocus
+                onClicked: graphCanvas.resetZoom()
+            }
+            IconButton {
+                glyph: "zoom-in"
+                tooltip: qsTr("Zoom in (Ctrl++)")
+                focusPolicy: Qt.NoFocus
+                enabled: graphCanvas.zoom < graphCanvas.maxZoom - 0.01
+                onClicked: graphCanvas.zoomCentered(1.12)
+            }
+        }
+    }
+
+    NodeMinimap {
+        visible: root.showMinimap
+        x: parent.width - width - Theme.spacingLg
+        y: parent.height - height - Theme.spacingLg
+        canvas: graphCanvas
+    }
+
+    AddNodeMenu {
+        id: addMenu
+        canvas: graphCanvas
+
+        onPicked: (entry) => {
+            if (entry.input) {
+                graphCanvas.cancelConnection()
+                root.addInputNodeRequested(worldPos.x, worldPos.y)
+            } else {
+                graphCanvas.addNodeAt(entry.type, entry.params, worldPos.x, worldPos.y)
+            }
+        }
+        onClosed: {
+            if (!wasPicked)
+                graphCanvas.cancelConnection()
+            graphCanvas.forceActiveFocus()
+        }
+    }
+
+    ThemedContextMenu {
+        id: nodeMenu
+
+        property var target: null
+        readonly property int type: target ? target.type : -1
+        readonly property var T: NodePalette.nodeType
+        readonly property string editKind: target ? NodePalette.editorKind(type, target.hasEditor) : ""
+
+        ThemedMenuItem {
+            visible: nodeMenu.editKind.length > 0
+            text: {
+                switch (nodeMenu.type) {
+                case nodeMenu.T.Layer: return qsTr("Edit Layout")
+                case nodeMenu.T.AudioMixer: return qsTr("Edit Mix")
+                case nodeMenu.T.MasterAudioInput: return qsTr("Edit Mic…")
+                case nodeMenu.T.MasterAudioCapture: return qsTr("Edit Audio Capture…")
+                case nodeMenu.T.AudioScript: return qsTr("Edit FFT")
+                case nodeMenu.T.Process:
+                case nodeMenu.T.AudioEffect:
+                    return NodeCatalog.effectLabel(nodeMenu.type, nodeMenu.target.params)
+                }
+                return qsTr("Edit")
+            }
+            onTriggered: nodeMenu.target.requestEditor(nodeMenu.editKind)
+        }
+        ThemedMenuItem {
+            visible: nodeMenu.type === nodeMenu.T.Input && !!nodeMenu.target && !!nodeMenu.target.params.hasAudio
+            text: qsTr("Edit Audio")
+            onTriggered: nodeMenu.target.requestEditor("audio")
+        }
+        ThemedMenuItem {
+            visible: nodeMenu.type === nodeMenu.T.Layer
+            text: qsTr("Edit Canvas Size")
+            onTriggered: nodeMenu.target.requestEditor("layerCanvas")
+        }
+        ThemedMenuItem {
+            visible: nodeMenu.type === nodeMenu.T.Script
+            text: qsTr("Run now")
+            onTriggered: root.runScriptRequested(nodeMenu.target.nodeId)
+        }
+        ThemedMenuItem {
+            visible: nodeMenu.type === nodeMenu.T.Trigger
+            text: qsTr("Pulse now")
+            onTriggered: root.pulseTriggerRequested(nodeMenu.target.nodeId)
+        }
+        ThemedMenuItem {
+            text: qsTr("Delete")
+            icon.name: "trash-2"
+            enabled: nodeMenu.type !== nodeMenu.T.Output || graphCanvas.nodeCount <= 1
+            onTriggered: root.controller.removeNodes(root.controller.selection)
+        }
+        onClosed: graphCanvas.forceActiveFocus()
+    }
+
+    ThemedContextMenu {
+        id: edgeMenu
+
+        property var edgeId: 0
+
+        ThemedMenuItem {
+            text: qsTr("Delete connection")
+            icon.name: "trash-2"
+            onTriggered: {
+                root.controller.disconnectEdge(edgeMenu.edgeId)
+                graphCanvas.selectedEdge = 0
+            }
+        }
+        onClosed: graphCanvas.forceActiveFocus()
+    }
+}

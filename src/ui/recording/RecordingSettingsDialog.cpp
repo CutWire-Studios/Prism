@@ -1,5 +1,5 @@
 #include "ui/recording/RecordingSettingsDialog.h"
-#include "ui/nodes/ClipNodeEditor.h"
+#include "core/graph/ClipGraph.h"
 #include "ui/recording/ProgramRecorder.h"
 #include "core/media/MediaProbe.h"
 #include "core/sources/SourceDescriptor.h"
@@ -60,10 +60,10 @@ QWidget *makeStreamRowWidget(const QString &title, QLabel *&timeLabel, QPushButt
 }
 }
 
-RecordingSettingsDialog::RecordingSettingsDialog(OutputHub *hub, ClipNodeEditor *editor, QWidget *parent)
+RecordingSettingsDialog::RecordingSettingsDialog(OutputHub *hub, ClipGraph *graph, QWidget *parent)
     : QDialog(parent)
     , m_hub(hub)
-    , m_editor(editor)
+    , m_graph(graph)
     , m_uiTimer(new QTimer(this))
 {
     setWindowTitle(tr("Recording Panel"));
@@ -175,11 +175,11 @@ void RecordingSettingsDialog::rebuildStreamRows() {
     addRow(tr("Deck A (iso)"), OutputHub::TrackKind::DeckA);
     addRow(tr("Deck B (iso)"), OutputHub::TrackKind::DeckB);
 
-    if (m_editor) {
-        for (ClipNodeModel *node : m_editor->allNodes()) {
-            if (!node || !node->hasSource() || !node->isLiveSource())
+    if (m_graph) {
+        for (NodeId id : m_graph->nodeIdsOfType(ClipGraph::NodeType::Input)) {
+            if (!m_graph->sourceDescriptor(id).isLiveSource())
                 continue;
-            addRow(node->sourceName(), OutputHub::TrackKind::Source, node->nodeId());
+            addRow(m_graph->sourceName(id), OutputHub::TrackKind::Source, id);
         }
     }
 
@@ -214,15 +214,14 @@ void RecordingSettingsDialog::rebuildAudioRows() {
     addRow(tr("Deck A audio (iso)"), OutputHub::TrackKind::DeckAAudio);
     addRow(tr("Deck B audio (iso)"), OutputHub::TrackKind::DeckBAudio);
 
-    if (m_editor) {
-        for (ClipNodeModel *node : m_editor->allNodes()) {
-            if (!node || !node->hasSource())
+    if (m_graph) {
+        for (NodeId id : m_graph->nodeIdsOfType(ClipGraph::NodeType::Input)) {
+            const SourceDescriptor desc = m_graph->sourceDescriptor(id);
+            if (desc.kind != SourceDescriptor::Kind::VideoFile)
                 continue;
-            if (node->sourceDescriptor().kind != SourceDescriptor::Kind::VideoFile)
+            if (!hasStream(MediaProbe::probe(desc.path), StreamInfo::Type::Audio))
                 continue;
-            if (!hasStream(MediaProbe::probe(node->sourceDescriptor().path), StreamInfo::Type::Audio))
-                continue;
-            addRow(node->sourceName(), OutputHub::TrackKind::ClipAudio, node->nodeId());
+            addRow(m_graph->sourceName(id), OutputHub::TrackKind::ClipAudio, id);
         }
     }
 }
@@ -355,6 +354,8 @@ RecordingOptions RecordingSettingsDialog::loadSavedOptions() {
     RecordingOptions opts;
     opts.outputDir = settings.value(QLatin1String(kOutputDirKey), ProgramRecorder::defaultOutputDir()).toString();
     settings.endGroup();
+    opts.videoCodec = ProgramRecorder::codecSetting();
+    opts.container = ProgramRecorder::containerSetting();
     return opts;
 }
 

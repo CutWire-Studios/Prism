@@ -4,8 +4,7 @@
 #include "core/webrtc/NetworkUtils.h"
 #include "core/sources/SourceDescriptor.h"
 #include "core/project/OverlayItem.h"
-#include "ui/nodes/ClipCard.h"
-#include "ui/nodes/ClipNodeModel.h"
+#include "core/graph/ClipGraph.h"
 
 #include <QtTest>
 #include <QTemporaryDir>
@@ -13,7 +12,6 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QHostAddress>
-#include <QWidget>
 
 class TestPackaging : public QObject {
     Q_OBJECT
@@ -101,11 +99,11 @@ private slots:
         const QString imagePath = dir.filePath(QStringLiteral("clip.png"));
         QVERIFY(TestSupport::writePng(dir.path(), QStringLiteral("clip.png"), Qt::blue));
 
-        QWidget parent;
-        ClipCard card(0, &parent);
-        ClipNodeModel model;
-        model.setCard(&card);
-        model.loadClip(imagePath, QPixmap());
+        ClipGraph clipGraph;
+        SourceDescriptor desc;
+        desc.kind = SourceDescriptor::Kind::Image;
+        desc.path = imagePath;
+        QVERIFY(clipGraph.addInputNode(desc) != 0);
 
         QJsonObject session;
         session.insert(QStringLiteral("version"), 1);
@@ -122,7 +120,7 @@ private slots:
         session.insert(QStringLiteral("graph"), graph);
 
         const QString packagePath = dir.filePath(QStringLiteral("project.prism"));
-        const auto exportReport = ProjectPackager::exportPackage(session, {&model}, packagePath);
+        const auto exportReport = ProjectPackager::exportPackage(session, clipGraph, packagePath);
         QVERIFY2(exportReport.success, qPrintable(exportReport.error));
         QVERIFY(QFileInfo::exists(packagePath));
         QVERIFY(exportReport.assetCount >= 1);
@@ -151,7 +149,7 @@ private slots:
         QTemporaryDir dir;
         const QJsonObject session{{QStringLiteral("version"), 1}};
         const QString packagePath = dir.filePath(QStringLiteral("empty.prism"));
-        const auto report = ProjectPackager::exportPackage(session, {}, packagePath);
+        const auto report = ProjectPackager::exportPackage(session, ClipGraph(), packagePath);
         QVERIFY2(report.success, qPrintable(report.error));
         QVERIFY(QFileInfo::exists(packagePath));
         QCOMPARE(report.assetCount, 0);

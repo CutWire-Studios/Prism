@@ -1,4 +1,4 @@
-#include "ui/common/ThumbHelper.h"
+#include "app/common/ThumbHelper.h"
 #include "core/sources/SourceDescriptor.h"
 #include "ui/editors/ShapeEditDialog.h"
 #include "ui/editors/TextEditDialog.h"
@@ -18,43 +18,43 @@ class TestThumbHelper : public QObject {
 
 private slots:
     void makeIconThumb_sizeAndContent() {
-        const QPixmap pix = ThumbHelper::makeIconThumb(QStringLiteral("A"), 110, 65);
+        const QImage pix = ThumbHelper::makeIconThumb(QStringLiteral("A"), 110, 65);
         QCOMPARE(pix.size(), QSize(110, 65));
         QVERIFY(!pix.isNull());
     }
 
     void makeCanvasThumb_checkeredAndTransparent() {
-        const QPixmap checkered = ThumbHelper::makeCanvasThumb(
+        const QImage checkered = ThumbHelper::makeCanvasThumb(
             QStringLiteral("CV"), SourceDescriptor::CanvasFill::Checkered);
         QCOMPARE(checkered.size(), QSize(110, 65));
         QVERIFY(!checkered.isNull());
 
-        const QPixmap transparent = ThumbHelper::makeCanvasThumb(
+        const QImage transparent = ThumbHelper::makeCanvasThumb(
             QStringLiteral("ignored"), SourceDescriptor::CanvasFill::Transparent);
         QVERIFY(!transparent.isNull());
     }
 
     void makeCanvasThumb_solidColor() {
         const QColor fill(Qt::red);
-        const QPixmap pix = ThumbHelper::makeCanvasThumb(
+        const QImage pix = ThumbHelper::makeCanvasThumb(
             QStringLiteral("CV"), SourceDescriptor::CanvasFill::Color, fill, 32, 32);
         QCOMPARE(pix.size(), QSize(32, 32));
-        QImage img = pix.toImage();
+        const QImage &img = pix;
         QCOMPARE(img.pixelColor(16, 16), fill);
     }
 
-    void makeShaderThumb_returnsPixmap() {
+    void makeShaderThumb_returnsImage() {
         const QString code = QStringLiteral(
             "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
             "  fragColor = vec4(fragCoord / iResolution.xy, 0.5, 1.0);\n"
             "}\n");
-        const QPixmap pix = ThumbHelper::makeShaderThumb(code, 64, 48);
+        const QImage pix = ThumbHelper::makeShaderThumb(code, 64, 48);
         QCOMPARE(pix.size(), QSize(64, 48));
         QVERIFY(!pix.isNull());
     }
 
     void makeShaderThumb_emptyCodeFallsBack() {
-        const QPixmap pix = ThumbHelper::makeShaderThumb(QString(), 110, 65);
+        const QImage pix = ThumbHelper::makeShaderThumb(QString(), 110, 65);
         QCOMPARE(pix.size(), QSize(110, 65));
         QVERIFY(!pix.isNull());
     }
@@ -63,7 +63,7 @@ private slots:
         SourceDescriptor desc;
         desc.kind = SourceDescriptor::Kind::SvgTemplate;
         desc.svgTemplateId = QStringLiteral("clock");
-        const QPixmap pix = ThumbHelper::makeSvgTemplateThumb(desc, 110, 65);
+        const QImage pix = ThumbHelper::makeSvgTemplateThumb(desc, 110, 65);
         QCOMPARE(pix.size(), QSize(110, 65));
         QVERIFY(!pix.isNull());
     }

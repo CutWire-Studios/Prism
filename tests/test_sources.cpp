@@ -4,8 +4,8 @@
 #include "core/sources/VideoFileSource.h"
 #include "core/sources/SourceDescriptor.h"
 #include "core/project/ClipManager.h"
-#include "ui/mainwindow/SourceFactory.h"
-#include "ui/canvas/VideoWidget.h"
+#include "app/mainwindow/SourceFactory.h"
+#include "core/render/Compositor.h"
 
 #include <QtTest>
 #include <QTemporaryDir>

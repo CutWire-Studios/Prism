@@ -1,6 +1,6 @@
 #include "ui/hotkeys/HotkeyEditorDialog.h"
 #include "ui/hotkeys/HotkeyManager.h"
-#include "ui/nodes/ClipNodeEditor.h"
+#include "core/graph/ClipGraph.h"
 #include "ui/common/Theme.h"
 
 #include <QTableWidget>
@@ -82,11 +82,11 @@ private:
 
 } // namespace
 
-HotkeyEditorDialog::HotkeyEditorDialog(HotkeyManager *manager, ClipNodeEditor *editor,
+HotkeyEditorDialog::HotkeyEditorDialog(HotkeyManager *manager, ClipGraph *graph,
                                        QWidget *parent)
     : QDialog(parent)
     , m_manager(manager)
-    , m_editor(editor)
+    , m_editor(graph)
 {
     setWindowTitle(tr("Edit Hotkeys"));
     setMinimumSize(720, 420);
@@ -147,16 +147,16 @@ HotkeyEditorDialog::HotkeyEditorDialog(HotkeyManager *manager, ClipNodeEditor *e
 void HotkeyEditorDialog::populateTable() {
     m_table->setRowCount(0);
 
-    const QVector<AbSlotInfo> inputs = m_editor->abSelectInputs();
+    const QVector<ClipGraph::AbSlotInfo> inputs = m_editor->abSelectInputs();
 
     // Count distinct switchers so labels only mention the node when ambiguous.
     QList<NodeId> abNodes;
-    for (const AbSlotInfo &info : inputs)
+    for (const ClipGraph::AbSlotInfo &info : inputs)
         if (!abNodes.contains(info.ref.abNodeId))
             abNodes.append(info.ref.abNodeId);
 
     int row = 0;
-    for (const AbSlotInfo &info : inputs) {
+    for (const ClipGraph::AbSlotInfo &info : inputs) {
         m_table->insertRow(row);
 
         QString label = info.name.isEmpty() ? tr("In %1").arg(info.ref.slot + 1)
@@ -206,7 +206,7 @@ void HotkeyEditorDialog::populateTable() {
     refreshConflictHighlights();
 }
 
-AbSlotRef HotkeyEditorDialog::slotRefForRow(int row) const {
+ClipGraph::AbSlotRef HotkeyEditorDialog::slotRefForRow(int row) const {
     const QTableWidgetItem *item = m_table->item(row, 0);
     if (!item)
         return {};
@@ -214,14 +214,14 @@ AbSlotRef HotkeyEditorDialog::slotRefForRow(int row) const {
             item->data(Qt::UserRole + 1).toInt()};
 }
 
-QMap<AbSlotRef, Qt::Key> HotkeyEditorDialog::collectBindings(bool *hasConflicts) const {
-    QMap<AbSlotRef, Qt::Key> bindings;
+QMap<ClipGraph::AbSlotRef, Qt::Key> HotkeyEditorDialog::collectBindings(bool *hasConflicts) const {
+    QMap<ClipGraph::AbSlotRef, Qt::Key> bindings;
     QList<Qt::Key> usedKeys;
     if (hasConflicts)
         *hasConflicts = false;
 
     for (int row = 0; row < m_table->rowCount(); ++row) {
-        const AbSlotRef ref = slotRefForRow(row);
+        const ClipGraph::AbSlotRef ref = slotRefForRow(row);
         const auto *capture = qobject_cast<const HotkeyCaptureEdit *>(m_table->cellWidget(row, 1));
         if (!ref.isValid() || !capture)
             continue;
@@ -325,7 +325,7 @@ void HotkeyEditorDialog::onExportProfile() {
     root.insert(QStringLiteral("version"), 2);
     QJsonArray bindings;
     for (int row = 0; row < m_table->rowCount(); ++row) {
-        const AbSlotRef ref = slotRefForRow(row);
+        const ClipGraph::AbSlotRef ref = slotRefForRow(row);
         const auto *capture = qobject_cast<const HotkeyCaptureEdit *>(m_table->cellWidget(row, 1));
         if (!ref.isValid() || !capture)
             continue;
@@ -362,7 +362,7 @@ void HotkeyEditorDialog::onClearAll() {
 
 void HotkeyEditorDialog::onApply() {
     bool hasConflicts = false;
-    const QMap<AbSlotRef, Qt::Key> bindings = collectBindings(&hasConflicts);
+    const QMap<ClipGraph::AbSlotRef, Qt::Key> bindings = collectBindings(&hasConflicts);
     if (hasConflicts) {
         QMessageBox::warning(this, tr("Hotkey Conflict"),
                              tr("Two or more switcher inputs use the same key. "

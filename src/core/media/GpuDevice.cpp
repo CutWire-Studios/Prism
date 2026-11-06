@@ -320,13 +320,42 @@ QList<QPair<QString, PciId>> drmRenderNodes()
     return nodes;
 }
 
+bool isLimitedPreviewGpu(PciId id)
+{
+    if (id.vendor != 0x8086)
+        return false;
+    switch (id.device) {
+    case 0x0102:
+    case 0x0106:
+    case 0x010A:
+    case 0x0112:
+    case 0x0116:
+    case 0x0122:
+    case 0x0126:
+    case 0x0152:
+    case 0x0156:
+    case 0x015A:
+    case 0x0162:
+    case 0x0166:
+    case 0x016A:
+        return true;
+    default:
+        return false;
+    }
+}
+
 PciId renderPciId(const QString &glVendor)
 {
     const QString vendor = glVendor.isEmpty() ? prism::hwaccel::renderVendor() : glVendor;
     // The probed node describes the live renderer, so it cannot answer for anyone else.
     if (glVendor.isEmpty() || glVendor == prism::hwaccel::renderVendor()) {
         if (const QString node = renderDrmNode(); !node.isEmpty()) {
-            if (const PciId id = pciIdForDrmNode(node); id.isValid())
+            // The vendor hint can be overridden after the probe, so a node on another vendor's
+            // card is stale rather than an answer.
+            const quint16 nodeVendor = vendorIdForGlVendor(vendor);
+            if (const PciId id = pciIdForDrmNode(node);
+                id.isValid() && (nodeVendor == 0 || id.vendor == nodeVendor
+                                 || (nodeVendor == 0x1002 && id.vendor == 0x1022)))
                 return id;
         }
     }
@@ -392,16 +421,20 @@ QList<Adapter> hardwareAdapters()
     return adapters;
 }
 
-int adapterIndexForGlVendor(const QString &glVendor)
+int adapterIndexForVendorId(quint16 vendorId)
 {
-    const quint16 wanted = vendorIdForGlVendor(glVendor);
-    if (wanted == 0)
+    if (vendorId == 0)
         return -1;
     for (const Adapter &adapter : hardwareAdapters()) {
-        if (adapter.vendorId == wanted || (wanted == 0x1002 && adapter.vendorId == 0x1022))
+        if (adapter.vendorId == vendorId || (vendorId == 0x1002 && adapter.vendorId == 0x1022))
             return adapter.index;
     }
     return -1;
+}
+
+int adapterIndexForGlVendor(const QString &glVendor)
+{
+    return adapterIndexForVendorId(vendorIdForGlVendor(glVendor));
 }
 
 void setSysfsRootForTesting(const QString &root)

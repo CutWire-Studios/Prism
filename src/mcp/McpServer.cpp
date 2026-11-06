@@ -18,10 +18,10 @@
 
 namespace prism::mcp {
 
-McpServer::McpServer(MainWindow *window, QObject *parent)
+McpServer::McpServer(AppController *app, QObject *parent)
     : QObject(parent)
-    , m_window(window)
-    , m_dispatcher(std::make_unique<McpDispatcher>(window))
+    , m_app(app)
+    , m_dispatcher(std::make_unique<McpDispatcher>(app))
 {
 }
 

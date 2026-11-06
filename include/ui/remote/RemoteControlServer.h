@@ -3,11 +3,10 @@
 #include <QTcpServer>
 #include <QHostAddress>
 #include <QPointer>
-#include "ui/transitions/TransitionController.h"
 
-class QSlider;
+class AppController;
 class QTcpSocket;
-class MainWindow;
+class TransitionController;
 
 /// TCP server that lets a remote client (phone/companion app) drive the live
 /// transition and T-bar fader. Speaks the line protocol in RemoteProtocol.
@@ -16,7 +15,7 @@ class RemoteControlServer : public QTcpServer {
 public:
     static constexpr quint16 kPort = 38470;
 
-    explicit RemoteControlServer(MainWindow *mainWindow, TransitionController *transitionCtrl, QSlider *faderSlider, QObject *parent = nullptr);
+    explicit RemoteControlServer(AppController *app, QObject *parent = nullptr);
     ~RemoteControlServer() override;
 
     bool startServer(const QHostAddress &address, quint16 port);
@@ -39,10 +38,9 @@ private:
     void sendJsonResponse(QTcpSocket *socket, const QByteArray &json);
     void sendTextResponse(QTcpSocket *socket, const QString &text, int statusCode);
     QString getWebPageHtml() const;
+    TransitionController *transitions() const;
 
-    QPointer<MainWindow> m_mainWindow;
-    QPointer<TransitionController> m_transitionCtrl;
-    QPointer<QSlider> m_faderSlider;
+    QPointer<AppController> m_mainWindow;
     bool m_isRunning = false;
     QHostAddress m_serverAddress;
     quint16 m_serverPort = kPort;

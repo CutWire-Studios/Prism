@@ -1,11 +1,15 @@
 #include "core/media/VideoDecoder.h"
 
+#include "core/media/GpuDevice.h"
 #include "core/media/GpuVideoUploader.h"
 #include "core/media/MediaProbe.h"
 
+#include <QByteArray>
 #include <QDebug>
+#include <QHash>
 #include <QMutex>
 #include <QMutexLocker>
+#include <QPair>
 #include <QSettings>
 #include <QtGlobal>
 
@@ -67,17 +71,27 @@ void installRecordingLogCallback()
     std::call_once(once, [] { av_log_set_callback(recordingLogCallback); });
 }
 
-// One CUDA device for every decoder. Each av_hwdevice_ctx_create makes a CUDA context of its own,
-// while GpuVideoUploader's interop textures are registered with exactly one; two hardware clips on
+// One device per backend (and device node) for every decoder, created on first use.
+//
+// CUDA is where this started. Each av_hwdevice_ctx_create makes a CUDA context of its own, while
+// GpuVideoUploader's interop textures are registered with exactly one; two hardware clips on
 // separate contexts made every switch between them fail to map. NVDEC decoders share a context
-// without trouble. Never released: tearing a CUDA context down during the driver's own exit
-// teardown aborts the process.
-AVBufferRef *sharedCudaDevice()
+// without trouble. VAAPI and D3D11VA share for the cost alone: a device per clip meant a DRM fd
+// and a vaInitialize, or a D3D11 device, for every clip opened. Keyed by the device string too,
+// since that follows the render GPU and may not be known yet the first time.
+//
+// Never released: tearing a CUDA context down during the driver's own exit teardown aborts the
+// process. A failed creation is not remembered, so the next decoder tries again.
+AVBufferRef *sharedHwDevice(AVHWDeviceType type, const QByteArray &deviceString)
 {
     static QMutex mutex;
-    static AVBufferRef *device = nullptr;
+    static QHash<QPair<int, QByteArray>, AVBufferRef *> devices;
     QMutexLocker lock(&mutex);
-    if (!device && av_hwdevice_ctx_create(&device, AV_HWDEVICE_TYPE_CUDA, nullptr, nullptr, 0) < 0) {
+    AVBufferRef *&device = devices[{int(type), deviceString}];
+    if (!device
+        && av_hwdevice_ctx_create(&device, type,
+                                  deviceString.isEmpty() ? nullptr : deviceString.constData(),
+                                  nullptr, 0) < 0) {
         av_buffer_unref(&device);
         return nullptr;
     }
@@ -575,6 +589,19 @@ bool VideoDecoder::openSoftwareDecoder()
     return true;
 }
 
+// hardwareDecodeIsWorthIt() weighs decode cost against reading a GPU frame back to the CPU. Once a
+// frame has gone straight from a decoder into GL with no importer declining, that readback is
+// gone and hardware decode is cheaper for light clips too. Evidence rather than prediction: until
+// a heavy clip has proved the path the heuristic stands, and the first decline withdraws it.
+bool VideoDecoder::zeroCopyProven()
+{
+    using Path = prism::GpuVideoUploader::UploadPath;
+    const Path path = prism::GpuVideoUploader::lastUploadPath();
+    const bool zeroCopy = path == Path::CudaInterop || path == Path::VaapiDmaBuf
+        || path == Path::D3d11Interop;
+    return zeroCopy && prism::GpuVideoUploader::lastZeroCopyDeclineReason().isEmpty();
+}
+
 bool VideoDecoder::hardwareDecodeIsWorthIt() const
 {
     const AVStream *stream = m_fmt->streams[m_streamIndex];
@@ -612,8 +639,9 @@ bool VideoDecoder::openHardwareDecoderWith(hwaccel::Backend backend)
         return false;
 
     installRecordingLogCallback();
-    if (type == AV_HWDEVICE_TYPE_CUDA) {
-        m_hwDevice = sharedCudaDevice();
+    if (type == AV_HWDEVICE_TYPE_CUDA || type == AV_HWDEVICE_TYPE_VAAPI
+        || type == AV_HWDEVICE_TYPE_D3D11VA) {
+        m_hwDevice = sharedHwDevice(type, hwaccel::deviceString(type));
         if (!m_hwDevice)
             return false;
     } else {
@@ -671,7 +699,12 @@ bool VideoDecoder::tryOpenHardwareDecoder()
     const Mode decodeMode = mode();
     if (decodeMode == Mode::Software)
         return false;
-    if (decodeMode == Mode::Auto && !hardwareDecodeIsWorthIt())
+    if (decodeMode == Mode::Auto && !hardwareDecodeIsWorthIt() && !zeroCopyProven())
+        return false;
+    // Sandy/Ivy Bridge: hardware decode plus a CPU preview upload is slower than software there,
+    // and is the path that published empty NV12 on the HD 2500.
+    if (decodeMode == Mode::Auto
+        && prism::gpu::isLimitedPreviewGpu(prism::gpu::renderPciId(hwaccel::renderVendor())))
         return false;
 
     // An explicit pick is honoured on its own: falling back to a backend the user did not choose
@@ -715,6 +748,8 @@ void VideoDecoder::recordHardwareFailure(const QString &what)
     }
     qWarning("VideoDecoder: hardware decode failed, falling back to software: %s",
              qUtf8Printable(text));
+    hwaccel::reportFailure(hwaccel::AccelerationFailure::Stage::Decode,
+                           QString::fromLatin1(hwaccel::name(m_hwBackend)), text);
 }
 
 bool VideoDecoder::fallbackToSoftware(const QString &why)
@@ -883,8 +918,12 @@ AVFrame *VideoDecoder::toPresentable(AVFrame *decoded)
                 src = scaled;
             }
         }
-        if (prism::GpuVideoUploader::mayImport(src))
+        if (prism::GpuVideoUploader::mayImport(src)) {
+            // Here, not on the GUI thread that imports it: by then a seek may have destroyed the
+            // decoder or scaler context that wrote the surface.
+            hwaccel::syncVaapiFrame(src);
             return owned ? owned : av_frame_clone(src);
+        }
 
         // No zero-copy path takes this surface: read it back here, off the GUI thread.
         AVFrame *sw = av_frame_alloc();

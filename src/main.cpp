@@ -1,8 +1,10 @@
-#include "ui/mainwindow/MainWindow.h"
-#include "ui/mainwindow/GetStartedDialog.h"
+#include "app/AppController.h"
+#include "app/GraphicsApiChoice.h"
+#include "app/gpu/GpuPreference.h"
+#include "app/graph/GraphRuntime.h"
+#include "app/preview/AppCompositor.h"
 #include "ui/common/Icons.h"
 #include "ui/common/Theme.h"
-#include "ui/mainwindow/PrismSplashScreen.h"
 #include "core/platform/MacPermissions.h"
 #include "mcp/McpStdio.h"
 #include "core/media/GpuVideoUploader.h"
@@ -13,14 +15,24 @@
 #include <QApplication>
 #include <QByteArray>
 #include <QIcon>
+#include <QProcess>
+#include <QQmlApplicationEngine>
+#include <QQuickImageProvider>
+#include <QQuickWindow>
 #include <QTimer>
 #include <QtGlobal>
-#include <QThread>
 #include <QCoreApplication>
 
 extern "C" {
 #include <libavutil/log.h>
 }
+
+#ifdef Q_OS_WIN
+extern "C" {
+__declspec(dllexport) unsigned long NvOptimusEnablement = 0;
+__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 0;
+}
+#endif
 
 int main(int argc, char *argv[]) {
     for (int i = 1; i < argc; ++i) {
@@ -57,7 +69,15 @@ int main(int argc, char *argv[]) {
     // EGL, which has to be chosen before the platform plugin loads.
     QCoreApplication::setOrganizationName(QStringLiteral("Prism"));
     QCoreApplication::setApplicationName(QStringLiteral(PRISM_APP_NAME));
+    [[maybe_unused]] const bool graphicsApiGuarded = prism::graphics::applyAtStartup(argc, argv);
     prism::applyZeroCopyXcbEgl();
+#ifdef Q_OS_WIN
+    if (prism::gpu::applyStoredPreference() == prism::gpu::Preference::HighPerformance) {
+        NvOptimusEnablement = 1;
+        AmdPowerXpressRequestHighPerformance = 1;
+    }
+#endif
+    qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
 
     QApplication app(argc, argv);
     app.setOrganizationName("Prism");
@@ -81,41 +101,45 @@ int main(int argc, char *argv[]) {
     Theme::loadFonts();
     Theme::instance().apply();
 
-    // Initialize and show custom splash screen
-    PrismSplashScreen splash;
-    splash.show();
-    splash.setProgress(15, "Initializing video codecs...");
-    app.processEvents();
-    QThread::msleep(150);
+    AppController controller;
+    AppCompositor::setInstance(controller.compositor());
 
-    // Resources are compiled into prism_core (static lib); register them here so
-    // :/… paths (shaders, SVG templates, Lua examples, etc.) resolve at runtime.
-    splash.setProgress(45, "Loading icons & resources...");
-    app.processEvents();
-    QThread::msleep(150);
+    QQmlApplicationEngine engine;
+    controller.setEngine(&engine);
+    if (auto *runtime = controller.graphRuntime())
+        engine.addImageProvider(QStringLiteral("nodethumb"), runtime->createImageProvider());
+    QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
+                     [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, &controller,
+                     [&controller] { controller.shutdown(); });
+    engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Prism/src/qml/Main.qml")));
+    if (engine.rootObjects().isEmpty())
+        return 1;
 
-    splash.setProgress(75, "Constructing live media engine...");
-    app.processEvents();
-    MainWindow window;
-    QThread::msleep(150);
-
-    splash.setProgress(100, "Starting interface...");
-    app.processEvents();
-    QThread::msleep(100);
-
-    window.show();
-    splash.finish(&window);
-    GetStartedDialog::showIfNeeded(&window);
-
-    // macOS shows the camera/mic prompt only when the app asks explicitly. Do it
-    // once the window is up so the dialog isn't parented to the splash. No-op
-    // elsewhere.
-    MacPermissions::requestCameraAndMicrophone();
-
-    if (qEnvironmentVariableIsSet("PRISM_AUTO_QUIT_MS")) {
-        const int ms = qEnvironmentVariableIntValue("PRISM_AUTO_QUIT_MS");
-        QTimer::singleShot(qMax(ms, 1), &window, &QWidget::close);
+    if (auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().constFirst())) {
+        if (graphicsApiGuarded) {
+            QObject::connect(window, &QQuickWindow::frameSwapped, &app,
+                             [] { prism::graphics::markStarted(); },
+                             static_cast<Qt::ConnectionType>(Qt::QueuedConnection | Qt::SingleShotConnection));
+            QObject::connect(window, &QQuickWindow::sceneGraphError, &app,
+                             [](QQuickWindow::SceneGraphError, const QString &message) {
+                qCritical("Qt Quick could not start on the chosen graphics API: %s", qUtf8Printable(message));
+                prism::graphics::revertAfterFailure();
+                QProcess::startDetached(QCoreApplication::applicationFilePath(),
+                                        QCoreApplication::arguments().mid(1));
+                QCoreApplication::exit(1);
+            }, Qt::QueuedConnection);
+        }
+        if (qEnvironmentVariableIsSet("PRISM_AUTO_QUIT_MS")) {
+            const int ms = qEnvironmentVariableIntValue("PRISM_AUTO_QUIT_MS");
+            QTimer::singleShot(qMax(ms, 1), window, &QQuickWindow::close);
+        }
     }
+
+    controller.start();
+
+    // macOS shows the camera/mic prompt only when the app asks explicitly. No-op elsewhere.
+    MacPermissions::requestCameraAndMicrophone();
 
     return app.exec();
 }

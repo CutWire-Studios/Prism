@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ui/recording/ProgramRecorder.h"
-#include "ui/canvas/VideoWidget.h"
+#include "core/render/Compositor.h"
 
 #include <QDir>
 #include <QFile>
@@ -69,8 +69,8 @@ inline QString encodeSampleMkv(const QString &dirPath, int frameCount = 30,
         return {};
     }
 
-    const QImage frame = makeSolidImage(VideoWidget::programWidth(),
-                                        VideoWidget::programHeight(), color);
+    const QImage frame = makeSolidImage(Compositor::programWidth(),
+                                        Compositor::programHeight(), color);
     for (int i = 0; i < frameCount; ++i) {
         recorder.submitFrame(frame);
     }

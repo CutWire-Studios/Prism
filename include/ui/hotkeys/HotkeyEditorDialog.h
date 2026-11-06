@@ -3,7 +3,7 @@
 #include <QDialog>
 #include <QMap>
 #include <Qt>
-#include "ui/nodes/ClipNodeEditor.h"
+#include "core/graph/ClipGraph.h"
 
 class HotkeyManager;
 class QTableWidget;
@@ -13,7 +13,7 @@ class HotkeyEditorDialog : public QDialog {
     Q_OBJECT
 
 public:
-    explicit HotkeyEditorDialog(HotkeyManager *manager, ClipNodeEditor *editor,
+    explicit HotkeyEditorDialog(HotkeyManager *manager, ClipGraph *graph,
                                 QWidget *parent = nullptr);
 
 private slots:
@@ -25,10 +25,10 @@ private slots:
 
 private:
     void populateTable();
-    QMap<AbSlotRef, Qt::Key> collectBindings(bool *hasConflicts) const;
-    AbSlotRef slotRefForRow(int row) const;
+    QMap<ClipGraph::AbSlotRef, Qt::Key> collectBindings(bool *hasConflicts) const;
+    ClipGraph::AbSlotRef slotRefForRow(int row) const;
 
     HotkeyManager   *m_manager = nullptr;
-    ClipNodeEditor  *m_editor  = nullptr;
+    ClipGraph       *m_editor  = nullptr;
     QTableWidget    *m_table   = nullptr;
 };

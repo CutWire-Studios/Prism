@@ -3,10 +3,9 @@
 #include <QDialog>
 #include <QVector>
 #include "ui/recording/RecordingOptions.h"
-#include "ui/output/OutputHub.h"
-#include "ui/nodes/ClipNodeModel.h"
+#include "app/output/OutputHub.h"
+#include "core/graph/ClipGraph.h"
 
-class ClipNodeEditor;
 class QVBoxLayout;
 class QLineEdit;
 class QTimer;
@@ -18,7 +17,7 @@ class RecordingSettingsDialog : public QDialog {
     Q_OBJECT
 
 public:
-    explicit RecordingSettingsDialog(OutputHub *hub, ClipNodeEditor *editor, QWidget *parent = nullptr);
+    explicit RecordingSettingsDialog(OutputHub *hub, ClipGraph *graph, QWidget *parent = nullptr);
 
     void syncFromHub();
 
@@ -47,7 +46,7 @@ private:
     StreamRow *rowForSender();
 
     OutputHub       *m_hub = nullptr;
-    ClipNodeEditor  *m_editor = nullptr;
+    ClipGraph       *m_graph = nullptr;
     QLineEdit       *m_outputDirEdit = nullptr;
     QVBoxLayout     *m_streamListLayout = nullptr;
     QVBoxLayout     *m_audioListLayout = nullptr;

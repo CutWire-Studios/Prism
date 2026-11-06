@@ -1,20 +1,84 @@
 #include "ui/hotkeys/HotkeyManager.h"
-#include <QShortcut>
+#include <QCoreApplication>
+#include <QGuiApplication>
+#include <QInputMethodQueryEvent>
+#include <QKeyEvent>
 #include <QKeySequence>
 #include <QSettings>
-#include <QWidget>
 #include <QJsonDocument>
 #include <QDebug>
 
 namespace {
 constexpr int kProfileVersion = 2;   // v1 bound clips; v2 binds A/B switcher inputs
+
+using AbSlotRef = ClipGraph::AbSlotRef;
+using AbSlotInfo = ClipGraph::AbSlotInfo;
+
+// Shift turns the digit row into symbols (US layout), and QKeyEvent::key() reports the symbol.
+Qt::Key unshiftedDigit(int key) {
+    switch (key) {
+    case Qt::Key_Exclam:      return Qt::Key_1;
+    case Qt::Key_At:          return Qt::Key_2;
+    case Qt::Key_NumberSign:  return Qt::Key_3;
+    case Qt::Key_Dollar:      return Qt::Key_4;
+    case Qt::Key_Percent:     return Qt::Key_5;
+    case Qt::Key_AsciiCircum: return Qt::Key_6;
+    case Qt::Key_Ampersand:   return Qt::Key_7;
+    case Qt::Key_Asterisk:    return Qt::Key_8;
+    case Qt::Key_ParenLeft:   return Qt::Key_9;
+    case Qt::Key_ParenRight:  return Qt::Key_0;
+    default:                  return Qt::Key_unknown;
+    }
 }
 
-HotkeyManager::HotkeyManager(QWidget *shortcutParent, ClipNodeEditor *editor, QObject *parent)
-    : QObject(parent), m_shortcutParent(shortcutParent), m_editor(editor)
+bool focusIsTextInput() {
+    QObject *focus = QGuiApplication::focusObject();
+    if (!focus)
+        return false;
+    QInputMethodQueryEvent query(Qt::ImEnabled);
+    QCoreApplication::sendEvent(focus, &query);
+    return query.value(Qt::ImEnabled).toBool();
+}
+}
+
+HotkeyManager::HotkeyManager(ClipGraph *graph, QObject *parent)
+    : QObject(parent), m_graph(graph)
 {
     loadSettingsProfile();
     syncWithGraph();
+    if (qApp)
+        qApp->installEventFilter(this);
+}
+
+bool HotkeyManager::eventFilter(QObject *watched, QEvent *event) {
+    const QEvent::Type type = event->type();
+    if (type != QEvent::KeyPress && type != QEvent::ShortcutOverride)
+        return false;
+    if (!watched->isWindowType() || QGuiApplication::modalWindow())
+        return false;
+
+    auto *ke = static_cast<QKeyEvent *>(event);
+    const Qt::KeyboardModifiers mods = ke->modifiers() & ~Qt::KeypadModifier;
+    if (mods != Qt::NoModifier && mods != Qt::ShiftModifier)
+        return false;
+    const bool deckA = mods == Qt::NoModifier;
+
+    int key = ke->key();
+    if (!deckA) {
+        const Qt::Key plain = unshiftedDigit(key);
+        if (plain != Qt::Key_unknown)
+            key = plain;
+    }
+    const AbSlotRef ref = m_keyToSlot.value(static_cast<Qt::Key>(key));
+    if (!ref.isValid() || focusIsTextInput())
+        return false;
+
+    if (type == QEvent::ShortcutOverride) {
+        event->accept();
+        return false;
+    }
+    m_graph->triggerAbSlot(ref, deckA);
+    return true;
 }
 
 const QList<Qt::Key> &HotkeyManager::hotkeySequence() {
@@ -59,35 +123,12 @@ void HotkeyManager::bindKey(const AbSlotRef &slot, Qt::Key key) {
         const Qt::Key oldKey = m_slotHotkeys.value(slot);
         if (oldKey != key)
             m_keyToSlot.remove(oldKey);
-        auto sit = m_slotShortcuts.find(slot);
-        if (sit != m_slotShortcuts.end()) {
-            delete sit.value().deckA;
-            delete sit.value().deckB;
-            m_slotShortcuts.erase(sit);
-        }
     }
 
     m_slotHotkeys[slot] = key;
     m_keyToSlot[key]    = slot;
 
-    auto *scA = new QShortcut(QKeySequence(key), m_shortcutParent);
-    scA->setContext(Qt::ApplicationShortcut);
-    connect(scA, &QShortcut::activated, this, [this, key]() {
-        const AbSlotRef ref = m_keyToSlot.value(key);
-        if (ref.isValid())
-            m_editor->triggerAbSlot(ref, true);
-    });
-
-    auto *scB = new QShortcut(QKeySequence(Qt::SHIFT | key), m_shortcutParent);
-    scB->setContext(Qt::ApplicationShortcut);
-    connect(scB, &QShortcut::activated, this, [this, key]() {
-        const AbSlotRef ref = m_keyToSlot.value(key);
-        if (ref.isValid())
-            m_editor->triggerAbSlot(ref, false);
-    });
-
-    m_slotShortcuts[slot] = {scA, scB};
-    m_editor->setAbSlotHotkeyLabel(slot, QKeySequence(key).toString());
+    m_graph->setAbSlotHotkeyLabel(slot, QKeySequence(key).toString());
 }
 
 void HotkeyManager::releaseSlot(const AbSlotRef &slot) {
@@ -98,23 +139,17 @@ void HotkeyManager::releaseSlot(const AbSlotRef &slot) {
     m_keyToSlot.remove(hit.value());
     m_slotHotkeys.erase(hit);
 
-    auto sit = m_slotShortcuts.find(slot);
-    if (sit != m_slotShortcuts.end()) {
-        delete sit.value().deckA;
-        delete sit.value().deckB;
-        m_slotShortcuts.erase(sit);
-    }
-    m_editor->setAbSlotHotkeyLabel(slot, {});
+    m_graph->setAbSlotHotkeyLabel(slot, {});
 }
 
 void HotkeyManager::refreshSlotLabels() {
-    m_editor->clearAbSlotHotkeyLabels();
+    m_graph->clearAbSlotHotkeyLabels();
     for (auto it = m_slotHotkeys.cbegin(); it != m_slotHotkeys.cend(); ++it)
-        m_editor->setAbSlotHotkeyLabel(it.key(), QKeySequence(it.value()).toString());
+        m_graph->setAbSlotHotkeyLabel(it.key(), QKeySequence(it.value()).toString());
 }
 
 void HotkeyManager::syncWithGraph() {
-    const QVector<AbSlotInfo> inputs = m_editor->abSelectInputs();
+    const QVector<AbSlotInfo> inputs = m_graph->abSelectInputs();
 
     QList<AbSlotRef> alive;
     alive.reserve(inputs.size());
@@ -196,7 +231,7 @@ void HotkeyManager::applyBindings(const QMap<AbSlotRef, Qt::Key> &bindings) {
         releaseSlot(ref);
 
     QList<AbSlotRef> alive;
-    for (const AbSlotInfo &info : m_editor->abSelectInputs())
+    for (const AbSlotInfo &info : m_graph->abSelectInputs())
         alive.append(info.ref);
 
     for (auto it = bindings.cbegin(); it != bindings.cend(); ++it) {
@@ -234,7 +269,7 @@ void HotkeyManager::restoreHotkeys(const QJsonArray &hotkeys) {
     for (const AbSlotRef &ref : existing)
         releaseSlot(ref);
 
-    const QVector<AbSlotInfo> inputs = m_editor->abSelectInputs();
+    const QVector<AbSlotInfo> inputs = m_graph->abSelectInputs();
 
     QStringList skipped;
     for (const auto &val : hotkeys) {
@@ -301,7 +336,7 @@ bool HotkeyManager::importProfile(const QJsonObject &profile, QStringList *warni
     }
 
     QList<AbSlotRef> alive;
-    for (const AbSlotInfo &info : m_editor->abSelectInputs())
+    for (const AbSlotInfo &info : m_graph->abSelectInputs())
         alive.append(info.ref);
 
     QMap<AbSlotRef, Qt::Key> desired;

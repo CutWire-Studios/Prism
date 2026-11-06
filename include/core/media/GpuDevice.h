@@ -89,6 +89,15 @@ QString adapterName(PciId id);
 // DXGI hardware adapters in factory order. Empty off Windows.
 QList<Adapter> hardwareAdapters();
 
+// Sandy Bridge / Ivy Bridge Intel iGPUs (HD 2000-4000). Hardware decode plus a CPU preview
+// round-trip on these is slower than software, so Auto decode refuses hardware for them.
+bool isLimitedPreviewGpu(PciId id);
+
+// DXGI index of the first hardware adapter with this PCI vendor id, or -1. AMD also matches
+// 0x1022: some APUs report the CPU vendor id on the graphics adapter. Encoders use this, since
+// they want an adapter by vendor rather than the one OpenGL draws on.
+int adapterIndexForVendorId(quint16 vendorId);
+
 // DXGI index of the first hardware adapter from the vendor a GL_VENDOR string names, or -1.
 int adapterIndexForGlVendor(const QString &glVendor);
 

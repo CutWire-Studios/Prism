@@ -4,12 +4,12 @@
 #include <QObject>
 #include <QPointer>
 #include <QVariantList>
-#include "ui/nodes/ClipNodeEditor.h"
+#include "core/graph/ClipGraph.h"
 #include "ui/remote/OscProtocol.h"
 
 class QTimer;
 class QUdpSocket;
-class MainWindow;
+class AppController;
 
 /// UDP OSC server for show-control software (e.g. Linux Show Player). Settings
 /// live in QSettings under osc/*; when a feedback host is set, state changes are
@@ -20,7 +20,7 @@ public:
     static constexpr quint16 kDefaultPort = 9000;
     static constexpr quint16 kDefaultFeedbackPort = 9001;
 
-    explicit OscServer(MainWindow *mainWindow, QObject *parent = nullptr);
+    explicit OscServer(AppController *mainWindow, QObject *parent = nullptr);
     ~OscServer() override;
 
     /// (Re)reads osc/* settings and starts, restarts or stops the server.
@@ -57,7 +57,7 @@ private:
     void send(const QString &address, const QVariantList &args = {});
     State captureState() const;
 
-    QPointer<MainWindow> m_mainWindow;
+    QPointer<AppController> m_mainWindow;
     QUdpSocket *m_socket = nullptr;
     QTimer *m_pollTimer = nullptr;
     quint16 m_port = kDefaultPort;

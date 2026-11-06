@@ -20,12 +20,28 @@ class PreferencesController : public QObject
     Q_PROPERTY(bool darkModeOverridden READ darkModeOverridden NOTIFY darkModePreferenceChanged)
     Q_PROPERTY(bool darkModePreferred READ darkModePreferred NOTIFY darkModePreferenceChanged)
 
-    // Hardware-accelerated decode of source media, QSettings("decode/hardware"). Takes effect
-    // after restart.
+    // Hardware-accelerated decode of source media. Bridges VideoDecoder::modeSetting()
+    // (QSettings "playback/decodeMode"), the key the decoder reads: off is "software", on is
+    // "auto" or, with a backend pinned, "hw:<id>". Open clips reopen at once.
     Q_PROPERTY(bool hardwareDecode READ hardwareDecode WRITE setHardwareDecode NOTIFY hardwareDecodeChanged)
-    // Hardware-accelerated encode on export, QSettings("export/hardware"). Takes effect on the
-    // next export.
+    // The decode backend pinned in hardware mode: "auto" or an id from decodeBackends
+    // ("nvdec", "vaapi", "d3d11va", "videotoolbox"). decodeBackends lists only those whose device
+    // opens on this machine, as {id, label} maps; probing happens on first read. A pin that
+    // decodes on a different GPU than the one drawing sets decodeBackendWarning.
+    Q_PROPERTY(QString decodeBackend READ decodeBackend WRITE setDecodeBackend NOTIFY hardwareDecodeChanged)
+    Q_PROPERTY(QVariantList decodeBackends READ decodeBackends CONSTANT)
+    Q_PROPERTY(QString decodeBackendWarning READ decodeBackendWarning NOTIFY hardwareDecodeChanged)
+    // Hardware-accelerated encode of recordings. Bridges ProgramRecorder::encoderSetting()
+    // (QSettings "recording/videoEncoder"): off is "software", on is "auto". Takes effect on the
+    // next recording.
     Q_PROPERTY(bool hardwareEncode READ hardwareEncode WRITE setHardwareEncode NOTIFY hardwareEncodeChanged)
+
+    // Which GPU Prism runs on, "auto", "integrated" or "discrete" (GpuPreference.h), next launch.
+    // Supported on Windows with two or more GPUs; a Store build sends the user to Windows Settings
+    // instead (gpuPreferenceInSystemSettings).
+    Q_PROPERTY(QString gpuPreference READ gpuPreference WRITE setGpuPreference NOTIFY gpuPreferenceChanged)
+    Q_PROPERTY(bool gpuPreferenceSupported READ gpuPreferenceSupported CONSTANT)
+    Q_PROPERTY(bool gpuPreferenceInSystemSettings READ gpuPreferenceInSystemSettings CONSTANT)
 
     // Graphics API the interface is drawn with (GraphicsApiChoice.h), next launch. uiGraphicsApis
     // lists what this platform offers; uiGraphicsApiRevertedFrom names a choice this launch fell
@@ -62,8 +78,17 @@ public:
 
     bool hardwareDecode() const { return m_hardwareDecode; }
     void setHardwareDecode(bool enabled);
+    QString decodeBackend() const { return m_decodeBackend; }
+    void setDecodeBackend(const QString &id);
+    QVariantList decodeBackends() const;
+    QString decodeBackendWarning() const;
     bool hardwareEncode() const { return m_hardwareEncode; }
     void setHardwareEncode(bool enabled);
+
+    QString gpuPreference() const { return m_gpuPreference; }
+    void setGpuPreference(const QString &id);
+    bool gpuPreferenceSupported() const;
+    bool gpuPreferenceInSystemSettings() const;
 
     QString uiGraphicsApi() const { return m_uiGraphicsApi; }
     void setUiGraphicsApi(const QString &id);
@@ -98,6 +123,7 @@ signals:
     void darkModePreferenceChanged();
     void hardwareDecodeChanged();
     void hardwareEncodeChanged();
+    void gpuPreferenceChanged();
     void uiGraphicsApiChanged();
     void autosaveIntervalSecondsChanged();
     void uiLanguageChanged();
@@ -108,8 +134,12 @@ signals:
 private:
     bool m_darkModeOverridden = false;
     bool m_darkModePreferred = true;
+    void applyDecodeMode();
+
     bool m_hardwareDecode = true;
-    bool m_hardwareEncode = false;
+    QString m_decodeBackend = QStringLiteral("auto");
+    bool m_hardwareEncode = true;
+    QString m_gpuPreference = QStringLiteral("auto");
     QString m_uiGraphicsApi;
     int m_autosaveIntervalSeconds = 15;
     QString m_uiLanguage;

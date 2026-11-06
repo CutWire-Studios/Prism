@@ -16,8 +16,8 @@
 #include "core/sources/SourceDescriptor.h"
 #include "core/scripting/ScriptOutput.h"
 #include "ui/nodes/ClipNodeModel.h"
-#include "ui/nodes/ProcessEffects.h"
-#include "ui/nodes/AudioEffects.h"
+#include "core/graph/ProcessEffects.h"
+#include "core/graph/AudioEffects.h"
 
 class ClipNodeScene;
 class QGraphicsView;

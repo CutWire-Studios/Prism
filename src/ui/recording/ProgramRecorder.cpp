@@ -1,5 +1,6 @@
 #include "ui/recording/ProgramRecorder.h"
 
+#include "core/media/GpuDevice.h"
 #include "core/media/HwAccel.h"
 
 extern "C" {
@@ -13,6 +14,7 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
+#include <QByteArray>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -27,67 +29,137 @@ extern "C" {
 
 namespace {
 
-enum class HwBackend { None, Nvenc, Qsv, Amf, Vaapi };
+enum class HwBackend { None, Nvenc, Qsv, Amf, Vaapi, VideoToolbox };
 
-struct EncoderDef {
+enum Codec { CodecH264, CodecHevc, CodecAv1, CodecCount };
+
+struct CodecDef {
     const char *id;
     const char *label;
-    const char *encoder;
+    AVCodecID avId;
+    int quality;  // constant-quality value for hardware encoders, in each family's own scale
+};
+
+const CodecDef kCodecs[CodecCount] = {
+    {"h264", "H.264", AV_CODEC_ID_H264, 23},
+    {"hevc", "H.265 (HEVC)", AV_CODEC_ID_HEVC, 28},
+    {"av1", "AV1", AV_CODEC_ID_AV1, 30},
+};
+
+// One row per encoder family, with the FFmpeg encoder it uses for each codec (nullptr: none).
+// Hardware first: Auto tries them in this order and settles on the first that opens. The
+// software row is the floor, falling through to whatever encoder FFmpeg has for the codec when
+// the preferred library (x264, x265, SVT-AV1) was not built in.
+struct VendorDef {
+    const char *id;
+    const char *label;
     HwBackend hw;
+    const char *encoder[CodecCount];
 };
 
-// Hardware first: Auto tries them in this order and settles on the first that opens. x264 is the
-// floor every build has once CI ships the GPL FFmpeg.
-const EncoderDef kEncoders[] = {
-    {"nvenc", "NVIDIA NVENC", "h264_nvenc", HwBackend::Nvenc},
-    {"qsv", "Intel Quick Sync", "h264_qsv", HwBackend::Qsv},
-    {"amf", "AMD AMF", "h264_amf", HwBackend::Amf},
-    {"vaapi", "VAAPI", "h264_vaapi", HwBackend::Vaapi},
-    {"x264", "Software (x264)", "libx264", HwBackend::None},
+const VendorDef kVendors[] = {
+    {"nvenc", "NVIDIA NVENC", HwBackend::Nvenc, {"h264_nvenc", "hevc_nvenc", "av1_nvenc"}},
+    {"qsv", "Intel Quick Sync", HwBackend::Qsv, {"h264_qsv", "hevc_qsv", "av1_qsv"}},
+    {"amf", "AMD AMF", HwBackend::Amf, {"h264_amf", "hevc_amf", "av1_amf"}},
+    {"vaapi", "VAAPI", HwBackend::Vaapi, {"h264_vaapi", "hevc_vaapi", "av1_vaapi"}},
+    {"videotoolbox", "Apple VideoToolbox", HwBackend::VideoToolbox,
+     {"h264_videotoolbox", "hevc_videotoolbox", nullptr}},
+    {"software", "Software", HwBackend::None, {"libx264", "libx265", "libsvtav1"}},
 };
-constexpr int kEncoderCount = int(sizeof(kEncoders) / sizeof(kEncoders[0]));
-
-// Constant quality roughly matching x264's default look at recording bitrates.
-constexpr int kHwQuality = 23;
+constexpr int kVendorCount = int(sizeof(kVendors) / sizeof(kVendors[0]));
 
 const QString kEncoderSettingKey = QStringLiteral("recording/videoEncoder");
+const QString kCodecSettingKey = QStringLiteral("recording/videoCodec");
+const QString kContainerSettingKey = QStringLiteral("recording/container");
+
+int codecIndex(const QString &id)
+{
+    for (int i = 0; i < CodecCount; ++i) {
+        if (id == QLatin1String(kCodecs[i].id))
+            return i;
+    }
+    return CodecH264;
+}
 
 AVHWDeviceType hwDeviceType(HwBackend hw)
 {
     switch (hw) {
-    case HwBackend::Nvenc: return AV_HWDEVICE_TYPE_CUDA;
-    case HwBackend::Qsv:   return AV_HWDEVICE_TYPE_QSV;
-    case HwBackend::Amf:   return AV_HWDEVICE_TYPE_D3D11VA;
-    case HwBackend::Vaapi: return AV_HWDEVICE_TYPE_VAAPI;
-    case HwBackend::None:  break;
+    case HwBackend::Nvenc:        return AV_HWDEVICE_TYPE_CUDA;
+    case HwBackend::Qsv:          return AV_HWDEVICE_TYPE_QSV;
+    case HwBackend::Amf:          return AV_HWDEVICE_TYPE_D3D11VA;
+    case HwBackend::Vaapi:        return AV_HWDEVICE_TYPE_VAAPI;
+    case HwBackend::VideoToolbox: return AV_HWDEVICE_TYPE_VIDEOTOOLBOX;
+    case HwBackend::None:         break;
     }
     return AV_HWDEVICE_TYPE_NONE;
 }
 
+// Which device to hand av_hwdevice_ctx_create for an encoder; empty is FFmpeg's default.
+//
+// AMF maps to a D3D11VA device, which opens on any vendor's adapter, but the AMF runtime refuses
+// to initialise on anyone else's. The decode answer (the adapter OpenGL draws on) is the wrong one
+// here: on a hybrid laptop that is the NVIDIA card and "AMD AMF" would fail on a machine with a
+// perfectly good AMD encoder. NVENC needs nothing (CUDA enumerates NVIDIA GPUs itself) and QSV's
+// device string is a child-device spec, not a DXGI index.
+QByteArray encoderDeviceString(HwBackend hw)
+{
+#if defined(Q_OS_WIN)
+    if (hw == HwBackend::Amf) {
+        constexpr quint16 kPciVendorAmd = 0x1002;
+        const int index = prism::gpu::adapterIndexForVendorId(kPciVendorAmd);
+        if (index >= 0)
+            return QByteArray::number(index);
+    }
+#else
+    Q_UNUSED(hw);
+#endif
+    return {};
+}
+
 bool hwBackendOnThisOs(HwBackend hw)
 {
+    if (hw == HwBackend::None)
+        return true;
 #if defined(Q_OS_WIN)
     return hw == HwBackend::Nvenc || hw == HwBackend::Qsv || hw == HwBackend::Amf;
 #elif defined(Q_OS_MACOS)
-    Q_UNUSED(hw);
-    return false;
+    return hw == HwBackend::VideoToolbox;
 #else
     return hw == HwBackend::Nvenc || hw == HwBackend::Qsv || hw == HwBackend::Vaapi;
 #endif
 }
 
-bool encoderUsable(const EncoderDef &def)
+bool encoderUsable(const VendorDef &def, int codec)
 {
-    if (!avcodec_find_encoder_by_name(def.encoder))
+    if (!def.encoder[codec] || !avcodec_find_encoder_by_name(def.encoder[codec]))
         return false;
     if (def.hw == HwBackend::None)
         return true;
-    return hwBackendOnThisOs(def.hw) && !prism::hwaccel::disabledByEnv()
-        && prism::hwaccel::deviceAvailable(hwDeviceType(def.hw));
+    if (!hwBackendOnThisOs(def.hw) || prism::hwaccel::disabledByEnv())
+        return false;
+    const QByteArray device = encoderDeviceString(def.hw);
+#if defined(Q_OS_WIN)
+    // Empty means no AMD adapter is installed at all, and D3D11VA would happily open on someone
+    // else's and let AMF fail later.
+    if (def.hw == HwBackend::Amf && device.isEmpty())
+        return false;
+#endif
+    return prism::hwaccel::deviceAvailable(hwDeviceType(def.hw), device);
 }
 
-// NV12 when the encoder takes system-memory frames (NVENC, QSV, AMF all do), otherwise its
-// hardware surface format (VAAPI), which needs an upload per frame.
+QString vendorLabel(const VendorDef &def, int codec)
+{
+    if (def.hw != HwBackend::None)
+        return QString::fromLatin1(def.label);
+    switch (codec) {
+    case CodecHevc: return QStringLiteral("Software (x265)");
+    case CodecAv1:  return QStringLiteral("Software (SVT-AV1)");
+    default:        return QStringLiteral("Software (x264)");
+    }
+}
+
+// NV12 when the encoder takes system-memory frames (NVENC, QSV, AMF, VideoToolbox all do),
+// otherwise its hardware surface format (VAAPI), which needs an upload per frame.
 AVPixelFormat pickEncodePixFmt(const AVCodec *codec, HwBackend hw)
 {
     const void *configs = nullptr;
@@ -131,62 +203,132 @@ bool setupHwFrames(AVCodecContext *ctx, AVBufferRef *device, AVPixelFormat hwPix
 }
 
 // Low-latency, constant-quality settings per vendor, adapted from Drift's export rate control.
-void applyEncoderOptions(AVCodecContext *ctx, HwBackend hw, AVDictionary **opts)
+void applyEncoderOptions(AVCodecContext *ctx, HwBackend hw, int codec, AVDictionary **opts)
 {
     void *priv = ctx->priv_data;
+    const int quality = kCodecs[codec].quality;
     switch (hw) {
     case HwBackend::Nvenc:
         av_opt_set(priv, "preset", "p1", 0);
         av_opt_set(priv, "tune", "ll", 0);
         av_opt_set(priv, "rc", "vbr", 0);
-        av_opt_set_int(priv, "cq", kHwQuality, 0);
+        av_opt_set_int(priv, "cq", quality, 0);
         ctx->bit_rate = 0;
         break;
     case HwBackend::Qsv:
         av_opt_set(priv, "preset", "veryfast", 0);
-        ctx->global_quality = kHwQuality;
+        ctx->global_quality = quality;
         break;
     case HwBackend::Amf:
         av_opt_set(priv, "usage", "lowlatency", 0);
         av_opt_set(priv, "quality", "speed", 0);
         av_opt_set(priv, "rc", "cqp", 0);
-        av_opt_set_int(priv, "qp_i", kHwQuality, 0);
-        av_opt_set_int(priv, "qp_p", kHwQuality, 0);
+        av_opt_set_int(priv, "qp_i", quality, 0);
+        av_opt_set_int(priv, "qp_p", quality, 0);
         break;
     case HwBackend::Vaapi:
         av_opt_set(priv, "rc_mode", "CQP", 0);
-        av_opt_set_int(priv, "qp", kHwQuality, 0);
-        ctx->global_quality = kHwQuality;
+        av_opt_set_int(priv, "qp", quality, 0);
+        ctx->global_quality = quality;
+        break;
+    case HwBackend::VideoToolbox:
+        // Hardware only: a silent software fallback inside VideoToolbox would defeat the point of
+        // choosing it, and openEncoder's own candidate list already ends in x264/x265/SVT-AV1.
+        av_opt_set_int(priv, "allow_sw", 0, 0);
+        av_opt_set_int(priv, "realtime", 1, 0);
+        ctx->flags |= AV_CODEC_FLAG_QSCALE;
+#ifndef FF_QP2LAMBDA
+        ctx->global_quality = quality * 118;
+#else
+        ctx->global_quality = quality * FF_QP2LAMBDA;
+#endif
         break;
     case HwBackend::None:
-        av_dict_set(opts, "preset", "ultrafast", 0);
-        av_dict_set(opts, "tune", "zerolatency", 0);
-        av_dict_set(opts, "profile", "baseline", 0);
+        switch (codec) {
+        case CodecHevc:
+            av_dict_set(opts, "preset", "ultrafast", 0);
+            av_dict_set(opts, "tune", "zerolatency", 0);
+            av_dict_set(opts, "x265-params", "log-level=error", 0);
+            break;
+        case CodecAv1:
+            // 10 and up are SVT-AV1's real-time presets.
+            av_dict_set(opts, "preset", "10", 0);
+            av_dict_set(opts, "crf", "35", 0);
+            break;
+        default:
+            av_dict_set(opts, "preset", "ultrafast", 0);
+            av_dict_set(opts, "tune", "zerolatency", 0);
+            av_dict_set(opts, "profile", "baseline", 0);
+            break;
+        }
         break;
     }
 }
 
 } // namespace
 
-QList<ProgramRecorder::EncoderOption> ProgramRecorder::availableEncoders()
+QList<ProgramRecorder::EncoderOption> ProgramRecorder::availableEncoders(const QString &codecId)
 {
+    const int codec = codecIndex(codecId.isEmpty() ? codecSetting() : codecId);
     QList<EncoderOption> out;
     out.append({QStringLiteral("auto"), QObject::tr("Auto (hardware when available)")});
-    for (const EncoderDef &def : kEncoders) {
-        if (encoderUsable(def))
-            out.append({QString::fromLatin1(def.id), QString::fromLatin1(def.label)});
+    for (const VendorDef &def : kVendors) {
+        if (encoderUsable(def, codec))
+            out.append({QString::fromLatin1(def.id), vendorLabel(def, codec)});
     }
     return out;
 }
 
 QString ProgramRecorder::encoderSetting()
 {
-    return QSettings().value(kEncoderSettingKey, QStringLiteral("auto")).toString();
+    const QString id = QSettings().value(kEncoderSettingKey, QStringLiteral("auto")).toString();
+    return id == QLatin1String("x264") ? QStringLiteral("software") : id;
 }
 
 void ProgramRecorder::setEncoderSetting(const QString &id)
 {
     QSettings().setValue(kEncoderSettingKey, id);
+}
+
+QList<ProgramRecorder::CodecOption> ProgramRecorder::availableCodecs()
+{
+    QList<CodecOption> out;
+    for (int codec = 0; codec < CodecCount; ++codec) {
+        // H.264 is always listed: it is the default and the recorder reports its own error when
+        // the build has no encoder at all.
+        bool any = codec == CodecH264 || avcodec_find_encoder(kCodecs[codec].avId);
+        for (const VendorDef &def : kVendors)
+            any = any || encoderUsable(def, codec);
+        if (any)
+            out.append({QString::fromLatin1(kCodecs[codec].id), QString::fromLatin1(kCodecs[codec].label)});
+    }
+    return out;
+}
+
+QString ProgramRecorder::codecSetting()
+{
+    return QString::fromLatin1(
+        kCodecs[codecIndex(QSettings().value(kCodecSettingKey).toString())].id);
+}
+
+void ProgramRecorder::setCodecSetting(const QString &id)
+{
+    QSettings().setValue(kCodecSettingKey, QString::fromLatin1(kCodecs[codecIndex(id)].id));
+}
+
+QString ProgramRecorder::containerSetting()
+{
+    return resolveContainer(QSettings().value(kContainerSettingKey).toString());
+}
+
+void ProgramRecorder::setContainerSetting(const QString &id)
+{
+    QSettings().setValue(kContainerSettingKey, resolveContainer(id));
+}
+
+QString ProgramRecorder::resolveContainer(const QString &requested)
+{
+    return requested == QLatin1String("mp4") ? QStringLiteral("mp4") : QStringLiteral("mkv");
 }
 
 ProgramRecorder::ProgramRecorder(QObject *parent)
@@ -209,7 +351,7 @@ QString ProgramRecorder::defaultOutputDir() {
 
 QString ProgramRecorder::makeOutputPath(const QString &dir, const QString &stem, const QString &suffix) {
     const QString base = suffix.isEmpty() ? stem : stem + QLatin1Char('_') + suffix;
-    return QDir(dir).filePath(base + QStringLiteral(".mkv"));
+    return QDir(dir).filePath(base + QLatin1Char('.') + containerSetting());
 }
 
 QString ProgramRecorder::defaultOutputPath() {
@@ -244,18 +386,20 @@ bool ProgramRecorder::startRecording(const QString &outputPath, const QString &t
     m_lastPts = -1;
     m_lastDurationMs = 0;
 
-    // The chosen encoder first, then everything after it in the table as fallbacks, ending at
-    // x264. An explicit software choice skips hardware entirely.
+    // The chosen encoder first, then everything after it in the table as fallbacks, ending at the
+    // software encoder. An explicit software choice skips hardware entirely.
+    m_codec = codecIndex(codecSetting());
+    m_mp4 = m_outputPath.endsWith(QStringLiteral(".mp4"), Qt::CaseInsensitive);
     m_candidates.clear();
     m_candidate = -1;
     const QString choice = encoderSetting();
     int first = 0;
-    for (int i = 0; i < kEncoderCount; ++i) {
-        if (choice == QLatin1String(kEncoders[i].id))
+    for (int i = 0; i < kVendorCount; ++i) {
+        if (choice == QLatin1String(kVendors[i].id))
             first = i;
     }
-    for (int i = first; i < kEncoderCount; ++i) {
-        if (encoderUsable(kEncoders[i]))
+    for (int i = first; i < kVendorCount; ++i) {
+        if (encoderUsable(kVendors[i], m_codec))
             m_candidates.append(i);
     }
 
@@ -275,7 +419,8 @@ bool ProgramRecorder::startRecording(const QString &outputPath, const QString &t
 bool ProgramRecorder::openPipeline() {
     const QByteArray pathUtf8 = m_outputPath.toUtf8();
 
-    if (avformat_alloc_output_context2(&m_fmtCtx, nullptr, "matroska", pathUtf8.constData()) < 0) {
+    if (avformat_alloc_output_context2(&m_fmtCtx, nullptr, m_mp4 ? "mp4" : "matroska",
+                                       pathUtf8.constData()) < 0) {
         emit errorOccurred(tr("Could not create output file format."));
         return false;
     }
@@ -284,11 +429,13 @@ bool ProgramRecorder::openPipeline() {
     while (!opened && ++m_candidate < m_candidates.size())
         opened = openEncoder(m_candidates[m_candidate]);
     if (!opened) {
-        // Last resort for builds without libx264: whatever H.264 encoder FFmpeg has.
+        // Last resort for builds without the preferred software library: whatever encoder FFmpeg
+        // has for this codec.
         opened = openEncoder(-1);
     }
     if (!opened) {
-        emit errorOccurred(tr("Could not open an H.264 encoder."));
+        emit errorOccurred(tr("Could not open a %1 encoder.")
+                               .arg(QString::fromLatin1(kCodecs[m_codec].label)));
         return false;
     }
 
@@ -301,6 +448,9 @@ bool ProgramRecorder::openPipeline() {
     m_stream->avg_frame_rate = AVRational{kFps, 1};
     m_stream->r_frame_rate   = AVRational{kFps, 1};
     avcodec_parameters_from_context(m_stream->codecpar, m_codecCtx);
+    // QuickTime and Apple players only recognise HEVC in MP4 under the hvc1 tag.
+    if (m_mp4 && m_codec == CodecHevc)
+        m_stream->codecpar->codec_tag = MKTAG('h', 'v', 'c', '1');
 
     if (!(m_fmtCtx->oformat->flags & AVFMT_NOFILE)) {
         if (avio_open(&m_fmtCtx->pb, pathUtf8.constData(), AVIO_FLAG_WRITE) < 0) {
@@ -309,7 +459,13 @@ bool ProgramRecorder::openPipeline() {
         }
     }
 
-    if (avformat_write_header(m_fmtCtx, nullptr) < 0) {
+    // Fragmented, so an MP4 cut short by a crash or a power loss still plays up to that point.
+    AVDictionary *muxerOpts = nullptr;
+    if (m_mp4)
+        av_dict_set(&muxerOpts, "movflags", "frag_keyframe+empty_moov+default_base_moof", 0);
+    const int headerRc = avformat_write_header(m_fmtCtx, &muxerOpts);
+    av_dict_free(&muxerOpts);
+    if (headerRc < 0) {
         emit errorOccurred(tr("Could not write video header."));
         return false;
     }
@@ -339,14 +495,19 @@ bool ProgramRecorder::openPipeline() {
     return true;
 }
 
-// encoderIndex -1 means FFmpeg's default H.264 encoder.
-bool ProgramRecorder::openEncoder(int encoderIndex) {
-    const EncoderDef *def = encoderIndex >= 0 ? &kEncoders[encoderIndex] : nullptr;
+// vendorIndex -1 means FFmpeg's default encoder for the codec.
+bool ProgramRecorder::openEncoder(int vendorIndex) {
+    const VendorDef *def = vendorIndex >= 0 ? &kVendors[vendorIndex] : nullptr;
     const HwBackend hw = def ? def->hw : HwBackend::None;
-    const AVCodec *codec = def ? avcodec_find_encoder_by_name(def->encoder)
-                               : avcodec_find_encoder(AV_CODEC_ID_H264);
+    const AVCodec *codec = def ? avcodec_find_encoder_by_name(def->encoder[m_codec])
+                               : avcodec_find_encoder(kCodecs[m_codec].avId);
     if (!codec)
         return false;
+    const QString label = def ? (hw == HwBackend::None ? vendorLabel(*def, m_codec)
+                                                       : QStringLiteral("%1 %2")
+                                                             .arg(QString::fromLatin1(def->label),
+                                                                  QString::fromLatin1(kCodecs[m_codec].label)))
+                              : QString::fromLatin1(codec->name);
 
     m_codecCtx = avcodec_alloc_context3(codec);
     m_codecCtx->width      = m_width;
@@ -361,30 +522,50 @@ bool ProgramRecorder::openEncoder(int encoderIndex) {
 
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(m_codecCtx->pix_fmt);
     const bool needsUpload = desc && (desc->flags & AV_PIX_FMT_FLAG_HWACCEL);
-    if (needsUpload) {
-        const QByteArray device = prism::hwaccel::deviceString(hwDeviceType(hw));
-        if (av_hwdevice_ctx_create(&m_hwDevice, hwDeviceType(hw),
-                                   device.isEmpty() ? nullptr : device.constData(), nullptr, 0) < 0
-            || !setupHwFrames(m_codecCtx, m_hwDevice, m_codecCtx->pix_fmt, m_width, m_height)) {
+    const AVHWDeviceType type = hwDeviceType(hw);
+    if (type != AV_HWDEVICE_TYPE_NONE) {
+        // Every hardware encoder gets a device handed in, not only the ones that upload: it keeps
+        // the encoder on the adapter encoderDeviceString() chose rather than whichever its own
+        // default lands on.
+        const QByteArray device = encoderDeviceString(hw);
+        if (av_hwdevice_ctx_create(&m_hwDevice, type,
+                                   device.isEmpty() ? nullptr : device.constData(), nullptr, 0) < 0) {
             avcodec_free_context(&m_codecCtx);
             av_buffer_unref(&m_hwDevice);
+            prism::hwaccel::reportFailure(prism::hwaccel::AccelerationFailure::Stage::Encode, label,
+                                          QStringLiteral("could not create the device"));
+            return false;
+        }
+        m_codecCtx->hw_device_ctx = av_buffer_ref(m_hwDevice);
+        if (needsUpload && !setupHwFrames(m_codecCtx, m_hwDevice, m_codecCtx->pix_fmt, m_width, m_height)) {
+            avcodec_free_context(&m_codecCtx);
+            av_buffer_unref(&m_hwDevice);
+            prism::hwaccel::reportFailure(prism::hwaccel::AccelerationFailure::Stage::Encode, label,
+                                          QStringLiteral("could not allocate hardware frames"));
             return false;
         }
     }
 
     AVDictionary *opts = nullptr;
-    applyEncoderOptions(m_codecCtx, hw, &opts);
+    applyEncoderOptions(m_codecCtx, hw, m_codec, &opts);
     const int rc = avcodec_open2(m_codecCtx, codec, &opts);
     av_dict_free(&opts);
     if (rc < 0) {
-        qWarning("ProgramRecorder: %s did not open, trying the next encoder", codec->name);
+        char err[AV_ERROR_MAX_STRING_SIZE] = {};
+        av_strerror(rc, err, sizeof(err));
+        qWarning("ProgramRecorder: %s did not open (%s), trying the next encoder", codec->name, err);
+        if (hw != HwBackend::None) {
+            prism::hwaccel::reportFailure(prism::hwaccel::AccelerationFailure::Stage::Encode, label,
+                                          QStringLiteral("%1: %2").arg(QString::fromLatin1(codec->name),
+                                                                       QString::fromLatin1(err)));
+        }
         avcodec_free_context(&m_codecCtx);
         av_buffer_unref(&m_hwDevice);
         return false;
     }
     if (needsUpload)
         m_hwFrame = av_frame_alloc();
-    m_encoderLabel = def ? QString::fromLatin1(def->label) : QString::fromLatin1(codec->name);
+    m_encoderLabel = label;
     return true;
 }
 
@@ -475,6 +656,11 @@ void ProgramRecorder::submitFrame(const QImage &frame) {
         return;
     qWarning("ProgramRecorder: %s refused the first frame, falling back",
              qUtf8Printable(m_encoderLabel));
+    if (m_candidate >= 0 && m_candidate < m_candidates.size()
+        && kVendors[m_candidates[m_candidate]].hw != HwBackend::None) {
+        prism::hwaccel::reportFailure(prism::hwaccel::AccelerationFailure::Stage::Encode,
+                                      m_encoderLabel, QStringLiteral("refused the first frame"));
+    }
     cleanup();
     if (!openPipeline()) {
         cleanup();

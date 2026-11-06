@@ -2,6 +2,323 @@
 <!DOCTYPE TS>
 <TS version="2.1">
 <context>
+    <name>AbSelectBody</name>
+    <message>
+        <source>+ connect input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>in %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Send to deck A</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Send to deck B</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AccelerationFailedDialog</name>
+    <message>
+        <source>Hardware acceleration isn&apos;t working</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Turn off hardware encoding</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Turn off hardware decoding</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep trying</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&quot;%1&quot; couldn&apos;t encode the recording, so Prism used another encoder. Turn off hardware encoding to stop trying it, or keep trying if this was a one-off.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&quot;%1&quot; couldn&apos;t decode a clip, so Prism is playing it in software. Turn off hardware decoding to stop trying it on new clips, or keep trying if this was a one-off.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AddNodeMenu</name>
+    <message>
+        <source>Input Node…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Source</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Process</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Layer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Switching</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A/B Deck Select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Effects</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Output</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Capture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mic Input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Mixer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Script Node</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Script</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Script Node</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Trigger Node</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add and connect…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Search nodes…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No matching nodes</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AppController</name>
+    <message>
+        <source>Missing assets</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 asset(s) could not be found.
+%2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Program output window</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>NDI output</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear All</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove all clips and nodes from the grid? This cannot be undone.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hardware decoding failed for a clip, playing it in software: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add Media Files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Media Files (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add Media Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Network Video</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not open or play the video from URL:
+%1
+
+Please check the URL and ensure the video stream is accessible and valid.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New Session</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Discard unsaved changes and start a new session?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open Session</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Discard unsaved changes and open this session?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot write to file:
+%1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save Session</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Export Project</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Import Project</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Export failed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Exported %1 asset(s) to:
+%2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>
+
+Notes:
+%1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Import failed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Project imported with notes:
+%1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Extract Project To</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CutWire Prism - Program Output</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CutWire Prism - Preview Output</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not start NDI program output.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>NDI is not available. Install the NDI SDK and rebuild CutWire Prism.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not start virtual camera output on %1.
+
+Ensure v4l2loopback is loaded:
+  sudo modprobe v4l2loopback
+
+You may need to specify a device path in settings if the loopback device is not at the default location.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(unknown device)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not start virtual camera output (%1).
+
+Another application may already be using the virtual camera, or softcam.dll may be missing next to Prism.exe.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose a folder to save recordings and captures</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No save location. Pass dir or set it in the recording panel.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not start program recording</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No layers are available to capture.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not capture a frame from &quot;%1&quot;.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No save location set.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Captured the frame but could not save it to disk.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Capture %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>OSC: could not listen on UDP port %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>AppSettingsMenu</name>
     <message>
         <source>Multicam</source>
@@ -188,301 +505,40 @@ Files on disk are not deleted.</source>
     </message>
 </context>
 <context>
-    <name>AudioNodeDialog</name>
+    <name>AudioEffectBody</name>
     <message>
-        <source>Audio Settings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Playback Mode:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Always play (while on either deck)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Play when its deck is active</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Audio Delay:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source> ms</source>
+        <source>AUDIO FX</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
-    <name>ClipCard</name>
+    <name>AudioMixerBody</name>
     <message>
-        <source>Empty</source>
+        <source>+ connect stream</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>—</source>
+        <source>in %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source> Off</source>
+        <source>Muted</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Edit</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Transform ▸</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>X%</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>secondary</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Y%</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>W%</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>H%</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Set output</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>A</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>B</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Remove this card</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source> Loop</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Loop clip when it reaches the end</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit trim, crop and source settings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Show position and size controls</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Use this clip as the output</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Send to deck A</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Send to deck B</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>
-OBS scene: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>NDI Input</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>NDI is not available in this build.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No NDI sources found on the network.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select NDI Source</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Refresh</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Choose NDI source:</source>
+        <source>Edit Mix</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
-    <name>ClipEditDialog</name>
+    <name>AudioScriptBody</name>
     <message>
-        <source>Edit Clip</source>
+        <source>FFT %1 · %2 bins
+low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Trim</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>secondary</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>/ 0:00.00</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>10s</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>5s</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>1s</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>0.1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Current:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>M:SS.ss</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Set Start to Here</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Set End to Here</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Current Selection</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Start:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>0:00.00</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>→</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>End:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>⊡  Crop / Zoom</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Drag inside the crop to move it, drag corners to resize, or double-click to reset to full frame.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Crop Region (% of frame)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>X:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source> %</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Y:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>W:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>H:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Reset</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Reset to full frame (no crop)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Apply crop to preview</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>ClipNodeCanvasWidget</name>
-    <message>
-        <source>Zoom out (Ctrl+-)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Reset zoom to 100% (Ctrl+0)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Zoom in (Ctrl++)</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>ClipNodeMinimap</name>
-    <message>
-        <source>Canvas minimap — click or drag to pan</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>—</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Empty</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>ClipNodeView</name>
-    <message>
-        <source>Drop media here, drag from the Media bin, or right-click to add a source</source>
+        <source>Edit FFT</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -498,41 +554,6 @@ OBS scene: %1</source>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>ContextNodeDialog</name>
-    <message>
-        <source>Canvas Size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Width:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Height:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Preset:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Custom</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>16:9 (1280×720)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>16:9 (1920×1080)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>4:3 (1024×768)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -594,33 +615,6 @@ OBS scene: %1</source>
     <name>EditorHeaderSettingsButton</name>
     <message>
         <source>Settings</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>GetStartedDialog</name>
-    <message>
-        <source>Get Started</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Welcome to CutWire Prism</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Build live media shows by connecting sources on the node canvas. Use the asset library on the left and Media menu to add clips and inputs.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Quick Start</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>CutWire Prism documentation</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Report an issue on GitHub</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -749,6 +743,45 @@ OBS scene: %1</source>
     </message>
 </context>
 <context>
+    <name>InputBody</name>
+    <message>
+        <source>Loop</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Loop clip when it reaches the end</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit trim, crop and source settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>On Active</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Always</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delay:%1ms</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit Audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>LanguageChooserDialog</name>
     <message>
         <source>Language</source>
@@ -764,878 +797,113 @@ OBS scene: %1</source>
     </message>
 </context>
 <context>
-    <name>MainWindow</name>
+    <name>LayerBody</name>
     <message>
-        <source>CutWire Prism - Live Media Control</source>
+        <source>+ connect input</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Control Panel</source>
+        <source>Show or hide this layer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>A Deck</source>
+        <source>in %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>secondary</source>
+        <source>Move up</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>(None selected)</source>
+        <source>Move down</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>panel</source>
+        <source>Edit Layout</source>
         <translation type="unfinished"></translation>
     </message>
+</context>
+<context>
+    <name>Main</name>
     <message>
-        <source>Empty</source>
+        <source>Untitled</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>0:00 / 0:00</source>
+        <source>Prism</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Speed: 1.00x</source>
+        <source>Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Playback speed (0.25x – 4.00x)</source>
+        <source>Done</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>A/B Crossfader</source>
+        <source>Recover session</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>◄ A</source>
+        <source>Recover</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>B ►</source>
+        <source>Start fresh</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Transition:</source>
+        <source>Prism did not shut down cleanly. Recover the last autosave?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Crossfade: alpha blend
-Cut: hard switch at fader centre
-Wipe ←: B reveals from the left
-Wipe →: B reveals from the right
-Wipe ↑: B reveals from bottom to top
-Wipe ↓: B reveals from top to bottom
-Slide ←: A exits left, B enters right
-Slide →: A exits right, B enters left
-Slide ↑: A exits top, B enters bottom
-Slide ↓: A exits bottom, B enters top
-Dip to Black: fade through black
-Dip to White: fade through white
-Additive Glow: add colors for VJ brightness
-Cross Zoom: dynamic zoom scaling
-Split Door (H): horizontal split reveal
-Split Door (V): vertical split reveal
-Vortex Spin: spinning vortex wrap
-Split 4-Corner: split into 4 quadrants sliding outwards
-3D Gallery Fly: cinematic 3D pan, zoom fly-past with soft warm light sweep
-3D Cube: rotate a 3D perspective cube to reveal next deck
-3D Flip: flip the screen 180 degrees in 3D perspective</source>
+        <source>Error</source>
         <translation type="unfinished"></translation>
     </message>
+</context>
+<context>
+    <name>MasterAudioCaptureBody</name>
     <message>
-        <source>Crossfade</source>
+        <source>Default Output</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cut</source>
+        <source>Muted</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Wipe ←</source>
+        <source>Volume %1%</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Wipe →</source>
+        <source>Edit</source>
         <translation type="unfinished"></translation>
     </message>
+</context>
+<context>
+    <name>MasterAudioInputBody</name>
     <message>
-        <source>Wipe ↑</source>
+        <source>Default Mic</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Wipe ↓</source>
+        <source>Muted</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Slide ←</source>
+        <source>Volume %1%</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Slide →</source>
+        <source>Edit Mic</source>
         <translation type="unfinished"></translation>
     </message>
+</context>
+<context>
+    <name>MasterAudioOutputBody</name>
     <message>
-        <source>Slide ↑</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Slide ↓</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Dip to Black</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Dip to White</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Additive Glow</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cross Zoom</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Split Door (H)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Split Door (V)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Vortex Spin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Split 4-Corner</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>3D Gallery Fly</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>3D Cube</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>3D Flip</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Time: 1.00 s</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Transition time (0 – 1 second)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Smooth auto transition using selected mode</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>AUTO</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Instant cut to opposite deck</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>CUT</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Panic</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cut program output to black</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>BLACKOUT</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Freeze the program output on the current frame</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>PAUSE</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Show a &quot;Stay Tuned&quot; holding screen on program output</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>STAY TUNED</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>B Deck</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Media</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Output</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>View</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Appearance</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Tools</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Run</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Help</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add Files…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select media files to add to the Asset Library (Ctrl+I)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Ctrl+I</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add Folder…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add all supported media files from a folder to the Asset Library</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Save Session…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Save the layout and settings to a file. Media is referenced in place, not copied (Ctrl+S)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Ctrl+S</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Load Session…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Load a saved session. Media files must still exist at their original locations (Ctrl+O)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Ctrl+O</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Export Project…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Export a portable .prism package: the session plus a copy of its media files</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Import Project…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Import a portable .prism package: extracts its media and opens the session</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Clear All</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Remove all clips from the grid</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Set Output Resolution…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Change the resolution the program mix is rendered and output at</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Output Window</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Show the output window (Ctrl+Shift+O)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Ctrl+Shift+O</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Preview Output</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Show a second window mirroring the program mix (opens on second monitor when available)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>NDI Program Output</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Send the program mix as an NDI source (CutWire Prism Program) for OBS, vMix, etc.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Virtual Camera Output</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Expose the program mix as a webcam (v4l2loopback on Linux). Load the module first: sudo modprobe v4l2loopback</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Freeze Frame Capture…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Capture the current frame from the program mix or any active deck layer</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Ctrl+Shift+F</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Recording Panel…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Open the recording panel to start and stop each stream independently</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Drop Marker</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Timestamp a marker in the active recording (Ctrl+M)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit Hotkeys…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Ctrl+Shift+K</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Assign and manage keyboard triggers for deck clips</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Connect to OBS…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Connect to OBS Studio via obs-websocket (port 4455)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Link Clip to OBS Scene…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>When a clip is sent to a deck, also switch OBS to a linked scene</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Stay on Top</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Keep the output window above all other windows</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>System</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Light</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Dark</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Start Remote Control Server…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Start a remote control web server to manage mixing, fader, cut, and auto remotely</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>OSC Server…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Configure the OSC server for show-control software such as Linux Show Player</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Agent Access…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Start a localhost MCP server so an AI agent can drive this mixer</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>About Prism</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Show the CutWire Prism splash screen</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Prism Docs</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Open the CutWire Prism documentation website</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Report Bugs</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Open the Prism GitHub issue tracker</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>About CutWire</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Open the CutWire Studios website</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>OBS Scenes</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Requires qt6-websockets at build time</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>NDI SDK not found at build time. Install the NDI SDK and rebuild with -DNDI_ROOT=…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Virtual camera output is not available on this platform.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Expose the program mix as a webcam via %1 (v4l2loopback). Select as a camera source in OBS, Zoom, etc.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>a v4l2loopback device</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Expose the program mix as a webcam named &quot;%1&quot;. Select it as a camera source in OBS, Zoom, browsers, etc.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Scaling</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Stretch</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Fit</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Crop</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>CutWire Prism - Preview Output</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>NDI Output</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Could not start NDI program output.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>NDI is not available. Install the NDI SDK and rebuild CutWire Prism.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Could not start virtual camera output on %1.
-
-Ensure v4l2loopback is loaded:
-  sudo modprobe v4l2loopback
-
-You may need to specify a device path in settings if the loopback device is not at the default location.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>(unknown device)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Could not start virtual camera output (%1).
-
-Another application may already be using the virtual camera, or softcam.dll may be missing next to Prism.exe.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Recording Error</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Marker label:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Marker</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Playback &amp;&amp; Hardware…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Time: %1 s</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cut program output to black (%1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Freeze the program output on the current frame (%1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Show a &quot;Stay Tuned&quot; holding screen on program output (%1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Instant cut to opposite deck (%1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Smooth auto transition using selected mode (%1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add Files</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Media Files (%1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add Media Folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add Media Files</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add Video from URL</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Video URL:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Optional custom name</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Display Name:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Network Video</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Invalid Video URL</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Could not open or play the video from URL:
-%1
-
-Please check the URL and ensure the video stream is accessible and valid.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Remove all clips and nodes from the grid? This cannot be undone.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Speed: %1x</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Hardware decoding failed for a clip, playing it in software: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Export Project</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>CutWire Prism Project (*%1);;All Files (*)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Export failed.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Exported %1 asset(s) to:
-%2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>
-
-Notes:
-%1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Import Project</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Extract Project To</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Import failed.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Project imported with notes:
-%1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Freeze Frame Capture</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No layers are available to capture.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Save PNG to the Captures folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add captured frame as a new image element</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Hold selected layer as a still (freeze in place)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Capture current frame from:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Could not capture a frame from &quot;%1&quot;.
-
-Make sure the layer is active and has video.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Captured the frame but could not save it to disk.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Program output cannot be held as a still layer. Choose a deck or overlay layer, or use PAUSE to freeze the full output.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Capture %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Captured &quot;%1&quot;.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Saved: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Layer is now held as a still.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Added as a new image element.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 x %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Custom…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Set Output Resolution</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Program output resolution:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Width:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Height:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>CutWire Prism</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>OBS Scene Link</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add a clip with a source first.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select Clip</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Clip to link:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>(Not connected)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Refresh Scene List</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>OSC: could not listen on UDP port %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No output hub</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No save location. Pass dir or set it in the recording panel.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Could not start program recording</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>● REC</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Agent access</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Localhost MCP is listening. Turn it off in Run → Agent Access when you are done.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Save Location Not Set</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No save location is set for recordings and captures.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Choose a folder before you can record or capture.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Set Location…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Choose a folder to save recordings and captures</source>
+        <source>Default</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1684,9 +952,210 @@ Workflow: catalog → toolbox({name}) → apply({ops}).</source>
     </message>
 </context>
 <context>
-    <name>MirrorOutputWindow</name>
+    <name>NodeDelegate</name>
     <message>
-        <source>CutWire Prism - Preview Output</source>
+        <source>Audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Input</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>NodeEditorPanel</name>
+    <message>
+        <source>Drop media here, drag from the Media bin, or right-click to add a node</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Undo (Ctrl+Z)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Redo (Ctrl+Shift+Z)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add node</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Frame all (F frames the selection)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zoom out (Ctrl+-)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reset zoom to 100% (Ctrl+0)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zoom in (Ctrl++)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit Layout</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit Mix</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit Mic…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit Audio Capture…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit FFT</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit Audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit Canvas Size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Run now</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pulse now</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete connection</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>NodeMinimap</name>
+    <message>
+        <source>Empty</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click or drag to pan</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>NodePalette</name>
+    <message>
+        <source>Video</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A/B deck</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio stream</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mixer input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mixed audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio effect</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio output</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Script data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Process</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Effect</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Layer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A/B Select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Output</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Mixer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Output</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mic Input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Capture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Lua Script</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Script</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Trigger</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Double-click a layer name to rename. The eye toggles visibility; the arrows reorder.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Double-click an input name to rename. A and B send the input to that deck. Wire a Script node&apos;s output here to automate deck assignment.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Double-click a name to rename. Edit opens per-input volume and mute.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1805,6 +1274,21 @@ Workflow: catalog → toolbox({name}) → apply({ops}).</source>
     </message>
 </context>
 <context>
+    <name>OutputBody</name>
+    <message>
+        <source>video</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A/B</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>OutputHub</name>
     <message>
         <source>Program</source>
@@ -1840,215 +1324,21 @@ Workflow: catalog → toolbox({name}) → apply({ops}).</source>
     </message>
 </context>
 <context>
-    <name>OutputWindow</name>
-    <message>
-        <source>CutWire Prism - Output Monitor</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Exit Full Screen</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Full Screen</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Scaling</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Stretch</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Fit</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Crop</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>PedalboardDialog</name>
-    <message>
-        <source>Audio FX</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Search effects</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Split</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Split (parallel)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Split (bands)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Modulators</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No modulators. Add one from the palette, then right-click a knob to modulate it.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Signal chain</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Not possible: limit reached (4 lanes per split, 2 levels of nesting, 64 nodes).</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select impulse response</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>WAV files (*.wav);;All files (*)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>IN</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Click a palette item to add</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>OUT</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>More</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Move left</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Move right</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Remove</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Enable / bypass</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No IR</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Change IR…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Band split</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Parallel split</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Blend</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Crossfade</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Low/High</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Low/Mid</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Mid/High</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Lane</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add a lane</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Lane %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Remove lane</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Gain</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Targets</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Remove route</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Right-click a knob to target it</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Input</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Step %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Source</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Modulate by</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>(add a modulator first)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Remove modulation (%1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Modulated</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>PreferencesController</name>
     <message>
-        <source>Hardware decoding takes effect after you restart Prism.</source>
+        <source>%1 decodes on %2 while Prism draws on %3, so every frame crosses between GPUs. Automatic avoids this.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>another GPU</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>this GPU</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The graphics card choice takes effect after you restart Prism.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2061,75 +1351,9 @@ Workflow: catalog → toolbox({name}) → apply({ops}).</source>
     </message>
 </context>
 <context>
-    <name>PreferencesDialog</name>
+    <name>ProcessBody</name>
     <message>
-        <source>Playback &amp; Hardware</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Auto</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Software</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>On</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Off</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Hands decoded frames to OpenGL without copying them through system memory. Auto uses it where it has been verified. Takes effect after restarting Prism.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Video decoding</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Decoder:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Zero-copy:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Recording</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>H.264 encoder:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Last frame upload: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Zero-copy unavailable: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message numerus="yes">
-        <source>Hardware decode fell back to software %n time(s). Last: %1</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>%1 decodes on %2 while Prism draws on %3, so every frame crosses between GPUs. Auto avoids this.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>another GPU</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>this GPU</source>
+        <source>PROCESS</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2193,7 +1417,7 @@ Route clip audio to a Master Audio Output node and load a video clip, then try a
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Could not open an H.264 encoder.</source>
+        <source>Could not open a %1 encoder.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2285,15 +1509,6 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Captures audio playing on the selected output device. No monitor source was found for this device — pick the device that is actually playing sound (speakers vs headset).</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Captures audio playing on the selected output device via:
-%1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Auto (hardware when available)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2319,26 +1534,6 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
     </message>
     <message>
         <source>Effect</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>CUDA interop (zero-copy)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>VAAPI dma-buf (zero-copy)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>D3D11 interop (zero-copy)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>system memory upload</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>no video played yet</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2419,177 +1614,6 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
     </message>
     <message>
         <source>Phone Camera</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Shape</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>NDI Input</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>NDI is not available. Install the NDI SDK and rebuild CutWire Prism with -DNDI_ROOT=…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No NDI sources found on the network.
-
-Make sure another app (CutWire Prism program output, OBS, phone NDI app) is sending NDI, then try again.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select NDI Source</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>NDI source:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Phone Camera (WebRTC)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Waiting for phone…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Open CutWire Prism on your PC first and keep the pairing dialog open, then tap Start here.
-Scan with your phone camera for the browser streamer, or use the CutWire Prism app.
-Internet pairing may require STUN/TURN for media on different networks.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Scan with your phone camera to open the browser streamer, or scan with the CutWire Prism app to pair natively.
-Your phone may warn about the self-signed certificate — accept it to enable the camera.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Connected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>phone pairing</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Firewall</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Could not open firewall port(s).
-%1
-
-Continue anyway? Your phone may not be able to connect.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Permission denied or cancelled.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No active network interface with an IPv4 address was found.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Local network (LAN)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Public relay server</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Run scripts/webrtc_signaling_server.py on your VPS, then enter its WebSocket URL here.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Enter a valid relay WebSocket URL (ws:// or wss://).</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>WebRTC is not available in this build.
-Rebuild with -DPRISM_WITH_WEBRTC=ON and install qt6-websockets.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Could not connect to the relay server at %1.
-Check the URL and that the signaling server is running.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Could not start the WebRTC servers on %1.
-Check that ports %2 (signaling) and %3 (browser) are free.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Media File…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Video URL…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Slideshow…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Camera…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Mic Input…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Audio Capture…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Screen Capture…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Window / Tab…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Canvas…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Shader…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>SVG Template…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Text…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Shape…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>NDI Source…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>NDI SDK not found at build time. Install the NDI SDK and rebuild with -DNDI_ROOT=…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Phone Camera (WebRTC)…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>WebRTC not enabled at build time. Rebuild with -DPRISM_WITH_WEBRTC=ON.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2779,6 +1803,29 @@ Technical detail: %1</source>
     </message>
 </context>
 <context>
+    <name>ScriptBody</name>
+    <message>
+        <source>Every %1ms</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>On start</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Manual</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>On input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ScriptEditDialog</name>
     <message>
         <source>Lua Script Editor</source>
@@ -2818,41 +1865,6 @@ Technical detail: %1</source>
     </message>
     <message>
         <source>danger</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>SessionRecoveryDialog</name>
-    <message>
-        <source>Recover Session</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>CutWire Prism did not shut down cleanly last time. You can recover your last autosaved session or choose a backup.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Recover autosave</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Recover from backup:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Start with an empty session</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Last saved: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No autosave file found.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1  —  %2</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3164,6 +2176,34 @@ Technical detail: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Graphics card</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Which graphics card Prism runs on. High performance keeps video decoded on an NVIDIA card on that card; power saving uses less battery. Takes effect after restart.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Windows default</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Power saving (integrated GPU)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>High performance (discrete GPU)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose which graphics card Prism runs on in Windows Settings, under Display &gt; Graphics. Takes effect after restart.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open graphics settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Hardware acceleration</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3172,15 +2212,27 @@ Technical detail: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Decode source video on the graphics card when it can. Takes effect after restart.</source>
+        <source>Decode source video on the graphics card when it can. Automatic keeps light clips on the CPU.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Decoder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pin one decoder instead of letting Prism choose. A pinned decoder is used on its own, with no fallback to the others.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Automatic</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Record on the graphics card when it can, falling back to software if it fails. Faster, but usually a little larger for the same quality. Takes effect on the next recording.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Hardware encoding</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Encode exports on the graphics card when it can. Faster, but usually a little larger for the same quality.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -4062,6 +3114,115 @@ Technical detail: %1</source>
     </message>
     <message>
         <source>Enter a number</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>TransitionController</name>
+    <message>
+        <source>Crossfade</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cut</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wipe ←</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wipe →</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wipe ↑</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wipe ↓</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Slide ←</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Slide →</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Slide ↑</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Slide ↓</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dip to Black</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dip to White</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Additive Glow</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cross Zoom</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Split Door (H)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Split Door (V)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Vortex Spin</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Split 4-Corner</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>3D Gallery Fly</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>3D Cube</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>3D Flip</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>TriggerBody</name>
+    <message>
+        <source>Every
+%1 ms</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>At
+%1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Manual
+pulse</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

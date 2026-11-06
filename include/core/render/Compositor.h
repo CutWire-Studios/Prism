@@ -11,8 +11,8 @@
 #include <vector>
 #include "core/sources/MediaSource.h"
 #include "core/project/OverlayItem.h"
-#include "ui/output/ProgramFrameSource.h"
-#include "ui/transitions/Transition.h"
+#include "app/output/ProgramFrameSource.h"
+#include "app/transitions/Transition.h"
 
 class QOffscreenSurface;
 class QOpenGLContext;

@@ -3,7 +3,7 @@
 #include "core/project/OverlayItem.h"
 #include "core/sources/SourceDescriptor.h"
 #include "core/sources/SvgTemplates.h"
-#include "ui/nodes/ClipNodeModel.h"
+#include "core/graph/ClipGraph.h"
 
 #include <QDateTime>
 #include <QCryptographicHash>
@@ -417,17 +417,15 @@ bool verifyManifest(const QDir &root, const QJsonObject &manifest, QString *erro
 } // namespace
 
 ProjectPackager::Report ProjectPackager::exportPackage(const QJsonObject &sessionJson,
-                                                       const QVector<ClipNodeModel *> &nodes,
+                                                       const ClipGraph &graph,
                                                        const QString &outputPath) {
     Report report;
 
     QSet<QString> files;
     QSet<QString> directories;
-    for (ClipNodeModel *model : nodes) {
-        if (!model)
-            continue;
-        collectFromDescriptor(model->sourceDescriptor(), files, directories, &report.warnings);
-        collectFromSettings(model->settings(), files, directories, &report.warnings);
+    for (NodeId id : graph.nodeIdsOfType(ClipGraph::NodeType::Input)) {
+        collectFromDescriptor(graph.sourceDescriptor(id), files, directories, &report.warnings);
+        collectFromSettings(graph.clipSettings(id), files, directories, &report.warnings);
     }
 
     QTemporaryDir staging;

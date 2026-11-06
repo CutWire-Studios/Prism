@@ -1,5 +1,5 @@
 #include "ui/mainwindow/SourcePrompt.h"
-#include "ui/common/ThumbHelper.h"
+#include "app/common/ThumbHelper.h"
 #include "ui/common/Icons.h"
 #include "ui/common/CameraEnumerator.h"
 #ifndef Q_OS_LINUX
@@ -9,7 +9,7 @@
 #include "ui/editors/ShapeEditDialog.h"
 #include "ui/editors/SvgTemplateDialog.h"
 #include "ui/editors/TextEditDialog.h"
-#include "ui/common/ThumbHelper.h"
+#include "app/common/ThumbHelper.h"
 #include "core/media/ThumbnailExtractor.h"
 #include "core/sources/NdiSource.h"
 #include "core/sources/ShapeSource.h"

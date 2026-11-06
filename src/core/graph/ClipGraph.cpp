@@ -323,6 +323,35 @@ QString ClipGraph::sourceName(NodeId inputNodeId) const {
     return n->params.value("source").toMap().value("displayName").toString();
 }
 
+SourceDescriptor ClipGraph::sourceDescriptor(NodeId inputNodeId) const {
+    const Node *n = node(inputNodeId);
+    if (!n || n->type != NT::Input) return {};
+    return descriptorFromJson(QJsonObject::fromVariantMap(n->params.value("source").toMap()));
+}
+
+ClipSettings ClipGraph::clipSettings(NodeId inputNodeId) const {
+    const Node *n = node(inputNodeId);
+    if (!n || n->type != NT::Input) return {};
+    return ClipSettings::fromJson(QJsonObject::fromVariantMap(n->params.value("settings").toMap()));
+}
+
+bool ClipGraph::clipRepeat(NodeId inputNodeId) const {
+    const Node *n = node(inputNodeId);
+    return n && n->type == NT::Input && n->params.value("repeat").toBool();
+}
+
+bool ClipGraph::setSourceDescriptor(NodeId inputNodeId, const SourceDescriptor &desc) {
+    const Node *n = node(inputNodeId);
+    if (!n || n->type != NT::Input) return false;
+    return setParams(inputNodeId, {{"source", descriptorToJson(desc).toVariantMap()}});
+}
+
+bool ClipGraph::setClipSettings(NodeId inputNodeId, const ClipSettings &settings) {
+    const Node *n = node(inputNodeId);
+    if (!n || n->type != NT::Input) return false;
+    return setParams(inputNodeId, {{"settings", settings.toJson().toVariantMap()}});
+}
+
 int ClipGraph::slotCount(const Node &n) const {
     return int(n.params.value("slots").toList().size());
 }

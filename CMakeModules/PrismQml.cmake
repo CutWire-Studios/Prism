@@ -14,6 +14,8 @@ foreach(_prism_singleton Theme Toasts Haptics WindowBackdrop)
     set_source_files_properties(src/qml/${_prism_singleton}.qml PROPERTIES QT_QML_SINGLETON_TYPE true)
 endforeach()
 
+set_source_files_properties(src/qml/components/nodes/NodePalette.qml PROPERTIES QT_QML_SINGLETON_TYPE true)
+
 file(GLOB_RECURSE PRISM_QML_FILES CONFIGURE_DEPENDS
      RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "src/qml/*.qml" "src/qml/*.js")
 
@@ -41,6 +43,10 @@ qt_add_qml_module(prism_qml
         src/app/editor/LayoutStore.cpp
         include/app/GraphicsApiChoice.h
         src/app/GraphicsApiChoice.cpp
+        include/app/gpu/GpuStatus.h
+        src/app/gpu/GpuStatus.cpp
+        include/app/gpu/GpuPreference.h
+        src/app/gpu/GpuPreference.cpp
         include/app/preview/AppCompositor.h
         src/app/preview/AppCompositor.cpp
         include/app/preview/PreviewItem.h
@@ -49,6 +55,26 @@ qt_add_qml_module(prism_qml
         src/app/online/updates/UpdateAsset.cpp
         include/app/online/updates/UpdateChecker.h
         src/app/online/updates/UpdateChecker.cpp
+        include/app/AppController.h
+        src/app/AppController.cpp
+        include/mcp/McpDispatcher.h
+        src/mcp/McpDispatcher.cpp
+        include/mcp/McpServer.h
+        src/mcp/McpServer.cpp
+        include/ui/mcp/McpAccessDialog.h
+        src/ui/mcp/McpAccessDialog.cpp
+        include/ui/remote/OscServer.h
+        src/ui/remote/OscServer.cpp
+        include/ui/remote/OscSettingsDialog.h
+        src/ui/remote/OscSettingsDialog.cpp
+        include/ui/remote/RemoteControlServer.h
+        src/ui/remote/RemoteControlServer.cpp
+        include/ui/remote/RemoteServerDialog.h
+        src/ui/remote/RemoteServerDialog.cpp
+        include/app/nodes/NodeCatalog.h
+        src/app/nodes/NodeCatalog.cpp
+        include/app/nodes/NodeGridItem.h
+        src/app/nodes/NodeGridItem.cpp
     QML_FILES
         ${PRISM_QML_FILES}
     RESOURCES
@@ -72,6 +98,8 @@ target_include_directories(prism_qml PRIVATE
     include/app/editor
     include/app/preview
     include/app/online/updates
+    include/app/gpu
+    include/app/nodes
     include/app
 )
 

@@ -1,6 +1,9 @@
 #include "core/render/Compositor.h"
+#include "core/sources/CameraSource.h"
+#include "core/sources/CanvasSource.h"
 
 #include <QGuiApplication>
+#include <QMediaDevices>
 #include <QPainter>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -53,6 +56,62 @@ private slots:
         QSignalSpy spy(&comp, &Compositor::frameReady);
         QTRY_VERIFY_WITH_TIMEOUT(spy.count() > 0, 2000);
         QVERIFY(comp.programFrame().isNull());
+    }
+    void clearDeckA_dropsPrimarySource() {
+        Compositor comp;
+        comp.adoptSourceA(std::make_unique<CanvasSource>());
+        QVERIFY(comp.sourceA());
+
+        comp.clearDeckA();
+        QVERIFY(!comp.sourceA());
+    }
+
+    void clearDeckB_dropsPrimarySource() {
+        Compositor comp;
+        comp.adoptSourceB(std::make_unique<CanvasSource>());
+        QVERIFY(comp.sourceB());
+
+        comp.clearDeckB();
+        QVERIFY(!comp.sourceB());
+    }
+
+    void clearDeckA_stopsCamera() {
+        if (QMediaDevices::videoInputs().isEmpty())
+            QSKIP("No video inputs available in this environment");
+
+        Compositor comp;
+        auto cam = std::make_unique<CameraSource>();
+        cam->start({});
+        QCoreApplication::processEvents();
+        comp.adoptSourceA(std::move(cam));
+        QVERIFY(comp.sourceA());
+
+        comp.clearDeckA();
+        QVERIFY(!comp.sourceA());
+    }
+
+    void destructWithLiveSourceBeforeGlInit() {
+        auto comp = std::make_unique<Compositor>();
+        comp->adoptSourceA(std::make_unique<CanvasSource>());
+        comp->adoptSourceB(std::make_unique<CanvasSource>());
+        comp.reset();
+        QVERIFY(true);
+    }
+
+    void destructWithCameraBeforeGlInit() {
+        if (QMediaDevices::videoInputs().isEmpty())
+            QSKIP("No video inputs available in this environment");
+
+        auto comp = std::make_unique<Compositor>();
+        auto cam = std::make_unique<CameraSource>();
+        cam->start({});
+        QCoreApplication::processEvents();
+        comp->adoptSourceA(std::move(cam));
+        QCoreApplication::processEvents();
+
+        comp.reset();
+        QCoreApplication::processEvents();
+        QVERIFY(true);
     }
 };
 

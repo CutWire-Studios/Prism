@@ -7,10 +7,7 @@
 #include <QJsonObject>
 #include <QStringList>
 #include <Qt>
-#include "ui/nodes/ClipNodeEditor.h"
-
-class QShortcut;
-class QWidget;
+#include "core/graph/ClipGraph.h"
 
 /// Manages keyboard shortcut assignments (VJ hotkey grid) for the inputs of
 /// the A/B Select nodes. Keys 1-0, Q-P, A-L, Z-M are auto-assigned to
@@ -19,23 +16,22 @@ class QWidget;
 class HotkeyManager : public QObject {
     Q_OBJECT
 public:
-    explicit HotkeyManager(QWidget *shortcutParent, ClipNodeEditor *editor,
-                           QObject *parent = nullptr);
+    explicit HotkeyManager(ClipGraph *graph, QObject *parent = nullptr);
 
     /// Re-derive bindings from the node graph: release keys whose switcher
     /// input is gone and auto-assign keys to newly connected inputs.
-    /// Connect to ClipNodeEditor::clipChainChanged.
+    /// Connect to ClipGraph::changed.
     void syncWithGraph();
 
     /// Replace all bindings atomically (used by the hotkey editor).
-    void applyBindings(const QMap<AbSlotRef, Qt::Key> &bindings);
+    void applyBindings(const QMap<ClipGraph::AbSlotRef, Qt::Key> &bindings);
 
     /// Assign a single binding; returns false if the key is taken by another input.
-    bool setBinding(const AbSlotRef &slot, Qt::Key key);
-    void clearBinding(const AbSlotRef &slot);
+    bool setBinding(const ClipGraph::AbSlotRef &slot, Qt::Key key);
+    void clearBinding(const ClipGraph::AbSlotRef &slot);
 
-    Qt::Key   bindingForSlot(const AbSlotRef &slot) const;
-    AbSlotRef slotForKey(Qt::Key key) const;
+    Qt::Key   bindingForSlot(const ClipGraph::AbSlotRef &slot) const;
+    ClipGraph::AbSlotRef slotForKey(Qt::Key key) const;
 
     /// Session persistence.
     QJsonArray hotkeysJson() const;
@@ -46,7 +42,7 @@ public:
 
     static const QList<Qt::Key> &hotkeySequence();
     static bool isBindableKey(Qt::Key key);
-    static QString slotSettingsKey(const AbSlotRef &slot);
+    static QString slotSettingsKey(const ClipGraph::AbSlotRef &slot);
 
     /// Portable profile (switcher input → key), for import/export and QSettings.
     QJsonObject exportProfile() const;
@@ -58,21 +54,17 @@ public:
 signals:
     void bindingsChanged();
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private:
-    struct SlotShortcuts {
-        QShortcut *deckA = nullptr;
-        QShortcut *deckB = nullptr;
-    };
+    ClipGraph *m_graph;
 
-    QWidget        *m_shortcutParent;
-    ClipNodeEditor *m_editor;
-
-    QMap<AbSlotRef, Qt::Key>       m_slotHotkeys;
-    QMap<Qt::Key,   AbSlotRef>     m_keyToSlot;
-    QMap<AbSlotRef, SlotShortcuts> m_slotShortcuts;
+    QMap<ClipGraph::AbSlotRef, Qt::Key>       m_slotHotkeys;
+    QMap<Qt::Key,   ClipGraph::AbSlotRef>     m_keyToSlot;
     QMap<QString,   Qt::Key>       m_settingsProfile;
 
-    void bindKey(const AbSlotRef &slot, Qt::Key key);
-    void releaseSlot(const AbSlotRef &slot);
+    void bindKey(const ClipGraph::AbSlotRef &slot, Qt::Key key);
+    void releaseSlot(const ClipGraph::AbSlotRef &slot);
     void refreshSlotLabels();
 };

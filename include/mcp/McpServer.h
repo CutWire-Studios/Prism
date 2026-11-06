@@ -6,7 +6,7 @@
 #include <QString>
 #include <memory>
 
-class MainWindow;
+class AppController;
 class QThread;
 
 namespace prism::mcp {
@@ -20,7 +20,7 @@ class McpServer : public QObject
 public:
     static constexpr quint16 kPreferredPort = 38471;
 
-    explicit McpServer(MainWindow *window, QObject *parent = nullptr);
+    explicit McpServer(AppController *app, QObject *parent = nullptr);
     ~McpServer() override;
 
     bool running() const { return m_running; }
@@ -46,7 +46,7 @@ private:
     QString makeToken() const;
     QJsonObject dispatchTool(const QString &name, const QJsonObject &args);
 
-    MainWindow *m_window = nullptr;
+    AppController *m_app = nullptr;
     std::unique_ptr<McpDispatcher> m_dispatcher;
     QThread *m_thread = nullptr;
     McpHttp *m_http = nullptr;

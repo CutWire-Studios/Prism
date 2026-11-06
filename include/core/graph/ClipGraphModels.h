@@ -85,6 +85,9 @@ class ClipGraphController : public QObject {
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY undoStateChanged)
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY undoStateChanged)
     Q_PROPERTY(bool connecting READ connecting NOTIFY connectingChanged)
+    /// Bumped whenever routing, params or deck assignment change; bind to it to re-query
+    /// derived state (abState) that no model role carries.
+    Q_PROPERTY(int revision READ revision NOTIFY revisionChanged)
 
 public:
     explicit ClipGraphController(QObject *parent = nullptr);
@@ -98,6 +101,7 @@ public:
     bool canUndo() const { return m_undo.canUndo(); }
     bool canRedo() const { return m_undo.canRedo(); }
     bool connecting() const { return m_pending.node != 0; }
+    int revision() const { return m_revision; }
 
     /// type is a ClipGraph::NodeType value; returns the new id, 0 on failure.
     Q_INVOKABLE quint64 addNode(int type, qreal x, qreal y, const QVariantMap &params = {});
@@ -118,6 +122,18 @@ public:
     Q_INVOKABLE void clearSelection();
     Q_INVOKABLE bool isSelected(quint64 id) const { return m_selection.contains(id); }
 
+    Q_INVOKABLE void selectAll();
+
+    /// coords is a flat [x0, y0, x1, y1, ...] list parallel to ids. Consecutive calls with the
+    /// same ids collapse into one undo step until endMove().
+    Q_INVOKABLE void moveNodes(const QVariantList &ids, const QVariantList &coords);
+    /// Reorders two slots of a Layer / A/B Select / Audio Mixer and the edges wired to them.
+    Q_INVOKABLE bool swapSlots(quint64 id, int a, int b);
+    /// Assigns the producer wired into an A/B Select slot to deck A or B.
+    Q_INVOKABLE bool triggerAbSlot(quint64 node, int slot, bool deckA);
+    /// {a, b, outputConnected} for an A/B Select node; a/b are slot indices or -1.
+    Q_INVOKABLE QVariantMap abState(quint64 node) const;
+
     Q_INVOKABLE void undo();
     Q_INVOKABLE void redo();
     Q_INVOKABLE void clearHistory();
@@ -126,6 +142,7 @@ signals:
     void selectionChanged();
     void undoStateChanged();
     void connectingChanged();
+    void revisionChanged();
 
 private:
     struct Pending {
@@ -144,4 +161,5 @@ private:
     QSet<NodeId> m_selection;
     Pending m_pending;
     bool m_mergeMoves = false;
+    int m_revision = 0;
 };

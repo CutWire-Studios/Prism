@@ -9,7 +9,7 @@
 #include "core/media/AudioDecoder.h"
 #include "core/media/AudioEffectChain.h"
 #include "core/media/PcmResampler.h"
-#include "ui/nodes/AudioEffects.h"
+#include "core/graph/AudioEffects.h"
 
 class QAudioSource;
 class QIODevice;

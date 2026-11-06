@@ -3,8 +3,8 @@
 #include "mcp/McpProtocol.h"
 #include "mcp/McpServer.h"
 #include "mcp/McpSession.h"
-#include "ui/mainwindow/MainWindow.h"
-#include "ui/session/SessionManager.h"
+#include "app/AppController.h"
+#include "app/session/SessionManager.h"
 
 #include <QtTest>
 #include <QAbstractSocket>
@@ -43,14 +43,13 @@ private slots:
 
 void TestMcp::initTestCase()
 {
-    // Keep MainWindow's session files out of the user's real config dir.
+    // Keep AppController's session files out of the user's real config dir.
     QStandardPaths::setTestModeEnabled(true);
 }
 
 void TestMcp::init()
 {
-    // A run that crashed or was killed leaves the session lock behind, and the next MainWindow
-    // would then block forever on the modal crash-recovery prompt.
+    // A run that crashed or was killed leaves a stale session lock behind in the test config dir.
     QFile::remove(SessionManager::lockFilePath());
 }
 
@@ -267,7 +266,7 @@ void TestMcp::serverRequiresBearerToken()
 {
     QTemporaryDir dir;
     qputenv("PRISM_MCP_SESSION_PATH", dir.filePath(QStringLiteral("s.json")).toUtf8());
-    MainWindow window;
+    AppController window;
     window.setMcpEnabled(true);
     QVERIFY2(window.mcpEnabled(), qPrintable(window.mcpServer() ? window.mcpServer()->error() : QStringLiteral("no server")));
     int status = 0;
@@ -282,7 +281,7 @@ void TestMcp::serverInitializeWithToken()
 {
     QTemporaryDir dir;
     qputenv("PRISM_MCP_SESSION_PATH", dir.filePath(QStringLiteral("s.json")).toUtf8());
-    MainWindow window;
+    AppController window;
     window.setMcpEnabled(true);
     QVERIFY(window.mcpEnabled());
     const QByteArray auth = "Bearer " + window.mcpServer()->token().toUtf8();
@@ -302,7 +301,7 @@ void TestMcp::serverInitializeWithToken()
 
 void TestMcp::applyUnknownOp()
 {
-    MainWindow window;
+    AppController window;
     prism::mcp::McpDispatcher dispatcher(&window);
     const QJsonObject result = dispatcher.applyOne(QStringLiteral("nope"), {});
     QCOMPARE(result.value(QStringLiteral("ok")).toBool(), false);
@@ -311,7 +310,7 @@ void TestMcp::applyUnknownOp()
 
 void TestMcp::addSourceAndInspect()
 {
-    MainWindow window;
+    AppController window;
     prism::mcp::McpDispatcher dispatcher(&window);
     const QJsonObject added = dispatcher.applyOne(
         QStringLiteral("add_source"),
@@ -342,7 +341,7 @@ void TestMcp::addSourceAndInspect()
 
 void TestMcp::applyBatchStops()
 {
-    MainWindow window;
+    AppController window;
     prism::mcp::McpDispatcher dispatcher(&window);
     const QJsonObject result = dispatcher.apply(QJsonObject{
         {QStringLiteral("ops"),
@@ -361,7 +360,7 @@ void TestMcp::applyBatchStops()
 
 void TestMcp::addProcessNodeAndConnect()
 {
-    MainWindow window;
+    AppController window;
     prism::mcp::McpDispatcher dispatcher(&window);
 
     const QJsonObject graphBox = prism::mcp::toolboxPayload(QStringLiteral("graph"));
