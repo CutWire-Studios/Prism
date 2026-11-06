@@ -10,6 +10,13 @@
 #   ONNXRUNTIME_RUNTIME_LIBS  (shared libs to deploy next to the executable)
 # and an imported target onnxruntime::onnxruntime.
 
+# find_* never re-checks a cached hit, so an uninstalled system ORT would stick and block the fetch fallback.
+foreach(_ort_var OnnxRuntime_INCLUDE_DIR OnnxRuntime_LIBRARY)
+    if(${_ort_var} AND NOT EXISTS "${${_ort_var}}")
+        unset(${_ort_var} CACHE)
+    endif()
+endforeach()
+
 find_path(OnnxRuntime_INCLUDE_DIR
     NAMES onnxruntime_cxx_api.h
     HINTS
