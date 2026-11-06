@@ -3,6 +3,8 @@
 #include <QImage>
 #include <QList>
 #include <QString>
+#include "core/Deck.h"
+#include "core/Deck.h"
 #include "core/graph/ClipGraph.h"
 
 class Compositor;
@@ -16,7 +18,7 @@ public:
 
     struct LayerRef {
         LayerKind kind   = LayerKind::Program;
-        bool      deckA  = true;
+        Deck      deck   = Deck::Live;
         int       chainIndex = -1;
         NodeId    nodeId = 0;
         QString   label;

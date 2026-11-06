@@ -60,11 +60,11 @@ void RecordingPanel::rebuild()
     m_audio.clear();
 
     m_video.append(Row{tr("Program mix"), OutputHub::TrackKind::Program});
-    m_video.append(Row{tr("Deck A (iso)"), OutputHub::TrackKind::DeckA});
-    m_video.append(Row{tr("Deck B (iso)"), OutputHub::TrackKind::DeckB});
+    m_video.append(Row{tr("Live (iso)"), OutputHub::TrackKind::Live});
+    m_video.append(Row{tr("Staging (iso)"), OutputHub::TrackKind::Staging});
     m_audio.append(Row{tr("Program audio"), OutputHub::TrackKind::ProgramAudio});
-    m_audio.append(Row{tr("Deck A audio (iso)"), OutputHub::TrackKind::DeckAAudio});
-    m_audio.append(Row{tr("Deck B audio (iso)"), OutputHub::TrackKind::DeckBAudio});
+    m_audio.append(Row{tr("Live audio (iso)"), OutputHub::TrackKind::LiveAudio});
+    m_audio.append(Row{tr("Staging audio (iso)"), OutputHub::TrackKind::StagingAudio});
 
     for (NodeId id : graph->nodeIdsOfType(ClipGraph::NodeType::Input)) {
         const SourceDescriptor desc = graph->sourceDescriptor(id);
@@ -122,23 +122,23 @@ void RecordingPanel::toggle(bool audio, int index, bool on)
     if (on) {
         switch (row.kind) {
         case OutputHub::TrackKind::Program:      h->startProgramRecording(); break;
-        case OutputHub::TrackKind::DeckA:        h->startDeckARecording(); break;
-        case OutputHub::TrackKind::DeckB:        h->startDeckBRecording(); break;
+        case OutputHub::TrackKind::Live:        h->startDeckLiveRecording(); break;
+        case OutputHub::TrackKind::Staging:        h->startDeckStagingRecording(); break;
         case OutputHub::TrackKind::Source:       h->startSourceRecording(row.nodeId, row.label); break;
         case OutputHub::TrackKind::ProgramAudio: h->startProgramAudioRecording(); break;
-        case OutputHub::TrackKind::DeckAAudio:   h->startDeckAAudioRecording(); break;
-        case OutputHub::TrackKind::DeckBAudio:   h->startDeckBAudioRecording(); break;
+        case OutputHub::TrackKind::LiveAudio:   h->startDeckLiveAudioRecording(); break;
+        case OutputHub::TrackKind::StagingAudio:   h->startDeckStagingAudioRecording(); break;
         case OutputHub::TrackKind::ClipAudio:    h->startClipAudioRecording(row.nodeId, row.label); break;
         }
     } else {
         switch (row.kind) {
         case OutputHub::TrackKind::Program:      h->stopProgramRecording(); break;
-        case OutputHub::TrackKind::DeckA:        h->stopDeckARecording(); break;
-        case OutputHub::TrackKind::DeckB:        h->stopDeckBRecording(); break;
+        case OutputHub::TrackKind::Live:        h->stopDeckLiveRecording(); break;
+        case OutputHub::TrackKind::Staging:        h->stopDeckStagingRecording(); break;
         case OutputHub::TrackKind::Source:       h->stopSourceRecording(row.nodeId); break;
         case OutputHub::TrackKind::ProgramAudio: h->stopProgramAudioRecording(); break;
-        case OutputHub::TrackKind::DeckAAudio:   h->stopDeckAAudioRecording(); break;
-        case OutputHub::TrackKind::DeckBAudio:   h->stopDeckBAudioRecording(); break;
+        case OutputHub::TrackKind::LiveAudio:   h->stopDeckLiveAudioRecording(); break;
+        case OutputHub::TrackKind::StagingAudio:   h->stopDeckStagingAudioRecording(); break;
         case OutputHub::TrackKind::ClipAudio:    h->stopClipAudioRecording(row.nodeId); break;
         }
     }

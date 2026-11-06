@@ -22,7 +22,7 @@ AudioPlayer::~AudioPlayer() {
     stop();
 }
 
-bool AudioPlayer::start(const QString &filePath, double startTimeSeconds) {
+bool AudioPlayer::start(const QString &filePath, double startTimeSeconds, bool startPaused) {
     stop();
 
     if (!m_decoder.open(filePath)) return false;
@@ -81,6 +81,8 @@ bool AudioPlayer::start(const QString &filePath, double startTimeSeconds) {
         return false;
     }
 
+    if (startPaused)
+        m_sink->suspend();
     m_currentFilePath = filePath;
     m_residualBuffer.clear();
     m_pushTimer.start();

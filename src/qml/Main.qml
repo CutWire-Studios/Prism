@@ -140,7 +140,7 @@ ApplicationWindow {
     Shortcut {
         sequences: ["Return", "Enter"]
         enabled: window.shortcutsLive && !window.inCanvas && !AppController.singleStream
-        onActivated: AppController.autoTransition()
+        onActivated: AppController.take()
     }
 
     ThemedContextMenu {

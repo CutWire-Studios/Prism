@@ -479,7 +479,7 @@ ProjectPackager::ImportResult ProjectPackager::importPackage(const QString &pack
         return result;
     }
     if (manifest.value(QStringLiteral("formatVersion")).toInt() != kFormatVersion) {
-        result.error = QStringLiteral("Unsupported package version.");
+        result.error = QStringLiteral("This project was saved by an older version of Prism and cannot be opened.");
         return result;
     }
 

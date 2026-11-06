@@ -24,7 +24,9 @@ public:
     explicit AudioPlayer(QObject *parent = nullptr);
     ~AudioPlayer() override;
 
-    bool start(const QString &filePath, double startTimeSeconds = 0.0);
+    /// With @p startPaused the sink is suspended before any audio is queued, so a deck that is not
+    /// playing makes no sound.
+    bool start(const QString &filePath, double startTimeSeconds = 0.0, bool startPaused = false);
     void stop();
     void pause();
     void resume();

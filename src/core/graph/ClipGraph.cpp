@@ -439,12 +439,12 @@ void ClipGraph::buildPorts(const Node &n, QVector<Port> &in, QVector<Port> &out)
             add(in, PK::ChainIn, PD::In, slotLabel(slotList, i), true,
                 {0.0, kAbHdr + i * kAbRow + kAbRow / 2});
         add(in, PK::DataIn, PD::In, QStringLiteral("data"), false, {0.0, sz.height()});
-        add(out, PK::AbOut, PD::Out, QStringLiteral("A/B"), false, {kAbW, sz.height() / 2.0});
+        add(out, PK::AbOut, PD::Out, QStringLiteral("Switcher"), false, {kAbW, sz.height() / 2.0});
         break;
     }
     case NT::Output:
         add(in, PK::ChainIn, PD::In, QStringLiteral("video"), true, {0.0, kOutBodyH * 0.33});
-        add(in, PK::AbIn, PD::In, QStringLiteral("A/B"), true, {0.0, kOutBodyH * 0.67});
+        add(in, PK::AbIn, PD::In, QStringLiteral("Switcher"), true, {0.0, kOutBodyH * 0.67});
         break;
     case NT::AudioMixer: {
         const QVariantList slotList = n.params.value("slots").toList();
@@ -621,7 +621,7 @@ void ClipGraph::refreshNode(Node &n) {
         break;
     }
     case NT::Layer:             n.title = QStringLiteral("Layer"); break;
-    case NT::AbSelect:          n.title = QStringLiteral("A/B Select"); break;
+    case NT::AbSelect:          n.title = QStringLiteral("Switcher"); break;
     case NT::Output:            n.title = QStringLiteral("Output"); break;
     case NT::AudioMixer:        n.title = QStringLiteral("Audio Mixer"); break;
     case NT::MasterAudioOutput: n.title = QStringLiteral("Audio Output"); break;
@@ -817,8 +817,8 @@ bool ClipGraph::removeNode(NodeId id) {
     if (id == m_outputNode && m_nodes.size() > 1) return false;
 
     removeEdgesOfNode(id);
-    if (m_deckAInput == id) { m_deckAInput = 0; emit deckAChanged(0); }
-    if (m_deckBInput == id) { m_deckBInput = 0; emit deckBChanged(0); }
+    if (m_liveInput == id) { m_liveInput = 0; emit liveChanged(0); }
+    if (m_stagingInput == id) { m_stagingInput = 0; emit stagingChanged(0); }
     for (auto it = m_hotkeyLabels.begin(); it != m_hotkeyLabels.end();) {
         if (it.key().abNodeId == id) it = m_hotkeyLabels.erase(it);
         else ++it;
@@ -832,17 +832,17 @@ bool ClipGraph::removeNode(NodeId id) {
 }
 
 void ClipGraph::clear() {
-    const bool hadA = m_deckAInput != 0, hadB = m_deckBInput != 0;
+    const bool hadA = m_liveInput != 0, hadB = m_stagingInput != 0;
     m_nodes.clear();
     m_order.clear();
     m_edges.clear();
     m_hotkeyLabels.clear();
     m_outputNode = 0;
-    m_deckAInput = 0;
-    m_deckBInput = 0;
+    m_liveInput = 0;
+    m_stagingInput = 0;
     emit graphReset();
-    if (hadA) emit deckAChanged(0);
-    if (hadB) emit deckBChanged(0);
+    if (hadA) emit liveChanged(0);
+    if (hadB) emit stagingChanged(0);
     emit changed();
 }
 
@@ -1412,26 +1412,29 @@ void ClipGraph::setOutputCanvasSize(int w, int h) {
     if (anyFollowing) notifyChanged();
 }
 
-// ── A/B select and decks ────────────────────────────────────────────────────
+// ── Switcher and decks ────────────────────────────────────────────────────
 
-void ClipGraph::setDeck(NodeId id, bool deckA) {
-    if (deckA) { m_deckAInput = id; emit deckAChanged(id); }
-    else       { m_deckBInput = id; emit deckBChanged(id); }
+void ClipGraph::setDeck(NodeId id, Deck deck) {
+    if (deck == Deck::Live) { m_liveInput = id; emit liveChanged(id); }
+    else                    { m_stagingInput = id; emit stagingChanged(id); }
 }
 
-void ClipGraph::setActiveDeckClip(NodeId clipId, bool deckA) {
-    setDeck(clipId, deckA);
+void ClipGraph::setActiveDeckClip(NodeId clipId, Deck deck) {
+    setDeck(clipId, deck);
     notifyChanged();
 }
 
-void ClipGraph::assignInputToDeck(NodeId inputProducerNode, bool deckA) {
-    if (deckA) {
-        if (m_deckBInput == inputProducerNode) setDeck(0, false);
-        setDeck(inputProducerNode, true);
-    } else {
-        if (m_deckAInput == inputProducerNode) setDeck(0, true);
-        setDeck(inputProducerNode, false);
-    }
+void ClipGraph::assignInputToDeck(NodeId inputProducerNode, Deck deck) {
+    const Deck other = otherDeck(deck);
+    if ((other == Deck::Live ? m_liveInput : m_stagingInput) == inputProducerNode) setDeck(0, other);
+    setDeck(inputProducerNode, deck);
+    notifyChanged();
+}
+
+void ClipGraph::swapDeckInputs() {
+    std::swap(m_liveInput, m_stagingInput);
+    emit liveChanged(m_liveInput);
+    emit stagingChanged(m_stagingInput);
     notifyChanged();
 }
 
@@ -1466,16 +1469,16 @@ void ClipGraph::abDeckSlots(NodeId abNodeId, int &aSlot, int &bSlot) const {
     if (!n || n->type != NT::AbSelect) return;
     for (int i = 0; i < slotCount(*n); ++i) {
         const NodeId prod = producerForInput(abNodeId, i);
-        if (prod != 0 && prod == m_deckAInput) aSlot = i;
-        if (prod != 0 && prod == m_deckBInput) bSlot = i;
+        if (prod != 0 && prod == m_liveInput) aSlot = i;
+        if (prod != 0 && prod == m_stagingInput) bSlot = i;
     }
 }
 
-bool ClipGraph::triggerAbSlot(const AbSlotRef &ref, bool deckA) {
+bool ClipGraph::triggerAbSlot(const AbSlotRef &ref, Deck deck) {
     if (!abOutputConnected(ref.abNodeId)) return false;
     const NodeId prod = producerForInput(ref.abNodeId, ref.slot);
     if (prod == 0) return false;
-    assignInputToDeck(prod, deckA);
+    assignInputToDeck(prod, deck);
     return true;
 }
 
@@ -1498,11 +1501,11 @@ void ClipGraph::applyAbScriptOutput(NodeId abNodeId, const QJsonObject &output) 
 
     if (output.contains("a")) {
         const int slot = resolveSlot(output.value("a"));
-        if (slot >= 0) triggerAbSlot({abNodeId, slot}, true);
+        if (slot >= 0) triggerAbSlot({abNodeId, slot}, Deck::Live);
     }
     if (output.contains("b")) {
         const int slot = resolveSlot(output.value("b"));
-        if (slot >= 0) triggerAbSlot({abNodeId, slot}, false);
+        if (slot >= 0) triggerAbSlot({abNodeId, slot}, Deck::Staging);
     }
 }
 
@@ -1730,10 +1733,10 @@ QVector<NodeId> ClipGraph::scriptProducersForData(NodeId dataNodeId) const {
 
 QJsonObject ClipGraph::toJson() const {
     QJsonObject root;
-    root["graphVersion"] = 3;
+    root["graphVersion"] = kGraphVersion;
     root["nextId"] = (qint64)m_nextId;
-    root["deckAInput"] = (qint64)m_deckAInput;
-    root["deckBInput"] = (qint64)m_deckBInput;
+    root["liveInput"] = (qint64)m_liveInput;
+    root["stagingInput"] = (qint64)m_stagingInput;
 
     QJsonArray inputNodes, processNodes, audioEffectNodes, layerNodes, abSelectNodes,
         audioMixerNodes, scriptNodes, masterAudioNodes, masterAudioInputNodes,
@@ -1804,21 +1807,20 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
     m_edges.clear();
     m_hotkeyLabels.clear();
     m_outputNode = 0;
-    m_deckAInput = 0;
-    m_deckBInput = 0;
+    m_liveInput = 0;
+    m_stagingInput = 0;
     m_nextId = 1;
 
     auto finish = [this](bool ok) {
         m_restoring = false;
         emit graphReset();
-        emit deckAChanged(m_deckAInput);
-        emit deckBChanged(m_deckBInput);
+        emit liveChanged(m_liveInput);
+        emit stagingChanged(m_stagingInput);
         emit changed();
         return ok;
     };
 
-    const int graphVersion = state.value("graphVersion").toInt(0);
-    if (graphVersion < 2) return finish(false);
+    if (state.value("graphVersion").toInt(0) < kGraphVersion) return finish(false);
 
     NodeId maxId = 0;
     auto restore = [&](const QJsonObject &obj, NodeType type, const QVariantMap &params) {
@@ -1847,12 +1849,7 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         const bool audioOnly = obj["audioOnly"].toBool(desc.kind == K::AudioFile);
         const bool hasAudio = obj["hasAudio"].toBool(audioOnly) || audioOnly;
 
-        // Version 2 stored {0 = Deck A only, 1 = Deck B only, 2 = Always};
-        // version 3 stores {0 = Always, 1 = Active deck}.
-        const int storedMode = obj["audioPlaybackMode"].toInt(0);
-        int mode;
-        if (graphVersion < 3) mode = (storedMode == 2) ? 0 : 1;
-        else mode = (storedMode == 1) ? 1 : 0;
+        const int mode = obj["audioPlaybackMode"].toInt(0) == 1 ? 1 : 0;
 
         QVariantMap p;
         p["hasAudio"] = hasAudio;
@@ -2008,8 +2005,8 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
     if (m_outputNode == 0 && !m_nodes.isEmpty())
         ensureOutputNode();
 
-    m_deckAInput = (NodeId)state["deckAInput"].toInteger(0);
-    m_deckBInput = (NodeId)state["deckBInput"].toInteger(0);
+    m_liveInput = (NodeId)state["liveInput"].toInteger(0);
+    m_stagingInput = (NodeId)state["stagingInput"].toInteger(0);
     return finish(true);
 }
 

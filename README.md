@@ -51,11 +51,11 @@ See [all releases](https://github.com/CutWire-Studios/Prism/releases) for previo
 
 ## Features
 
-- **Node Graph Canvas**: Free-form visual pipeline — wire **Input → Process → Layer → A/B Select → Output** nodes; zoom, pan, and minimap for large shows
+- **Node Graph Canvas**: Free-form visual pipeline — wire **Input → Process → Layer → Switcher → Output** nodes; zoom, pan, and minimap for large shows
 - **Process & Layer Nodes**: Crop, flip, and ML background removal in Process nodes; stack and layout multiple inputs in Layer nodes with canvas sizing and transform editing
 - **AI Background Removal**: Remove-Background process node runs MediaPipe's selfie-segmentation model (via ONNX Runtime) to key out a webcam's background live, compositing the subject over the layers below
 - **Multiple Media Source Types**: Video files, images, slideshows, webcams, screen/window capture, custom canvases, GLSL shaders, SVG templates, text, NDI inputs, and phone cameras (WebRTC)
-- **Live A/B Deck Mixing**: Crossfade between two decks with per-deck speed, **AUTO** / **CUT**, and many transition modes (wipes, slides, dips, 3D cube/flip, and more)
+- **Live/Staging Deck Mixing**: Stage a clip, then **TAKE** or **CUT** it to Live, with per-deck speed, and many transition modes (wipes, slides, dips, 3D cube/flip, and more)
 - **Master Audio Routing**: Master audio-input and master audio-output nodes for per-device capture and mixing inside the graph
 - **Asset Library**: Reusable sidebar of imported media — drag assets onto the node canvas or double-click to add files
 - **Dockable Control Panel**: Deck previews, crossfader, transitions, and panic controls in a dock widget that can be floated or repositioned
@@ -68,13 +68,13 @@ See [all releases](https://github.com/CutWire-Studios/Prism/releases) for previo
 - **Lua Scripting**: Script nodes that generate live text/data overlays via an embedded Lua runtime (sol2, optional at build time)
 - **Phone Camera (WebRTC)**: Stream a smartphone camera into CutWire Prism over LAN or a public relay, paired by QR code
 - **Audio FFT Visualization**: Real-time spectrum analysis with kissfft-driven shader inputs
-- **Hotkey Grid**: Keyboard trigger map (1–0, Q–P, A–L, Z–M); bare key → Deck A, Shift+key → Deck B
+- **Hotkey Grid**: Keyboard trigger map (1–0, Q–P, A–L, Z–M); bare key → stage, Shift+key → stage and cut to Live
 - **Session & Project Management**: Save/load sessions, autosave, smart asset relinking, and portable `.prism` project export/import
 - **Panic Controls**: Emergency **Blackout**, **Pause** (freeze on current frame), and **Stay Tuned** overlay
 - **Program Output Hub**: Mirror windows, optional NDI program output, virtual-camera output, program video recording with markers, FLAC program-audio recording, and freeze-frame capture
 - **OBS Integration**: Optional WebSocket connection for scene switching and per-source OBS scene links
 - **Remote Control**: Built-in server for triggering sources and decks from another device on the network
-- **OSC Control**: UDP OSC server (Run → OSC Server…) for show-control software such as Linux Show Player; `/prism/{a,b}/slot <n>`, `/prism/cut`, `/prism/auto`, `/prism/fader`, `/prism/{a,b}/play|pause|toggle|seek`, `/prism/transition/mode|duration`, `/prism/panic`, with optional state feedback to a host/port
+- **OSC Control**: UDP OSC server (Run → OSC Server…) for show-control software such as Linux Show Player; `/prism/stage <n>`, `/prism/cut`, `/prism/take`, `/prism/fader` (progress toward Staging), `/prism/{live,staging}/play|pause|toggle|seek`, `/prism/transition/mode|duration`, `/prism/panic`, with optional state feedback to a host/port
 - **Agent Access**: Optional localhost MCP server so Cursor, Claude Code, or other agents can drive the mixer (off at every launch; see [docs/MCP.md](docs/MCP.md))
 - **Real-time Playback**: FFmpeg decoding on a background thread with low-latency OpenGL compositing
 - **Hardware Acceleration**: NVDEC, VAAPI and Direct3D 11 decoding with zero-copy GPU import where the driver allows, plus NVENC / Quick Sync / AMF / VAAPI encoding for recordings (Tools → Playback & Hardware)
@@ -133,8 +133,8 @@ See [all releases](https://github.com/CutWire-Studios/Prism/releases) for previo
 The main window is split into three areas:
 
 1. **Asset library** (left) — imported media thumbnails; drag clips onto the node canvas or double-click to add files
-2. **Node graph canvas** (center) — visual pipeline of Input, Process, Layer, A/B Select, and Output nodes
-3. **Control panel** (bottom dock) — A/B deck previews, crossfader, transition controls, and panic buttons
+2. **Node graph canvas** (center) — visual pipeline of Input, Process, Layer, Switcher, and Output nodes
+3. **Control panel** (bottom dock) — Live/Staging deck previews, transition progress, transition controls, and panic buttons
 
 Program output opens in a separate window (mirror, NDI, virtual camera, or recording).
 
@@ -417,8 +417,8 @@ The workflow uploads the artifacts to the run; it does not create a GitHub Relea
 
 1. **Import media**: Use **Media → Add Files…** or **Add Folder…** to populate the asset library on the left
 2. **Add sources**: Click **Add Element** on the canvas (or **Media → Add Element**) to insert video, photos, slideshows, cameras, screen/window capture, canvases, shaders, SVG templates, or NDI sources
-3. **Wire the graph**: Connect **Input → Process → Layer → A/B Select → Output** nodes to build your pipeline
-4. **Assign decks**: Use **A/B Select** node slots (or hotkeys — **View → Edit Hotkeys**) to route sources to Deck A or B
+3. **Wire the graph**: Connect **Input → Process → Layer → Switcher → Output** nodes to build your pipeline
+4. **Assign decks**: Use **Switcher** node slots (or hotkeys — **View → Edit Hotkeys**) to route sources to the Staging or Live deck
 5. **Mix live**: Blend decks with the crossfader, **AUTO** / **CUT**, and per-deck speed controls in the control panel
 6. **Edit a source**: Open node edit dialogs for trim, crop, transform, and layout
 7. **Open output**: Use **View → Show Output** for projection, or enable NDI, virtual camera, or recording from **View**

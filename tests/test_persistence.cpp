@@ -6,6 +6,7 @@
 #include "core/sources/SourceDescriptor.h"
 #include "core/webrtc/NetworkUtils.h"
 #include "app/session/SessionManager.h"
+#include "core/graph/ClipGraph.h"
 
 #include <QtTest>
 #include <QTemporaryDir>
@@ -75,7 +76,7 @@ private slots:
         QTemporaryDir sessionRoot;
         const QDir sessionDir(sessionRoot.path());
         const QString videoPath = sessionDir.filePath(QStringLiteral("clip.mp4"));
-        QFile(videoPath).open(QIODevice::WriteOnly);
+        QVERIFY(QFile(videoPath).open(QIODevice::WriteOnly));
 
         AssetPathResolver::Options opts;
         opts.sessionDir = sessionDir;
@@ -152,7 +153,7 @@ private slots:
                            QJsonDocument(bad).toJson());
             const auto result = runImport(entries);
             QVERIFY(!result.success);
-            QCOMPARE(result.error, QStringLiteral("Unsupported package version."));
+            QCOMPARE(result.error, QStringLiteral("This project was saved by an older version of Prism and cannot be opened."));
         }
 
         {
@@ -228,6 +229,26 @@ private slots:
         mgr.removeClip(9999);
         mgr.removeClip(0);
         QVERIFY(mgr.getClipCount() >= 0);
+    }
+
+    void sessionWithOldFormatVersionIsRejected() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("old.psm"));
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QJsonObject root;
+        root.insert(QStringLiteral("version"), SessionManager::kFormatVersion - 1);
+        file.write(QJsonDocument(root).toJson());
+        file.close();
+
+        ClipGraph graph;
+        ClipManager clips;
+        SessionManager session(&graph, nullptr, &clips);
+        QSignalSpy failed(&session, &SessionManager::loadFailed);
+        QVERIFY(!session.loadFromFile(path));
+        QCOMPARE(failed.size(), 1);
+        QVERIFY(failed.first().first().toString().contains(QStringLiteral("older version")));
     }
 
     void sessionManager_recoveryAndBackups() {

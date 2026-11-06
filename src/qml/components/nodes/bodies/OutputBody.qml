@@ -22,7 +22,7 @@ Item {
         height: 12
         muted: true
         font.pixelSize: Theme.fontSizeTiny
-        text: qsTr("A/B")
+        text: qsTr("Switcher")
     }
 
     NodeButton {

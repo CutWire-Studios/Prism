@@ -1,8 +1,10 @@
+#include "app/transitions/TransitionController.h"
 #include "core/render/Compositor.h"
 #include "core/sources/CameraSource.h"
 #include "core/sources/CanvasSource.h"
 
 #include <QGuiApplication>
+#include <cmath>
 #include <QMediaDevices>
 #include <QPainter>
 #include <QSignalSpy>
@@ -28,18 +30,19 @@ private slots:
         QVERIFY(img.save(path));
 
         comp.setProgramFrameConsumerCount(1);
-        comp.loadVideoA(path);
-        QVERIFY(comp.sourceA());
+        comp.loadVideoLive(path);
+        QVERIFY(comp.sourceLive());
         comp.setCrossfade(0.f);
 
+        // The CPU frame lags the GL one by a frame (PBO readback).
         QSignalSpy spy(&comp, &Compositor::frameReady);
-        QTRY_VERIFY_WITH_TIMEOUT(spy.count() > 0, 2000);
+        QTRY_VERIFY_WITH_TIMEOUT(spy.count() > 1, 2000);
 
         const QImage frame = comp.programFrame();
         QVERIFY(!frame.isNull());
         QCOMPARE(frame.size(), QSize(Compositor::programWidth(), Compositor::programHeight()));
         QVERIFY(comp.programTexture() != 0);
-        QVERIFY(comp.deckTexture(true) != 0);
+        QVERIFY(comp.deckTexture(Deck::Live) != 0);
         QCOMPARE(comp.programTextureSize(), frame.size());
 
         const QColor top = frame.pixelColor(frame.width() / 2, 4);
@@ -57,25 +60,191 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(spy.count() > 0, 2000);
         QVERIFY(comp.programFrame().isNull());
     }
-    void clearDeckA_dropsPrimarySource() {
+    void take_swapsSlotContentsAndResetsProgress() {
         Compositor comp;
-        comp.adoptSourceA(std::make_unique<CanvasSource>());
-        QVERIFY(comp.sourceA());
+        auto live = std::make_unique<CanvasSource>();
+        auto staging = std::make_unique<CanvasSource>();
+        MediaSource *liveSrc = live.get();
+        MediaSource *stagingSrc = staging.get();
+        comp.adoptSourceLive(std::move(live));
+        comp.adoptSourceStaging(std::move(staging));
+        TransitionController tc(&comp);
+        tc.setTransitionDuration(0.05);
+        QSignalSpy started(&tc, &TransitionController::takeStarted);
+        QSignalSpy committed(&tc, &TransitionController::takeCommitted);
 
-        comp.clearDeckA();
-        QVERIFY(!comp.sourceA());
+        tc.autoTransition();
+        QTRY_COMPARE(committed.count(), 1);
+        QVERIFY(!tc.isRunning());
+        QCOMPARE(tc.faderValue(), 0);
+        QCOMPARE(started.count(), 1);
+        QCOMPARE(comp.sourceLive(), stagingSrc);
+        QCOMPARE(comp.sourceStaging(), liveSrc);
+        QCOMPARE(comp.crossfade(), 0.f);
+
+        tc.autoTransition();
+        QTRY_COMPARE(committed.count(), 2);
+        QCOMPARE(comp.sourceLive(), liveSrc);
+        QCOMPARE(comp.sourceStaging(), stagingSrc);
+        QCOMPARE(comp.crossfade(), 0.f);
     }
 
-    void clearDeckB_dropsPrimarySource() {
+    void cut_isImmediate() {
         Compositor comp;
-        comp.adoptSourceB(std::make_unique<CanvasSource>());
-        QVERIFY(comp.sourceB());
-
-        comp.clearDeckB();
-        QVERIFY(!comp.sourceB());
+        comp.adoptSourceLive(std::make_unique<CanvasSource>());
+        comp.adoptSourceStaging(std::make_unique<CanvasSource>());
+        TransitionController tc(&comp);
+        tc.setTransitionDuration(5.0);
+        QSignalSpy committed(&tc, &TransitionController::takeCommitted);
+        tc.cutTransition();
+        QCOMPARE(committed.count(), 1);
+        QVERIFY(!tc.isRunning());
+        QCOMPARE(tc.faderValue(), 0);
     }
 
-    void clearDeckA_stopsCamera() {
+    void takeAndCut_noOpWhenStagingEmpty() {
+        Compositor comp;
+        comp.adoptSourceLive(std::make_unique<CanvasSource>());
+        TransitionController tc(&comp);
+        tc.autoTransition();
+        QSignalSpy committed(&tc, &TransitionController::takeCommitted);
+        tc.cutTransition();
+        QCOMPARE(committed.count(), 0);
+        QVERIFY(!tc.isRunning());
+        QVERIFY(comp.crossfade() < 0.01f);
+    }
+
+    void manualFader_reachingEndCommitsTake() {
+        Compositor comp;
+        comp.adoptSourceLive(std::make_unique<CanvasSource>());
+        comp.adoptSourceStaging(std::make_unique<CanvasSource>());
+        TransitionController tc(&comp);
+        QSignalSpy committed(&tc, &TransitionController::takeCommitted);
+        tc.setFaderValue(40);
+        QCOMPARE(committed.count(), 0);
+        QCOMPARE(tc.faderValue(), 40);
+        tc.setFaderValue(100);
+        QCOMPARE(committed.count(), 1);
+        QCOMPARE(tc.faderValue(), 0);
+        QCOMPARE(comp.crossfade(), 0.f);
+    }
+
+    void manualFader_returningToZeroCancelsTake() {
+        Compositor comp;
+        comp.adoptSourceLive(std::make_unique<CanvasSource>());
+        comp.adoptSourceStaging(std::make_unique<CanvasSource>());
+        TransitionController tc(&comp);
+        QSignalSpy cancelled(&tc, &TransitionController::takeCancelled);
+        QSignalSpy committed(&tc, &TransitionController::takeCommitted);
+        tc.setFaderValue(0);
+        QCOMPARE(cancelled.count(), 0);
+        tc.setFaderValue(30);
+        tc.setFaderValue(0);
+        QCOMPARE(cancelled.count(), 1);
+        tc.setFaderValue(100);
+        QCOMPARE(committed.count(), 1);
+        QCOMPARE(cancelled.count(), 1);
+    }
+
+    void takeProgress_isFloatAndEndsExactlyAtOne() {
+        Compositor comp;
+        comp.adoptSourceLive(std::make_unique<CanvasSource>());
+        comp.adoptSourceStaging(std::make_unique<CanvasSource>());
+        TransitionController tc(&comp);
+        tc.setTransitionDuration(0.4);
+        QSignalSpy steps(&tc, &TransitionController::crossfadeChanged);
+        QSignalSpy committed(&tc, &TransitionController::takeCommitted);
+        tc.autoTransition();
+        QTRY_COMPARE_WITH_TIMEOUT(committed.count(), 1, 3000);
+        QVERIFY(steps.count() > 2);
+        QCOMPARE(steps.at(steps.count() - 2).at(0).toFloat(), 1.0f);
+        QCOMPARE(steps.last().at(0).toFloat(), 0.0f);
+        bool fractional = false;
+        for (const auto &args : steps) {
+            const float v = args.at(0).toFloat() * 100.f;
+            if (std::abs(v - std::round(v)) > 0.01f)
+                fractional = true;
+        }
+        QVERIFY(fractional);
+        QCOMPARE(tc.progress(), 0.f);
+    }
+
+    void easedProgress_followsInOutQuad() {
+        QCOMPARE(TransitionController::easedProgress(0, 5000), 0.f);
+        QCOMPARE(TransitionController::easedProgress(5000, 5000), 1.f);
+        QCOMPARE(TransitionController::easedProgress(9000, 5000), 1.f);
+        QVERIFY(qFuzzyCompare(TransitionController::easedProgress(2500, 5000), 0.5f));
+        QVERIFY(qFuzzyCompare(TransitionController::easedProgress(1250, 5000), 0.125f));
+        const float a = TransitionController::easedProgress(2000, 5000);
+        const float b = TransitionController::easedProgress(2016, 5000);
+        QVERIFY(b > a && (b - a) < 0.01f);
+    }
+
+    void audioGains_equalPowerCutAndDip() {
+        using M = Compositor::TransitionMode;
+        auto g = Compositor::audioGains(M::Crossfade, 0.f);
+        QVERIFY(qFuzzyCompare(g.first, 1.f) && g.second == 0.f);
+        g = Compositor::audioGains(M::Crossfade, 1.f);
+        QVERIFY(g.first < 1e-6f && qFuzzyCompare(g.second, 1.f));
+        g = Compositor::audioGains(M::Crossfade, 0.5f);
+        QVERIFY(qAbs(g.first - 0.70710678f) < 1e-5f && qAbs(g.second - 0.70710678f) < 1e-5f);
+        for (float t = 0.f; t <= 1.f; t += 0.1f) {
+            g = Compositor::audioGains(M::WipeLeft, t);
+            QVERIFY(qAbs(g.first * g.first + g.second * g.second - 1.f) < 1e-5f);
+        }
+        g = Compositor::audioGains(M::Cut, 0.49f);
+        QVERIFY(g.first == 1.f && g.second == 0.f);
+        g = Compositor::audioGains(M::Cut, 0.5f);
+        QVERIFY(g.first == 0.f && g.second == 1.f);
+        g = Compositor::audioGains(M::DipToBlack, 0.5f);
+        QVERIFY(g.first == 0.f && g.second == 0.f);
+        g = Compositor::audioGains(M::DipToWhite, 0.25f);
+        QVERIFY(g.first > 0.5f && g.second == 0.f);
+        g = Compositor::audioGains(M::DipToBlack, 1.f);
+        QVERIFY(g.first == 0.f && qFuzzyCompare(g.second, 1.f));
+    }
+
+    void deckContribution_skipsOffAirDeck() {
+        Compositor comp;
+        comp.setCrossfade(0.f);
+        QVERIFY(comp.deckContributesToProgram(Deck::Live));
+        QVERIFY(!comp.deckContributesToProgram(Deck::Staging));
+        QVERIFY(!comp.deckNeedsRender(Deck::Staging));
+        comp.addViewer(2);
+        QVERIFY(comp.deckNeedsRender(Deck::Staging));
+        comp.removeViewer(2);
+        QVERIFY(!comp.deckNeedsRender(Deck::Staging));
+        comp.setCrossfade(0.4f);
+        QVERIFY(comp.deckContributesToProgram(Deck::Live) && comp.deckContributesToProgram(Deck::Staging));
+        comp.setCrossfade(1.f);
+        QVERIFY(!comp.deckContributesToProgram(Deck::Live));
+        QVERIFY(comp.deckContributesToProgram(Deck::Staging));
+        comp.setSingleStreamMode(true);
+        QVERIFY(comp.deckContributesToProgram(Deck::Live) && !comp.deckContributesToProgram(Deck::Staging));
+        comp.setSingleStreamMode(false);
+        comp.setPanicOverlay(Compositor::PanicOverlay::Blackout);
+        QVERIFY(!comp.deckContributesToProgram(Deck::Live) && !comp.deckContributesToProgram(Deck::Staging));
+    }
+
+    void clearDeckLive_dropsPrimarySource() {
+        Compositor comp;
+        comp.adoptSourceLive(std::make_unique<CanvasSource>());
+        QVERIFY(comp.sourceLive());
+
+        comp.clearDeckLive();
+        QVERIFY(!comp.sourceLive());
+    }
+
+    void clearDeckStaging_dropsPrimarySource() {
+        Compositor comp;
+        comp.adoptSourceStaging(std::make_unique<CanvasSource>());
+        QVERIFY(comp.sourceStaging());
+
+        comp.clearDeckStaging();
+        QVERIFY(!comp.sourceStaging());
+    }
+
+    void clearDeckLive_stopsCamera() {
         if (QMediaDevices::videoInputs().isEmpty())
             QSKIP("No video inputs available in this environment");
 
@@ -83,17 +252,17 @@ private slots:
         auto cam = std::make_unique<CameraSource>();
         cam->start({});
         QCoreApplication::processEvents();
-        comp.adoptSourceA(std::move(cam));
-        QVERIFY(comp.sourceA());
+        comp.adoptSourceLive(std::move(cam));
+        QVERIFY(comp.sourceLive());
 
-        comp.clearDeckA();
-        QVERIFY(!comp.sourceA());
+        comp.clearDeckLive();
+        QVERIFY(!comp.sourceLive());
     }
 
     void destructWithLiveSourceBeforeGlInit() {
         auto comp = std::make_unique<Compositor>();
-        comp->adoptSourceA(std::make_unique<CanvasSource>());
-        comp->adoptSourceB(std::make_unique<CanvasSource>());
+        comp->adoptSourceLive(std::make_unique<CanvasSource>());
+        comp->adoptSourceStaging(std::make_unique<CanvasSource>());
         comp.reset();
         QVERIFY(true);
     }
@@ -106,7 +275,7 @@ private slots:
         auto cam = std::make_unique<CameraSource>();
         cam->start({});
         QCoreApplication::processEvents();
-        comp->adoptSourceA(std::move(cam));
+        comp->adoptSourceLive(std::move(cam));
         QCoreApplication::processEvents();
 
         comp.reset();

@@ -27,7 +27,7 @@ public:
     };
 
     static constexpr const char *kExtension      = ".prism";
-    static constexpr int         kFormatVersion  = 1;
+    static constexpr int         kFormatVersion  = 2;
     static constexpr const char *kManifestName   = "manifest.json";
     static constexpr const char *kSessionName    = "session.psm";
     static constexpr const char *kAssetsDirName  = "assets";

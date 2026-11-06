@@ -435,6 +435,7 @@ if(PRISM_HAVE_SEGMENTATION)
 endif()
 
 set(HEADERS
+    include/core/Deck.h
     include/core/sources/MediaSource.h
     include/core/sources/SourceDescriptor.h
     include/core/media/MediaFormats.h

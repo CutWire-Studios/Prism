@@ -328,15 +328,15 @@ public:
 
 // ── 3D transitions ──────────────────────────────────────────────────────────
 // These composite the full deck textures themselves under a perspective
-// projection, so they read the raw A/B textures from the context rather than
+// projection, so they read the raw Live/Staging textures from the context rather than
 // using the direction-aware drawOut/drawIn callbacks.
 
 class Gallery3DTransition : public Transition {
 public:
     void paint(const Context &c) const override {
         const float t       = c.t;
-        const float alphaA  = 1.f - t;
-        const float alphaB  = t;
+        const float alphaLive  = 1.f - t;
+        const float alphaStaging  = t;
         const float aspect  = (float)c.width / c.height;
         const bool  flip    = c.texFlipped;
 
@@ -345,7 +345,7 @@ public:
         // Eased fader value for camera position.
         const float ease = t * t * (3.f - 2.f * t);
 
-        // 3D layout for deck B (right, slightly lower, angled and further back).
+        // 3D layout for staging deck (right, slightly lower, angled and further back).
         const float XB = 2.4f * aspect, YB = -0.3f, ZB = -1.8f, rotB = -15.f;
 
         const float d = 2.41421356f;
@@ -379,12 +379,12 @@ public:
         glPopMatrix();
 
         // 2. Ambient video glow textures in the background (Z = -18).
-        if (alphaA > 0.f && c.readyA) {
+        if (alphaLive > 0.f && c.readyLive) {
             glPushMatrix();
             glTranslatef(0.f, 0.f, -18.f);
             glScalef(12.f * aspect, 12.f, 1.f);
-            glBindTexture(GL_TEXTURE_2D, c.texA);
-            glColor4f(0.35f, 0.35f, 0.35f, alphaA * 0.18f);
+            glBindTexture(GL_TEXTURE_2D, c.texLive);
+            glColor4f(0.35f, 0.35f, 0.35f, alphaLive * 0.18f);
             glBegin(GL_QUADS);
             if (flip) {
                 glTexCoord2f(0.f, 0.f); glVertex3f(-1.f, -1.f, 0.f);
@@ -400,12 +400,12 @@ public:
             glEnd();
             glPopMatrix();
         }
-        if (alphaB > 0.f && c.readyB) {
+        if (alphaStaging > 0.f && c.readyStaging) {
             glPushMatrix();
             glTranslatef(XB, YB, -18.f);
             glScalef(12.f * aspect, 12.f, 1.f);
-            glBindTexture(GL_TEXTURE_2D, c.texB);
-            glColor4f(0.35f, 0.35f, 0.35f, alphaB * 0.18f);
+            glBindTexture(GL_TEXTURE_2D, c.texStaging);
+            glColor4f(0.35f, 0.35f, 0.35f, alphaStaging * 0.18f);
             glBegin(GL_QUADS);
             if (flip) {
                 glTexCoord2f(0.f, 0.f); glVertex3f(-1.f, -1.f, 0.f);
@@ -522,16 +522,16 @@ public:
             glBindTexture(GL_TEXTURE_2D, 0);
         };
 
-        if (alphaA > 0.f) {
+        if (alphaLive > 0.f) {
             glPushMatrix();
-            drawGalleryDeck(c.texA, c.readyA, alphaA);
+            drawGalleryDeck(c.texLive, c.readyLive, alphaLive);
             glPopMatrix();
         }
-        if (alphaB > 0.f) {
+        if (alphaStaging > 0.f) {
             glPushMatrix();
             glTranslatef(XB, YB, ZB);
             glRotatef(rotB, 0.f, 1.f, 0.f);
-            drawGalleryDeck(c.texB, c.readyB, alphaB);
+            drawGalleryDeck(c.texStaging, c.readyStaging, alphaStaging);
             glPopMatrix();
         }
 
@@ -567,26 +567,26 @@ class Cube3DTransition : public Transition {
 public:
     void paint(const Context &c) const override {
         const float t      = c.t;
-        const float alphaA = 1.f - t;
-        const float alphaB = t;
+        const float alphaLive = 1.f - t;
+        const float alphaStaging = t;
         const float aspect = (float)c.width / c.height;
 
         begin3D(aspect);
         // Z translation matches the FOV so that scale = 1 fills the viewport.
         glTranslatef(0.f, 0.f, -(2.41421356f + aspect));
 
-        if (alphaA > 0.f) {                       // face A rotates out to the left
+        if (alphaLive > 0.f) {                       // Live face rotates out to the left
             glPushMatrix();
             glRotatef(-t * 90.f, 0.f, 1.f, 0.f);
             glTranslatef(0.f, 0.f, aspect);
-            draw3DDeck(c.texA, c.readyA, alphaA, aspect, c.texFlipped);
+            draw3DDeck(c.texLive, c.readyLive, alphaLive, aspect, c.texFlipped);
             glPopMatrix();
         }
-        if (alphaB > 0.f) {                       // face B rotates in from the right
+        if (alphaStaging > 0.f) {                       // Staging face rotates in from the right
             glPushMatrix();
             glRotatef(90.f - t * 90.f, 0.f, 1.f, 0.f);
             glTranslatef(0.f, 0.f, aspect);
-            draw3DDeck(c.texB, c.readyB, alphaB, aspect, c.texFlipped);
+            draw3DDeck(c.texStaging, c.readyStaging, alphaStaging, aspect, c.texFlipped);
             glPopMatrix();
         }
 
@@ -598,8 +598,8 @@ class Flip3DTransition : public Transition {
 public:
     void paint(const Context &c) const override {
         const float t      = c.t;
-        const float alphaA = 1.f - t;
-        const float alphaB = t;
+        const float alphaLive = 1.f - t;
+        const float alphaStaging = t;
         const float aspect = (float)c.width / c.height;
 
         begin3D(aspect);
@@ -608,10 +608,10 @@ public:
         glPushMatrix();
         glRotatef(-t * 180.f, 0.f, 1.f, 0.f);     // flip the whole card
         if (t < 0.5f) {
-            draw3DDeck(c.texA, c.readyA, alphaA, aspect, c.texFlipped);
+            draw3DDeck(c.texLive, c.readyLive, alphaLive, aspect, c.texFlipped);
         } else {
             glRotatef(180.f, 0.f, 1.f, 0.f);      // face the back card's texture forward
-            draw3DDeck(c.texB, c.readyB, alphaB, aspect, c.texFlipped);
+            draw3DDeck(c.texStaging, c.readyStaging, alphaStaging, aspect, c.texFlipped);
         }
         glPopMatrix();
 

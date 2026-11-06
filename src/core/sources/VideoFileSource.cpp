@@ -19,8 +19,8 @@ extern "C" {
 
 namespace {
 
-// How long nextFrame() waits for the first frame after open or seek. Callers (deck load, seek
-// while paused, thumbnails) expect that frame synchronously, as they did when decoding was.
+// How long a blocking nextFrame() waits for the first frame after open or seek. Callers outside
+// the compositor (thumbnails, tests) expect that frame synchronously; async sources never wait.
 constexpr int kFirstFrameWaitMs = 2000;
 
 QSet<VideoFileSource *> &liveSources()
@@ -58,6 +58,7 @@ bool VideoFileSource::open(const QString &filePath)
 {
     m_name = QFileInfo(filePath).fileName();
     m_hasFrame = false;
+    m_everFrame = false;
     m_time = 0.0;
     if (!m_decoder.open(filePath))
         return false;
@@ -72,7 +73,7 @@ bool VideoFileSource::open(const QString &filePath)
 
 bool VideoFileSource::isReady() const
 {
-    return m_decoder.isOpen();
+    return m_decoder.isOpen() && (!m_async || m_everFrame);
 }
 
 double VideoFileSource::duration() const
@@ -90,7 +91,7 @@ void VideoFileSource::seek(double s)
 bool VideoFileSource::nextFrame()
 {
     DecodedVideoFrame frame;
-    if (!m_decoder.popNext(frame, m_hasFrame ? 0 : kFirstFrameWaitMs)) {
+    if (!m_decoder.popNext(frame, m_hasFrame || m_async ? 0 : kFirstFrameWaitMs)) {
         noteEndIfDrained();
         return false;
     }
@@ -141,6 +142,7 @@ bool VideoFileSource::present(DecodedVideoFrame &frame)
     m_frame = std::move(frame);
     m_time = m_frame.ptsUs / 1e6;
     m_hasFrame = true;
+    m_everFrame = true;
     return true;
 }
 

@@ -84,7 +84,7 @@ QSGNode *PreviewItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *)
     if (!m_compositor || !window())
         return reset();
 
-    const bool deckA = m_source == DeckA;
+    const Deck deck = m_source == Live ? Deck::Live : Deck::Staging;
     const bool native = window()->rendererInterface()->graphicsApi() == QSGRendererInterface::OpenGL
                         && m_compositor->texturesShareable();
 
@@ -92,12 +92,12 @@ QSGNode *PreviewItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *)
     QImage image;
     QSize drawSize;
     if (native) {
-        textureId = m_source == Program ? m_compositor->programTexture() : m_compositor->deckTexture(deckA);
+        textureId = m_source == Program ? m_compositor->programTexture() : m_compositor->deckTexture(deck);
         drawSize = m_compositor->programTextureSize();
         if (!textureId)
             return reset();
     } else {
-        image = m_source == Program ? m_compositor->programFrame() : m_compositor->deckProgramFrame(deckA);
+        image = m_source == Program ? m_compositor->programFrame() : m_compositor->deckProgramFrame(deck);
         if (image.isNull())
             return reset();
         drawSize = image.size();

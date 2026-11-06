@@ -18,7 +18,7 @@ class QTimer;
 
 /// Runtime half of the node graph: everything ClipNodeEditor did beyond holding the model.
 /// Owns the per-node script engines (Script / Audio Script / Trigger), merges script outputs
-/// into DataIn feeds, applies A/B-select script results, drives audio-script nodes from the
+/// into DataIn feeds, applies switcher script results, drives audio-script nodes from the
 /// decks, and caches node thumbnails for QML (image://nodethumb/<id>).
 /// It follows the ClipGraph's nodeAdded/nodeRemoved/nodeChanged/graphReset signals to
 /// create, update and destroy its per-node runtime objects.
@@ -51,7 +51,7 @@ public:
     QQuickImageProvider *createImageProvider();
 
     // ── Script / data runtime ─────────────────────────────────────────────────
-    /// One poll step (script-node input feeds, merged feeds, A/B-select scripts). Driven by an
+    /// One poll step (script-node input feeds, merged feeds, switcher scripts). Driven by an
     /// internal timer; public for tests.
     void pollDataConsumers();
     QString mergeScriptInputs(const QVector<NodeId> &producers, uint &verSum) const;
@@ -65,8 +65,8 @@ public:
     // ── Audio scripts ─────────────────────────────────────────────────────────
     void feedLiveAudioForProducer(NodeId producerId, const QByteArray &pcm);
     void syncAudioScriptNode(NodeId scriptNodeId, double playbackTime, bool playing, double speed);
-    void syncAllAudioScripts(NodeId deckAClip, double timeA, bool playingA, double speedA,
-                             NodeId deckBClip, double timeB, bool playingB, double speedB);
+    void syncAllAudioScripts(NodeId liveClip, double timeLive, bool playingLive, double speedLive,
+                             NodeId stagingClip, double timeStaging, bool playingStaging, double speedStaging);
 
 signals:
     /// id 0 means every thumbnail was dropped (graph reset).

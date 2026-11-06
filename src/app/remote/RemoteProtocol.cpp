@@ -49,16 +49,28 @@ Route matchRoute(const QString &method, const QString &path)
         return Route::Fader;
     if (path == QStringLiteral("/api/cut"))
         return Route::Cut;
-    if (path == QStringLiteral("/api/auto"))
-        return Route::Auto;
-    if (path.startsWith(QStringLiteral("/api/selectA")))
-        return Route::SelectA;
-    if (path.startsWith(QStringLiteral("/api/selectB")))
-        return Route::SelectB;
-    if (path == QStringLiteral("/api/togglePlayA"))
-        return Route::TogglePlayA;
-    if (path == QStringLiteral("/api/togglePlayB"))
-        return Route::TogglePlayB;
+    if (path == QStringLiteral("/api/take"))
+        return Route::Take;
+
+    const QString base = path.section(QLatin1Char('?'), 0, 0);
+    if (base == QStringLiteral("/api/stage"))
+        return Route::Stage;
+    if (base == QStringLiteral("/api/live/play"))
+        return Route::LivePlay;
+    if (base == QStringLiteral("/api/live/pause"))
+        return Route::LivePause;
+    if (base == QStringLiteral("/api/live/toggle"))
+        return Route::LiveToggle;
+    if (base == QStringLiteral("/api/live/seek"))
+        return Route::LiveSeek;
+    if (base == QStringLiteral("/api/staging/play"))
+        return Route::StagingPlay;
+    if (base == QStringLiteral("/api/staging/pause"))
+        return Route::StagingPause;
+    if (base == QStringLiteral("/api/staging/toggle"))
+        return Route::StagingToggle;
+    if (base == QStringLiteral("/api/staging/seek"))
+        return Route::StagingSeek;
     if (path.startsWith(QStringLiteral("/api/setTransitionMode")))
         return Route::SetTransitionMode;
     if (path.startsWith(QStringLiteral("/api/setDuration")))
@@ -118,18 +130,18 @@ QByteArray buildStatusJson(const StatusData &data)
     statusObj.insert(QStringLiteral("fader"), data.fader);
 
     if (data.hasDeck) {
-        statusObj.insert(QStringLiteral("activeA"), QString::number(data.activeA));
-        statusObj.insert(QStringLiteral("activeB"), QString::number(data.activeB));
-        statusObj.insert(QStringLiteral("isPlayingA"), data.isPlayingA);
-        statusObj.insert(QStringLiteral("isPlayingB"), data.isPlayingB);
+        statusObj.insert(QStringLiteral("live"), QString::number(data.live));
+        statusObj.insert(QStringLiteral("staging"), QString::number(data.staging));
+        statusObj.insert(QStringLiteral("isPlayingLive"), data.isPlayingLive);
+        statusObj.insert(QStringLiteral("isPlayingStaging"), data.isPlayingStaging);
 
         QJsonArray clipsArray;
         for (const ClipInfo &clip : data.clips) {
             QJsonObject clipObj;
             clipObj.insert(QStringLiteral("id"), QString::number(clip.id));
             clipObj.insert(QStringLiteral("name"), clip.name);
-            clipObj.insert(QStringLiteral("activeA"), clip.activeA);
-            clipObj.insert(QStringLiteral("activeB"), clip.activeB);
+            clipObj.insert(QStringLiteral("onLive"), clip.onLive);
+            clipObj.insert(QStringLiteral("onStaging"), clip.onStaging);
             clipsArray.append(clipObj);
         }
         statusObj.insert(QStringLiteral("clips"), clipsArray);

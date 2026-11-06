@@ -31,12 +31,12 @@ class OutputHub : public QObject {
 public:
     enum class TrackKind {
         Program,
-        DeckA,
-        DeckB,
+        Live,
+        Staging,
         Source,
         ProgramAudio,
-        DeckAAudio,
-        DeckBAudio,
+        LiveAudio,
+        StagingAudio,
         ClipAudio
     };
 
@@ -47,7 +47,7 @@ public:
     void setProgramSourceForTest(ProgramFrameSource *source);
     Compositor *programSource() const;
 
-    void setActiveDeckNodes(NodeId deckA, NodeId deckB);
+    void setActiveDeckNodes(NodeId live, NodeId staging);
 
     QString outputDir() const { return m_outputDir; }
     void setOutputDir(const QString &dir);
@@ -81,19 +81,19 @@ public:
 
     bool startProgramRecording();
     void stopProgramRecording();
-    bool startDeckARecording();
-    void stopDeckARecording();
-    bool startDeckBRecording();
-    void stopDeckBRecording();
+    bool startDeckLiveRecording();
+    void stopDeckLiveRecording();
+    bool startDeckStagingRecording();
+    void stopDeckStagingRecording();
     bool startSourceRecording(NodeId nodeId, const QString &label);
     void stopSourceRecording(NodeId nodeId);
 
     bool startProgramAudioRecording();
     void stopProgramAudioRecording();
-    bool startDeckAAudioRecording();
-    void stopDeckAAudioRecording();
-    bool startDeckBAudioRecording();
-    void stopDeckBAudioRecording();
+    bool startDeckLiveAudioRecording();
+    void stopDeckLiveAudioRecording();
+    bool startDeckStagingAudioRecording();
+    void stopDeckStagingAudioRecording();
     bool startClipAudioRecording(NodeId nodeId, const QString &label);
     void stopClipAudioRecording(NodeId nodeId);
     bool isProgramAudioRecording() const;
@@ -132,7 +132,7 @@ private:
     // thread. onProgramFrameReady() (GUI) does the GL readback and hands the
     // frames to m_dispatchThread, which fans them out to the heavy sinks.
     void dispatchLoop();
-    void distributeFrames(const QImage &program, const QImage &deckA, const QImage &deckB);
+    void distributeFrames(const QImage &program, const QImage &live, const QImage &staging);
     void deliverPendingFrames();
     void ensureProgressTimer();
     void maybeStopProgressTimer();
@@ -149,16 +149,16 @@ private:
     std::unique_ptr<VirtualCameraProgramSink>  m_virtualCameraSink;
     std::unique_ptr<ProgramRecorder>           m_programRecorder;
     std::unique_ptr<ProgramAudioRecorder>      m_programAudioRecorder;
-    std::unique_ptr<ProgramAudioRecorder>      m_deckAAudioRecorder;
-    std::unique_ptr<ProgramAudioRecorder>      m_deckBAudioRecorder;
+    std::unique_ptr<ProgramAudioRecorder>      m_liveAudioRecorder;
+    std::unique_ptr<ProgramAudioRecorder>      m_stagingAudioRecorder;
     std::unordered_map<NodeId, std::unique_ptr<ProgramAudioRecorder>> m_clipAudioRecorders;
-    std::unique_ptr<ProgramRecorder>           m_deckARecorder;
-    std::unique_ptr<ProgramRecorder>           m_deckBRecorder;
+    std::unique_ptr<ProgramRecorder>           m_liveRecorder;
+    std::unique_ptr<ProgramRecorder>           m_stagingRecorder;
     std::unordered_map<NodeId, std::unique_ptr<ProgramRecorder>> m_sourceRecorders;
 
     QString  m_outputDir;
-    NodeId   m_activeDeckA = 0;
-    NodeId   m_activeDeckB = 0;
+    NodeId   m_activeLive = 0;
+    NodeId   m_activeStaging = 0;
     QTimer  *m_progressTimer = nullptr;
 
     bool m_ndiEnabled = false;
@@ -168,7 +168,7 @@ private:
     QThread        *m_dispatchThread = nullptr;
     QMutex          m_mailboxMutex;          // guards the pending-frame mailbox
     QWaitCondition  m_mailboxCv;
-    QImage          m_pendingProgram, m_pendingDeckA, m_pendingDeckB;
+    QImage          m_pendingProgram, m_pendingLive, m_pendingStaging;
     bool            m_frameDirty   = false;
     bool            m_dispatchStop = false;
     // Serialises all sink/recorder access between the dispatch thread and the

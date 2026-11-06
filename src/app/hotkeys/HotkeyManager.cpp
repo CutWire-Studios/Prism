@@ -9,7 +9,7 @@
 #include <QDebug>
 
 namespace {
-constexpr int kProfileVersion = 2;   // v1 bound clips; v2 binds A/B switcher inputs
+constexpr int kProfileVersion = 2;   // v1 bound clips; v2 binds switcher inputs
 
 using AbSlotRef = ClipGraph::AbSlotRef;
 using AbSlotInfo = ClipGraph::AbSlotInfo;
@@ -61,10 +61,10 @@ bool HotkeyManager::eventFilter(QObject *watched, QEvent *event) {
     const Qt::KeyboardModifiers mods = ke->modifiers() & ~Qt::KeypadModifier;
     if (mods != Qt::NoModifier && mods != Qt::ShiftModifier)
         return false;
-    const bool deckA = mods == Qt::NoModifier;
+    const bool cutToLive = mods == Qt::ShiftModifier;
 
     int key = ke->key();
-    if (!deckA) {
+    if (cutToLive) {
         const Qt::Key plain = unshiftedDigit(key);
         if (plain != Qt::Key_unknown)
             key = plain;
@@ -77,7 +77,7 @@ bool HotkeyManager::eventFilter(QObject *watched, QEvent *event) {
         event->accept();
         return false;
     }
-    m_graph->triggerAbSlot(ref, deckA);
+    emit slotTriggered(ref, cutToLive);
     return true;
 }
 

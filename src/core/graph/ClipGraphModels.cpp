@@ -293,8 +293,8 @@ void ClipGraphController::init() {
     });
     auto bump = [this] { ++m_revision; emit revisionChanged(); };
     connect(m_graph, &ClipGraph::changed, this, bump);
-    connect(m_graph, &ClipGraph::deckAChanged, this, bump);
-    connect(m_graph, &ClipGraph::deckBChanged, this, bump);
+    connect(m_graph, &ClipGraph::liveChanged, this, bump);
+    connect(m_graph, &ClipGraph::stagingChanged, this, bump);
     connect(m_graph, &ClipGraph::graphReset, this, bump);
 }
 
@@ -505,12 +505,8 @@ bool ClipGraphController::swapSlots(quint64 id, int a, int b) {
     return true;
 }
 
-bool ClipGraphController::triggerAbSlot(quint64 node, int slot, bool deckA) {
-    return m_graph->triggerAbSlot({node, slot}, deckA);
-}
-
 QVariantMap ClipGraphController::abState(quint64 node) const {
     int a = -1, b = -1;
     m_graph->abDeckSlots(node, a, b);
-    return {{"a", a}, {"b", b}, {"outputConnected", m_graph->abOutputConnected(node)}};
+    return {{"live", a}, {"staging", b}, {"outputConnected", m_graph->abOutputConnected(node)}};
 }

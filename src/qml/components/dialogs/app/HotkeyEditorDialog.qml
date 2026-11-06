@@ -24,7 +24,7 @@ ThemedDialog {
 
         ThemedLabel {
             width: parent.width
-            text: qsTr("Assign a key to each A/B switcher input. The key sends the input to Deck A; Shift plus the same key sends it to Deck B. Click a field, then press the key. Esc cancels, Backspace clears.")
+            text: qsTr("Assign a key to each switcher input. The key stages the input; Shift plus the same key stages it and cuts to Live. Click a field, then press the key. Esc cancels, Backspace clears.")
         }
 
         Flickable {
@@ -63,7 +63,7 @@ ThemedDialog {
 
                         ShortcutCaptureField {
                             id: capture
-                            anchors.right: deckB.left
+                            anchors.right: cutLabel.left
                             anchors.rightMargin: Theme.spacingLg
                             anchors.verticalCenter: parent.verticalCenter
                             actionId: row.modelData.label
@@ -76,14 +76,14 @@ ThemedDialog {
                         }
 
                         ThemedLabel {
-                            id: deckB
+                            id: cutLabel
                             anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
                             width: 90
                             horizontalAlignment: Text.AlignRight
                             wrapMode: Text.NoWrap
-                            text: row.modelData.deckBChord.length > 0
-                                  ? qsTr("B: %1").arg(Theme.shortcutDisplay(row.modelData.deckBChord)) : ""
+                            text: row.modelData.cutChord.length > 0
+                                  ? qsTr("Cut: %1").arg(Theme.shortcutDisplay(row.modelData.cutChord)) : ""
                         }
                     }
                 }
@@ -93,7 +93,7 @@ ThemedDialog {
         ThemedLabel {
             width: parent.width
             visible: HotkeyEditor.rows.length === 0
-            text: qsTr("No A/B switcher inputs yet. Connect sources to an A/B Select node to assign keys.")
+            text: qsTr("No switcher inputs yet. Connect sources to a Switcher node to assign keys.")
         }
 
         ThemedLabel {

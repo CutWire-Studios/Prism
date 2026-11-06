@@ -123,14 +123,14 @@ void OscServer::dispatch(const OscProtocol::OscMessage &msg)
     const QVariantList &args = msg.args;
     TransitionController *transition = m_mainWindow->transitionController();
 
-    if (parts.size() == 3 && (cmd == QLatin1String("a") || cmd == QLatin1String("b"))) {
-        handleDeck(cmd == QLatin1String("a"), parts.at(2), args);
+    if (parts.size() == 3 && (cmd == QLatin1String("live") || cmd == QLatin1String("staging"))) {
+        handleDeck(cmd == QLatin1String("live") ? Deck::Live : Deck::Staging, parts.at(2), args);
     } else if (parts.size() == 2 && cmd == QLatin1String("cut")) {
-        if (transition)
-            transition->cutTransition();
-    } else if (parts.size() == 2 && cmd == QLatin1String("auto")) {
-        if (transition)
-            transition->autoTransition();
+        m_mainWindow->cut();
+    } else if (parts.size() == 2 && cmd == QLatin1String("stage")) {
+        handleStage(args);
+    } else if (parts.size() == 2 && cmd == QLatin1String("take")) {
+        m_mainWindow->take();
     } else if (parts.size() == 2 && cmd == QLatin1String("fader")) {
         if (!args.isEmpty() && isNumber(args.first())) {
             const double v = args.first().toDouble();
@@ -157,26 +157,30 @@ void OscServer::dispatch(const OscProtocol::OscMessage &msg)
     }
 }
 
-void OscServer::handleDeck(bool deckA, const QString &cmd, const QVariantList &args)
+void OscServer::handleDeck(Deck deck, const QString &cmd, const QVariantList &args)
 {
-    if (cmd == QLatin1String("slot")) {
-        ClipGraph *editor = m_mainWindow->clipGraph();
-        if (!editor || args.isEmpty() || !isNumber(args.first()))
-            return;
-        const QVector<ClipGraph::AbSlotInfo> inputs = editor->abSelectInputs();
-        const int index = args.first().toInt() - 1;
-        if (index >= 0 && index < inputs.size())
-            editor->triggerAbSlot(inputs.at(index).ref, deckA);
-    } else if (cmd == QLatin1String("play")) {
-        m_mainWindow->playDeck(deckA, args.isEmpty() || argToBool(args.first()));
+    const int slotIndex = static_cast<int>(deck);
+    if (cmd == QLatin1String("play")) {
+        m_mainWindow->playDeck(slotIndex, args.isEmpty() || argToBool(args.first()));
     } else if (cmd == QLatin1String("pause")) {
-        m_mainWindow->playDeck(deckA, false);
+        m_mainWindow->playDeck(slotIndex, false);
     } else if (cmd == QLatin1String("toggle")) {
-        deckA ? m_mainWindow->togglePlayA() : m_mainWindow->togglePlayB();
+        m_mainWindow->togglePlay(slotIndex);
     } else if (cmd == QLatin1String("seek")) {
         if (!args.isEmpty() && isNumber(args.first()))
-            m_mainWindow->seekDeck(deckA, args.first().toDouble());
+            m_mainWindow->seekDeck(slotIndex, args.first().toDouble());
     }
+}
+
+void OscServer::handleStage(const QVariantList &args)
+{
+    ClipGraph *editor = m_mainWindow->clipGraph();
+    if (!editor || args.isEmpty() || !isNumber(args.first()))
+        return;
+    const QVector<ClipGraph::AbSlotInfo> inputs = editor->abSelectInputs();
+    const int index = args.first().toInt() - 1;
+    if (index >= 0 && index < inputs.size())
+        m_mainWindow->stageAbSlot(inputs.at(index).ref.abNodeId, inputs.at(index).ref.slot, false);
 }
 
 OscServer::State OscServer::captureState() const
@@ -186,8 +190,8 @@ OscServer::State OscServer::captureState() const
         return s;
 
     s.fader = m_mainWindow->faderValue();
-    s.a.playing = m_mainWindow->isPlayingA();
-    s.b.playing = m_mainWindow->isPlayingB();
+    s.live.playing = m_mainWindow->isPlayingLive();
+    s.staging.playing = m_mainWindow->isPlayingStaging();
     s.panic = m_mainWindow->mcpPanicMode();
     if (TransitionController *transition = m_mainWindow->transitionController()) {
         s.mode = transition->currentModeIndex();
@@ -197,21 +201,21 @@ OscServer::State OscServer::captureState() const
     ClipGraph *editor = m_mainWindow->clipGraph();
     if (!editor)
         return s;
-    s.a.input = editor->deckAInput();
-    s.b.input = editor->deckBInput();
+    s.live.input = m_mainWindow->activeNodeLive();
+    s.staging.input = m_mainWindow->activeNodeStaging();
 
-    const bool aChanged = s.a.input != m_state.a.input;
-    const bool bChanged = s.b.input != m_state.b.input;
-    s.a.slot = m_state.a.slot;
-    s.a.name = m_state.a.name;
-    s.b.slot = m_state.b.slot;
-    s.b.name = m_state.b.name;
-    if (!aChanged && !bChanged)
+    const bool liveChanged = s.live.input != m_state.live.input;
+    const bool stagingChanged = s.staging.input != m_state.staging.input;
+    s.live.slot = m_state.live.slot;
+    s.live.name = m_state.live.name;
+    s.staging.slot = m_state.staging.slot;
+    s.staging.name = m_state.staging.name;
+    if (!liveChanged && !stagingChanged)
         return s;
 
     // abSelectInputs() resolves every slot's stream, so only walk it when a deck input changed.
     const QVector<ClipGraph::AbSlotInfo> inputs = editor->abSelectInputs();
-    auto resolve = [&](Deck &deck) {
+    auto resolve = [&](DeckState &deck) {
         deck.slot = 0;
         deck.name.clear();
         for (int i = 0; i < inputs.size(); ++i) {
@@ -224,8 +228,8 @@ OscServer::State OscServer::captureState() const
         if (editor->hasNode(deck.input))
             deck.name = editor->sourceName(deck.input);
     };
-    if (aChanged) resolve(s.a);
-    if (bChanged) resolve(s.b);
+    if (liveChanged) resolve(s.live);
+    if (stagingChanged) resolve(s.staging);
     return s;
 }
 
@@ -236,12 +240,9 @@ void OscServer::pollState()
 
     if (now.fader != before.fader) {
         send(QStringLiteral("/prism/fader"), {float(now.fader / 100.0)});
-        const bool onA = now.fader < 50;
-        if (before.fader < 0 || onA != (before.fader < 50))
-            send(QStringLiteral("/prism/program"), {onA ? QStringLiteral("a") : QStringLiteral("b")});
     }
-    sendDeckDiff("a", now.a, before.a);
-    sendDeckDiff("b", now.b, before.b);
+    sendDeckDiff("live", now.live, before.live);
+    sendDeckDiff("staging", now.staging, before.staging);
     if (now.mode != before.mode)
         send(QStringLiteral("/prism/transition/mode"), {now.mode});
     if (now.duration != before.duration)
@@ -252,7 +253,7 @@ void OscServer::pollState()
     m_state = now;
 }
 
-void OscServer::sendDeckDiff(const char *deck, const Deck &now, const Deck &before)
+void OscServer::sendDeckDiff(const char *deck, const DeckState &now, const DeckState &before)
 {
     const QString prefix = QStringLiteral("/prism/") + QLatin1String(deck);
     if (now.slot != before.slot || now.input != before.input)

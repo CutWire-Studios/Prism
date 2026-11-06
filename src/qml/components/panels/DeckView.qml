@@ -5,16 +5,19 @@ import Prism
 ColumnLayout {
     id: root
 
-    property bool deckA: true
+    property bool staging: false
+    readonly property int deckIndex: staging ? 1 : 0
 
-    readonly property string deckName: deckA ? AppController.deckNameA : AppController.deckNameB
-    readonly property bool hasTransport: deckA ? AppController.deckHasTransportA : AppController.deckHasTransportB
-    readonly property bool hasSpeed: deckA ? AppController.deckHasSpeedA : AppController.deckHasSpeedB
-    readonly property bool playing: deckA ? AppController.deckPlayingA : AppController.deckPlayingB
-    readonly property real time: deckA ? AppController.deckTimeA : AppController.deckTimeB
-    readonly property real duration: deckA ? AppController.deckDurationA : AppController.deckDurationB
-    readonly property real speed: deckA ? AppController.deckSpeedA : AppController.deckSpeedB
-    readonly property bool onAir: AppController.onAirDeck === (deckA ? 0 : 1)
+    readonly property string deckName: staging ? AppController.deckNameStaging : AppController.deckNameLive
+    readonly property bool hasTransport: staging ? AppController.deckHasTransportStaging : AppController.deckHasTransportLive
+    readonly property bool hasSpeed: staging ? AppController.deckHasSpeedStaging : AppController.deckHasSpeedLive
+    readonly property bool playing: staging ? AppController.deckPlayingStaging : AppController.deckPlayingLive
+    readonly property real time: staging ? AppController.deckTimeStaging : AppController.deckTimeLive
+    readonly property real duration: staging ? AppController.deckDurationStaging : AppController.deckDurationLive
+    readonly property real speed: staging ? AppController.deckSpeedStaging : AppController.deckSpeedLive
+    readonly property bool isLive: !staging
+    readonly property bool ready: staging ? AppController.deckReadyStaging : AppController.deckReadyLive
+    readonly property bool onAir: AppController.onAirDeck === (staging ? 1 : 0)
 
     function fmt(secs) {
         const s = Math.max(0, Math.floor(secs))
@@ -46,7 +49,7 @@ ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 1
                 compositor: AppController.compositor
-                source: root.deckA ? PreviewItem.DeckA : PreviewItem.DeckB
+                source: root.staging ? PreviewItem.Staging : PreviewItem.Live
             }
 
             Rectangle {
@@ -61,8 +64,19 @@ ColumnLayout {
                     id: badge
                     anchors.centerIn: parent
                     tone: "default"
-                    text: (root.deckA ? qsTr("A") : qsTr("B")) + (root.onAir ? "  " + qsTr("ON AIR") : "")
+                    text: (root.isLive ? qsTr("Live") : qsTr("Staging")) + (root.onAir ? "  " + qsTr("ON AIR") : "")
                 }
+            }
+
+            ThemedLabel {
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: Theme.spacingSm
+                visible: !root.isLive && root.deckName.length > 0
+                tone: "default"
+                text: root.ready ? qsTr("READY") : qsTr("Loading…")
+                style: Text.Outline
+                styleColor: "black"
             }
 
             ThemedLabel {
@@ -89,14 +103,14 @@ ColumnLayout {
         IconButton {
             glyph: root.playing ? "pause" : "play"
             tooltip: root.playing ? qsTr("Pause") : qsTr("Play")
-            onClicked: root.deckA ? AppController.togglePlayA() : AppController.togglePlayB()
+            onClicked: AppController.togglePlay(root.deckIndex)
         }
         ThemedSlider {
             id: seek
             Layout.fillWidth: true
             label: qsTr("Position")
             showValueTooltip: false
-            onMoved: AppController.seekDeckFraction(root.deckA, value)
+            onMoved: AppController.seekDeckFraction(root.deckIndex, value)
             Binding {
                 target: seek
                 property: "value"
@@ -123,7 +137,7 @@ ColumnLayout {
             from: 0.25
             to: 4
             valueFormatter: v => Number(v).toFixed(2) + "x"
-            onMoved: AppController.setDeckSpeedValue(root.deckA, value)
+            onMoved: AppController.setDeckSpeedValue(root.deckIndex, value)
             Binding {
                 target: speedSlider
                 property: "value"

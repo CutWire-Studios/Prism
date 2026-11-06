@@ -134,9 +134,9 @@ QJsonObject realisticState() {
     };
 
     QJsonObject state;
-    state["graphVersion"] = 3;
-    state["deckAInput"] = 3;
-    state["deckBInput"] = 4;
+    state["graphVersion"] = ClipGraph::kGraphVersion;
+    state["liveInput"] = 3;
+    state["stagingInput"] = 4;
     state["inputNodes"] = inputs;
     state["processNodes"] = QJsonArray{flip};
     state["layerNodes"] = QJsonArray{layer};
@@ -163,9 +163,9 @@ class TestClipGraph : public QObject {
 private slots:
     void jsonMatchesStoredFixture() {
         const QJsonObject input = QJsonDocument::fromJson(QByteArray(R"json({
-            "graphVersion": 3,
-            "deckAInput": 0,
-            "deckBInput": 0,
+            "graphVersion": 4,
+            "liveInput": 0,
+            "stagingInput": 0,
             "inputNodes": [
                 {"id": 1, "posX": 20, "posY": 20, "hasAudio": false,
                  "source": {"kind": 5, "displayName": "Cam 1"}}
@@ -180,10 +180,10 @@ private slots:
             ]
         })json")).object();
         const QJsonObject expectedGraph = QJsonDocument::fromJson(QByteArray(R"json({
-            "graphVersion": 3,
+            "graphVersion": 4,
             "nextId": 4,
-            "deckAInput": 0,
-            "deckBInput": 0,
+            "liveInput": 0,
+            "stagingInput": 0,
             "inputNodes": [
                 {"id": 1, "posX": 20, "posY": 20, "hasAudio": false, "audioOnly": false,
                  "repeat": false,
@@ -248,8 +248,8 @@ private slots:
         ClipGraph graph;
         QVERIFY(graph.fromJson(realisticState()));
         QCOMPARE(graph.nodeIds().size(), 11);
-        QCOMPARE(graph.deckAInput(), NodeId(3));
-        QCOMPARE(graph.deckBInput(), NodeId(4));
+        QCOMPARE(graph.liveInput(), NodeId(3));
+        QCOMPARE(graph.stagingInput(), NodeId(4));
 
         const QJsonObject out = graph.toJson();
         QVERIFY(out["nextId"].toInteger() > 20);
@@ -261,8 +261,8 @@ private slots:
         QCOMPARE(out["masterAudioInputNodes"].toArray().size(), 1);
         QCOMPARE(out["masterAudioNodes"].toArray().size(), 1);
         QCOMPARE(out["outputNode"].toObject()["id"].toInt(), 20);
-        QCOMPARE(out["deckAInput"].toInteger(), 3);
-        QCOMPARE(out["deckBInput"].toInteger(), 4);
+        QCOMPARE(out["liveInput"].toInteger(), 3);
+        QCOMPARE(out["stagingInput"].toInteger(), 4);
 
         ClipGraph second;
         QVERIFY(second.fromJson(out));
@@ -277,6 +277,32 @@ private slots:
         ClipGraph graph;
         QVERIFY(!graph.fromJson(QJsonObject{{"graphVersion", 1}}));
         QVERIFY(graph.isEmptyGraph());
+    }
+
+    void rejectsPreviousVersion() {
+        ClipGraph graph;
+        QJsonObject old = realisticState();
+        old["graphVersion"] = ClipGraph::kGraphVersion - 1;
+        QVERIFY(!graph.fromJson(old));
+        QVERIFY(graph.isEmptyGraph());
+    }
+
+    void swapDeckInputsSwapsAndEmits() {
+        ClipGraph g;
+        const NodeId a = g.addNode(NT::Input, {}, canvas("a", false));
+        const NodeId b = g.addNode(NT::Input, {}, canvas("b", false));
+        g.setActiveDeckClip(a, Deck::Live);
+        g.setActiveDeckClip(b, Deck::Staging);
+
+        QSignalSpy liveSpy(&g, &ClipGraph::liveChanged);
+        QSignalSpy stagingSpy(&g, &ClipGraph::stagingChanged);
+        g.swapDeckInputs();
+        QCOMPARE(g.liveInput(), b);
+        QCOMPARE(g.stagingInput(), a);
+        QCOMPARE(liveSpy.size(), 1);
+        QCOMPARE(stagingSpy.size(), 1);
+        QCOMPARE(liveSpy.first().first().toULongLong(), quint64(b));
+        QCOMPARE(stagingSpy.first().first().toULongLong(), quint64(a));
     }
 
     void trailingSlotsAndDefaultNames() {
@@ -483,17 +509,17 @@ private slots:
         QCOMPARE(inputs[1].producer, b);
 
         // Needs the switcher wired to the Output first
-        QVERIFY(!g.triggerAbSlot({ab, 0}, true));
+        QVERIFY(!g.triggerAbSlot({ab, 0}, Deck::Live));
         QVERIFY(g.connectNodes(ab, g.outputNodeId(), int(EK::AbToOutput)));
         QVERIFY(g.abOutputConnected(ab));
 
-        QSignalSpy deckA(&g, &ClipGraph::deckAChanged);
-        QSignalSpy deckB(&g, &ClipGraph::deckBChanged);
-        QVERIFY(g.triggerAbSlot({ab, 0}, true));
-        QVERIFY(g.triggerAbSlot({ab, 1}, false));
-        QCOMPARE(g.deckAInput(), a);
-        QCOMPARE(g.deckBInput(), b);
-        QCOMPARE(deckA.size(), 1);
+        QSignalSpy liveSpy(&g, &ClipGraph::liveChanged);
+        QSignalSpy stagingSpy(&g, &ClipGraph::stagingChanged);
+        QVERIFY(g.triggerAbSlot({ab, 0}, Deck::Live));
+        QVERIFY(g.triggerAbSlot({ab, 1}, Deck::Staging));
+        QCOMPARE(g.liveInput(), a);
+        QCOMPARE(g.stagingInput(), b);
+        QCOMPARE(liveSpy.size(), 1);
 
         int aSlot = -1, bSlot = -1;
         g.abDeckSlots(ab, aSlot, bSlot);
@@ -501,16 +527,16 @@ private slots:
         QCOMPARE(bSlot, 1);
 
         // Sending A's input to deck B clears deck A
-        g.assignInputToDeck(a, false);
-        QCOMPARE(g.deckAInput(), NodeId(0));
-        QCOMPARE(g.deckBInput(), a);
+        g.assignInputToDeck(a, Deck::Staging);
+        QCOMPARE(g.liveInput(), NodeId(0));
+        QCOMPARE(g.stagingInput(), a);
 
-        QVERIFY(!g.triggerAbSlot({ab, 2}, true));   // trailing empty slot
-        QVERIFY(!g.triggerAbSlot({999, 0}, true));
+        QVERIFY(!g.triggerAbSlot({ab, 2}, Deck::Live));   // trailing empty slot
+        QVERIFY(!g.triggerAbSlot({999, 0}, Deck::Live));
 
         g.applyAbScriptOutput(ab, QJsonObject{{"a", "CAMB"}, {"b", 1}});
-        QCOMPARE(g.deckAInput(), b);
-        QCOMPARE(g.deckBInput(), a);
+        QCOMPARE(g.liveInput(), b);
+        QCOMPARE(g.stagingInput(), a);
 
         g.setAbSlotHotkeyLabel({ab, 0}, "F1");
         QCOMPARE(g.abSlotHotkeyLabel({ab, 0}), QStringLiteral("F1"));
@@ -519,7 +545,7 @@ private slots:
 
         // Removing a deck producer clears the deck
         QVERIFY(g.removeNode(b));
-        QCOMPARE(g.deckAInput(), NodeId(0));
+        QCOMPARE(g.liveInput(), NodeId(0));
     }
 
     void audioRouting() {

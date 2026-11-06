@@ -11,14 +11,14 @@
 
 class HotkeyManager;
 
-/// QML-facing view of HotkeyManager's A/B switcher key bindings. Edits apply and persist
+/// QML-facing view of HotkeyManager's switcher key bindings. Edits apply and persist
 /// immediately; a key already used by another input is refused.
 class HotkeyEditor : public QObject {
     Q_OBJECT
     QML_ELEMENT
     QML_SINGLETON
 
-    /// Rows {label, chord, deckBChord}; chord is empty when unbound.
+    /// Rows {label, chord, cutChord}; chord (the bare key, stages) is empty when unbound.
     Q_PROPERTY(QVariantList rows READ rows NOTIFY rowsChanged)
 
 public:
@@ -26,7 +26,7 @@ public:
 
     QVariantList rows() const { return m_rows; }
 
-    /// Returns {ok, message}. Only unmodified keys are bindable (Shift+key is always Deck B).
+    /// Returns {ok, message}. Only unmodified keys are bindable (Shift+key stages and cuts to Live).
     Q_INVOKABLE QVariantMap setChord(int row, const QString &chord);
     Q_INVOKABLE void clearRow(int row);
     Q_INVOKABLE void clearAll();

@@ -7,6 +7,7 @@
 #include <QCoreApplication>
 #include <QEvent>
 #include <QOpenGLContext>
+#include <QOpenGLExtraFunctions>
 #include <QOffscreenSurface>
 #include <QPainter>
 #include <QPaintDevice>
@@ -14,6 +15,8 @@
 #include <QSurfaceFormat>
 #include <QTimer>
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 
 int Compositor::s_programWidth  = 1280;
 Compositor::OutputScaleMode Compositor::s_outputScaleMode = Compositor::OutputScaleMode::Fit;
@@ -22,8 +25,21 @@ int Compositor::s_programHeight = 720;
 Compositor::Compositor(QObject *parent)
     : QObject(parent) {
     m_frameTimer = new QTimer(this);
+    m_frameTimer->setTimerType(Qt::PreciseTimer);
     connect(m_frameTimer, &QTimer::timeout, this, &Compositor::updateFrame);
-    m_frameTimer->start(33); // ~30 FPS
+    m_frameTimer->start(frameIntervalMs(m_programFps));
+}
+
+int Compositor::frameIntervalMs(int fps) {
+    return std::max(1, qRound(1000.0 / std::clamp(fps, 1, 240)));
+}
+
+void Compositor::setProgramFps(int fps) {
+    fps = std::clamp(fps, 1, 240);
+    if (fps == m_programFps) return;
+    m_programFps = fps;
+    if (m_frameTimer && m_frameTimer->isActive())
+        m_frameTimer->start(frameIntervalMs(fps));
 }
 
 Compositor::~Compositor() {
@@ -32,10 +48,10 @@ Compositor::~Compositor() {
     releaseMediaSources();
     if (m_ctx && makeCurrent()) {
         destroyProgramFbo();
-        if (m_textureA)       glDeleteTextures(1, &m_textureA);
-        if (m_textureB)       glDeleteTextures(1, &m_textureB);
-        clearChainTextures(m_chainTexA);
-        clearChainTextures(m_chainTexB);
+        if (m_textureLive)       glDeleteTextures(1, &m_textureLive);
+        if (m_textureStaging)       glDeleteTextures(1, &m_textureStaging);
+        clearChainTextures(m_chainTexLive);
+        clearChainTextures(m_chainTexStaging);
         doneCurrent();
     }
 }
@@ -61,12 +77,12 @@ void Compositor::releaseMediaSources() {
         m_frameTimer->stop();
         disconnect(m_frameTimer, nullptr, this, nullptr);
     }
-    m_playingA = false;
-    m_playingB = false;
-    m_sourceA.reset();
-    m_sourceB.reset();
-    m_chainA.clear();
-    m_chainB.clear();
+    m_playingLive = false;
+    m_playingStaging = false;
+    m_sourceLive.reset();
+    m_sourceStaging.reset();
+    m_chainLive.clear();
+    m_chainStaging.clear();
 }
 
 // ── GL context ────────────────────────────────────────────────────────────────
@@ -108,7 +124,14 @@ bool Compositor::isValid() {
 
 bool Compositor::makeCurrent() {
     if (!isValid()) return false;
-    if (m_ctxDepth == 0) {
+    if (m_ctxDepth > 0) {
+        // Sources can switch contexts inside nextFrame() (e.g. offscreen QML); only re-assert then.
+        if (QOpenGLContext::currentContext() != m_ctx.get() && !m_ctx->makeCurrent(m_surface.get()))
+            return false;
+        ++m_ctxDepth;
+        return true;
+    }
+    {
         QOpenGLContext *prev = QOpenGLContext::currentContext();
         m_prevContext = prev != m_ctx.get() ? prev : nullptr;
         m_prevSurface = m_prevContext ? m_prevContext->surface() : nullptr;
@@ -116,6 +139,10 @@ bool Compositor::makeCurrent() {
     if (!m_ctx->makeCurrent(m_surface.get()))
         return false;
     ++m_ctxDepth;
+    if (m_holdContext && !m_contextHeld) {
+        m_contextHeld = true;
+        ++m_ctxDepth;
+    }
     if (!m_glReady) {
         initializeOpenGLFunctions();
         // Hardware decode picks its device by the GPU that draws; tell it which one that is before
@@ -172,12 +199,12 @@ QSize Compositor::programTextureSize() const {
     return {s_programWidth, s_programHeight};
 }
 
-GLuint Compositor::deckTexture(bool deckA) const {
-    return deckA ? m_deckColorTexA : m_deckColorTexB;
+GLuint Compositor::deckTexture(Deck deck) const {
+    return isLive(deck) ? m_deckColorTexLive : m_deckColorTexStaging;
 }
 
 std::pair<float,float> Compositor::computeDeckAlphas() const {
-    const float t = std::clamp(m_crossfadeB, 0.f, 1.f);
+    const float t = std::clamp(m_crossfade, 0.f, 1.f);
     switch (m_transitionMode) {
     case TransitionMode::Crossfade:
     case TransitionMode::Additive:
@@ -216,12 +243,14 @@ void Compositor::composeProgramFrame() {
     m_compW = s_programWidth;
     m_compH = s_programHeight;
 
-    renderDeckToFbo(true);
-    renderDeckToFbo(false);
-
-    if (wantsDeckFrame()) {
-        cacheDeckFrameFromFbo(true);
-        cacheDeckFrameFromFbo(false);
+    for (const Deck deck : {Deck::Live, Deck::Staging}) {
+        if (!deckNeedsRender(deck))
+            continue;
+        renderDeckToFbo(deck);
+        if (m_deckFrameConsumers > 0 || (!m_sharesWithGui && m_viewers[isLive(deck) ? 1 : 2] > 0))
+            cacheDeckFrameFromFbo(deck);
+        else
+            resetReadback(isLive(deck) ? m_readbackDeckLive : m_readbackDeckStaging);
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, m_programFbo);
@@ -234,15 +263,46 @@ void Compositor::composeProgramFrame() {
     renderCompositionGL();
     if (wantsProgramFrame())
         cacheProgramFrameFromFbo();
+    else
+        resetReadback(m_readbackProgram);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     m_compW = 0;
     m_compH = 0;
 }
 
-void Compositor::renderDeckToFbo(bool deckA) {
-    const GLuint fbo = deckA ? m_deckFboA : m_deckFboB;
-    QRectF &outRect = deckA ? m_videoRectProgramA : m_videoRectProgramB;
+std::pair<float,float> Compositor::audioGains(TransitionMode mode, float mix) {
+    const float t = std::clamp(mix, 0.f, 1.f);
+    constexpr float kPi = 3.14159265358979f;
+    switch (mode) {
+    case TransitionMode::Cut:
+        return t < 0.5f ? std::make_pair(1.f, 0.f) : std::make_pair(0.f, 1.f);
+    case TransitionMode::DipToBlack:
+    case TransitionMode::DipToWhite:
+        return {t < 0.5f ? std::max(0.f, std::cos(kPi * t)) : 0.f, t > 0.5f ? std::sin(kPi * (t - 0.5f)) : 0.f};
+    default:
+        return {std::max(0.f, std::cos(kPi * 0.5f * t)), std::sin(kPi * 0.5f * t)};
+    }
+}
+
+bool Compositor::deckContributesToProgram(Deck deck) const {
+    if (m_panicOverlay != PanicOverlay::None)
+        return false;
+    if (m_singleStream)
+        return isLive(deck);
+    const float t = std::clamp(m_crossfade, 0.f, 1.f);
+    if (m_transitionMode == TransitionMode::Cut)
+        return isLive(deck) ? t < 0.5f : t >= 0.5f;
+    return isLive(deck) ? t < 0.999f : t > 0.001f;
+}
+
+bool Compositor::deckNeedsRender(Deck deck) const {
+    return deckContributesToProgram(deck) || m_deckFrameConsumers > 0 || m_viewers[isLive(deck) ? 1 : 2] > 0;
+}
+
+void Compositor::renderDeckToFbo(Deck deck) {
+    const GLuint fbo = isLive(deck) ? m_deckFboLive : m_deckFboStaging;
+    QRectF &outRect = isLive(deck) ? m_videoRectProgramLive : m_videoRectProgramStaging;
 
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     glViewport(0, 0, s_programWidth, s_programHeight);
@@ -261,23 +321,24 @@ void Compositor::renderDeckToFbo(bool deckA) {
         return;
     }
 
-    const GLuint deckTex = deckA
-        ? ((m_sourceA && m_sourceA->glTexture()) ? m_sourceA->glTexture() : m_textureA)
-        : ((m_sourceB && m_sourceB->glTexture()) ? m_sourceB->glTexture() : m_textureB);
-    MediaSource *src = deckA ? m_sourceA.get() : m_sourceB.get();
-    const float cx = deckA ? m_cropXA : m_cropXB;
-    const float cy = deckA ? m_cropYA : m_cropYB;
-    const float cw = deckA ? m_cropWA : m_cropWB;
-    const float ch = deckA ? m_cropHA : m_cropHB;
-    const float baseX = deckA ? m_baseXA : m_baseXB;
-    const float baseY = deckA ? m_baseYA : m_baseYB;
-    const float baseW = deckA ? m_baseWA : m_baseWB;
-    const float baseH = deckA ? m_baseHA : m_baseHB;
-    const int canvasW = deckA ? m_canvasWidthA : m_canvasWidthB;
-    const int canvasH = deckA ? m_canvasHeightA : m_canvasHeightB;
-    auto &chain = deckA ? m_chainA : m_chainB;
-    auto &chainTex = deckA ? m_chainTexA : m_chainTexB;
+    const GLuint deckTex = isLive(deck)
+        ? ((m_sourceLive && m_sourceLive->glTexture()) ? m_sourceLive->glTexture() : m_textureLive)
+        : ((m_sourceStaging && m_sourceStaging->glTexture()) ? m_sourceStaging->glTexture() : m_textureStaging);
+    MediaSource *src = isLive(deck) ? m_sourceLive.get() : m_sourceStaging.get();
+    const float cx = isLive(deck) ? m_cropXLive : m_cropXStaging;
+    const float cy = isLive(deck) ? m_cropYLive : m_cropYStaging;
+    const float cw = isLive(deck) ? m_cropWLive : m_cropWStaging;
+    const float ch = isLive(deck) ? m_cropHLive : m_cropHStaging;
+    const float baseX = isLive(deck) ? m_baseXLive : m_baseXStaging;
+    const float baseY = isLive(deck) ? m_baseYLive : m_baseYStaging;
+    const float baseW = isLive(deck) ? m_baseWLive : m_baseWStaging;
+    const float baseH = isLive(deck) ? m_baseHLive : m_baseHStaging;
+    const int canvasW = isLive(deck) ? m_canvasWidthLive : m_canvasWidthStaging;
+    const int canvasH = isLive(deck) ? m_canvasHeightLive : m_canvasHeightStaging;
+    auto &chain = isLive(deck) ? m_chainLive : m_chainStaging;
+    auto &chainTex = isLive(deck) ? m_chainTexLive : m_chainTexStaging;
 
+    glEnable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -307,8 +368,8 @@ void Compositor::renderDeckToFbo(bool deckA) {
             bounds = fitSourceRect(bounds, src, cw, ch);
         outRect = bounds;
 
-        const bool flipH = deckA ? m_flipHA : m_flipHB;
-        const bool flipV = deckA ? m_flipVA : m_flipVB;
+        const bool flipH = isLive(deck) ? m_flipHLive : m_flipHStaging;
+        const bool flipV = isLive(deck) ? m_flipVLive : m_flipVStaging;
         glColor4f(1.f, 1.f, 1.f, 1.f);
         renderTexture(deckTex, cx, cy, cw, ch,
                       (float)bounds.x(),     (float)bounds.y(),
@@ -349,42 +410,39 @@ void Compositor::renderCompositionGL() {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // Single-stream output: show deck A directly, no crossfade/transition.
+    // Single-stream output: show the Live deck directly, no crossfade/transition.
     if (m_singleStream) {
-        if (m_deckColorTexA)
-            renderFboTexture(m_deckColorTexA, 0.f, 0.f, (float)rw, (float)rh, 1.f);
+        if (m_deckColorTexLive)
+            renderFboTexture(m_deckColorTexLive, 0.f, 0.f, (float)rw, (float)rh, 1.f);
         glDisable(GL_BLEND);
         glColor4f(1.f, 1.f, 1.f, 1.f);
         return;
     }
 
-    const float t = std::clamp(m_crossfadeB, 0.f, 1.f);
+    const float t = std::clamp(m_crossfade, 0.f, 1.f);
 
     auto drawDeckFbo = [&](GLuint deckTex, float alpha) {
         if (alpha <= 0.f || !deckTex) return;
         renderFboTexture(deckTex, 0.f, 0.f, (float)rw, (float)rh, alpha);
     };
 
-    auto drawSideA = [&](float alpha) { drawDeckFbo(m_deckColorTexA, alpha); };
-    auto drawSideB = [&](float alpha) { drawDeckFbo(m_deckColorTexB, alpha); };
-
-    const bool inB = m_transitionTowardB;
-    const float p  = inB ? t : 1.f - t;
+    auto drawSideLive = [&](float alpha) { drawDeckFbo(m_deckColorTexLive, alpha); };
+    auto drawSideStaging = [&](float alpha) { drawDeckFbo(m_deckColorTexStaging, alpha); };
 
     Transition::Context ctx;
     ctx.width   = rw;
     ctx.height  = rh;
     ctx.t       = t;
-    ctx.p       = p;
-    ctx.drawOut = [&](float a) { inB ? drawSideA(a) : drawSideB(a); };
-    ctx.drawIn  = [&](float a) { inB ? drawSideB(a) : drawSideA(a); };
-    ctx.texA    = m_deckColorTexA;
-    ctx.texB    = m_deckColorTexB;
+    ctx.p       = t;
+    ctx.drawOut = drawSideLive;
+    ctx.drawIn  = drawSideStaging;
+    ctx.texLive    = m_deckColorTexLive;
+    ctx.texStaging    = m_deckColorTexStaging;
     // Deck FBO upright sampling for 2D is handled in renderFboTexture(). 3D quads are
     // Y-up (+Y = top), so use source-style V coords (texFlipped=false) — not the 2D flip.
     ctx.texFlipped = false;
-    ctx.readyA  = m_deckColorTexA && m_sourceA && m_sourceA->isReady();
-    ctx.readyB  = m_deckColorTexB && m_sourceB && m_sourceB->isReady();
+    ctx.readyLive  = m_deckColorTexLive && m_sourceLive && m_sourceLive->isReady();
+    ctx.readyStaging  = m_deckColorTexStaging && m_sourceStaging && m_sourceStaging->isReady();
     Transition::forMode(m_transitionMode).paint(ctx);
 
     glDisable(GL_DEPTH_TEST);
@@ -419,7 +477,7 @@ void Compositor::ensureProgramFbo() {
 }
 
 void Compositor::ensureDeckFbos() {
-    if (m_deckFboA) return;
+    if (m_deckFboLive) return;
 
     auto setupDeckFbo = [&](GLuint &fbo, GLuint &colorTex) {
         glGenFramebuffers(1, &fbo);
@@ -440,15 +498,19 @@ void Compositor::ensureDeckFbos() {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     };
 
-    setupDeckFbo(m_deckFboA, m_deckColorTexA);
-    setupDeckFbo(m_deckFboB, m_deckColorTexB);
+    setupDeckFbo(m_deckFboLive, m_deckColorTexLive);
+    setupDeckFbo(m_deckFboStaging, m_deckColorTexStaging);
 }
 
 void Compositor::destroyProgramFbo() {
-    if (m_deckColorTexA) { glDeleteTextures(1, &m_deckColorTexA); m_deckColorTexA = 0; }
-    if (m_deckFboA)      { glDeleteFramebuffers(1, &m_deckFboA); m_deckFboA = 0; }
-    if (m_deckColorTexB) { glDeleteTextures(1, &m_deckColorTexB); m_deckColorTexB = 0; }
-    if (m_deckFboB)      { glDeleteFramebuffers(1, &m_deckFboB); m_deckFboB = 0; }
+    for (Readback *rb : {&m_readbackProgram, &m_readbackDeckLive, &m_readbackDeckStaging}) {
+        if (rb->pbo[0]) m_ctx->extraFunctions()->glDeleteBuffers(2, rb->pbo);
+        *rb = Readback();
+    }
+    if (m_deckColorTexLive) { glDeleteTextures(1, &m_deckColorTexLive); m_deckColorTexLive = 0; }
+    if (m_deckFboLive)      { glDeleteFramebuffers(1, &m_deckFboLive); m_deckFboLive = 0; }
+    if (m_deckColorTexStaging) { glDeleteTextures(1, &m_deckColorTexStaging); m_deckColorTexStaging = 0; }
+    if (m_deckFboStaging)      { glDeleteFramebuffers(1, &m_deckFboStaging); m_deckFboStaging = 0; }
     if (m_programColorTex) { glDeleteTextures(1, &m_programColorTex); m_programColorTex = 0; }
     if (m_programFbo)      { glDeleteFramebuffers(1, &m_programFbo); m_programFbo = 0; }
 }
@@ -467,8 +529,8 @@ void Compositor::setProgramResolution(int width, int height) {
         doneCurrent();
     }
     m_programFrameCache = QImage();
-    m_deckFrameCacheA   = QImage();
-    m_deckFrameCacheB   = QImage();
+    m_deckFrameCacheLive   = QImage();
+    m_deckFrameCacheStaging   = QImage();
     markDirty();
 }
 
@@ -505,25 +567,74 @@ void Compositor::setDeckFrameConsumerCount(int count) {
     m_deckFrameConsumers = std::max(0, count);
 }
 
-void Compositor::cacheDeckFrameFromFbo(bool deckA) {
-    const GLuint fbo = deckA ? m_deckFboA : m_deckFboB;
+void Compositor::resetReadback(Readback &rb) {
+    rb.pending[0] = rb.pending[1] = false;
+}
+
+// Double-buffered: this frame's pixels land in one PBO while the previous frame's are copied out
+// of the other, so the GPU never stalls the CPU. The first frame after a reset (and any
+// captureProgramFrame) reads the PBO it just filled instead, so callers always get a frame.
+void Compositor::readbackToCache(Readback &rb, QImage &cache, bool flipRows) {
+    QOpenGLExtraFunctions *gl = m_ctx->extraFunctions();
+    const QSize sz(s_programWidth, s_programHeight);
+    const qsizetype stride = qsizetype(sz.width()) * 4;
+    const qsizetype bytes = stride * sz.height();
+
+    if (rb.size != sz || !rb.pbo[0]) {
+        if (rb.pbo[0]) gl->glDeleteBuffers(2, rb.pbo);
+        gl->glGenBuffers(2, rb.pbo);
+        for (GLuint pbo : rb.pbo) {
+            gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo);
+            gl->glBufferData(GL_PIXEL_PACK_BUFFER, bytes, nullptr, GL_STREAM_READ);
+        }
+        rb.size = sz;
+        rb.next = 0;
+        resetReadback(rb);
+    }
+
+    const int write = rb.next;
+    const int prev = write ^ 1;
+    gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, rb.pbo[write]);
+    gl->glReadPixels(0, 0, sz.width(), sz.height(), GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    rb.pending[write] = true;
+    rb.next = prev;
+
+    const bool useWrite = m_syncReadback || !rb.pending[prev];
+    const int slot = useWrite ? write : prev;
+    gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, rb.pbo[slot]);
+    const auto *src = static_cast<const uchar *>(
+        gl->glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, bytes, GL_MAP_READ_BIT));
+    if (src) {
+        if (cache.size() != sz || cache.format() != QImage::Format_RGBA8888)
+            cache = QImage(sz, QImage::Format_RGBA8888);
+        uchar *dst = cache.bits();
+        if (flipRows) {
+            for (int y = 0; y < sz.height(); ++y)
+                memcpy(dst + y * stride, src + (sz.height() - 1 - y) * stride, size_t(stride));
+        } else {
+            memcpy(dst, src, size_t(bytes));
+        }
+        gl->glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+    }
+    gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    if (!useWrite)
+        rb.pending[prev] = false;
+}
+
+void Compositor::cacheDeckFrameFromFbo(Deck deck) {
+    const GLuint fbo = isLive(deck) ? m_deckFboLive : m_deckFboStaging;
     if (!fbo) return;
 
-    QImage &cache = deckA ? m_deckFrameCacheA : m_deckFrameCacheB;
-    cache = QImage(s_programWidth, s_programHeight, QImage::Format_RGBA8888);
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    glReadPixels(0, 0, s_programWidth, s_programHeight,
-                 GL_RGBA, GL_UNSIGNED_BYTE, cache.bits());
+    readbackToCache(isLive(deck) ? m_readbackDeckLive : m_readbackDeckStaging,
+                    isLive(deck) ? m_deckFrameCacheLive : m_deckFrameCacheStaging, true);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    cache = cache.mirrored(false, true);
 }
 
 void Compositor::cacheProgramFrameFromFbo() {
     if (!m_programFbo) return;
 
-    m_programFrameCache = QImage(s_programWidth, s_programHeight, QImage::Format_RGBA8888);
-    glReadPixels(0, 0, s_programWidth, s_programHeight,
-                 GL_RGBA, GL_UNSIGNED_BYTE, m_programFrameCache.bits());
+    readbackToCache(m_readbackProgram, m_programFrameCache, false);
 }
 
 // ── Texture rendering ─────────────────────────────────────────────────────────
@@ -564,8 +675,9 @@ void Compositor::renderFboTexture(GLuint tex, float dstX, float dstY, float dstW
 // Private helper: detect type, construct the right MediaSource, upload first frame.
 void Compositor::loadSourceInternal(const QString &filePath,
                                      std::unique_ptr<MediaSource> &target,
-                                     GLuint &tex, bool &playing) {
+                                     GLuint &tex, bool &playing, bool &pending) {
     playing = false;
+    pending = false;
 
     std::unique_ptr<MediaSource> source;
 
@@ -575,11 +687,13 @@ void Compositor::loadSourceInternal(const QString &filePath,
         source = std::move(img);
     } else {
         auto vid = std::make_unique<VideoFileSource>();
+        vid->setAsync(true);
         if (!vid->open(filePath)) return;
         source = std::move(vid);
     }
 
     target = std::move(source);
+    pending = target->type() == MediaSource::Type::VideoFile;
 
     if (!isValid()) {
         markDirty();
@@ -589,39 +703,46 @@ void Compositor::loadSourceInternal(const QString &filePath,
     setupTextureGL(tex, target->frameSize());
     target->nextFrame();                     // prime first frame (no-op for images)
     uploadSourceFrameGL(tex, target.get());
+    pending = pending && !target->isReady();
     doneCurrent();
     markDirty();
 }
 
-void Compositor::loadVideoA(const QString &filePath) {
-    loadSourceInternal(filePath, m_sourceA, m_textureA, m_playingA);
+void Compositor::loadVideoLive(const QString &filePath) {
+    m_readyLive = false;
+    loadSourceInternal(filePath, m_sourceLive, m_textureLive, m_playingLive, m_pendingFrameLive);
 }
 
-void Compositor::loadVideoB(const QString &filePath) {
-    loadSourceInternal(filePath, m_sourceB, m_textureB, m_playingB);
+void Compositor::loadVideoStaging(const QString &filePath) {
+    m_readyStaging = false;
+    loadSourceInternal(filePath, m_sourceStaging, m_textureStaging, m_playingStaging, m_pendingFrameStaging);
 }
 
-void Compositor::setSourceA(std::unique_ptr<MediaSource> source) {
-    m_playingA = false;
-    m_clockDirtyA = true;
-    m_sourceA  = std::move(source);
-    if (!m_sourceA) return;
+void Compositor::setSourceLive(std::unique_ptr<MediaSource> source) {
+    m_playingLive = false;
+    m_clockDirtyLive = true;
+    m_pendingFrameLive = false;
+    m_readyLive = false;
+    m_sourceLive  = std::move(source);
+    if (!m_sourceLive) return;
     if (isValid()) {
         makeCurrent();
         // frameSize() may be (0,0) for async sources like Camera; uploadSourceFrameGL
         // handles resizing the texture when the first real frame arrives.
-        setupTextureGL(m_textureA, m_sourceA->frameSize());
-        if (m_sourceA->nextFrame()) {
+        setupTextureGL(m_textureLive, m_sourceLive->frameSize());
+        const bool primed = m_sourceLive->nextFrame();
+        m_pendingFrameLive = !primed && m_sourceLive->type() == MediaSource::Type::VideoFile;
+        if (primed) {
             // nextFrame() may switch GL contexts internally (e.g. DynamicInterfaceSource
             // creates its own context for offscreen QML rendering). Re-assert ours.
             m_ctx->makeCurrent(m_surface.get());
-            uploadSourceFrameGL(m_textureA, m_sourceA.get());
+            uploadSourceFrameGL(m_textureLive, m_sourceLive.get());
         }
         doneCurrent();
     }
     // Live sources deliver frames continuously via the frame timer.
-    const auto t = m_sourceA->type();
-    m_playingA = (t == MediaSource::Type::Camera    ||
+    const auto t = m_sourceLive->type();
+    m_playingLive = (t == MediaSource::Type::Camera    ||
                   t == MediaSource::Type::Screen     ||
                   t == MediaSource::Type::Window     ||
                   t == MediaSource::Type::Slideshow  ||
@@ -630,22 +751,26 @@ void Compositor::setSourceA(std::unique_ptr<MediaSource> source) {
     markDirty();
 }
 
-void Compositor::setSourceB(std::unique_ptr<MediaSource> source) {
-    m_playingB = false;
-    m_clockDirtyB = true;
-    m_sourceB  = std::move(source);
-    if (!m_sourceB) return;
+void Compositor::setSourceStaging(std::unique_ptr<MediaSource> source) {
+    m_playingStaging = false;
+    m_clockDirtyStaging = true;
+    m_pendingFrameStaging = false;
+    m_readyStaging = false;
+    m_sourceStaging  = std::move(source);
+    if (!m_sourceStaging) return;
     if (isValid()) {
         makeCurrent();
-        setupTextureGL(m_textureB, m_sourceB->frameSize());
-        if (m_sourceB->nextFrame()) {
+        setupTextureGL(m_textureStaging, m_sourceStaging->frameSize());
+        const bool primed = m_sourceStaging->nextFrame();
+        m_pendingFrameStaging = !primed && m_sourceStaging->type() == MediaSource::Type::VideoFile;
+        if (primed) {
             m_ctx->makeCurrent(m_surface.get());
-            uploadSourceFrameGL(m_textureB, m_sourceB.get());
+            uploadSourceFrameGL(m_textureStaging, m_sourceStaging.get());
         }
         doneCurrent();
     }
-    const auto t = m_sourceB->type();
-    m_playingB = (t == MediaSource::Type::Camera    ||
+    const auto t = m_sourceStaging->type();
+    m_playingStaging = (t == MediaSource::Type::Camera    ||
                   t == MediaSource::Type::Screen     ||
                   t == MediaSource::Type::Window     ||
                   t == MediaSource::Type::Slideshow  ||
@@ -654,106 +779,117 @@ void Compositor::setSourceB(std::unique_ptr<MediaSource> source) {
     markDirty();
 }
 
-void Compositor::clearDeckA() {
-    setSourceA(nullptr);
-    setNodeChainA({});
+void Compositor::clearDeckLive() {
+    setSourceLive(nullptr);
+    setNodeChainLive({});
 }
 
-void Compositor::clearDeckB() {
-    setSourceB(nullptr);
-    setNodeChainB({});
+void Compositor::clearDeckStaging() {
+    setSourceStaging(nullptr);
+    setNodeChainStaging({});
 }
 
-void Compositor::adoptSourceA(std::unique_ptr<MediaSource> source) {
-    m_playingA = false;
-    m_sourceA  = std::move(source);
+void Compositor::adoptSourceLive(std::unique_ptr<MediaSource> source) {
+    m_playingLive = false;
+    m_pendingFrameLive = false;
+    m_readyLive = false;
+    m_sourceLive  = std::move(source);
 }
 
-void Compositor::adoptSourceB(std::unique_ptr<MediaSource> source) {
-    m_playingB = false;
-    m_sourceB  = std::move(source);
+void Compositor::adoptSourceStaging(std::unique_ptr<MediaSource> source) {
+    m_playingStaging = false;
+    m_pendingFrameStaging = false;
+    m_readyStaging = false;
+    m_sourceStaging  = std::move(source);
 }
 
 // ── Playback control ──────────────────────────────────────────────────────────
 
-void Compositor::playA()  { if (m_sourceA) { m_playingA = true; m_clockDirtyA = true; } }
-void Compositor::pauseA() { m_playingA = false; }
-void Compositor::playB()  { if (m_sourceB) { m_playingB = true; m_clockDirtyB = true; } }
-void Compositor::pauseB() { m_playingB = false; }
+void Compositor::playLive()  { if (m_sourceLive) { m_playingLive = true; m_clockDirtyLive = true; } }
+void Compositor::pauseLive() { m_playingLive = false; }
+void Compositor::playStaging()  { if (m_sourceStaging) { m_playingStaging = true; m_clockDirtyStaging = true; } }
+void Compositor::pauseStaging() { m_playingStaging = false; }
 
-void Compositor::stop() {
-    m_playingA = false;
-    m_playingB = false;
-}
-
-void Compositor::setDeckSpeed(bool deckA, double speed) {
+void Compositor::setDeckSpeed(Deck deck, double speed) {
     if (speed <= 0.0) speed = 1.0;
     // Re-anchor the play clock so already-elapsed time isn't re-scaled by the
     // new rate (which would jump the position).
-    if (deckA) { m_speedA = speed; m_clockDirtyA = true; }
-    else       { m_speedB = speed; m_clockDirtyB = true; }
+    if (isLive(deck)) { m_speedLive = speed; m_clockDirtyLive = true; }
+    else       { m_speedStaging = speed; m_clockDirtyStaging = true; }
 }
 
-void Compositor::seekA(double seconds) {
-    if (!m_sourceA || !m_sourceA->isReady()) return;
-    m_clockDirtyA = true;
-    m_sourceA->seek(seconds);
-    if (m_sourceA->nextFrame()) {
+void Compositor::seekLive(double seconds) {
+    if (!m_sourceLive) return;
+    // Video sources open asynchronously and take the seek before their first frame arrives.
+    const bool video = m_sourceLive->type() == MediaSource::Type::VideoFile;
+    if (!m_sourceLive->isReady() && !video) return;
+    m_clockDirtyLive = true;
+    m_sourceLive->seek(seconds);
+    if (m_sourceLive->nextFrame()) {
+        m_pendingFrameLive = false;
         if (makeCurrent()) {
-            uploadSourceFrameGL(m_textureA, m_sourceA.get());
+            uploadSourceFrameGL(m_textureLive, m_sourceLive.get());
             doneCurrent();
         }
         markDirty();
+    } else {
+        m_pendingFrameLive = video;
     }
 }
 
-void Compositor::seekB(double seconds) {
-    if (!m_sourceB || !m_sourceB->isReady()) return;
-    m_clockDirtyB = true;
-    m_sourceB->seek(seconds);
-    if (m_sourceB->nextFrame()) {
+void Compositor::seekStaging(double seconds) {
+    if (!m_sourceStaging) return;
+    // Video sources open asynchronously and take the seek before their first frame arrives.
+    const bool video = m_sourceStaging->type() == MediaSource::Type::VideoFile;
+    if (!m_sourceStaging->isReady() && !video) return;
+    m_clockDirtyStaging = true;
+    m_sourceStaging->seek(seconds);
+    if (m_sourceStaging->nextFrame()) {
+        m_pendingFrameStaging = false;
         if (makeCurrent()) {
-            uploadSourceFrameGL(m_textureB, m_sourceB.get());
+            uploadSourceFrameGL(m_textureStaging, m_sourceStaging.get());
             doneCurrent();
         }
         markDirty();
+    } else {
+        m_pendingFrameStaging = video;
     }
 }
 
 // ── Trim ─────────────────────────────────────────────────────────────────────
 
-void Compositor::setTrimPointsA(double s, double e) { m_trimStartA = s; m_trimEndA = e; }
-void Compositor::setTrimPointsB(double s, double e) { m_trimStartB = s; m_trimEndB = e; }
+void Compositor::setTrimPointsLive(double s, double e) { m_trimStartLive = s; m_trimEndLive = e; }
+void Compositor::setTrimPointsStaging(double s, double e) { m_trimStartStaging = s; m_trimEndStaging = e; }
 
 // ── Crop ─────────────────────────────────────────────────────────────────────
 
-void Compositor::setCropA(float x, float y, float w, float h) {
-    m_cropXA = x; m_cropYA = y; m_cropWA = w; m_cropHA = h;
+void Compositor::setCropLive(float x, float y, float w, float h) {
+    m_cropXLive = x; m_cropYLive = y; m_cropWLive = w; m_cropHLive = h;
     markDirty();
 }
 
-void Compositor::setCropB(float x, float y, float w, float h) {
-    m_cropXB = x; m_cropYB = y; m_cropWB = w; m_cropHB = h;
+void Compositor::setCropStaging(float x, float y, float w, float h) {
+    m_cropXStaging = x; m_cropYStaging = y; m_cropWStaging = w; m_cropHStaging = h;
     markDirty();
 }
 
-void Compositor::setBaseA(float x, float y, float w, float h) {
-    m_baseXA = x; m_baseYA = y; m_baseWA = w; m_baseHA = h;
+void Compositor::setBaseLive(float x, float y, float w, float h) {
+    m_baseXLive = x; m_baseYLive = y; m_baseWLive = w; m_baseHLive = h;
     markDirty();
 }
 
-void Compositor::setBaseB(float x, float y, float w, float h) {
-    m_baseXB = x; m_baseYB = y; m_baseWB = w; m_baseHB = h;
+void Compositor::setBaseStaging(float x, float y, float w, float h) {
+    m_baseXStaging = x; m_baseYStaging = y; m_baseWStaging = w; m_baseHStaging = h;
     markDirty();
 }
 
-void Compositor::setFlipA(bool flipH, bool flipV) {
-    m_flipHA = flipH; m_flipVA = flipV;
+void Compositor::setFlipLive(bool flipH, bool flipV) {
+    m_flipHLive = flipH; m_flipVLive = flipV;
     markDirty();
 }
 
-void Compositor::setFlipB(bool flipH, bool flipV) {
-    m_flipHB = flipH; m_flipVB = flipV;
+void Compositor::setFlipStaging(bool flipH, bool flipV) {
+    m_flipHStaging = flipH; m_flipVStaging = flipV;
     markDirty();
 }
 
@@ -765,40 +901,41 @@ void Compositor::setSingleStreamMode(bool enabled) {
 
 void Compositor::swapDeckContents() {
     using std::swap;
-    swap(m_sourceA, m_sourceB);
-    swap(m_textureA, m_textureB);
-    swap(m_playingA, m_playingB);
-    swap(m_repeatA, m_repeatB);
-    swap(m_trimStartA, m_trimStartB);
-    swap(m_trimEndA, m_trimEndB);
-    swap(m_playClockA, m_playClockB);
-    swap(m_clockAnchorA, m_clockAnchorB);
-    // Speed is a deck property and does not swap with the content; re-anchor
-    // both clocks so accumulated elapsed time isn't re-scaled by the other
-    // deck's rate.
-    m_clockDirtyA = true;
-    m_clockDirtyB = true;
-    swap(m_cropXA, m_cropXB); swap(m_cropYA, m_cropYB);
-    swap(m_cropWA, m_cropWB); swap(m_cropHA, m_cropHB);
-    swap(m_flipHA, m_flipHB); swap(m_flipVA, m_flipVB);
-    swap(m_baseXA, m_baseXB); swap(m_baseYA, m_baseYB);
-    swap(m_baseWA, m_baseWB); swap(m_baseHA, m_baseHB);
-    swap(m_canvasWidthA, m_canvasWidthB);
-    swap(m_canvasHeightA, m_canvasHeightB);
-    swap(m_chainA, m_chainB);
-    swap(m_chainTexA, m_chainTexB);
+    swap(m_sourceLive, m_sourceStaging);
+    swap(m_textureLive, m_textureStaging);
+    swap(m_playingLive, m_playingStaging);
+    swap(m_pendingFrameLive, m_pendingFrameStaging);
+    swap(m_readyLive, m_readyStaging);
+    swap(m_repeatLive, m_repeatStaging);
+    swap(m_trimStartLive, m_trimStartStaging);
+    swap(m_trimEndLive, m_trimEndStaging);
+    swap(m_playClockLive, m_playClockStaging);
+    swap(m_clockAnchorLive, m_clockAnchorStaging);
+    swap(m_speedLive, m_speedStaging);
+    // Re-anchor both clocks so elapsed time is measured against the new owner.
+    m_clockDirtyLive = true;
+    m_clockDirtyStaging = true;
+    swap(m_cropXLive, m_cropXStaging); swap(m_cropYLive, m_cropYStaging);
+    swap(m_cropWLive, m_cropWStaging); swap(m_cropHLive, m_cropHStaging);
+    swap(m_flipHLive, m_flipHStaging); swap(m_flipVLive, m_flipVStaging);
+    swap(m_baseXLive, m_baseXStaging); swap(m_baseYLive, m_baseYStaging);
+    swap(m_baseWLive, m_baseWStaging); swap(m_baseHLive, m_baseHStaging);
+    swap(m_canvasWidthLive, m_canvasWidthStaging);
+    swap(m_canvasHeightLive, m_canvasHeightStaging);
+    swap(m_chainLive, m_chainStaging);
+    swap(m_chainTexLive, m_chainTexStaging);
     markDirty();
 }
 
-void Compositor::setCanvasSizeA(int width, int height) {
-    m_canvasWidthA = width;
-    m_canvasHeightA = height;
+void Compositor::setCanvasSizeLive(int width, int height) {
+    m_canvasWidthLive = width;
+    m_canvasHeightLive = height;
     markDirty();
 }
 
-void Compositor::setCanvasSizeB(int width, int height) {
-    m_canvasWidthB = width;
-    m_canvasHeightB = height;
+void Compositor::setCanvasSizeStaging(int width, int height) {
+    m_canvasWidthStaging = width;
+    m_canvasHeightStaging = height;
     markDirty();
 }
 
@@ -824,35 +961,35 @@ void Compositor::primeChainSources(std::vector<NodeChainSource> &chain,
     }
 }
 
-void Compositor::setNodeChainA(std::vector<NodeChainSource> chain) {
+void Compositor::setNodeChainLive(std::vector<NodeChainSource> chain) {
     if (isValid()) {
         makeCurrent();
-        clearChainTextures(m_chainTexA);
-        m_chainA = std::move(chain);
-        primeChainSources(m_chainA, m_chainTexA);
+        clearChainTextures(m_chainTexLive);
+        m_chainLive = std::move(chain);
+        primeChainSources(m_chainLive, m_chainTexLive);
         doneCurrent();
         markDirty();
     } else {
-        m_chainA = std::move(chain);
+        m_chainLive = std::move(chain);
     }
 }
 
-void Compositor::setNodeChainB(std::vector<NodeChainSource> chain) {
+void Compositor::setNodeChainStaging(std::vector<NodeChainSource> chain) {
     if (isValid()) {
         makeCurrent();
-        clearChainTextures(m_chainTexB);
-        m_chainB = std::move(chain);
-        primeChainSources(m_chainB, m_chainTexB);
+        clearChainTextures(m_chainTexStaging);
+        m_chainStaging = std::move(chain);
+        primeChainSources(m_chainStaging, m_chainTexStaging);
         doneCurrent();
         markDirty();
     } else {
-        m_chainB = std::move(chain);
+        m_chainStaging = std::move(chain);
     }
 }
 
-void Compositor::reorderChain(bool deckA, const std::vector<int> &perm) {
-    auto &chain = deckA ? m_chainA : m_chainB;
-    auto &texList = deckA ? m_chainTexA : m_chainTexB;
+void Compositor::reorderChain(Deck deck, const std::vector<int> &perm) {
+    auto &chain = isLive(deck) ? m_chainLive : m_chainStaging;
+    auto &texList = isLive(deck) ? m_chainTexLive : m_chainTexStaging;
     if (perm.size() != chain.size()) return;
     std::vector<NodeChainSource> newChain(chain.size());
     std::vector<GLuint> newTex(texList.size(), 0);
@@ -867,19 +1004,19 @@ void Compositor::reorderChain(bool deckA, const std::vector<int> &perm) {
     markDirty();
 }
 
-void Compositor::setChainVisibility(bool deckA, int chainIndex, bool visible) {
-    auto &chain = deckA ? m_chainA : m_chainB;
+void Compositor::setChainVisibility(Deck deck, int chainIndex, bool visible) {
+    auto &chain = isLive(deck) ? m_chainLive : m_chainStaging;
     if (chainIndex < 0 || chainIndex >= (int)chain.size()) return;
     chain[chainIndex].visible = visible;
     markDirty();
 }
 
-void Compositor::setChainPlacement(bool deckA, int chainIndex,
+void Compositor::setChainPlacement(Deck deck, int chainIndex,
                                     float cropX, float cropY, float cropW, float cropH,
                                     bool flipH, bool flipV,
                                     float baseX, float baseY, float baseW, float baseH,
                                     bool visible) {
-    auto &chain = deckA ? m_chainA : m_chainB;
+    auto &chain = isLive(deck) ? m_chainLive : m_chainStaging;
     if (chainIndex < 0 || chainIndex >= (int)chain.size()) return;
     auto &e = chain[chainIndex];
     e.cropX = cropX; e.cropY = cropY; e.cropW = cropW; e.cropH = cropH;
@@ -979,30 +1116,22 @@ void Compositor::advanceChainSources(std::vector<NodeChainSource> &chain,
 
 // ── Query ─────────────────────────────────────────────────────────────────────
 
-double Compositor::getCurrentTimeA() const {
-    return m_sourceA ? m_sourceA->currentTime() : 0.0;
+double Compositor::getCurrentTimeLive() const {
+    return m_sourceLive ? m_sourceLive->currentTime() : 0.0;
 }
-double Compositor::getDurationA() const {
-    return m_sourceA ? m_sourceA->duration() : 0.0;
+double Compositor::getDurationLive() const {
+    return m_sourceLive ? m_sourceLive->duration() : 0.0;
 }
-double Compositor::getCurrentTimeB() const {
-    return m_sourceB ? m_sourceB->currentTime() : 0.0;
+double Compositor::getCurrentTimeStaging() const {
+    return m_sourceStaging ? m_sourceStaging->currentTime() : 0.0;
 }
-double Compositor::getDurationB() const {
-    return m_sourceB ? m_sourceB->duration() : 0.0;
+double Compositor::getDurationStaging() const {
+    return m_sourceStaging ? m_sourceStaging->duration() : 0.0;
 }
 
-void Compositor::setCrossfade(float mixB) {
-    mixB = std::clamp(mixB, 0.f, 1.f);
-    // Commit the transition direction only when leaving an end stop: moving off
-    // full-A makes B the incoming deck, moving off full-B makes A incoming.
-    // In between we keep the committed direction, so reversing the fader mid-way
-    // rewinds the current transition rather than swapping which deck animates.
-    if (mixB > m_crossfadeB && m_crossfadeB <= 0.001f)
-        m_transitionTowardB = true;
-    else if (mixB < m_crossfadeB && m_crossfadeB >= 0.999f)
-        m_transitionTowardB = false;
-    m_crossfadeB = mixB;
+void Compositor::setCrossfade(float mix) {
+    mix = std::clamp(mix, 0.f, 1.f);
+    m_crossfade = mix;
     markDirty();
 }
 
@@ -1020,7 +1149,9 @@ void Compositor::setOutputFrozen(bool frozen) {
 
 QImage Compositor::captureProgramFrame() {
     if (makeCurrent()) {
+        m_syncReadback = true;
         composeProgramFrame();
+        m_syncReadback = false;
         glFlush();
         doneCurrent();
     }
@@ -1038,7 +1169,7 @@ void Compositor::captureOutputFrameNow() {
     emit programFrameReady();
 }
 
-void Compositor::holdLayerAsStill(bool deckA, int chainIndex, const QImage &frame) {
+void Compositor::holdLayerAsStill(Deck deck, int chainIndex, const QImage &frame) {
     if (frame.isNull())
         return;
 
@@ -1048,16 +1179,16 @@ void Compositor::holdLayerAsStill(bool deckA, int chainIndex, const QImage &fram
 
     const bool glOk = makeCurrent();
     if (chainIndex < 0) {
-        if (deckA) {
-            pauseA();
-            setSourceA(std::move(still));
+        if (isLive(deck)) {
+            pauseLive();
+            setSourceLive(std::move(still));
         } else {
-            pauseB();
-            setSourceB(std::move(still));
+            pauseStaging();
+            setSourceStaging(std::move(still));
         }
     } else {
-        auto &chain   = deckA ? m_chainA : m_chainB;
-        auto &texList = deckA ? m_chainTexA : m_chainTexB;
+        auto &chain   = isLive(deck) ? m_chainLive : m_chainStaging;
+        auto &texList = isLive(deck) ? m_chainTexLive : m_chainTexStaging;
         if (chainIndex >= static_cast<int>(chain.size())) {
             doneCurrent();
             return;
@@ -1072,8 +1203,8 @@ void Compositor::holdLayerAsStill(bool deckA, int chainIndex, const QImage &fram
     markDirty();
 }
 
-QImage Compositor::deckProgramFrame(bool deckA) const {
-    return deckA ? m_deckFrameCacheA : m_deckFrameCacheB;
+QImage Compositor::deckProgramFrame(Deck deck) const {
+    return isLive(deck) ? m_deckFrameCacheLive : m_deckFrameCacheStaging;
 }
 
 
@@ -1153,14 +1284,13 @@ bool Compositor::advanceSource(MediaSource *source, bool &playing, bool repeat,
     return source->nextFrame();
 }
 
-bool Compositor::advanceDeckPaced(bool deckA) {
-    MediaSource *source = deckA ? m_sourceA.get() : m_sourceB.get();
-    bool &playing       = deckA ? m_playingA : m_playingB;
+bool Compositor::advanceDeckPaced(Deck deck) {
+    MediaSource *source = isLive(deck) ? m_sourceLive.get() : m_sourceStaging.get();
+    bool &playing       = isLive(deck) ? m_playingLive : m_playingStaging;
     if (!source) return false;
 
     if (!source->isReady()) {
-        source->nextFrame();   // let lazy/live sources initialize
-        return false;
+        return source->nextFrame();   // lets lazy/live sources initialize and async ones deliver their first frame
     }
 
     const double dur = source->duration();
@@ -1168,16 +1298,16 @@ bool Compositor::advanceDeckPaced(bool deckA) {
     // keep the simple one-frame-per-tick behaviour.
     if (dur <= 0.0)
         return advanceSource(source, playing,
-                             deckA ? m_repeatA : m_repeatB,
-                             deckA ? m_trimStartA : m_trimStartB,
-                             deckA ? m_trimEndA   : m_trimEndB);
+                             isLive(deck) ? m_repeatLive : m_repeatStaging,
+                             isLive(deck) ? m_trimStartLive : m_trimStartStaging,
+                             isLive(deck) ? m_trimEndLive   : m_trimEndStaging);
 
-    QElapsedTimer &clock = deckA ? m_playClockA   : m_playClockB;
-    double &anchor       = deckA ? m_clockAnchorA : m_clockAnchorB;
-    bool   &dirty        = deckA ? m_clockDirtyA  : m_clockDirtyB;
-    const bool   repeat    = deckA ? m_repeatA    : m_repeatB;
-    const double trimStart = deckA ? m_trimStartA : m_trimStartB;
-    const double trimEnd   = deckA ? m_trimEndA   : m_trimEndB;
+    QElapsedTimer &clock = isLive(deck) ? m_playClockLive   : m_playClockStaging;
+    double &anchor       = isLive(deck) ? m_clockAnchorLive : m_clockAnchorStaging;
+    bool   &dirty        = isLive(deck) ? m_clockDirtyLive  : m_clockDirtyStaging;
+    const bool   repeat    = isLive(deck) ? m_repeatLive    : m_repeatStaging;
+    const double trimStart = isLive(deck) ? m_trimStartLive : m_trimStartStaging;
+    const double trimEnd   = isLive(deck) ? m_trimEndLive   : m_trimEndStaging;
 
     if (dirty || !clock.isValid()) {
         anchor = source->currentTime();
@@ -1185,7 +1315,7 @@ bool Compositor::advanceDeckPaced(bool deckA) {
         dirty = false;
     }
 
-    const double speed = deckA ? m_speedA : m_speedB;
+    const double speed = isLive(deck) ? m_speedLive : m_speedStaging;
     double desired = anchor + clock.elapsed() / 1000.0 * speed;
     const double endLimit = (trimEnd > 0) ? trimEnd : dur;
     bool reachedEnd = false;
@@ -1217,56 +1347,90 @@ bool Compositor::advanceDeckPaced(bool deckA) {
 }
 
 void Compositor::syncOnAir() {
-    const float t = std::clamp(m_crossfadeB, 0.f, 1.f);
+    const float t = std::clamp(m_crossfade, 0.f, 1.f);
     const bool cut = m_transitionMode == TransitionMode::Cut;
-    const bool onAirA = m_singleStream || (cut ? t < 0.5f : t < 0.999f);
-    const bool onAirB = !m_singleStream && (cut ? t >= 0.5f : t > 0.001f);
-    if (m_sourceA) m_sourceA->setOnAir(onAirA);
-    if (m_sourceB) m_sourceB->setOnAir(onAirB);
-    for (const NodeChainSource &c : m_chainA)
-        if (c.source) c.source->setOnAir(onAirA);
-    for (const NodeChainSource &c : m_chainB)
-        if (c.source) c.source->setOnAir(onAirB);
+    const bool onAirLive = m_singleStream || (cut ? t < 0.5f : t < 0.999f);
+    const bool onAirStaging = !m_singleStream && (cut ? t >= 0.5f : t > 0.001f);
+    if (m_sourceLive) m_sourceLive->setOnAir(onAirLive);
+    if (m_sourceStaging) m_sourceStaging->setOnAir(onAirStaging);
+    for (const NodeChainSource &c : m_chainLive)
+        if (c.source) c.source->setOnAir(onAirLive);
+    for (const NodeChainSource &c : m_chainStaging)
+        if (c.source) c.source->setOnAir(onAirStaging);
 }
 
-double Compositor::requestDeckOut(bool deckA) {
-    MediaSource *primary = deckA ? m_sourceA.get() : m_sourceB.get();
+double Compositor::requestDeckOut(Deck deck) {
+    MediaSource *primary = isLive(deck) ? m_sourceLive.get() : m_sourceStaging.get();
     double longest = primary ? primary->requestOut() : 0.0;
-    for (const NodeChainSource &c : deckA ? m_chainA : m_chainB)
+    for (const NodeChainSource &c : isLive(deck) ? m_chainLive : m_chainStaging)
         if (c.source) longest = std::max(longest, c.source->requestOut());
     return longest;
 }
 
 void Compositor::updateFrame() {
+    // One make-current per tick: the first GL need below takes the context and it stays current
+    // until the tick ends.
+    struct FrameContext {
+        Compositor *c;
+        explicit FrameContext(Compositor *comp) : c(comp) { c->m_holdContext = true; }
+        ~FrameContext() {
+            c->m_holdContext = false;
+            if (c->m_contextHeld) {
+                c->m_contextHeld = false;
+                c->doneCurrent();
+            }
+        }
+    } frameContext(this);
+
+    emit frameTick();
     syncOnAir();
     const bool externalCapture = m_programFrameConsumers > 0 || m_deckFrameConsumers > 0;
     const bool needsCapture = externalCapture || wantsProgramFrame() || wantsDeckFrame();
 
-    bool decodedA = false, decodedB = false;
-    bool chainADecoded = false, chainBDecoded = false;
+    bool decodedLive = false, decodedStaging = false;
+    bool chainLiveDecoded = false, chainStagingDecoded = false;
     bool waitingForLiveSource = false;
 
     if (!(m_outputFrozen && !needsCapture)) {
-        if (m_playingA)
-            decodedA = advanceDeckPaced(true);
-        if (m_playingB)
-            decodedB = advanceDeckPaced(false);
+        if (m_playingLive)
+            decodedLive = advanceDeckPaced(Deck::Live);
+        if (m_playingStaging)
+            decodedStaging = advanceDeckPaced(Deck::Staging);
 
-        advanceChainSources(m_chainA, m_chainTexA, chainADecoded);
-        advanceChainSources(m_chainB, m_chainTexB, chainBDecoded);
+        // A paused async deck still waits for its first (or post-seek) frame.
+        if (m_playingLive) m_pendingFrameLive = false;
+        else if (m_pendingFrameLive && m_sourceLive && m_sourceLive->nextFrame()) { decodedLive = true; m_pendingFrameLive = false; }
+        if (m_playingStaging) m_pendingFrameStaging = false;
+        else if (m_pendingFrameStaging && m_sourceStaging && m_sourceStaging->nextFrame()) { decodedStaging = true; m_pendingFrameStaging = false; }
 
-        if ((decodedA || decodedB) && makeCurrent()) {
-            if (decodedA)       uploadSourceFrameGL(m_textureA,       m_sourceA.get());
-            if (decodedB)       uploadSourceFrameGL(m_textureB,       m_sourceB.get());
+        advanceChainSources(m_chainLive, m_chainTexLive, chainLiveDecoded);
+        advanceChainSources(m_chainStaging, m_chainTexStaging, chainStagingDecoded);
+
+        if ((decodedLive || decodedStaging) && makeCurrent()) {
+            if (decodedLive)       uploadSourceFrameGL(m_textureLive,       m_sourceLive.get());
+            if (decodedStaging)       uploadSourceFrameGL(m_textureStaging,       m_sourceStaging.get());
             doneCurrent();
         }
 
         waitingForLiveSource =
-            (m_playingA       && m_sourceA    && !m_sourceA->isReady())    ||
-            (m_playingB       && m_sourceB    && !m_sourceB->isReady());
+            (m_playingLive       && m_sourceLive    && !m_sourceLive->isReady())    ||
+            (m_playingStaging       && m_sourceStaging    && !m_sourceStaging->isReady());
     }
 
-    if (!(decodedA || decodedB || chainADecoded || chainBDecoded
+    for (const Deck deck : {Deck::Live, Deck::Staging}) {
+        const MediaSource *src = isLive(deck) ? m_sourceLive.get() : m_sourceStaging.get();
+        bool &ready = isLive(deck) ? m_readyLive : m_readyStaging;
+        const bool nowReady = src && src->isReady();
+        if (nowReady && !ready) {
+            ready = true;
+            markDirty();
+            emit deckReady(deck);
+        } else if (!nowReady) {
+            ready = false;
+        }
+    }
+
+    if (!(decodedLive || decodedStaging || chainLiveDecoded || chainStagingDecoded
           || needsCapture || waitingForLiveSource || m_dirty))
         return;
 

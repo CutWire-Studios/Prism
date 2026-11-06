@@ -1,5 +1,4 @@
 #include "app/transitions/TransitionController.h"
-#include <QVariantAnimation>
 #include <QEasingCurve>
 #include <QTimer>
 #include <algorithm>
@@ -21,11 +20,16 @@ void TransitionController::shutdown() {
 }
 
 void TransitionController::stopAnimation() {
-    if (m_animation) {
-        m_animation->stop();
-        delete m_animation;
-        m_animation = nullptr;
-    }
+    m_animating = false;
+    QObject::disconnect(m_tickConnection);
+}
+
+float TransitionController::easedProgress(double elapsedMs, double durationMs) {
+    if (durationMs <= 0.0 || elapsedMs >= durationMs)
+        return 1.f;
+    if (elapsedMs <= 0.0)
+        return 0.f;
+    return float(QEasingCurve(QEasingCurve::InOutQuad).valueForProgress(elapsedMs / durationMs));
 }
 
 void TransitionController::emitRunningIfChanged() {
@@ -36,18 +40,62 @@ void TransitionController::emitRunningIfChanged() {
     emit runningChanged(running);
 }
 
-void TransitionController::applyFader(int value) {
-    value = std::clamp(value, 0, 100);
-    if (value == m_faderValue)
+bool TransitionController::stagingEmpty() const {
+    return !m_compositor->sourceStaging();
+}
+
+void TransitionController::applyProgress(float value) {
+    value = std::clamp(value, 0.f, 1.f);
+    if (value == m_progressF)
         return;
-    m_faderValue = value;
-    m_compositor->setCrossfade(value / 100.0f);
-    emit faderValueChanged(value);
+    if (m_progressF <= 0.f && !m_incomingStarted) {
+        m_incomingStarted = true;
+        emit takeStarted();
+    }
+    m_progressF = value;
+    const int previous = m_progress;
+    m_progress = value >= 1.f ? 100 : std::min(99, qRound(value * 100.f));
+    const bool cancelled = value <= 0.f && m_incomingStarted;
+    if (value <= 0.f)
+        m_incomingStarted = false;
+    m_compositor->setCrossfade(value);
+    emit crossfadeChanged(value);
+    if (m_progress != previous)
+        emit faderValueChanged(m_progress);
+    if (value >= 1.f)
+        commitTake();
+    else if (cancelled)
+        emit takeCancelled();
+}
+
+void TransitionController::onFrameTick() {
+    if (!m_animating)
+        return;
+    const double durationMs = m_durationSecs * 1000.0;
+    const double elapsed = double(m_sweepClock.nsecsElapsed()) / 1e6;
+    if (elapsed >= durationMs) {
+        stopAnimation();
+        applyProgress(1.f);
+        emitRunningIfChanged();
+        return;
+    }
+    applyProgress(m_sweepStart + (1.f - m_sweepStart) * easedProgress(elapsed, durationMs));
+}
+
+void TransitionController::commitTake() {
+    m_compositor->swapDeckContents();
+    m_compositor->setCrossfade(0.f);
+    m_progress = 0;
+    m_progressF = 0.f;
+    m_incomingStarted = false;
+    emit takeCommitted();
+    emit crossfadeChanged(0.f);
+    emit faderValueChanged(0);
 }
 
 void TransitionController::setFaderValue(int value) {
     stopAnimation();
-    applyFader(value);
+    applyProgress(std::clamp(value, 0, 100) / 100.f);
     emitRunningIfChanged();
 }
 
@@ -93,9 +141,8 @@ QStringList TransitionController::transitionModeNames() const {
     };
 }
 
-void TransitionController::startAfterOut(int currentVal, std::function<void()> transition) {
-    const bool atEndStop = currentVal == 0 || currentVal == 100;
-    const double outSecs = atEndStop ? m_compositor->requestDeckOut(currentVal == 0) : 0.0;
+void TransitionController::startAfterOut(std::function<void()> transition) {
+    const double outSecs = m_progress == 0 ? m_compositor->requestDeckOut(Deck::Live) : 0.0;
     if (outSecs <= 0.0) {
         transition();
         return;
@@ -112,47 +159,30 @@ void TransitionController::startAfterOut(int currentVal, std::function<void()> t
 }
 
 void TransitionController::autoTransition() {
-    if (m_waitingForOut)
+    if (m_waitingForOut || m_animating || stagingEmpty())
         return;
-    startAfterOut(m_faderValue, [this]() { runAutoTransition(); });
+    if (m_modeIndex == 1) {
+        cutTransition();
+        return;
+    }
+    startAfterOut([this]() { runAutoTransition(); });
 }
 
 void TransitionController::runAutoTransition() {
-    stopAnimation();
-
-    const int currentVal = m_faderValue;
-    const int targetVal  = (currentVal <= 50) ? 100 : 0;
-    if (currentVal == targetVal) {
-        emitRunningIfChanged();
-        return;
-    }
-
-    m_animation = new QVariantAnimation(this);
-    m_animation->setDuration(static_cast<int>(m_durationSecs * 1000.0));
-    m_animation->setStartValue(currentVal);
-    m_animation->setEndValue(targetVal);
-    m_animation->setEasingCurve(QEasingCurve::InOutQuad);
-
-    connect(m_animation, &QVariantAnimation::valueChanged, this, [this](const QVariant &value) {
-        applyFader(value.toInt());
-    });
-    connect(m_animation, &QVariantAnimation::finished, this, [this]() {
-        if (m_animation) { m_animation->deleteLater(); m_animation = nullptr; }
-        emitRunningIfChanged();
-    });
-
-    m_animation->start();
+    m_sweepStart = m_progressF;
+    m_sweepClock.start();
+    m_animating = true;
+    m_tickConnection = connect(m_compositor, &Compositor::frameTick, this, &TransitionController::onFrameTick,
+                               Qt::DirectConnection);
     emitRunningIfChanged();
 }
 
 void TransitionController::cutTransition() {
-    if (m_waitingForOut)
+    if (m_waitingForOut || stagingEmpty())
         return;
-    startAfterOut(m_faderValue, [this]() { runCutTransition(); });
-}
-
-void TransitionController::runCutTransition() {
-    stopAnimation();
-    applyFader((m_faderValue <= 50) ? 100 : 0);
-    emitRunningIfChanged();
+    startAfterOut([this]() {
+        stopAnimation();
+        applyProgress(1.f);
+        emitRunningIfChanged();
+    });
 }

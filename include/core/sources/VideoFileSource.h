@@ -21,6 +21,11 @@ public:
 
     bool open(const QString &filePath);
 
+    // Async sources never block waiting for frames: isReady() turns true once the first frame has
+    // been presented, and nextFrame() just polls. Set before open(). The default blocks for the
+    // first frame so thumbnails and tests can read it synchronously.
+    void setAsync(bool async) { m_async = async; }
+
     Type    type()        const override { return Type::VideoFile; }
     bool    isReady()     const override;
     QSize   frameSize()   const override { return m_size; }
@@ -48,6 +53,8 @@ private:
     std::unique_ptr<QOpenGLFramebufferObject> m_target;
     unsigned int m_texture = 0;
     bool m_hasFrame = false;
+    bool m_everFrame = false;
+    bool m_async = false;
     bool m_useCpu = false;
     double m_time = 0.0;
     QSize m_size;

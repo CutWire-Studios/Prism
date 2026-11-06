@@ -19,11 +19,16 @@ enum class Route {
     Status,
     Fader,
     Cut,
-    Auto,
-    SelectA,
-    SelectB,
-    TogglePlayA,
-    TogglePlayB,
+    Take,
+    Stage,
+    LivePlay,
+    LivePause,
+    LiveToggle,
+    LiveSeek,
+    StagingPlay,
+    StagingPause,
+    StagingToggle,
+    StagingSeek,
     SetTransitionMode,
     SetDuration,
     NotFound,
@@ -33,17 +38,17 @@ enum class Route {
 struct ClipInfo {
     quint64 id = 0;
     QString name;
-    bool    activeA = false;
-    bool    activeB = false;
+    bool    onLive = false;
+    bool    onStaging = false;
 };
 
 struct StatusData {
     int              fader = 0;
     bool             hasDeck = false;
-    quint64          activeA = 0;
-    quint64          activeB = 0;
-    bool             isPlayingA = false;
-    bool             isPlayingB = false;
+    quint64          live = 0;
+    quint64          staging = 0;
+    bool             isPlayingLive = false;
+    bool             isPlayingStaging = false;
     QVector<ClipInfo> clips;
     bool             hasTransition = false;
     int              transitionMode = 0;

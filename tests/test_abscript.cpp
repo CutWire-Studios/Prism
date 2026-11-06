@@ -73,7 +73,7 @@ private slots:
         };
 
         QJsonObject state;
-        state["graphVersion"] = 3;
+        state["graphVersion"] = ClipGraph::kGraphVersion;
         state["inputNodes"] = QJsonArray{clip(1), clip(2)};
         state["abSelectNodes"] = QJsonArray{ab};
         state["outputNode"] = output;
@@ -88,15 +88,15 @@ private slots:
 
         // Script runs OnStart on its own thread, then the editor's poll timer
         // (100ms) applies the result; give both a generous window.
-        QTRY_COMPARE_WITH_TIMEOUT(m_graph->deckAInput(), NodeId(1), 3000);
-        QCOMPARE(m_graph->deckBInput(), NodeId(2));
+        QTRY_COMPARE_WITH_TIMEOUT(m_graph->liveInput(), NodeId(1), 3000);
+        QCOMPARE(m_graph->stagingInput(), NodeId(2));
     }
 
     void scriptResolvesSlotsByOneBasedIndex() {
         QVERIFY(m_graph->fromJson(makeGraph("return { a = 2, b = 1 }")));
 
-        QTRY_COMPARE_WITH_TIMEOUT(m_graph->deckAInput(), NodeId(2), 3000);
-        QCOMPARE(m_graph->deckBInput(), NodeId(1));
+        QTRY_COMPARE_WITH_TIMEOUT(m_graph->liveInput(), NodeId(2), 3000);
+        QCOMPARE(m_graph->stagingInput(), NodeId(1));
     }
 };
 

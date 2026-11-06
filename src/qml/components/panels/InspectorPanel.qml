@@ -129,13 +129,8 @@ PanelFrame {
 
                                 ThemedButton {
                                     Layout.fillWidth: true
-                                    text: qsTr("Send to A")
-                                    onClicked: AppController.selectNodeA(del.nodeId)
-                                }
-                                ThemedButton {
-                                    Layout.fillWidth: true
-                                    text: qsTr("Send to B")
-                                    onClicked: AppController.selectNodeB(del.nodeId)
+                                    text: qsTr("Send to Staging")
+                                    onClicked: AppController.stageNode(del.nodeId)
                                 }
                             }
 
@@ -225,13 +220,13 @@ PanelFrame {
                                         }
                                         ThemedButton {
                                             visible: del.type === body.nt.AbSelect
-                                            text: qsTr("A")
-                                            onClicked: root.graph.triggerAbSlot(del.nodeId, slotRow.index, true)
+                                            text: qsTr("Stage")
+                                            onClicked: AppController.stageAbSlot(del.nodeId, slotRow.index, false)
                                         }
                                         ThemedButton {
                                             visible: del.type === body.nt.AbSelect
-                                            text: qsTr("B")
-                                            onClicked: root.graph.triggerAbSlot(del.nodeId, slotRow.index, false)
+                                            text: qsTr("Cut to Live")
+                                            onClicked: AppController.stageAbSlot(del.nodeId, slotRow.index, true)
                                         }
                                         ThemedSwitch {
                                             visible: del.type === body.nt.AudioMixer

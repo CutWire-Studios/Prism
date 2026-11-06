@@ -2,8 +2,8 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Prism
 
-// A/B deck select: per input slot a name (double-click to rename) and A / B buttons that send
-// the slot's producer to that deck. The buttons only work while the node's output feeds the Output node.
+// Switcher: per input slot a name (double-click to rename) and Stage / Cut buttons that send
+// the slot's producer to Staging, or straight to Live. The buttons only work while the node's output feeds the Output node.
 Item {
     id: root
 
@@ -65,7 +65,7 @@ Item {
             NodeLabel {
                 visible: slotRow.connected && root.editing !== slotRow.index
                 x: 14
-                width: parent.width - 90
+                width: parent.width - 126
                 height: parent.height
                 text: slotRow.modelData.name && slotRow.modelData.name.length > 0
                       ? slotRow.modelData.name : qsTr("in %1").arg(slotRow.index + 1)
@@ -80,7 +80,7 @@ Item {
                 visible: root.editing === slotRow.index
                 x: 12
                 y: 3
-                width: parent.width - 88
+                width: parent.width - 124
                 height: 18
                 topPadding: 0
                 bottomPadding: 0
@@ -104,31 +104,31 @@ Item {
             NodeButton {
                 visible: slotRow.connected
                 enabled: root.ab.outputConnected
-                x: parent.width - 52
+                x: parent.width - 84
                 y: 3
-                width: 22
+                width: 40
                 height: 18
                 leftPadding: 0
                 rightPadding: 0
-                text: "A"
-                variant: slotRow.index === root.ab.a ? "primary" : "secondary"
-                tooltip: qsTr("Send to deck A")
-                onClicked: root.node.controller.triggerAbSlot(root.node.nodeId, slotRow.index, true)
+                text: qsTr("Stage")
+                variant: slotRow.index === root.ab.staging ? "primary" : "secondary"
+                tooltip: qsTr("Send to Staging")
+                onClicked: AppController.stageAbSlot(root.node.nodeId, slotRow.index, false)
             }
 
             NodeButton {
                 visible: slotRow.connected
                 enabled: root.ab.outputConnected
-                x: parent.width - 28
+                x: parent.width - 42
                 y: 3
-                width: 22
+                width: 36
                 height: 18
                 leftPadding: 0
                 rightPadding: 0
-                text: "B"
-                variant: slotRow.index === root.ab.b ? "primary" : "secondary"
-                tooltip: qsTr("Send to deck B")
-                onClicked: root.node.controller.triggerAbSlot(root.node.nodeId, slotRow.index, false)
+                text: qsTr("Cut")
+                variant: slotRow.index === root.ab.live ? "primary" : "secondary"
+                tooltip: qsTr("Cut to Live")
+                onClicked: AppController.stageAbSlot(root.node.nodeId, slotRow.index, true)
             }
         }
     }

@@ -64,7 +64,7 @@ private slots:
         QJsonArray connections{conn(1, 2), conn(2, 3), conn(3, 4), conn(4, 5)};
 
         QJsonObject state;
-        state["graphVersion"] = 3;
+        state["graphVersion"] = ClipGraph::kGraphVersion;
         state["nextId"] = 6;
         state["inputNodes"] = QJsonArray{input};
         state["processNodes"] = QJsonArray{crop, flip, seg};
@@ -184,7 +184,7 @@ private slots:
         };
 
         QJsonObject state;
-        state["graphVersion"] = 3;
+        state["graphVersion"] = ClipGraph::kGraphVersion;
         state["nextId"] = 11;
         state["inputNodes"] = QJsonArray{input(1), input(2)};
         state["layerNodes"] = QJsonArray{layer};
@@ -300,7 +300,7 @@ private slots:
         input["audioOnly"] = true;
 
         QJsonObject state;
-        state["graphVersion"] = 3;
+        state["graphVersion"] = ClipGraph::kGraphVersion;
         state["nextId"] = 2;
         state["inputNodes"] = QJsonArray{input};
         state["outputNode"] = QJsonObject{{"id", 2}};

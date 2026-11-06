@@ -49,7 +49,7 @@ public:
                         bool writeMarkersOnStop = true);
     void stopRecording();
 
-    /// Mixes deck A/B PCM (interleaved float32 stereo @ 44.1 kHz).
+    /// Mixes Live/Staging PCM (interleaved float32 stereo @ 44.1 kHz).
     void submitDeckChunk(int deckIndex, const QByteArray &pcm);
 
     /// Writes a single PCM stream (deck/clip iso recording).
@@ -83,8 +83,8 @@ private:
     QElapsedTimer   m_timer;
     qint64          m_lastDurationMs = 0;
 
-    QByteArray m_deckQueueA;
-    QByteArray m_deckQueueB;
+    QByteArray m_liveQueue;
+    QByteArray m_stagingQueue;
     QByteArray m_micQueue;
     QByteArray m_pcmQueue;
 

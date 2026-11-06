@@ -10,9 +10,9 @@
 #include "core/graph/ClipGraph.h"
 
 /// Manages keyboard shortcut assignments (VJ hotkey grid) for the inputs of
-/// the A/B Select nodes. Keys 1-0, Q-P, A-L, Z-M are auto-assigned to
-/// connected switcher inputs in order. Bare key sends the input to Deck A,
-/// Shift+key to Deck B.
+/// the Switcher nodes. Keys 1-0, Q-P, A-L, Z-M are auto-assigned to
+/// connected switcher inputs in order. Bare key stages the input,
+/// Shift+key stages it and cuts to Live.
 class HotkeyManager : public QObject {
     Q_OBJECT
 public:
@@ -53,6 +53,7 @@ public:
 
 signals:
     void bindingsChanged();
+    void slotTriggered(const ClipGraph::AbSlotRef &ref, bool cutToLive);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;

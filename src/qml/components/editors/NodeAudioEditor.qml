@@ -31,7 +31,7 @@ ThemedDialog {
         ThemedLabel { text: qsTr("Playback mode") }
         ThemedComboBox {
             Layout.fillWidth: true
-            model: [qsTr("Always play (while on either deck)"), qsTr("Play when its deck is active")]
+            model: [qsTr("Always play (while on Live or Staging)"), qsTr("Play when its deck is on air")]
             currentIndex: root.mode
             onActivated: index => root.mode = index
         }

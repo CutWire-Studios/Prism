@@ -3,11 +3,11 @@
 #include <functional>
 #include <qopengl.h>   // GLuint
 
-// Which built-in transition the crossfader applies between deck A and deck B.
+// Which built-in transition the crossfader applies from the Live deck to the Staging deck.
 // The numeric order is persisted in session files and mirrored by the
 // transition combo box in MainWindow, so do not reorder existing entries.
 enum class TransitionMode {
-    Crossfade,      // alpha blend A→B (default)
+    Crossfade,      // alpha blend Live→Staging (default)
     Cut,            // hard switch at fader centre
     WipeLeft,       // incoming wipes in from the left edge
     WipeRight,      // incoming wipes in from the right edge
@@ -34,9 +34,8 @@ enum class TransitionMode {
 //
 // Each concrete transition is stateless and paints the outgoing and incoming
 // decks for a given progress, using whatever GL transforms/scissor it needs.
-// The widget decides which deck is outgoing vs. incoming (so a transition reads
-// the same whether the fader moves A→B or B→A) and exposes that through the
-// Context's drawOut/drawIn callbacks.
+// Live is always the outgoing deck and Staging the incoming one; the Context's
+// drawOut/drawIn callbacks paint them.
 class Transition {
 public:
     struct Context {
@@ -44,8 +43,7 @@ public:
         int   height = 0;
         // Progress: 0 = fully outgoing deck visible, 1 = fully incoming deck.
         float p      = 0.f;
-        // Raw crossfade 0..1 (A→B). Used by transitions that are keyed to the
-        // A/B decks directly rather than the direction-aware out/in roles.
+        // Raw crossfade 0..1 (Live→Staging).
         float t      = 0.f;
         // Paint the respective deck (clip + node chain) at the given alpha,
         // under the GL transform/scissor state set up by the transition.
@@ -53,10 +51,10 @@ public:
         std::function<void(float alpha)> drawIn;
         // Raw deck textures and readiness, for transitions (e.g. the 3D modes)
         // that composite full deck frames themselves under their own projection.
-        GLuint texA   = 0;
-        GLuint texB   = 0;
-        bool   readyA = false;
-        bool   readyB = false;
+        GLuint texLive   = 0;
+        GLuint texStaging   = 0;
+        bool   readyLive = false;
+        bool   readyStaging = false;
         // Deck FBO color textures are V-flipped vs. source textures.
         bool   texFlipped = false;
     };

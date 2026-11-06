@@ -12,11 +12,19 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Send to deck A</source>
+        <source>Stage</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Send to deck B</source>
+        <source>Send to Staging</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cut</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cut to Live</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -70,7 +78,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>A/B Deck Select</source>
+        <source>Switcher</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -942,15 +950,23 @@ low/mid/high · beat</source>
 <context>
     <name>DeckView</name>
     <message>
-        <source>A</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>B</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>ON AIR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Live</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Staging</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>READY</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Loading…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1038,15 +1054,15 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>A/B #%1 · %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>That key cannot be used.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Use a key on its own. Shift plus the key always sends to Deck B.</source>
+        <source>Switcher #%1 · %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use a key on its own. Shift plus the key stages it and cuts to Live.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1094,15 +1110,15 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Assign a key to each A/B switcher input. The key sends the input to Deck A; Shift plus the same key sends it to Deck B. Click a field, then press the key. Esc cancels, Backspace clears.</source>
+        <source>Assign a key to each switcher input. The key stages the input; Shift plus the same key stages it and cuts to Live. Click a field, then press the key. Esc cancels, Backspace clears.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>B: %1</source>
+        <source>Cut: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No A/B switcher inputs yet. Connect sources to an A/B Select node to assign keys.</source>
+        <source>No switcher inputs yet. Connect sources to a Switcher node to assign keys.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1199,11 +1215,7 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Send to A</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Send to B</source>
+        <source>Send to Staging</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1231,11 +1243,11 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>A</source>
+        <source>Stage</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>B</source>
+        <source>Cut to Live</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1876,11 +1888,11 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Always play (while on either deck)</source>
+        <source>Always play (while on Live or Staging)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Play when its deck is active</source>
+        <source>Play when its deck is on air</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2000,7 +2012,7 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>A/B deck</source>
+        <source>Switcher</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2048,7 +2060,7 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>A/B Select</source>
+        <source>Double-click an input name to rename. Stage sends the input to Staging; Cut to Live sends it straight to Live. Wire a Script node&apos;s output here to automate switching.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2085,10 +2097,6 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Double-click a layer name to rename. The eye toggles visibility; the arrows reorder.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Double-click an input name to rename. A and B send the input to that deck. Wire a Script node&apos;s output here to automate deck assignment.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2197,7 +2205,7 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>A/B</source>
+        <source>Switcher</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2216,19 +2224,19 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Deck A audio</source>
+        <source>Live audio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Deck B audio</source>
+        <source>Staging audio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Deck A</source>
+        <source>Live</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Deck B</source>
+        <source>Staging</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2800,23 +2808,23 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Deck A (iso)</source>
+        <source>Live (iso)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Deck B (iso)</source>
+        <source>Staging (iso)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Live audio (iso)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Staging audio (iso)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Program audio</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Deck A audio (iso)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Deck B audio (iso)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2839,15 +2847,15 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Live-source rows record only while that source is loaded on Deck A or B.</source>
+        <source>Live-source rows record only while that source is loaded on Live or Staging.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Saved as separate FLAC files. Program audio follows the crossfader and includes a connected Master Audio Input mic. Deck and clip isos record at full clip volume without the mic. Clip audio records only while that clip is loaded on Live or Staging.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Audio streams</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Saved as separate FLAC files. Program audio follows the crossfader and includes a connected Master Audio Input mic. Deck and clip isos record at full clip volume without the mic. Clip audio records only while that clip is loaded on Deck A or B.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3030,6 +3038,13 @@ Technical detail: %1</source>
     </message>
     <message>
         <source>Output preview</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>SessionManager</name>
+    <message>
+        <source>This project was saved by an older version of Prism and cannot be opened.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3318,11 +3333,11 @@ Technical detail: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Click a shortcut, then press the key. Esc cancels, Backspace clears. Shift plus the key sends the input to Deck B.</source>
+        <source>Click a shortcut, then press the key. Esc cancels, Backspace clears. Shift plus the key stages the input and cuts to Live.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No A/B switcher inputs yet. Connect sources to an A/B Select node to assign keys.</source>
+        <source>No switcher inputs yet. Connect sources to a Switcher node to assign keys.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -4571,31 +4586,27 @@ Continue anyway? Your phone may not be able to connect.</source>
 <context>
     <name>SwitcherView</name>
     <message>
-        <source>A</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Fader</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>B</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Cut</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Instant cut to opposite deck (Space)</source>
+        <source>Take</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Auto</source>
+        <source>Slide to go live</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Smooth auto transition using selected mode (Enter)</source>
+        <source>slide to go live</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Instant cut from Staging to Live (Space)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transition Staging to Live using the selected mode (Enter)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

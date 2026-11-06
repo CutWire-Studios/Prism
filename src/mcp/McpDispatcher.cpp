@@ -259,30 +259,22 @@ QJsonObject McpDispatcher::applyOne(const QString &tool, const QJsonObject &args
         return opSetSvgParams(args);
     if (tool == QLatin1String("set_shader"))
         return opSetShader(args);
-    if (tool == QLatin1String("select_a"))
-        return opSelectDeck(args, true);
-    if (tool == QLatin1String("select_b"))
-        return opSelectDeck(args, false);
-    if (tool == QLatin1String("play_a"))
-        return opPlayDeck(true, true);
-    if (tool == QLatin1String("pause_a"))
-        return opPlayDeck(true, false);
-    if (tool == QLatin1String("play_b"))
-        return opPlayDeck(false, true);
-    if (tool == QLatin1String("pause_b"))
-        return opPlayDeck(false, false);
-    if (tool == QLatin1String("seek_a"))
-        return opSeekDeck(args, true);
-    if (tool == QLatin1String("seek_b"))
-        return opSeekDeck(args, false);
+    if (tool == QLatin1String("stage"))
+        return opStage(args);
+    if (tool == QLatin1String("play"))
+        return opPlayDeck(args, true);
+    if (tool == QLatin1String("pause"))
+        return opPlayDeck(args, false);
+    if (tool == QLatin1String("seek"))
+        return opSeekDeck(args);
     if (tool == QLatin1String("set_speed"))
         return opSetSpeed(args);
-    if (tool == QLatin1String("set_fader"))
+    if (tool == QLatin1String("set_transition_progress"))
         return opSetFader(args);
     if (tool == QLatin1String("cut"))
         return opCut();
-    if (tool == QLatin1String("auto_transition"))
-        return opAuto();
+    if (tool == QLatin1String("take"))
+        return opTake();
     if (tool == QLatin1String("list_transitions"))
         return opListTransitions();
     if (tool == QLatin1String("set_transition"))
@@ -714,49 +706,74 @@ QJsonObject McpDispatcher::opSetShader(const QJsonObject &args)
     return clipOk(m_window->clipGraph(), node);
 }
 
-QJsonObject McpDispatcher::opSelectDeck(const QJsonObject &args, bool deckA)
+bool McpDispatcher::parseDeck(const QJsonObject &args, Deck &deck, QJsonObject *error)
+{
+    const QString name = args.value(QStringLiteral("deck")).toString().trimmed().toLower();
+    if (name == QLatin1String("live"))
+        deck = Deck::Live;
+    else if (name == QLatin1String("staging"))
+        deck = Deck::Staging;
+    else {
+        *error = err("bad_args", QStringLiteral("deck must be live or staging"));
+        return false;
+    }
+    return true;
+}
+
+namespace {
+QString deckName(Deck deck)
+{
+    return deck == Deck::Live ? QStringLiteral("live") : QStringLiteral("staging");
+}
+}
+
+QJsonObject McpDispatcher::opStage(const QJsonObject &args)
 {
     QJsonObject error;
     const NodeId node = resolveClip(m_window, args, &error);
     if (!node)
         return error;
-    if (deckA)
-        m_window->selectNodeA(node);
-    else
-        m_window->selectNodeB(node);
+    m_window->stageNode(node);
     m_window->mcpBumpRevision();
-    return clipOk(m_window->clipGraph(), node, {{QStringLiteral("deck"), deckA ? QStringLiteral("a") : QStringLiteral("b")}});
+    return clipOk(m_window->clipGraph(), node, {{QStringLiteral("deck"), QStringLiteral("staging")}});
 }
 
-QJsonObject McpDispatcher::opPlayDeck(bool deckA, bool play)
+QJsonObject McpDispatcher::opPlayDeck(const QJsonObject &args, bool play)
 {
-    m_window->playDeck(deckA, play);
+    Deck deck;
+    QJsonObject error;
+    if (!parseDeck(args, deck, &error))
+        return error;
+    m_window->playDeck(static_cast<int>(deck), play);
     m_window->mcpBumpRevision();
-    return ok({{QStringLiteral("deck"), deckA ? QStringLiteral("a") : QStringLiteral("b")},
-               {QStringLiteral("playing"), play}});
+    return ok({{QStringLiteral("deck"), deckName(deck)}, {QStringLiteral("playing"), play}});
 }
 
-QJsonObject McpDispatcher::opSeekDeck(const QJsonObject &args, bool deckA)
+QJsonObject McpDispatcher::opSeekDeck(const QJsonObject &args)
 {
+    Deck deck;
+    QJsonObject error;
+    if (!parseDeck(args, deck, &error))
+        return error;
     if (!args.contains(QStringLiteral("at")))
         return err("bad_args", QStringLiteral("at is required"));
     const double at = jsonNumber(args.value(QStringLiteral("at")), 0);
-    m_window->seekDeck(deckA, qMax(0.0, at));
-    return ok({{QStringLiteral("deck"), deckA ? QStringLiteral("a") : QStringLiteral("b")},
-               {QStringLiteral("at"), at}});
+    m_window->seekDeck(static_cast<int>(deck), qMax(0.0, at));
+    return ok({{QStringLiteral("deck"), deckName(deck)}, {QStringLiteral("at"), at}});
 }
 
 QJsonObject McpDispatcher::opSetSpeed(const QJsonObject &args)
 {
-    const QString deck = args.value(QStringLiteral("deck")).toString().trimmed().toLower();
-    if (deck != QLatin1String("a") && deck != QLatin1String("b"))
-        return err("bad_args", QStringLiteral("deck must be a or b"));
+    Deck deck;
+    QJsonObject error;
+    if (!parseDeck(args, deck, &error))
+        return error;
     if (!args.contains(QStringLiteral("speed")))
         return err("bad_args", QStringLiteral("speed is required"));
     const double speed = jsonNumber(args.value(QStringLiteral("speed")), 1.0);
-    m_window->setDeckSpeedValue(deck == QLatin1String("a"), speed);
+    m_window->setDeckSpeedValue(static_cast<int>(deck), speed);
     m_window->mcpBumpRevision();
-    return ok({{QStringLiteral("deck"), deck}, {QStringLiteral("speed"), speed}});
+    return ok({{QStringLiteral("deck"), deckName(deck)}, {QStringLiteral("speed"), speed}});
 }
 
 QJsonObject McpDispatcher::opSetFader(const QJsonObject &args)
@@ -771,16 +788,14 @@ QJsonObject McpDispatcher::opSetFader(const QJsonObject &args)
 
 QJsonObject McpDispatcher::opCut()
 {
-    if (auto *t = m_window->transitionController())
-        t->cutTransition();
+    m_window->cut();
     m_window->mcpBumpRevision();
     return ok({{QStringLiteral("fader"), m_window->faderValue()}});
 }
 
-QJsonObject McpDispatcher::opAuto()
+QJsonObject McpDispatcher::opTake()
 {
-    if (auto *t = m_window->transitionController())
-        t->autoTransition();
+    m_window->take();
     m_window->mcpBumpRevision();
     return ok({{QStringLiteral("fader"), m_window->faderValue()}});
 }
@@ -1026,7 +1041,7 @@ QJsonObject McpDispatcher::opAddAbSelect(const QJsonObject &args)
                          : qQNaN();
     const NodeId id = editor->addNode(ClipGraph::NodeType::AbSelect, QPointF(x, y));
     if (!id)
-        return err("conflict", QStringLiteral("Could not add A/B select node"));
+        return err("conflict", QStringLiteral("Could not add Switcher node"));
     m_window->mcpBumpRevision();
     return ok({{QStringLiteral("id"), QString::number(id)},
                {QStringLiteral("type"), QStringLiteral("ab_select")}});
@@ -1052,7 +1067,7 @@ QJsonObject McpDispatcher::opConnect(const QJsonObject &args)
     if (!editor->connectNodes(from, to, kind, toPort))
         return err("conflict",
                    QStringLiteral("Could not connect those ports. Output cannot take a video "
-                                  "chain and A/B at the same time — disconnect the other Output "
+                                  "chain and a Switcher at the same time — disconnect the other Output "
                                   "input first, or splice into an existing chain."));
     m_window->mcpBumpRevision();
     QString kindName;

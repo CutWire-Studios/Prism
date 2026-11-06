@@ -48,17 +48,19 @@ public:
     static QStringList listBackupFiles();
     static void pruneBackups(int keepCount = kDefaultBackupRetention);
 
-    QJsonObject buildJson(int crossfader, int transitionMode,
+    static constexpr int kFormatVersion = 2;
+
+    QJsonObject buildJson(int transitionProgress, int transitionMode,
                           double transitionDuration,
-                          NodeId activeNodeA, NodeId activeNodeB,
+                          NodeId activeLive, NodeId activeStaging,
                           const QJsonArray &hotkeys,
                           const QString &sessionFilePath = {}) const;
 
-    int    restoredCrossfader()        const { return m_restoredCrossfader; }
+    int    restoredTransitionProgress()  const { return m_restoredTransitionProgress; }
     int    restoredTransitionMode()    const { return m_restoredTransitionMode; }
     double restoredTransitionDuration() const { return m_restoredTransitionDuration; }
-    NodeId restoredActiveNodeA()       const { return m_restoredActiveNodeA; }
-    NodeId restoredActiveNodeB()       const { return m_restoredActiveNodeB; }
+    NodeId restoredActiveNodeLive()    const { return m_restoredActiveNodeLive; }
+    NodeId restoredActiveNodeStaging() const { return m_restoredActiveNodeStaging; }
 
     QJsonArray restoredHotkeys() const { return m_restoredHotkeys; }
 
@@ -74,10 +76,10 @@ private:
     Compositor  *m_compositor;
     ClipManager *m_clipManager;
 
-    int    m_restoredCrossfader        = 50;
+    int    m_restoredTransitionProgress = 0;
     int    m_restoredTransitionMode    = 0;
     double m_restoredTransitionDuration = 1.0;
-    NodeId m_restoredActiveNodeA       = 0;
-    NodeId m_restoredActiveNodeB       = 0;
+    NodeId m_restoredActiveNodeLive    = 0;
+    NodeId m_restoredActiveNodeStaging = 0;
     QJsonArray m_restoredHotkeys;
 };

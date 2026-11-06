@@ -130,11 +130,9 @@ public:
     /// coords is a flat [x0, y0, x1, y1, ...] list parallel to ids. Consecutive calls with the
     /// same ids collapse into one undo step until endMove().
     Q_INVOKABLE void moveNodes(const QVariantList &ids, const QVariantList &coords);
-    /// Reorders two slots of a Layer / A/B Select / Audio Mixer and the edges wired to them.
+    /// Reorders two slots of a Layer / Switcher / Audio Mixer and the edges wired to them.
     Q_INVOKABLE bool swapSlots(quint64 id, int a, int b);
-    /// Assigns the producer wired into an A/B Select slot to deck A or B.
-    Q_INVOKABLE bool triggerAbSlot(quint64 node, int slot, bool deckA);
-    /// {a, b, outputConnected} for an A/B Select node; a/b are slot indices or -1.
+    /// {live, staging, outputConnected} for a Switcher node; live/staging are slot indices or -1.
     Q_INVOKABLE QVariantMap abState(quint64 node) const;
 
     Q_INVOKABLE void undo();

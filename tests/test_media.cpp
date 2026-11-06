@@ -279,6 +279,19 @@ private slots:
         VideoDecoder::setMode(VideoDecoder::Mode::Software, prism::hwaccel::Backend::None);
     }
 
+    void source_asyncNeverBlocksAndBecomesReady() {
+        VideoFileSource src;
+        src.setAsync(true);
+        QVERIFY(src.open(clip("vfr.mp4")));
+        QVERIFY(!src.isReady());
+        QElapsedTimer timer;
+        timer.start();
+        src.nextFrame();
+        QVERIFY2(timer.elapsed() < 200, qPrintable(QString::number(timer.elapsed())));
+        QTRY_VERIFY_WITH_TIMEOUT(src.nextFrame() || src.isReady(), 5000);
+        QVERIFY(src.isReady());
+    }
+
     void source_gpuPathMatchesExpectedColours() {
         if (QGuiApplication::platformName() == QLatin1String("offscreen")
             || !prism::GpuVideoUploader::instance().available())

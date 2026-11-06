@@ -202,11 +202,12 @@ void AppController::notifyLibraryChanged()
 void AppController::connectSignals()
 {
     connect(m_graph, &ClipGraph::changed, this, &AppController::onGraphChanged);
-    connect(m_graph, &ClipGraph::deckAChanged, this, [this]() { m_pushTimer->start(); });
-    connect(m_graph, &ClipGraph::deckBChanged, this, [this]() { m_pushTimer->start(); });
+    connect(m_graph, &ClipGraph::liveChanged, this, [this]() { m_pushTimer->start(); });
+    connect(m_graph, &ClipGraph::stagingChanged, this, [this]() { m_pushTimer->start(); });
     connect(m_graph, &ClipGraph::graphReset, this, [this]() { m_pushTimer->start(); });
     connect(m_graph, &ClipGraph::nodeChanged, this, &AppController::onNodeChanged);
     connect(m_graph, &ClipGraph::changed, m_hotkeyManager, &HotkeyManager::syncWithGraph);
+    connect(m_hotkeyManager, &HotkeyManager::slotTriggered, this, &AppController::stageSlot);
 
     connect(m_sessionManager, &SessionManager::sessionLoaded, this, &AppController::onSessionLoaded);
     connect(m_sessionManager, &SessionManager::loadFailed, this, &AppController::errorOccurred);
@@ -215,16 +216,26 @@ void AppController::connectSignals()
         emit infoMessage(tr("Missing assets"), tr("%1 asset(s) could not be found.\n%2").arg(count).arg(notes));
     });
 
-    connect(m_transitionCtrl, &TransitionController::faderValueChanged, this, [this]() {
-        if (m_deckController->activeNodeA())
-            m_deckController->applyAudioControllerToDeck(true, m_deckController->activeNodeA(), false);
-        if (m_deckController->activeNodeB())
-            m_deckController->applyAudioControllerToDeck(false, m_deckController->activeNodeB(), false);
-        emit faderValueChanged();
+    connect(m_transitionCtrl, &TransitionController::faderValueChanged, this, [this]() { emit faderValueChanged(); });
+    connect(m_transitionCtrl, &TransitionController::crossfadeChanged, this, [this]() {
+        m_deckController->updateDeckAudioGain(Deck::Live);
+        m_deckController->updateDeckAudioGain(Deck::Staging);
+    });
+    connect(m_compositor.get(), &Compositor::deckReady, this, [this]() { emit deckClockChanged(); });
+    connect(m_transitionCtrl, &TransitionController::takeStarted, this, [this]() {
+        m_deckController->startDeckPlayback(Deck::Staging);
+    });
+    connect(m_transitionCtrl, &TransitionController::takeCommitted, this, &AppController::onTakeCommitted);
+    connect(m_transitionCtrl, &TransitionController::takeCancelled, this, [this]() {
+        m_deckController->parkDeck(Deck::Staging);
     });
     connect(m_transitionCtrl, &TransitionController::modeChanged, this, &AppController::transitionSettingsChanged);
     connect(m_transitionCtrl, &TransitionController::durationChanged, this, &AppController::transitionSettingsChanged);
-    connect(m_transitionCtrl, &TransitionController::runningChanged, this, &AppController::transitionRunningChanged);
+    connect(m_transitionCtrl, &TransitionController::runningChanged, this, [this](bool running) {
+        emit transitionRunningChanged();
+        if (!running && m_pushDeferred)
+            m_pushTimer->start();
+    });
 
     connect(m_outputHub, &OutputHub::recordingStateChanged, this, [this]() {
         emit recordingChanged();
@@ -294,8 +305,8 @@ void AppController::shutdown(bool saveAndMarkClean)
     m_mcp->stop();
     m_transitionCtrl->shutdown();
 
-    m_deckController->setActiveNodeA(0);
-    m_deckController->setActiveNodeB(0);
+    m_deckController->setActiveNode(Deck::Live, 0);
+    m_deckController->setActiveNode(Deck::Staging, 0);
     m_deckController->releaseAllDeckAudio();
     m_deckController->releaseAllMasterAudioInputs();
     for (int i = 0; i < 2; ++i) {
@@ -319,18 +330,21 @@ void AppController::shutdown(bool saveAndMarkClean)
 
 // ── Property getters ──────────────────────────────────────────────────────────
 
-quint64 AppController::activeNodeA() const { return m_deckController ? m_deckController->activeNodeA() : 0; }
-quint64 AppController::activeNodeB() const { return m_deckController ? m_deckController->activeNodeB() : 0; }
-double AppController::deckSpeedA() const { return m_deckController->deckSpeed(true); }
-double AppController::deckSpeedB() const { return m_deckController->deckSpeed(false); }
-bool AppController::isPlayingA() const { return m_compositor && m_compositor->isPlayingA(); }
-bool AppController::isPlayingB() const { return m_compositor && m_compositor->isPlayingB(); }
-double AppController::deckTimeA() const { return m_compositor->getCurrentTimeA(); }
-double AppController::deckTimeB() const { return m_compositor->getCurrentTimeB(); }
-double AppController::deckDurationA() const { return m_compositor->getDurationA(); }
-double AppController::deckDurationB() const { return m_compositor->getDurationB(); }
+quint64 AppController::activeNodeLive() const { return m_deckController ? m_deckController->activeNode(Deck::Live) : 0; }
+quint64 AppController::activeNodeStaging() const { return m_deckController ? m_deckController->activeNode(Deck::Staging) : 0; }
+double AppController::deckSpeedLive() const { return m_deckController->deckSpeed(Deck::Live); }
+double AppController::deckSpeedStaging() const { return m_deckController->deckSpeed(Deck::Staging); }
+bool AppController::isPlayingLive() const { return m_compositor && m_compositor->isPlayingLive(); }
+bool AppController::isPlayingStaging() const { return m_compositor && m_compositor->isPlayingStaging(); }
+double AppController::deckTimeLive() const { return m_compositor->getCurrentTimeLive(); }
+double AppController::deckTimeStaging() const { return m_compositor->getCurrentTimeStaging(); }
+double AppController::deckDurationLive() const { return m_compositor->getDurationLive(); }
+double AppController::deckDurationStaging() const { return m_compositor->getDurationStaging(); }
 
 int AppController::faderValue() const { return m_transitionCtrl->faderValue(); }
+
+bool AppController::deckReadyLive() const { return m_compositor && m_compositor->sourceLive() && m_compositor->sourceLive()->isReady(); }
+bool AppController::deckReadyStaging() const { return m_compositor && m_compositor->sourceStaging() && m_compositor->sourceStaging()->isReady(); }
 
 int AppController::onAirDeck() const
 {
@@ -408,20 +422,20 @@ void AppController::applyPanic(const QString &mode)
         m_compositor->setPanicOverlay(mode == QLatin1String("blackout")
                                           ? Compositor::PanicOverlay::Blackout
                                           : Compositor::PanicOverlay::StayTuned);
-        m_deckController->stopDeckAudio(true);
-        m_deckController->stopDeckAudio(false);
+        m_deckController->stopDeckAudio(Deck::Live);
+        m_deckController->stopDeckAudio(Deck::Staging);
     } else if (mode == QLatin1String("freeze")) {
         m_compositor->setPanicOverlay(Compositor::PanicOverlay::None);
         m_compositor->setOutputFrozen(true);
-        m_deckController->stopDeckAudio(true);
-        m_deckController->stopDeckAudio(false);
+        m_deckController->stopDeckAudio(Deck::Live);
+        m_deckController->stopDeckAudio(Deck::Staging);
     } else {
         m_compositor->setPanicOverlay(Compositor::PanicOverlay::None);
         m_compositor->setOutputFrozen(false);
-        if (m_deckController->activeNodeA())
-            m_deckController->applyAudioControllerToDeck(true, m_deckController->activeNodeA());
-        if (m_deckController->activeNodeB())
-            m_deckController->applyAudioControllerToDeck(false, m_deckController->activeNodeB());
+        if (m_deckController->activeNode(Deck::Live))
+            m_deckController->applyAudioControllerToDeck(Deck::Live, m_deckController->activeNode(Deck::Live));
+        if (m_deckController->activeNode(Deck::Staging))
+            m_deckController->applyAudioControllerToDeck(Deck::Staging, m_deckController->activeNode(Deck::Staging));
     }
     emit panicModeChanged();
 }
@@ -497,65 +511,109 @@ void AppController::setProgramResolution(int width, int height)
 
 // ── Decks ─────────────────────────────────────────────────────────────────────
 
-void AppController::selectNodeA(quint64 nodeId)
+void AppController::selectNode(quint64 nodeId, Deck deck)
 {
     if (nodeId)
-        m_graph->assignInputToDeck(nodeId, true);
+        m_graph->assignInputToDeck(nodeId, deck);
     else
         pushDecks();
 }
 
-void AppController::selectNodeB(quint64 nodeId)
+void AppController::togglePlay(int deck)
 {
-    if (nodeId)
-        m_graph->assignInputToDeck(nodeId, false);
-    else
-        pushDecks();
+    const Deck d = static_cast<Deck>(deck);
+    playDeck(deck, !(isLive(d) ? m_compositor->isPlayingLive() : m_compositor->isPlayingStaging()));
 }
 
-void AppController::togglePlayA() { playDeck(true, !m_compositor->isPlayingA()); }
-void AppController::togglePlayB() { playDeck(false, !m_compositor->isPlayingB()); }
-
-void AppController::playDeck(bool deckA, bool play)
+void AppController::playDeck(int deck, bool play)
 {
-    if (deckA) {
-        if (play) m_compositor->playA(); else m_compositor->pauseA();
-        m_deckController->applyAudioControllerToDeck(true, m_deckController->activeNodeA());
+    const Deck d = static_cast<Deck>(deck);
+    if (isLive(d)) {
+        if (play) m_compositor->playLive(); else m_compositor->pauseLive();
     } else {
-        if (play) m_compositor->playB(); else m_compositor->pauseB();
-        m_deckController->applyAudioControllerToDeck(false, m_deckController->activeNodeB());
+        if (play) m_compositor->playStaging(); else m_compositor->pauseStaging();
     }
+    m_deckController->applyAudioControllerToDeck(d, m_deckController->activeNode(d));
 }
 
-void AppController::seekDeck(bool deckA, double seconds)
+void AppController::seekDeck(int deck, double seconds)
 {
-    if (deckA)
-        m_compositor->seekA(seconds);
+    if (isLive(static_cast<Deck>(deck)))
+        m_compositor->seekLive(seconds);
     else
-        m_compositor->seekB(seconds);
+        m_compositor->seekStaging(seconds);
 }
 
-void AppController::seekDeckFraction(bool deckA, double fraction)
+void AppController::seekDeckFraction(int deck, double fraction)
 {
-    const double dur = deckA ? m_compositor->getDurationA() : m_compositor->getDurationB();
+    const Deck d = static_cast<Deck>(deck);
+    const double dur = isLive(d) ? m_compositor->getDurationLive() : m_compositor->getDurationStaging();
     if (dur <= 0)
         return;
     const double t = qBound(0.0, fraction, 1.0) * dur;
-    seekDeck(deckA, t);
-    const NodeId id = deckA ? m_deckController->activeNodeA() : m_deckController->activeNodeB();
+    seekDeck(deck, t);
+    const NodeId id = m_deckController->activeNode(d);
     if (id)
-        m_deckController->updateDeckAudio(deckA, id, t, true);
+        m_deckController->updateDeckAudio(d, id, t, true);
 }
 
-void AppController::setDeckSpeedValue(bool deckA, double speed)
+void AppController::setDeckSpeedValue(int deck, double speed)
 {
     const double clamped = qBound(0.25, speed, 4.0);
-    m_deckController->setDeckSpeed(deckA, clamped);
+    m_deckController->setDeckSpeed(static_cast<Deck>(deck), clamped);
     emit decksChanged();
 }
 
-void AppController::cut() { m_transitionCtrl->cutTransition(); }
-void AppController::autoTransition() { m_transitionCtrl->autoTransition(); }
+void AppController::stageNode(quint64 nodeId)
+{
+    selectNode(nodeId, Deck::Staging);
+}
+
+void AppController::stageSlot(const ClipGraph::AbSlotRef &ref, bool cutToLive)
+{
+    m_graph->triggerAbSlot(ref, Deck::Staging);
+    if (cutToLive)
+        cut();
+}
+
+void AppController::stageAbSlot(quint64 node, int slot, bool cutToLive)
+{
+    stageSlot({node, slot}, cutToLive);
+}
+
+void AppController::swapDeckState()
+{
+    m_deckController->swapDeckAudio();
+    std::swap(m_deckBase[0], m_deckBase[1]);
+    std::swap(m_deckOverlays[0], m_deckOverlays[1]);
+    std::swap(m_deckUi[0], m_deckUi[1]);
+}
+
+void AppController::onTakeCommitted()
+{
+    swapDeckState();
+    m_graph->swapDeckInputs();
+    m_deckController->parkDeck(Deck::Staging);
+    emit decksChanged();
+}
+
+void AppController::cut()
+{
+    if (m_pushTimer->isActive()) {
+        m_pushTimer->stop();
+        pushDecks();
+    }
+    m_transitionCtrl->cutTransition();
+}
+
+void AppController::take()
+{
+    if (m_pushTimer->isActive()) {
+        m_pushTimer->stop();
+        pushDecks();
+    }
+    m_transitionCtrl->autoTransition();
+}
 
 void AppController::clearGraph()
 {
@@ -574,23 +632,21 @@ void AppController::onTimerTick()
                                .arg(VideoDecoder::lastHardwareFailure()), 10000);
     }
 
-    for (int i = 0; i < 2; ++i) {
-        const bool deckA = i == 0;
-        const double dur = deckA ? m_compositor->getDurationA() : m_compositor->getDurationB();
-        const double t = deckA ? m_compositor->getCurrentTimeA() : m_compositor->getCurrentTimeB();
+    for (const Deck deck : {Deck::Live, Deck::Staging}) {
+        const double dur = isLive(deck) ? m_compositor->getDurationLive() : m_compositor->getDurationStaging();
+        const double t = isLive(deck) ? m_compositor->getCurrentTimeLive() : m_compositor->getCurrentTimeStaging();
         if (dur > 0) {
-            const double last = deckA ? m_deckController->lastTimeA() : m_deckController->lastTimeB();
-            if (MainWindowUtils::isBackwardJump(t, last)) {
-                const NodeId id = deckA ? m_deckController->activeNodeA() : m_deckController->activeNodeB();
+            if (MainWindowUtils::isBackwardJump(t, m_deckController->lastTime(deck))) {
+                const NodeId id = m_deckController->activeNode(deck);
                 if (id)
-                    m_deckController->updateDeckAudio(deckA, id, t, true);
+                    m_deckController->updateDeckAudio(deck, id, t, true);
             }
-            if (deckA) m_deckController->setLastTimeA(t); else m_deckController->setLastTimeB(t);
+            m_deckController->setLastTime(deck, t);
         }
     }
 
     m_deckController->refreshShaderAudioForActiveDecks();
-    m_outputHub->setActiveDeckNodes(m_deckController->activeNodeA(), m_deckController->activeNodeB());
+    m_outputHub->setActiveDeckNodes(m_deckController->activeNode(Deck::Live), m_deckController->activeNode(Deck::Staging));
     emit deckClockChanged();
     if (m_outputHub->isRecording())
         emit recordingProgress(m_outputHub->longestActiveRecordingMs());
@@ -612,10 +668,10 @@ void AppController::onGraphChanged()
         return;
     markDirty();
     m_pushTimer->start();
-    if (m_deckController->activeNodeA())
-        m_deckController->applyAudioControllerToDeck(true, m_deckController->activeNodeA(), false);
-    if (m_deckController->activeNodeB())
-        m_deckController->applyAudioControllerToDeck(false, m_deckController->activeNodeB(), false);
+    if (m_deckController->activeNode(Deck::Live))
+        m_deckController->applyAudioControllerToDeck(Deck::Live, m_deckController->activeNode(Deck::Live), false);
+    if (m_deckController->activeNode(Deck::Staging))
+        m_deckController->applyAudioControllerToDeck(Deck::Staging, m_deckController->activeNode(Deck::Staging), false);
     m_deckController->refreshShaderAudioForActiveDecks();
     m_deckController->refreshTextDataForActiveDecks();
     m_deckController->syncMasterAudioInputs();
@@ -626,19 +682,19 @@ void AppController::onNodeChanged(NodeId id)
 {
     if (m_shuttingDown || !id)
         return;
-    const bool isA = id == m_deckController->activeNodeA();
-    const bool isB = id == m_deckController->activeNodeB();
-    if (!isA && !isB)
+    const bool isLiveNode = id == m_deckController->activeNode(Deck::Live);
+    const bool isStagingNode = id == m_deckController->activeNode(Deck::Staging);
+    if (!isLiveNode && !isStagingNode)
         return;
     const bool repeat = m_graph->clipRepeat(id);
     const ClipSettings s = m_graph->clipSettings(id);
-    if (isA) {
-        m_compositor->setRepeatA(repeat);
-        m_compositor->setTrimPointsA(s.startTime, s.endTime);
+    if (isLiveNode) {
+        m_compositor->setRepeatLive(repeat);
+        m_compositor->setTrimPointsLive(s.startTime, s.endTime);
     }
-    if (isB) {
-        m_compositor->setRepeatB(repeat);
-        m_compositor->setTrimPointsB(s.startTime, s.endTime);
+    if (isStagingNode) {
+        m_compositor->setRepeatStaging(repeat);
+        m_compositor->setTrimPointsStaging(s.startTime, s.endTime);
     }
 }
 
@@ -646,6 +702,11 @@ void AppController::pushDecks()
 {
     if (m_shuttingDown || m_pushing)
         return;
+    if (m_transitionCtrl->isRunning()) {
+        m_pushDeferred = true;
+        return;
+    }
+    m_pushDeferred = false;
     m_pushing = true;
 
     Compositor *out = m_compositor.get();
@@ -694,42 +755,41 @@ void AppController::pushDecks()
         a.sort(); b.sort(); return a == b;
     };
 
-    const NodeId prodA = single ? m_graph->outputSingleProducer() : m_graph->deckAInput();
-    const NodeId prodB = single ? 0 : m_graph->deckBInput();
-    Stream streamA = prodA ? m_graph->evaluateVideoInput(prodA) : Stream{};
-    Stream streamB = prodB ? m_graph->evaluateVideoInput(prodB) : Stream{};
+    const NodeId prodLive = single ? m_graph->outputSingleProducer() : m_graph->liveInput();
+    const NodeId prodStaging = single ? 0 : m_graph->stagingInput();
+    Stream streamLive = prodLive ? m_graph->evaluateVideoInput(prodLive) : Stream{};
+    Stream streamStaging = prodStaging ? m_graph->evaluateVideoInput(prodStaging) : Stream{};
 
-    QString dBaseA, dBaseB;
-    QStringList dOvA, dOvB;
-    keysOf(streamA, dBaseA, dOvA);
-    keysOf(streamB, dBaseB, dOvB);
+    QString dBaseLive, dBaseStaging;
+    QStringList dOvLive, dOvStaging;
+    keysOf(streamLive, dBaseLive, dOvLive);
+    keysOf(streamStaging, dBaseStaging, dOvStaging);
 
-    const bool aWantsCurB = !dBaseA.isEmpty() && sameStream(dBaseA, dOvA, m_deckBase[1], m_deckOverlays[1]);
-    const bool bWantsCurA = !dBaseB.isEmpty() && sameStream(dBaseB, dOvB, m_deckBase[0], m_deckOverlays[0]);
-    const bool aUnchanged = sameStream(dBaseA, dOvA, m_deckBase[0], m_deckOverlays[0]);
-    const bool bUnchanged = sameStream(dBaseB, dOvB, m_deckBase[1], m_deckOverlays[1]);
-    if (!(aUnchanged && bUnchanged) && (aWantsCurB || bWantsCurA)) {
+    const bool liveWantsStaging = !dBaseLive.isEmpty() && sameStream(dBaseLive, dOvLive, m_deckBase[1], m_deckOverlays[1]);
+    const bool stagingWantsLive = !dBaseStaging.isEmpty() && sameStream(dBaseStaging, dOvStaging, m_deckBase[0], m_deckOverlays[0]);
+    const bool liveUnchanged = sameStream(dBaseLive, dOvLive, m_deckBase[0], m_deckOverlays[0]);
+    const bool stagingUnchanged = sameStream(dBaseStaging, dOvStaging, m_deckBase[1], m_deckOverlays[1]);
+    if (!(liveUnchanged && stagingUnchanged) && (liveWantsStaging || stagingWantsLive)) {
         out->swapDeckContents();
-        m_deckController->swapDeckAudio();
-        std::swap(m_deckBase[0], m_deckBase[1]);
-        std::swap(m_deckOverlays[0], m_deckOverlays[1]);
-        std::swap(m_deckUi[0], m_deckUi[1]);
+        swapDeckState();
     }
 
-    auto clearDeck = [&](bool deckA) {
-        if (deckA) { out->clearDeckA(); m_deckController->setActiveNodeA(0); }
-        else       { out->clearDeckB(); m_deckController->setActiveNodeB(0); }
+    auto clearDeck = [&](Deck deck) {
+        if (isLive(deck)) out->clearDeckLive();
+        else              out->clearDeckStaging();
+        m_deckController->setActiveNode(deck, 0);
     };
 
-    auto pushDeck = [&](bool deckA, const Stream &stream, const QString &dBase, const QStringList &dOv) {
-        const int di = deckA ? 0 : 1;
+    auto pushDeck = [&](Deck deck, const Stream &stream, const QString &dBase, const QStringList &dOv) {
+        const int di = static_cast<int>(deck);
+        const bool startPlayback = single || isLive(deck);
         QString &curBase = m_deckBase[di];
         QStringList &curOv = m_deckOverlays[di];
         DeckUi &ui = m_deckUi[di];
 
         if (stream.layers.isEmpty()) {
-            clearDeck(deckA);
-            m_deckController->stopDeckAudio(deckA);
+            clearDeck(deck);
+            m_deckController->stopDeckAudio(deck);
             ui = DeckUi{};
             curBase.clear(); curOv.clear();
             return;
@@ -740,16 +800,16 @@ void AppController::pushDecks()
             const float cx = composite ? 0.f : b.cropX, cy = composite ? 0.f : b.cropY;
             const float cw = composite ? 1.f : b.cropW, ch = composite ? 1.f : b.cropH;
             const bool fh = composite ? false : b.flipH, fv = composite ? false : b.flipV;
-            if (deckA) {
-                out->setBaseA(b.baseX, b.baseY, b.baseW, b.baseH);
-                out->setCropA(cx, cy, cw, ch);
-                out->setFlipA(fh, fv);
-                out->setCanvasSizeA(stream.canvasWidth, stream.canvasHeight);
+            if (isLive(deck)) {
+                out->setBaseLive(b.baseX, b.baseY, b.baseW, b.baseH);
+                out->setCropLive(cx, cy, cw, ch);
+                out->setFlipLive(fh, fv);
+                out->setCanvasSizeLive(stream.canvasWidth, stream.canvasHeight);
             } else {
-                out->setBaseB(b.baseX, b.baseY, b.baseW, b.baseH);
-                out->setCropB(cx, cy, cw, ch);
-                out->setFlipB(fh, fv);
-                out->setCanvasSizeB(stream.canvasWidth, stream.canvasHeight);
+                out->setBaseStaging(b.baseX, b.baseY, b.baseW, b.baseH);
+                out->setCropStaging(cx, cy, cw, ch);
+                out->setFlipStaging(fh, fv);
+                out->setCanvasSizeStaging(stream.canvasWidth, stream.canvasHeight);
             }
         };
 
@@ -768,14 +828,14 @@ void AppController::pushDecks()
             } else {
                 auto src = SourceFactory::buildLayerSource(base, m_graph, m_runtime);
                 if (!src) {
-                    clearDeck(deckA);
+                    clearDeck(deck);
                     curBase.clear(); curOv.clear();
                     return;
                 }
-                m_deckController->assignCompositeToDeck(std::move(src), primaryId, deckA);
+                m_deckController->assignCompositeToDeck(std::move(src), primaryId, deck, startPlayback);
                 applyBaseFor(base, true);
-                if (deckA) out->setNodeChainA({});
-                else       out->setNodeChainB({});
+                if (isLive(deck)) out->setNodeChainLive({});
+                else       out->setNodeChainStaging({});
                 curBase = dBase; curOv = dOv;
             }
             return;
@@ -791,7 +851,7 @@ void AppController::pushDecks()
         auto applyOverlayPlacements = [&]() {
             for (int i = 1; i < stream.layers.size(); ++i) {
                 const Layer &l = stream.layers[i];
-                out->setChainPlacement(deckA, i - 1, l.cropX, l.cropY, l.cropW, l.cropH,
+                out->setChainPlacement(deck, i - 1, l.cropX, l.cropY, l.cropW, l.cropH,
                                        l.flipH, l.flipV, l.baseX, l.baseY, l.baseW, l.baseH, l.visible);
             }
         };
@@ -805,12 +865,12 @@ void AppController::pushDecks()
             for (int i = 0; i < dOv.size(); ++i)
                 for (int j = 0; j < curOv.size(); ++j)
                     if (!used[j] && curOv[j] == dOv[i]) { perm[i] = j; used[j] = true; break; }
-            out->reorderChain(deckA, perm);
+            out->reorderChain(deck, perm);
             applyBaseFor(base, false);
             applyOverlayPlacements();
             curOv = dOv;
         } else {
-            m_deckController->assignNodeToDeck(base.inputNodeId, deckA, base.sourceEffects);
+            m_deckController->assignNodeToDeck(base.inputNodeId, deck, base.sourceEffects, startPlayback);
             applyBaseFor(base, false);
             Stream overlay;
             overlay.canvasWidth = stream.canvasWidth;
@@ -818,17 +878,17 @@ void AppController::pushDecks()
             for (int i = 1; i < stream.layers.size(); ++i)
                 overlay.layers.push_back(stream.layers[i]);
             auto chain = SourceFactory::buildStream(overlay, m_graph, m_runtime);
-            if (deckA) out->setNodeChainA(std::move(chain));
-            else       out->setNodeChainB(std::move(chain));
+            if (isLive(deck)) out->setNodeChainLive(std::move(chain));
+            else       out->setNodeChainStaging(std::move(chain));
             m_obsIntegration->onClipTriggered(desc);
             curBase = dBase; curOv = dOv;
         }
     };
 
-    pushDeck(true, streamA, dBaseA, dOvA);
-    pushDeck(false, streamB, dBaseB, dOvB);
+    pushDeck(Deck::Live, streamLive, dBaseLive, dOvLive);
+    pushDeck(Deck::Staging, streamStaging, dBaseStaging, dOvStaging);
 
-    m_outputHub->setActiveDeckNodes(m_deckController->activeNodeA(), m_deckController->activeNodeB());
+    m_outputHub->setActiveDeckNodes(m_deckController->activeNode(Deck::Live), m_deckController->activeNode(Deck::Staging));
     m_pushing = false;
     emit decksChanged();
 }
@@ -912,8 +972,8 @@ void AppController::removeNode(quint64 nodeId)
     if (!m_graph->hasNode(nodeId))
         return;
     m_graph->removeNode(nodeId);
-    if (m_deckController->activeNodeA() == nodeId) m_deckController->setActiveNodeA(0);
-    if (m_deckController->activeNodeB() == nodeId) m_deckController->setActiveNodeB(0);
+    if (m_deckController->activeNode(Deck::Live) == nodeId) m_deckController->setActiveNode(Deck::Live, 0);
+    if (m_deckController->activeNode(Deck::Staging) == nodeId) m_deckController->setActiveNode(Deck::Staging, 0);
     m_pushTimer->stop();
     pushDecks();
     mcpBumpRevision();
@@ -978,7 +1038,7 @@ QJsonObject AppController::currentSessionJson(const QString &sessionFilePath) co
 {
     return m_sessionManager->buildJson(
         faderValue(), m_transitionCtrl->currentModeIndex(), m_transitionCtrl->currentDurationSecs(),
-        m_deckController->activeNodeA(), m_deckController->activeNodeB(),
+        m_deckController->activeNode(Deck::Live), m_deckController->activeNode(Deck::Staging),
         m_hotkeyManager->hotkeysJson(),
         sessionFilePath.isEmpty() ? SessionManager::autosavePath() : sessionFilePath);
 }
@@ -1016,24 +1076,24 @@ void AppController::clearRecentSessions()
 
 bool AppController::loadSessionFile(const QString &path)
 {
-    m_deckController->setActiveNodeA(0);
-    m_deckController->setActiveNodeB(0);
-    m_deckController->stopDeckAudio(true);
-    m_deckController->stopDeckAudio(false);
+    m_deckController->setActiveNode(Deck::Live, 0);
+    m_deckController->setActiveNode(Deck::Staging, 0);
+    m_deckController->stopDeckAudio(Deck::Live);
+    m_deckController->stopDeckAudio(Deck::Staging);
     return m_sessionManager->loadFromFile(path);
 }
 
 void AppController::onSessionLoaded()
 {
     m_hotkeyManager->restoreHotkeys(m_sessionManager->restoredHotkeys());
-    setFaderValue(m_sessionManager->restoredCrossfader());
+    m_transitionCtrl->setFaderValue(m_sessionManager->restoredTransitionProgress());
     m_transitionCtrl->setTransitionModeIndex(m_sessionManager->restoredTransitionMode());
     m_transitionCtrl->setTransitionDuration(m_sessionManager->restoredTransitionDuration());
 
-    const NodeId savedA = m_sessionManager->restoredActiveNodeA();
-    const NodeId savedB = m_sessionManager->restoredActiveNodeB();
-    if (savedA) selectNodeA(savedA);
-    if (savedB) selectNodeB(savedB);
+    const NodeId savedLive = m_sessionManager->restoredActiveNodeLive();
+    const NodeId savedStaging = m_sessionManager->restoredActiveNodeStaging();
+    if (savedLive) selectNode(savedLive, Deck::Live);
+    if (savedStaging) selectNode(savedStaging, Deck::Staging);
 
     m_graph->setOutputCanvasSize(Compositor::programWidth(), Compositor::programHeight());
 
@@ -1047,12 +1107,12 @@ void AppController::onSessionLoaded()
 void AppController::doNewSession()
 {
     m_graph->clear();
-    m_deckController->setActiveNodeA(0);
-    m_deckController->setActiveNodeB(0);
-    m_deckController->stopDeckAudio(true);
-    m_deckController->stopDeckAudio(false);
-    m_compositor->clearDeckA();
-    m_compositor->clearDeckB();
+    m_deckController->setActiveNode(Deck::Live, 0);
+    m_deckController->setActiveNode(Deck::Staging, 0);
+    m_deckController->stopDeckAudio(Deck::Live);
+    m_deckController->stopDeckAudio(Deck::Staging);
+    m_compositor->clearDeckLive();
+    m_compositor->clearDeckStaging();
     for (int i = 0; i < 2; ++i) {
         m_deckBase[i].clear();
         m_deckOverlays[i].clear();
@@ -1202,12 +1262,12 @@ void AppController::confirmAnswered(const QString &id, bool accepted)
         return;
     if (id == QLatin1String("clearAll")) {
         m_graph->clear();
-        m_deckController->setActiveNodeA(0);
-        m_deckController->setActiveNodeB(0);
-        m_deckController->stopDeckAudio(true);
-        m_deckController->stopDeckAudio(false);
-        m_compositor->clearDeckA();
-        m_compositor->clearDeckB();
+        m_deckController->setActiveNode(Deck::Live, 0);
+        m_deckController->setActiveNode(Deck::Staging, 0);
+        m_deckController->stopDeckAudio(Deck::Live);
+        m_deckController->stopDeckAudio(Deck::Staging);
+        m_compositor->clearDeckLive();
+        m_compositor->clearDeckStaging();
         for (int i = 0; i < 2; ++i) {
             m_deckBase[i].clear();
             m_deckOverlays[i].clear();
@@ -1421,7 +1481,7 @@ QVariantMap AppController::captureFrame(int layerIndex, bool savePng, bool addAs
     bool held = false;
     if (holdAsStill && layer.kind != FrameCaptureHelper::LayerKind::Program) {
         const int chainIndex = layer.kind == FrameCaptureHelper::LayerKind::DeckChain ? layer.chainIndex : -1;
-        m_compositor->holdLayerAsStill(layer.deckA, chainIndex, frame);
+        m_compositor->holdLayerAsStill(layer.deck, chainIndex, frame);
         held = true;
     }
 
@@ -1499,15 +1559,15 @@ QJsonObject AppController::mcpInspect(bool includeClips, bool detail, int sinceR
     if (sinceRevision >= 0 && sinceRevision == m_mcpEditRevision)
         return ok({{QStringLiteral("unchanged"), true}, {QStringLiteral("revision"), m_mcpEditRevision}});
 
-    auto deckJson = [this](bool deckA) {
-        const NodeId id = deckA ? activeNodeA() : activeNodeB();
+    auto deckJson = [this](Deck deck) {
+        const NodeId id = m_deckController->activeNode(deck);
         return QJsonObject{
             {QStringLiteral("clip"), id ? QString::number(id) : QJsonValue(QJsonValue::Null)},
             {QStringLiteral("name"), id ? m_graph->sourceName(id) : QString()},
-            {QStringLiteral("playing"), deckA ? isPlayingA() : isPlayingB()},
-            {QStringLiteral("time"), deckA ? deckTimeA() : deckTimeB()},
-            {QStringLiteral("duration"), deckA ? deckDurationA() : deckDurationB()},
-            {QStringLiteral("speed"), m_deckController->deckSpeed(deckA)},
+            {QStringLiteral("playing"), isLive(deck) ? isPlayingLive() : isPlayingStaging()},
+            {QStringLiteral("time"), isLive(deck) ? deckTimeLive() : deckTimeStaging()},
+            {QStringLiteral("duration"), isLive(deck) ? deckDurationLive() : deckDurationStaging()},
+            {QStringLiteral("speed"), m_deckController->deckSpeed(deck)},
         };
     };
 
@@ -1520,8 +1580,8 @@ QJsonObject AppController::mcpInspect(bool includeClips, bool detail, int sinceR
         {QStringLiteral("revision"), m_mcpEditRevision},
         {QStringLiteral("fader"), faderValue()},
         {QStringLiteral("panic"), mcpPanicMode()},
-        {QStringLiteral("decks"), QJsonObject{{QStringLiteral("a"), deckJson(true)},
-                                               {QStringLiteral("b"), deckJson(false)}}},
+        {QStringLiteral("decks"), QJsonObject{{QStringLiteral("live"), deckJson(Deck::Live)},
+                                               {QStringLiteral("staging"), deckJson(Deck::Staging)}}},
         {QStringLiteral("transition"), QJsonObject{
             {QStringLiteral("index"), m_transitionCtrl->currentModeIndex()},
             {QStringLiteral("duration"), m_transitionCtrl->currentDurationSecs()},
@@ -1550,8 +1610,8 @@ QJsonObject AppController::mcpInspect(bool includeClips, bool detail, int sinceR
                 {QStringLiteral("id"), QString::number(id)},
                 {QStringLiteral("name"), m_graph->sourceName(id)},
                 {QStringLiteral("kind"), mcpKindName(d.kind)},
-                {QStringLiteral("activeA"), id == activeNodeA()},
-                {QStringLiteral("activeB"), id == activeNodeB()},
+                {QStringLiteral("onLive"), id == activeNodeLive()},
+                {QStringLiteral("onStaging"), id == activeNodeStaging()},
             };
             if (detail) {
                 if (!d.path.isEmpty())

@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QVariantList>
+#include "core/Deck.h"
 #include "core/graph/ClipGraph.h"
 #include "app/remote/OscProtocol.h"
 
@@ -36,7 +37,7 @@ private slots:
     void pollState();
 
 private:
-    struct Deck {
+    struct DeckState {
         NodeId  input = ~NodeId(0); // sentinel so the first poll reports everything
         int     slot = 0;
         QString name;
@@ -44,16 +45,17 @@ private:
     };
     struct State {
         int     fader = -1;
-        Deck    a, b;
+        DeckState live, staging;
         int     mode = -1;
         double  duration = -1.0;
         QString panic;
     };
 
     void dispatch(const OscProtocol::OscMessage &msg);
-    void handleDeck(bool deckA, const QString &cmd, const QVariantList &args);
+    void handleDeck(Deck deck, const QString &cmd, const QVariantList &args);
+    void handleStage(const QVariantList &args);
     void sendFullState();
-    void sendDeckDiff(const char *deck, const Deck &now, const Deck &before);
+    void sendDeckDiff(const char *deck, const DeckState &now, const DeckState &before);
     void send(const QString &address, const QVariantList &args = {});
     State captureState() const;
 

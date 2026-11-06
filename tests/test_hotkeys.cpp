@@ -24,7 +24,7 @@ private slots:
         m_graph = nullptr;
     }
 
-    // Two canvas inputs (ids 1, 2) wired into a 3-slot A/B Select (id 3),
+    // Two canvas inputs (ids 1, 2) wired into a 3-slot Switcher (id 3),
     // whose output feeds the Output node (id 4).
     QJsonObject makeGraph() const {
         auto canvasSource = [](const QString &name) {
@@ -67,7 +67,7 @@ private slots:
         };
 
         QJsonObject state;
-        state["graphVersion"] = 3;
+        state["graphVersion"] = ClipGraph::kGraphVersion;
         state["nextId"] = 5;
         state["inputNodes"] = inputNodes;
         state["abSelectNodes"] = QJsonArray{ab};
@@ -108,12 +108,12 @@ private slots:
         const QVector<ClipGraph::AbSlotInfo> inputs = m_graph->abSelectInputs();
         QCOMPARE(inputs.size(), 2);
 
-        QVERIFY(m_graph->triggerAbSlot(inputs[0].ref, true));
-        QCOMPARE(m_graph->deckAInput(), inputs[0].producer);
-        QVERIFY(m_graph->triggerAbSlot(inputs[1].ref, false));
-        QCOMPARE(m_graph->deckBInput(), inputs[1].producer);
+        QVERIFY(m_graph->triggerAbSlot(inputs[0].ref, Deck::Live));
+        QCOMPARE(m_graph->liveInput(), inputs[0].producer);
+        QVERIFY(m_graph->triggerAbSlot(inputs[1].ref, Deck::Staging));
+        QCOMPARE(m_graph->stagingInput(), inputs[1].producer);
 
-        QVERIFY(!m_graph->triggerAbSlot(ClipGraph::AbSlotRef{999, 0}, true));
+        QVERIFY(!m_graph->triggerAbSlot(ClipGraph::AbSlotRef{999, 0}, Deck::Live));
     }
 
     void restoreMapsLegacyClipBindings() {

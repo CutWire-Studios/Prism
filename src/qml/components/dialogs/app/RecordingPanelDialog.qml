@@ -48,7 +48,7 @@ ThemedDialog {
 
             ThemedLabel {
                 width: parent.width
-                text: qsTr("Live-source rows record only while that source is loaded on Deck A or B.")
+                text: qsTr("Live-source rows record only while that source is loaded on Live or Staging.")
             }
 
             RecordingRows {
@@ -65,7 +65,7 @@ ThemedDialog {
 
             ThemedLabel {
                 width: parent.width
-                text: qsTr("Saved as separate FLAC files. Program audio follows the crossfader and includes a connected Master Audio Input mic. Deck and clip isos record at full clip volume without the mic. Clip audio records only while that clip is loaded on Deck A or B.")
+                text: qsTr("Saved as separate FLAC files. Program audio follows the crossfader and includes a connected Master Audio Input mic. Deck and clip isos record at full clip volume without the mic. Clip audio records only while that clip is loaded on Live or Staging.")
             }
 
             RecordingRows {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QUrl>
+#include "core/Deck.h"
 #include <QHash>
 #include <QImage>
 #include <QJsonObject>
@@ -56,29 +57,33 @@ class AppController : public QObject {
     Q_PROPERTY(Compositor *compositor READ compositor CONSTANT)
 
     // ── Decks (clock properties refresh every 100 ms via deckClockChanged) ────
-    Q_PROPERTY(quint64 activeNodeA READ activeNodeA NOTIFY decksChanged)
-    Q_PROPERTY(quint64 activeNodeB READ activeNodeB NOTIFY decksChanged)
-    Q_PROPERTY(QString deckNameA READ deckNameA NOTIFY decksChanged)
-    Q_PROPERTY(QString deckNameB READ deckNameB NOTIFY decksChanged)
+    Q_PROPERTY(quint64 activeNodeLive READ activeNodeLive NOTIFY decksChanged)
+    Q_PROPERTY(quint64 activeNodeStaging READ activeNodeStaging NOTIFY decksChanged)
+    Q_PROPERTY(QString deckNameLive READ deckNameLive NOTIFY decksChanged)
+    Q_PROPERTY(QString deckNameStaging READ deckNameStaging NOTIFY decksChanged)
     /// The deck has a seekable timeline / a speed control (what the old progress slider,
     /// play button and speed slider visibility tracked).
-    Q_PROPERTY(bool deckHasTransportA READ deckHasTransportA NOTIFY decksChanged)
-    Q_PROPERTY(bool deckHasTransportB READ deckHasTransportB NOTIFY decksChanged)
-    Q_PROPERTY(bool deckHasSpeedA READ deckHasSpeedA NOTIFY decksChanged)
-    Q_PROPERTY(bool deckHasSpeedB READ deckHasSpeedB NOTIFY decksChanged)
-    Q_PROPERTY(double deckSpeedA READ deckSpeedA NOTIFY decksChanged)
-    Q_PROPERTY(double deckSpeedB READ deckSpeedB NOTIFY decksChanged)
-    Q_PROPERTY(bool deckPlayingA READ isPlayingA NOTIFY deckClockChanged)
-    Q_PROPERTY(bool deckPlayingB READ isPlayingB NOTIFY deckClockChanged)
-    Q_PROPERTY(double deckTimeA READ deckTimeA NOTIFY deckClockChanged)
-    Q_PROPERTY(double deckTimeB READ deckTimeB NOTIFY deckClockChanged)
-    Q_PROPERTY(double deckDurationA READ deckDurationA NOTIFY deckClockChanged)
-    Q_PROPERTY(double deckDurationB READ deckDurationB NOTIFY deckClockChanged)
+    Q_PROPERTY(bool deckHasTransportLive READ deckHasTransportLive NOTIFY decksChanged)
+    Q_PROPERTY(bool deckHasTransportStaging READ deckHasTransportStaging NOTIFY decksChanged)
+    Q_PROPERTY(bool deckHasSpeedLive READ deckHasSpeedLive NOTIFY decksChanged)
+    Q_PROPERTY(bool deckHasSpeedStaging READ deckHasSpeedStaging NOTIFY decksChanged)
+    Q_PROPERTY(double deckSpeedLive READ deckSpeedLive NOTIFY decksChanged)
+    Q_PROPERTY(double deckSpeedStaging READ deckSpeedStaging NOTIFY decksChanged)
+    Q_PROPERTY(bool deckPlayingLive READ isPlayingLive NOTIFY deckClockChanged)
+    Q_PROPERTY(bool deckPlayingStaging READ isPlayingStaging NOTIFY deckClockChanged)
+    Q_PROPERTY(double deckTimeLive READ deckTimeLive NOTIFY deckClockChanged)
+    Q_PROPERTY(double deckTimeStaging READ deckTimeStaging NOTIFY deckClockChanged)
+    Q_PROPERTY(double deckDurationLive READ deckDurationLive NOTIFY deckClockChanged)
+    Q_PROPERTY(double deckDurationStaging READ deckDurationStaging NOTIFY deckClockChanged)
+
+    /// The deck's source has a decoded first frame.
+    Q_PROPERTY(bool deckReadyLive READ deckReadyLive NOTIFY deckClockChanged)
+    Q_PROPERTY(bool deckReadyStaging READ deckReadyStaging NOTIFY deckClockChanged)
 
     // ── Transitions ───────────────────────────────────────────────────────────
-    /// 0..100, 0 = full A, 100 = full B. Writing it moves the crossfade like the old slider.
+    /// 0..100 transition progress from Live toward Staging; reaching 100 swaps the Live and Staging contents and resets to 0.
     Q_PROPERTY(int faderValue READ faderValue WRITE setFaderValue NOTIFY faderValueChanged)
-    /// 0 = A is on air, 1 = B is on air (whichever deck currently has the larger alpha).
+    /// 0 = Live dominates, 1 = Staging dominates (whichever deck currently has the larger alpha).
     Q_PROPERTY(int onAirDeck READ onAirDeck NOTIFY faderValueChanged)
     Q_PROPERTY(int transitionMode READ transitionMode WRITE setTransitionMode NOTIFY transitionSettingsChanged)
     Q_PROPERTY(QStringList transitionModeNames READ transitionModeNames CONSTANT)
@@ -154,24 +159,26 @@ public:
     void notifyLibraryChanged();
 
     // ── Property getters ──────────────────────────────────────────────────────
-    quint64 activeNodeA() const;
-    quint64 activeNodeB() const;
-    QString deckNameA() const { return m_deckUi[0].name; }
-    QString deckNameB() const { return m_deckUi[1].name; }
-    bool deckHasTransportA() const { return m_deckUi[0].hasTransport; }
-    bool deckHasTransportB() const { return m_deckUi[1].hasTransport; }
-    bool deckHasSpeedA() const { return m_deckUi[0].hasSpeed; }
-    bool deckHasSpeedB() const { return m_deckUi[1].hasSpeed; }
-    double deckSpeedA() const;
-    double deckSpeedB() const;
-    bool isPlayingA() const;
-    bool isPlayingB() const;
-    double deckTimeA() const;
-    double deckTimeB() const;
-    double deckDurationA() const;
-    double deckDurationB() const;
+    quint64 activeNodeLive() const;
+    quint64 activeNodeStaging() const;
+    QString deckNameLive() const { return m_deckUi[0].name; }
+    QString deckNameStaging() const { return m_deckUi[1].name; }
+    bool deckHasTransportLive() const { return m_deckUi[0].hasTransport; }
+    bool deckHasTransportStaging() const { return m_deckUi[1].hasTransport; }
+    bool deckHasSpeedLive() const { return m_deckUi[0].hasSpeed; }
+    bool deckHasSpeedStaging() const { return m_deckUi[1].hasSpeed; }
+    double deckSpeedLive() const;
+    double deckSpeedStaging() const;
+    bool isPlayingLive() const;
+    bool isPlayingStaging() const;
+    double deckTimeLive() const;
+    double deckTimeStaging() const;
+    double deckDurationLive() const;
+    double deckDurationStaging() const;
 
     int faderValue() const;
+    bool deckReadyLive() const;
+    bool deckReadyStaging() const;
     int onAirDeck() const;
     int transitionMode() const;
     QStringList transitionModeNames() const;
@@ -212,18 +219,23 @@ public:
     void setMcpEnabled(bool on);
 
     // ── Decks / transitions (QML) ─────────────────────────────────────────────
-    /// Send an Input/producer node to deck A or B (ClipGraph::assignInputToDeck). 0 re-pushes the decks.
-    Q_INVOKABLE void selectNodeA(quint64 nodeId);
-    Q_INVOKABLE void selectNodeB(quint64 nodeId);
-    Q_INVOKABLE void togglePlayA();
-    Q_INVOKABLE void togglePlayB();
-    Q_INVOKABLE void playDeck(bool deckA, bool play);
-    Q_INVOKABLE void seekDeck(bool deckA, double seconds);
+    /// Send an Input/producer node to a deck (ClipGraph::assignInputToDeck). 0 re-pushes the decks.
+    void selectNode(quint64 nodeId, Deck deck);
+    /// Send an Input/producer node to the Staging deck.
+    Q_INVOKABLE void stageNode(quint64 nodeId);
+    /// Send a switcher slot to Staging; with @p cutToLive it is then cut straight to Live.
+    void stageSlot(const ClipGraph::AbSlotRef &ref, bool cutToLive);
+    Q_INVOKABLE void stageAbSlot(quint64 node, int slot, bool cutToLive);
+    /// The @p deck arguments below are int(Deck): 0 = Live, 1 = Staging.
+    Q_INVOKABLE void togglePlay(int deck);
+    Q_INVOKABLE void playDeck(int deck, bool play);
+    Q_INVOKABLE void seekDeck(int deck, double seconds);
     /// 0..1 of the deck's duration; also re-seeks the deck audio (the old progress-slider release).
-    Q_INVOKABLE void seekDeckFraction(bool deckA, double fraction);
-    Q_INVOKABLE void setDeckSpeedValue(bool deckA, double speed);
+    Q_INVOKABLE void seekDeckFraction(int deck, double fraction);
+    Q_INVOKABLE void setDeckSpeedValue(int deck, double speed);
     Q_INVOKABLE void cut();
-    Q_INVOKABLE void autoTransition();
+    /// Animates Live -> Staging with the configured transition, then the Staging content becomes Live.
+    Q_INVOKABLE void take();
     /// mode: "blackout" | "freeze" | "stay_tuned"; toggles it off when already active.
     Q_INVOKABLE void togglePanic(const QString &mode);
     Q_INVOKABLE void setProgramResolution(int width, int height);
@@ -376,6 +388,10 @@ signals:
     void sessionLoaded();
 
 private:
+    /// Exchanges the Live/Staging audio players and per-deck UI/stream state (pairs with Compositor::swapDeckContents).
+    void swapDeckState();
+    void onTakeCommitted();
+
     struct DeckUi {
         QString name;
         bool hasTransport = false;
@@ -432,6 +448,7 @@ private:
     bool m_dirty = false;
     bool m_stayOnTop = false;
     bool m_pushing = false;
+    bool m_pushDeferred = false;
     quint64 m_seenHwFallbacks = 0;
     double m_lastTime[2] = {0.0, 0.0};
     QString m_sessionPath;

@@ -26,8 +26,8 @@ QtObject {
         ClipToAudioScript: 12
     })
 
-    // Domain hues. These carry meaning (video / A-B / raw audio / mixed audio / script data) and
-    // have no counterpart in the theme tokens, so they stay fixed; the A/B hue follows the theme.
+    // Domain hues. These carry meaning (video / switcher / raw audio / mixed audio / script data) and
+    // have no counterpart in the theme tokens, so they stay fixed; the switcher hue follows the theme.
     readonly property color chainHue: "#50a8d8"
     readonly property color abHue: Theme.destructive
     readonly property color streamHue: "#e4b042"
@@ -71,7 +71,7 @@ QtObject {
         const k = portKind
         switch (kind) {
         case k.ChainIn: case k.ChainOut: return qsTr("Video")
-        case k.AbIn: case k.AbOut: return qsTr("A/B deck")
+        case k.AbIn: case k.AbOut: return qsTr("Switcher")
         case k.AudioControllerOut: case k.MasterAudioInputOut: return qsTr("Audio stream")
         case k.AudioMixerIn: return qsTr("Mixer input")
         case k.AudioMixerOut: return qsTr("Mixed audio")
@@ -115,7 +115,7 @@ QtObject {
           inKinds: [14], outKinds: [15] },
         { name: qsTr("Layer"), icon: "layers", hue: "#78aad2", header: 20, category: "video",
           inKinds: [0], outKinds: [1] },
-        { name: qsTr("A/B Select"), icon: "split", hue: "#e67878", header: 20, category: "video",
+        { name: qsTr("Switcher"), icon: "split", hue: "#e67878", header: 20, category: "video",
           inKinds: [0, 11], outKinds: [2] },
         { name: qsTr("Output"), icon: "monitor", hue: "#96c8f0", header: 20, category: "video",
           inKinds: [0, 3], outKinds: [] },
@@ -143,8 +143,8 @@ QtObject {
         case nodeType.Layer:
             return qsTr("Double-click a layer name to rename. The eye toggles visibility; the arrows reorder.")
         case nodeType.AbSelect:
-            return qsTr("Double-click an input name to rename. A and B send the input to that deck. "
-                        + "Wire a Script node's output here to automate deck assignment.")
+            return qsTr("Double-click an input name to rename. Stage sends the input to Staging; Cut to Live sends it straight to Live. "
+                        + "Wire a Script node's output here to automate switching.")
         case nodeType.AudioMixer:
             return qsTr("Double-click a name to rename. Edit opens per-input volume and mute.")
         }

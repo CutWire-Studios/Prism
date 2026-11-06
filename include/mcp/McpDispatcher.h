@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/Deck.h"
+
 #include <QJsonObject>
 #include <QString>
 
@@ -29,13 +31,14 @@ private:
     QJsonObject opSetText(const QJsonObject &args);
     QJsonObject opSetSvgParams(const QJsonObject &args);
     QJsonObject opSetShader(const QJsonObject &args);
-    QJsonObject opSelectDeck(const QJsonObject &args, bool deckA);
-    QJsonObject opPlayDeck(bool deckA, bool play);
-    QJsonObject opSeekDeck(const QJsonObject &args, bool deckA);
+    static bool parseDeck(const QJsonObject &args, Deck &deck, QJsonObject *error);
+    QJsonObject opStage(const QJsonObject &args);
+    QJsonObject opPlayDeck(const QJsonObject &args, bool play);
+    QJsonObject opSeekDeck(const QJsonObject &args);
     QJsonObject opSetSpeed(const QJsonObject &args);
     QJsonObject opSetFader(const QJsonObject &args);
     QJsonObject opCut();
-    QJsonObject opAuto();
+    QJsonObject opTake();
     QJsonObject opListTransitions() const;
     QJsonObject opSetTransition(const QJsonObject &args);
     QJsonObject opSetDuration(const QJsonObject &args);

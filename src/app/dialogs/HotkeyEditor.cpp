@@ -51,17 +51,17 @@ void HotkeyEditor::refresh()
         if (!info.sourceName.isEmpty())
             label += QStringLiteral(" — %1").arg(info.sourceName);
         if (abNodes.size() > 1)
-            label = tr("A/B #%1 · %2").arg(abNodes.indexOf(info.ref.abNodeId) + 1).arg(label);
+            label = tr("Switcher #%1 · %2").arg(abNodes.indexOf(info.ref.abNodeId) + 1).arg(label);
 
         const Qt::Key key = mgr->bindingForSlot(info.ref);
         QString chord;
-        QString deckB;
+        QString cutChord;
         if (key != Qt::Key_unknown) {
             chord = QKeySequence(key).toString(QKeySequence::PortableText);
-            deckB = QKeySequence(Qt::SHIFT | key).toString(QKeySequence::PortableText);
+            cutChord = QKeySequence(Qt::SHIFT | key).toString(QKeySequence::PortableText);
         }
         m_slots.append(info.ref);
-        m_rows.append(QVariantMap{{"label", label}, {"chord", chord}, {"deckBChord", deckB}});
+        m_rows.append(QVariantMap{{"label", label}, {"chord", chord}, {"cutChord", cutChord}});
     }
     emit rowsChanged();
 }
@@ -77,7 +77,7 @@ QVariantMap HotkeyEditor::setChord(int row, const QString &chord)
         return {{"ok", false}, {"message", tr("That key cannot be used.")}};
     const QKeyCombination combo = seq[0];
     if (combo.keyboardModifiers() != Qt::NoModifier)
-        return {{"ok", false}, {"message", tr("Use a key on its own. Shift plus the key always sends to Deck B.")}};
+        return {{"ok", false}, {"message", tr("Use a key on its own. Shift plus the key stages it and cuts to Live.")}};
 
     const Qt::Key key = combo.key();
     if (!HotkeyManager::isBindableKey(key))

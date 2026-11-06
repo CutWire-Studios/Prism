@@ -1,6 +1,7 @@
 #include "app/remote/RemoteControlServer.h"
 #include "core/webrtc/FirewallUtils.h"
 #include "app/AppController.h"
+#include "core/Deck.h"
 #include "app/transitions/TransitionController.h"
 #include "core/graph/ClipGraph.h"
 #include "app/remote/RemoteProtocol.h"
@@ -94,18 +95,18 @@ void RemoteControlServer::onReadyRead() {
 
         if (m_mainWindow) {
             status.hasDeck = true;
-            status.activeA = m_mainWindow->activeNodeA();
-            status.activeB = m_mainWindow->activeNodeB();
-            status.isPlayingA = m_mainWindow->isPlayingA();
-            status.isPlayingB = m_mainWindow->isPlayingB();
+            status.live = m_mainWindow->activeNodeLive();
+            status.staging = m_mainWindow->activeNodeStaging();
+            status.isPlayingLive = m_mainWindow->isPlayingLive();
+            status.isPlayingStaging = m_mainWindow->isPlayingStaging();
 
             if (auto *graph = m_mainWindow->clipGraph()) {
                 for (NodeId id : graph->nodeIdsOfType(ClipGraph::NodeType::Input)) {
                     RemoteProtocol::ClipInfo clip;
                     clip.id = id;
                     clip.name = graph->sourceName(id);
-                    clip.activeA = (id == m_mainWindow->activeNodeA());
-                    clip.activeB = (id == m_mainWindow->activeNodeB());
+                    clip.onLive = (id == m_mainWindow->activeNodeLive());
+                    clip.onStaging = (id == m_mainWindow->activeNodeStaging());
                     status.clips.append(clip);
                 }
             }
@@ -131,44 +132,76 @@ void RemoteControlServer::onReadyRead() {
     }
 
     case RemoteProtocol::Route::Cut:
-        if (auto *tc = transitions())
-            tc->cutTransition();
+        if (m_mainWindow)
+            m_mainWindow->cut();
         sendJsonResponse(socket, "{\"status\": \"ok\"}");
         break;
 
-    case RemoteProtocol::Route::Auto:
-        if (auto *tc = transitions())
-            tc->autoTransition();
+    case RemoteProtocol::Route::Take:
+        if (m_mainWindow)
+            m_mainWindow->take();
         sendJsonResponse(socket, "{\"status\": \"ok\"}");
         break;
 
-    case RemoteProtocol::Route::SelectA: {
+    case RemoteProtocol::Route::Stage: {
         quint64 id = 0;
         if (RemoteProtocol::uint64Param(request.path, QStringLiteral("id"), id) && m_mainWindow)
-            m_mainWindow->selectNodeA(id);
+            m_mainWindow->stageNode(id);
         sendJsonResponse(socket, "{\"status\": \"ok\"}");
         break;
     }
 
-    case RemoteProtocol::Route::SelectB: {
-        quint64 id = 0;
-        if (RemoteProtocol::uint64Param(request.path, QStringLiteral("id"), id) && m_mainWindow)
-            m_mainWindow->selectNodeB(id);
+    case RemoteProtocol::Route::LivePlay:
+        if (m_mainWindow)
+            m_mainWindow->playDeck(static_cast<int>(Deck::Live), true);
+        sendJsonResponse(socket, "{\"status\": \"ok\"}");
+        break;
+
+    case RemoteProtocol::Route::LivePause:
+        if (m_mainWindow)
+            m_mainWindow->playDeck(static_cast<int>(Deck::Live), false);
+        sendJsonResponse(socket, "{\"status\": \"ok\"}");
+        break;
+
+    case RemoteProtocol::Route::LiveToggle:
+        if (m_mainWindow)
+            m_mainWindow->togglePlay(static_cast<int>(Deck::Live));
+        sendJsonResponse(socket, "{\"status\": \"ok\"}");
+        break;
+
+    case RemoteProtocol::Route::LiveSeek: {
+        double val = 0.0;
+        if (RemoteProtocol::doubleParam(request.path, QStringLiteral("val"), val) && m_mainWindow)
+            m_mainWindow->seekDeck(static_cast<int>(Deck::Live), qMax(0.0, val));
         sendJsonResponse(socket, "{\"status\": \"ok\"}");
         break;
     }
 
-    case RemoteProtocol::Route::TogglePlayA:
+    case RemoteProtocol::Route::StagingPlay:
         if (m_mainWindow)
-            m_mainWindow->togglePlayA();
+            m_mainWindow->playDeck(static_cast<int>(Deck::Staging), true);
         sendJsonResponse(socket, "{\"status\": \"ok\"}");
         break;
 
-    case RemoteProtocol::Route::TogglePlayB:
+    case RemoteProtocol::Route::StagingPause:
         if (m_mainWindow)
-            m_mainWindow->togglePlayB();
+            m_mainWindow->playDeck(static_cast<int>(Deck::Staging), false);
         sendJsonResponse(socket, "{\"status\": \"ok\"}");
         break;
+
+    case RemoteProtocol::Route::StagingToggle:
+        if (m_mainWindow)
+            m_mainWindow->togglePlay(static_cast<int>(Deck::Staging));
+        sendJsonResponse(socket, "{\"status\": \"ok\"}");
+        break;
+
+    case RemoteProtocol::Route::StagingSeek: {
+        double val = 0.0;
+        if (RemoteProtocol::doubleParam(request.path, QStringLiteral("val"), val) && m_mainWindow)
+            m_mainWindow->seekDeck(static_cast<int>(Deck::Staging), qMax(0.0, val));
+        sendJsonResponse(socket, "{\"status\": \"ok\"}");
+        break;
+    }
 
     case RemoteProtocol::Route::SetTransitionMode: {
         int index = 0;
@@ -241,10 +274,10 @@ QString RemoteControlServer::getWebPageHtml() const {
             --panel-bg: rgba(22, 22, 26, 0.7);
             --primary-gold: #e5a93b;
             --primary-gold-glow: rgba(229, 169, 59, 0.4);
-            --deck-a-color: #ff3b30;
-            --deck-a-glow: rgba(255, 59, 48, 0.3);
-            --deck-b-color: #34c759;
-            --deck-b-glow: rgba(52, 199, 89, 0.3);
+            --deck-live-color: #ff3b30;
+            --deck-live-glow: rgba(255, 59, 48, 0.3);
+            --deck-staging-color: #34c759;
+            --deck-staging-glow: rgba(52, 199, 89, 0.3);
             --text-color: #f5f5f7;
             --text-muted: #8e8e93;
             --border-color: rgba(255, 255, 255, 0.08);
@@ -357,12 +390,12 @@ QString RemoteControlServer::getWebPageHtml() const {
             transition: border-color 0.3s ease;
         }
 
-        .deck-card.deck-a {
-            border-bottom: 3px solid var(--deck-a-color);
+        .deck-card.deck-live {
+            border-bottom: 3px solid var(--deck-live-color);
         }
 
-        .deck-card.deck-b {
-            border-bottom: 3px solid var(--deck-b-color);
+        .deck-card.deck-staging {
+            border-bottom: 3px solid var(--deck-staging-color);
         }
 
         .deck-label {
@@ -372,8 +405,8 @@ QString RemoteControlServer::getWebPageHtml() const {
             text-transform: uppercase;
         }
 
-        .deck-a .deck-label { color: var(--deck-a-color); }
-        .deck-b .deck-label { color: var(--deck-b-color); }
+        .deck-live .deck-label { color: var(--deck-live-color); }
+        .deck-staging .deck-label { color: var(--deck-staging-color); }
 
         .deck-clip-name {
             font-size: 15px;
@@ -532,13 +565,13 @@ QString RemoteControlServer::getWebPageHtml() const {
             border-color: rgba(255, 59, 48, 0.45);
         }
 
-        .btn-auto {
+        .btn-take {
             border-color: rgba(229, 169, 59, 0.25);
             background: linear-gradient(135deg, rgba(229, 169, 59, 0.12), rgba(229, 169, 59, 0.03));
             color: var(--primary-gold);
         }
 
-        .btn-auto:active {
+        .btn-take:active {
             background: rgba(229, 169, 59, 0.22);
             border-color: rgba(229, 169, 59, 0.45);
         }
@@ -615,14 +648,14 @@ QString RemoteControlServer::getWebPageHtml() const {
             transition: all 0.25s ease;
         }
 
-        .clip-item.active-a {
-            border-color: var(--deck-a-color);
+        .clip-item.active-live {
+            border-color: var(--deck-live-color);
             background: rgba(255, 59, 48, 0.06);
             box-shadow: 0 0 10px rgba(255, 59, 48, 0.08);
         }
 
-        .clip-item.active-b {
-            border-color: var(--deck-b-color);
+        .clip-item.active-staging {
+            border-color: var(--deck-staging-color);
             background: rgba(52, 199, 89, 0.06);
             box-shadow: 0 0 10px rgba(52, 199, 89, 0.08);
         }
@@ -637,12 +670,12 @@ QString RemoteControlServer::getWebPageHtml() const {
             flex-grow: 1;
         }
 
-        .clip-item.active-a .clip-title {
+        .clip-item.active-live .clip-title {
             color: #ff453a;
             font-weight: 600;
         }
 
-        .clip-item.active-b .clip-title {
+        .clip-item.active-staging .clip-title {
             color: #30d158;
             font-weight: 600;
         }
@@ -670,25 +703,25 @@ QString RemoteControlServer::getWebPageHtml() const {
             transform: scale(0.9);
         }
 
-        .clip-select-btn.btn-to-a {
+        .clip-select-btn.btn-to-live {
             border-color: rgba(255, 59, 48, 0.2);
         }
 
-        .clip-select-btn.btn-to-a.active {
-            background: var(--deck-a-color);
+        .clip-select-btn.btn-to-live.active {
+            background: var(--deck-live-color);
             color: white;
-            border-color: var(--deck-a-color);
+            border-color: var(--deck-live-color);
             box-shadow: 0 2px 8px rgba(255, 59, 48, 0.4);
         }
 
-        .clip-select-btn.btn-to-b {
+        .clip-select-btn.btn-to-staging {
             border-color: rgba(52, 199, 89, 0.2);
         }
 
-        .clip-select-btn.btn-to-b.active {
-            background: var(--deck-b-color);
+        .clip-select-btn.btn-to-staging.active {
+            background: var(--deck-staging-color);
             color: white;
-            border-color: var(--deck-b-color);
+            border-color: var(--deck-staging-color);
             box-shadow: 0 2px 8px rgba(52, 199, 89, 0.4);
         }
 
@@ -717,20 +750,20 @@ QString RemoteControlServer::getWebPageHtml() const {
         </header>
 
         <section class="deck-monitors">
-            <div class="deck-card deck-a">
-                <div class="deck-label">Deck A (PGM)</div>
-                <div id="deckAClip" class="deck-clip-name">No Clip Loaded</div>
+            <div class="deck-card deck-staging">
+                <div class="deck-label">Staging</div>
+                <div id="stagingClip" class="deck-clip-name">No Clip Loaded</div>
                 <div class="deck-controls">
-                    <button id="playBtnA" class="play-toggle" onclick="togglePlay('A')">
+                    <button id="stagingBtn" class="play-toggle" onclick="togglePlay('staging')">
                         <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                     </button>
                 </div>
             </div>
-            <div class="deck-card deck-b">
-                <div class="deck-label">Deck B (PVW)</div>
-                <div id="deckBClip" class="deck-clip-name">No Clip Loaded</div>
+            <div class="deck-card deck-live">
+                <div class="deck-label">Live</div>
+                <div id="liveClip" class="deck-clip-name">No Clip Loaded</div>
                 <div class="deck-controls">
-                    <button id="playBtnB" class="play-toggle" onclick="togglePlay('B')">
+                    <button id="liveBtn" class="play-toggle" onclick="togglePlay('live')">
                         <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                     </button>
                 </div>
@@ -740,9 +773,9 @@ QString RemoteControlServer::getWebPageHtml() const {
         <main class="main-panel">
             <div class="fader-container">
                 <div class="fader-labels">
-                    <span>DECK A</span>
-                    <span id="mixPct">A: 100%</span>
-                    <span>DECK B</span>
+                    <span>LIVE</span>
+                    <span id="mixPct">Live</span>
+                    <span>STAGING</span>
                 </div>
                 <div class="fader-slider-wrap">
                     <input type="range" id="faderSlider" class="fader-slider" min="0" max="100" value="0">
@@ -751,7 +784,7 @@ QString RemoteControlServer::getWebPageHtml() const {
             
             <div class="action-buttons">
                 <button id="cutBtn" class="btn btn-cut">CUT</button>
-                <button id="autoBtn" class="btn btn-auto">AUTO</button>
+                <button id="takeBtn" class="btn btn-take">TAKE</button>
             </div>
 
             <div>
@@ -781,16 +814,16 @@ QString RemoteControlServer::getWebPageHtml() const {
         const slider = document.getElementById('faderSlider');
         const mixPct = document.getElementById('mixPct');
         const cutBtn = document.getElementById('cutBtn');
-        const autoBtn = document.getElementById('autoBtn');
+        const takeBtn = document.getElementById('takeBtn');
         const transitionCombo = document.getElementById('transitionCombo');
         const durationSpin = document.getElementById('durationSpin');
         
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
-        const deckAClip = document.getElementById('deckAClip');
-        const deckBClip = document.getElementById('deckBClip');
-        const playBtnA = document.getElementById('playBtnA');
-        const playBtnB = document.getElementById('playBtnB');
+        const liveClip = document.getElementById('liveClip');
+        const stagingClip = document.getElementById('stagingClip');
+        const liveBtn = document.getElementById('liveBtn');
+        const stagingBtn = document.getElementById('stagingBtn');
         const clipsList = document.getElementById('clipsList');
         
         let isDragging = false;
@@ -803,11 +836,11 @@ QString RemoteControlServer::getWebPageHtml() const {
 
         function updateFaderUI(val) {
             if (val === 0) {
-                mixPct.textContent = 'Deck A (100%)';
+                mixPct.textContent = 'Live';
             } else if (val === 100) {
-                mixPct.textContent = 'Deck B (100%)';
+                mixPct.textContent = 'Staging';
             } else {
-                mixPct.textContent = `A: ${100 - val}% | B: ${val}%`;
+                mixPct.textContent = `Live ${100 - val}% | Staging ${val}%`;
             }
         }
 
@@ -831,10 +864,10 @@ QString RemoteControlServer::getWebPageHtml() const {
         slider.addEventListener('touchend', () => { isDragging = false; });
 
         cutBtn.addEventListener('click', () => sendCommand('/api/cut'));
-        autoBtn.addEventListener('click', () => sendCommand('/api/auto'));
+        takeBtn.addEventListener('click', () => sendCommand('/api/take'));
 
         function togglePlay(deck) {
-            sendCommand(`/api/togglePlay${deck}`);
+            sendCommand(`/api/${deck}/toggle`);
         }
 
         function setTransitionMode(index) {
@@ -845,8 +878,8 @@ QString RemoteControlServer::getWebPageHtml() const {
             sendCommand(`/api/setDuration?val=${val}`);
         }
 
-        function selectClip(id, deck) {
-            sendCommand(`/api/select${deck}?id=${id}`);
+        function stageClip(id) {
+            sendCommand(`/api/stage?id=${id}`);
         }
 
         async function pollStatus() {
@@ -887,34 +920,34 @@ QString RemoteControlServer::getWebPageHtml() const {
                     }
                 }
 
-                let clipAName = "No Clip Loaded";
-                let clipBName = "No Clip Loaded";
+                let liveName = "No Clip Loaded";
+                let stagingName = "No Clip Loaded";
                 
                 if (data.clips) {
-                    const activeAClip = data.clips.find(c => c.id === data.activeA);
-                    if (activeAClip) clipAName = activeAClip.name;
+                    const liveEntry = data.clips.find(c => c.id === data.live);
+                    if (liveEntry) liveName = liveEntry.name;
                     
-                    const activeBClip = data.clips.find(c => c.id === data.activeB);
-                    if (activeBClip) clipBName = activeBClip.name;
+                    const stagingEntry = data.clips.find(c => c.id === data.staging);
+                    if (stagingEntry) stagingName = stagingEntry.name;
                 }
                 
-                deckAClip.textContent = clipAName;
-                deckBClip.textContent = clipBName;
+                liveClip.textContent = liveName;
+                stagingClip.textContent = stagingName;
 
-                if (data.isPlayingA) {
-                    playBtnA.classList.add('playing');
-                    playBtnA.innerHTML = pauseIcon;
+                if (data.isPlayingLive) {
+                    liveBtn.classList.add('playing');
+                    liveBtn.innerHTML = pauseIcon;
                 } else {
-                    playBtnA.classList.remove('playing');
-                    playBtnA.innerHTML = playIcon;
+                    liveBtn.classList.remove('playing');
+                    liveBtn.innerHTML = playIcon;
                 }
 
-                if (data.isPlayingB) {
-                    playBtnB.classList.add('playing');
-                    playBtnB.innerHTML = pauseIcon;
+                if (data.isPlayingStaging) {
+                    stagingBtn.classList.add('playing');
+                    stagingBtn.innerHTML = pauseIcon;
                 } else {
-                    playBtnB.classList.remove('playing');
-                    playBtnB.innerHTML = playIcon;
+                    stagingBtn.classList.remove('playing');
+                    stagingBtn.innerHTML = playIcon;
                 }
 
                 if (data.clips) {
@@ -927,7 +960,7 @@ QString RemoteControlServer::getWebPageHtml() const {
                             clipsList.innerHTML = "";
                             data.clips.forEach(clip => {
                                 const div = document.createElement('div');
-                                div.className = `clip-item ${clip.activeA ? 'active-a' : ''} ${clip.activeB ? 'active-b' : ''}`;
+                                div.className = `clip-item ${clip.onLive ? 'active-live' : ''} ${clip.onStaging ? 'active-staging' : ''}`;
                                 
                                 const title = document.createElement('span');
                                 title.className = 'clip-title';
@@ -937,17 +970,11 @@ QString RemoteControlServer::getWebPageHtml() const {
                                 const btnGroup = document.createElement('div');
                                 btnGroup.className = 'clip-btn-group';
                                 
-                                const btnA = document.createElement('button');
-                                btnA.className = `clip-select-btn btn-to-a ${clip.activeA ? 'active' : ''}`;
-                                btnA.textContent = "A";
-                                btnA.onclick = () => selectClip(clip.id, 'A');
-                                btnGroup.appendChild(btnA);
-
-                                const btnB = document.createElement('button');
-                                btnB.className = `clip-select-btn btn-to-b ${clip.activeB ? 'active' : ''}`;
-                                btnB.textContent = "B";
-                                btnB.onclick = () => selectClip(clip.id, 'B');
-                                btnGroup.appendChild(btnB);
+                                const btnStage = document.createElement('button');
+                                btnStage.className = `clip-select-btn btn-to-staging ${clip.onStaging ? 'active' : ''}`;
+                                btnStage.textContent = "Stage";
+                                btnStage.onclick = () => stageClip(clip.id);
+                                btnGroup.appendChild(btnStage);
 
                                 div.appendChild(btnGroup);
                                 clipsList.appendChild(div);

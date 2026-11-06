@@ -16,7 +16,7 @@
 class FakeProgramFrameSource : public ProgramFrameSource {
 public:
     QImage programFrame() const override { return m_program; }
-    QImage deckProgramFrame(bool deckA) const override { return deckA ? m_deckA : m_deckB; }
+    QImage deckProgramFrame(Deck deck) const override { return deck == Deck::Live ? m_live : m_staging; }
     void setProgramFrameConsumerCount(int count) override { m_programConsumers = count; }
     void setDeckFrameConsumerCount(int count) override { m_deckConsumers = count; }
     void captureOutputFrameNow() override { ++m_captureCalls; }
@@ -27,9 +27,9 @@ public:
 
     QImage m_program = TestSupport::makeSolidImage(Compositor::programWidth(),
                                                    Compositor::programHeight(), Qt::red);
-    QImage m_deckA   = TestSupport::makeSolidImage(Compositor::programWidth(),
+    QImage m_live    = TestSupport::makeSolidImage(Compositor::programWidth(),
                                                    Compositor::programHeight(), Qt::green);
-    QImage m_deckB   = TestSupport::makeSolidImage(Compositor::programWidth(),
+    QImage m_staging = TestSupport::makeSolidImage(Compositor::programWidth(),
                                                    Compositor::programHeight(), Qt::blue);
     int m_programConsumers = 0;
     int m_deckConsumers    = 0;
@@ -134,8 +134,8 @@ private slots:
 
     void programRecorder_pathHelpers() {
         const QString path = ProgramRecorder::makeOutputPath(
-            QStringLiteral("/tmp/out"), QStringLiteral("2024-01-01"), QStringLiteral("deckA"));
-        QCOMPARE(path, QStringLiteral("/tmp/out/2024-01-01_deckA.mkv"));
+            QStringLiteral("/tmp/out"), QStringLiteral("2024-01-01"), QStringLiteral("live"));
+        QCOMPARE(path, QStringLiteral("/tmp/out/2024-01-01_live.mkv"));
 
         const QString programOnly = ProgramRecorder::makeOutputPath(
             QStringLiteral("/tmp/out"), QStringLiteral("stamp"), QString());
@@ -249,16 +249,16 @@ private slots:
         QVERIFY(dir.isValid());
         hub.setOutputDir(dir.path());
 
-        QVERIFY(hub.startDeckAAudioRecording());
-        QVERIFY(hub.isTrackRecording(OutputHub::TrackKind::DeckAAudio));
+        QVERIFY(hub.startDeckLiveAudioRecording());
+        QVERIFY(hub.isTrackRecording(OutputHub::TrackKind::LiveAudio));
 
         QByteArray pcm(ProgramAudioRecorder::kChannels * static_cast<int>(sizeof(float)) * 1024, Qt::Uninitialized);
         hub.submitDeckAudioChunk(0, 42, pcm);
 
-        hub.stopDeckAAudioRecording();
-        QVERIFY(!hub.isTrackRecording(OutputHub::TrackKind::DeckAAudio));
+        hub.stopDeckLiveAudioRecording();
+        QVERIFY(!hub.isTrackRecording(OutputHub::TrackKind::LiveAudio));
 
-        const QStringList files = QDir(dir.path()).entryList({QStringLiteral("*deckA*.flac")}, QDir::Files);
+        const QStringList files = QDir(dir.path()).entryList({QStringLiteral("*live*.flac")}, QDir::Files);
         QVERIFY(!files.isEmpty());
     }
 
@@ -299,7 +299,7 @@ private slots:
         hub.setActiveDeckNodes(42, 0);
 
         QVERIFY(hub.startProgramRecording());
-        QVERIFY(hub.startDeckARecording());
+        QVERIFY(hub.startDeckLiveRecording());
         QVERIFY(hub.startSourceRecording(42, QStringLiteral("cam")));
 
         hub.stopAllRecording();

@@ -183,18 +183,18 @@ void SessionManager::relativizeGraphPaths(QJsonObject &graph, const QDir &sessio
     graph["inputNodes"] = nodes;
 }
 
-QJsonObject SessionManager::buildJson(int crossfader, int transitionMode,
+QJsonObject SessionManager::buildJson(int transitionProgress, int transitionMode,
                                       double transitionDuration,
-                                      NodeId activeNodeA, NodeId activeNodeB,
+                                      NodeId activeLive, NodeId activeStaging,
                                       const QJsonArray &hotkeys,
                                       const QString &sessionFilePath) const {
     QJsonObject root;
-    root["version"]            = 1;
-    root["crossfader"]         = crossfader;
+    root["version"]            = kFormatVersion;
+    root["transitionProgress"] = transitionProgress;
     root["transitionMode"]     = transitionMode;
     root["transitionDuration"] = transitionDuration;
-    root["activeNodeA"]        = (qint64)activeNodeA;
-    root["activeNodeB"]        = (qint64)activeNodeB;
+    root["activeNodeLive"]     = (qint64)activeLive;
+    root["activeNodeStaging"]  = (qint64)activeStaging;
     root["outputResolution"]   = QJsonObject{{"w", Compositor::programWidth()},
                                              {"h", Compositor::programHeight()}};
     switch (Compositor::outputScaleMode()) {
@@ -269,18 +269,21 @@ bool SessionManager::loadFromFile(const QString &path) {
         return false;
     }
     const QJsonObject root = doc.object();
-    if (root["version"].toInt() != 1) {
-        emit loadFailed(QStringLiteral("Unsupported session version."));
+    if (root["version"].toInt() != kFormatVersion) {
+        emit loadFailed(tr("This project was saved by an older version of Prism and cannot be opened."));
         return false;
     }
 
     m_clipManager->clear();
-    m_compositor->setSourceA(nullptr);
-    m_compositor->setSourceB(nullptr);
-    m_compositor->setNodeChainA({});
-    m_compositor->setNodeChainB({});
+    m_compositor->setSourceLive(nullptr);
+    m_compositor->setSourceStaging(nullptr);
+    m_compositor->setNodeChainLive({});
+    m_compositor->setNodeChainStaging({});
 
-    m_graph->fromJson(root["graph"].toObject());
+    if (!m_graph->fromJson(root["graph"].toObject())) {
+        emit loadFailed(tr("This project was saved by an older version of Prism and cannot be opened."));
+        return false;
+    }
 
     AssetPathResolver::Options relinkOpts;
     const QString savedSessionDir = root["sessionDir"].toString();
@@ -337,11 +340,11 @@ bool SessionManager::loadFromFile(const QString &path) {
     m_restoredHotkeys = root["hotkeys"].toArray();
 
     // Restore UI values ───────────────────────────────────────────────────────
-    m_restoredCrossfader         = root["crossfader"].toInt(50);
+    m_restoredTransitionProgress = root["transitionProgress"].toInt(0);
     m_restoredTransitionMode     = root["transitionMode"].toInt(0);
     m_restoredTransitionDuration = root["transitionDuration"].toDouble(1.0);
-    m_restoredActiveNodeA        = (NodeId)root["activeNodeA"].toInteger();
-    m_restoredActiveNodeB        = (NodeId)root["activeNodeB"].toInteger();
+    m_restoredActiveNodeLive     = (NodeId)root["activeNodeLive"].toInteger();
+    m_restoredActiveNodeStaging  = (NodeId)root["activeNodeStaging"].toInteger();
 
     const QJsonObject res = root["outputResolution"].toObject();
     const int resW = res["w"].toInt();

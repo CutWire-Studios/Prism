@@ -5,7 +5,7 @@
 #include <QColor>
 
 // Lightweight description of any media source that a ClipCard can hold.
-// MainWindow reads this when an A/B button is clicked and creates the
+// MainWindow reads this when a Stage button is clicked and creates the
 // appropriate MediaSource subclass on the fly.
 
 struct SourceDescriptor {

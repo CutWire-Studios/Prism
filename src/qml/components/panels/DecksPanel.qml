@@ -15,12 +15,12 @@ PanelFrame {
         DeckView {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            deckA: true
+            staging: true
         }
         DeckView {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            deckA: false
+            staging: false
         }
     }
 }

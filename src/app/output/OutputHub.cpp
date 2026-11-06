@@ -19,10 +19,10 @@ OutputHub::OutputHub(QObject *parent)
     , m_virtualCameraSink(std::make_unique<VirtualCameraProgramSink>())
     , m_programRecorder(std::make_unique<ProgramRecorder>(this))
     , m_programAudioRecorder(std::make_unique<ProgramAudioRecorder>(this))
-    , m_deckAAudioRecorder(std::make_unique<ProgramAudioRecorder>(this))
-    , m_deckBAudioRecorder(std::make_unique<ProgramAudioRecorder>(this))
-    , m_deckARecorder(std::make_unique<ProgramRecorder>(this))
-    , m_deckBRecorder(std::make_unique<ProgramRecorder>(this))
+    , m_liveAudioRecorder(std::make_unique<ProgramAudioRecorder>(this))
+    , m_stagingAudioRecorder(std::make_unique<ProgramAudioRecorder>(this))
+    , m_liveRecorder(std::make_unique<ProgramRecorder>(this))
+    , m_stagingRecorder(std::make_unique<ProgramRecorder>(this))
     , m_outputDir(ProgramRecorder::defaultOutputDir())
     ,     m_progressTimer(new QTimer(this))
 {
@@ -34,8 +34,8 @@ OutputHub::OutputHub(QObject *parent)
         connect(rec, &ProgramRecorder::errorOccurred, this, &OutputHub::recordingError);
     };
     connectRecorder(m_programRecorder.get());
-    connectRecorder(m_deckARecorder.get());
-    connectRecorder(m_deckBRecorder.get());
+    connectRecorder(m_liveRecorder.get());
+    connectRecorder(m_stagingRecorder.get());
     if (m_programAudioRecorder) {
         connect(m_programAudioRecorder.get(), &ProgramAudioRecorder::errorOccurred,
                 this, &OutputHub::recordingError);
@@ -44,8 +44,8 @@ OutputHub::OutputHub(QObject *parent)
         if (!rec) return;
         connect(rec, &ProgramAudioRecorder::errorOccurred, this, &OutputHub::recordingError);
     };
-    connectAudioRecorder(m_deckAAudioRecorder.get());
-    connectAudioRecorder(m_deckBAudioRecorder.get());
+    connectAudioRecorder(m_liveAudioRecorder.get());
+    connectAudioRecorder(m_stagingAudioRecorder.get());
 
     m_dispatchThread = QThread::create([this] { dispatchLoop(); });
     m_dispatchThread->setObjectName(QStringLiteral("OutputDispatch"));
@@ -68,7 +68,7 @@ OutputHub::~OutputHub() {
 
 void OutputHub::dispatchLoop() {
     for (;;) {
-        QImage program, deckA, deckB;
+        QImage program, live, staging;
         {
             QMutexLocker lk(&m_mailboxMutex);
             while (!m_frameDirty && !m_dispatchStop)
@@ -76,15 +76,15 @@ void OutputHub::dispatchLoop() {
             if (m_dispatchStop)
                 return;
             program = std::move(m_pendingProgram);
-            deckA   = std::move(m_pendingDeckA);
-            deckB   = std::move(m_pendingDeckB);
+            live   = std::move(m_pendingLive);
+            staging   = std::move(m_pendingStaging);
             m_pendingProgram = QImage();
-            m_pendingDeckA   = QImage();
-            m_pendingDeckB   = QImage();
+            m_pendingLive   = QImage();
+            m_pendingStaging   = QImage();
             m_frameDirty = false;
         }
         QMutexLocker sink(&m_sinkMutex);
-        distributeFrames(program, deckA, deckB);
+        distributeFrames(program, live, staging);
     }
 }
 
@@ -92,25 +92,25 @@ void OutputHub::dispatchLoop() {
 // video recorder stops, so the last captured frame (or the only one, in a short take) is written
 // rather than dropped with the mailbox.
 void OutputHub::deliverPendingFrames() {
-    QImage program, deckA, deckB;
+    QImage program, live, staging;
     {
         QMutexLocker lk(&m_mailboxMutex);
         if (!m_frameDirty)
             return;
         program = std::move(m_pendingProgram);
-        deckA   = std::move(m_pendingDeckA);
-        deckB   = std::move(m_pendingDeckB);
+        live   = std::move(m_pendingLive);
+        staging   = std::move(m_pendingStaging);
         m_pendingProgram = QImage();
-        m_pendingDeckA   = QImage();
-        m_pendingDeckB   = QImage();
+        m_pendingLive   = QImage();
+        m_pendingStaging   = QImage();
         m_frameDirty = false;
     }
-    distributeFrames(program, deckA, deckB);
+    distributeFrames(program, live, staging);
 }
 
 void OutputHub::distributeFrames(const QImage &programFrame,
-                                 const QImage &deckAFrame,
-                                 const QImage &deckBFrame) {
+                                 const QImage &liveFrame,
+                                 const QImage &stagingFrame) {
     if (m_ndiEnabled && m_ndiSink && m_ndiSink->isActive() && !programFrame.isNull())
         m_ndiSink->submitFrame(programFrame);
 
@@ -121,22 +121,22 @@ void OutputHub::distributeFrames(const QImage &programFrame,
     if (m_programRecorder && m_programRecorder->isRecording() && !programFrame.isNull())
         m_programRecorder->submitFrame(programFrame);
 
-    if (m_deckARecorder && m_deckARecorder->isRecording() && !deckAFrame.isNull())
-        m_deckARecorder->submitFrame(deckAFrame);
+    if (m_liveRecorder && m_liveRecorder->isRecording() && !liveFrame.isNull())
+        m_liveRecorder->submitFrame(liveFrame);
 
-    if (m_deckBRecorder && m_deckBRecorder->isRecording() && !deckBFrame.isNull())
-        m_deckBRecorder->submitFrame(deckBFrame);
+    if (m_stagingRecorder && m_stagingRecorder->isRecording() && !stagingFrame.isNull())
+        m_stagingRecorder->submitFrame(stagingFrame);
 
     for (const auto &entry : m_sourceRecorders) {
         const NodeId nodeId = entry.first;
         ProgramRecorder *rec = entry.second.get();
         if (!rec || !rec->isRecording()) continue;
 
-        const bool onA = nodeId != 0 && nodeId == m_activeDeckA;
-        const bool onB = nodeId != 0 && nodeId == m_activeDeckB;
-        if (!onA && !onB) continue;
+        const bool onLive = nodeId != 0 && nodeId == m_activeLive;
+        const bool onStaging = nodeId != 0 && nodeId == m_activeStaging;
+        if (!onLive && !onStaging) continue;
 
-        const QImage &srcFrame = onA ? deckAFrame : deckBFrame;
+        const QImage &srcFrame = onLive ? liveFrame : stagingFrame;
         if (!srcFrame.isNull())
             rec->submitFrame(srcFrame);
     }
@@ -167,10 +167,10 @@ Compositor *OutputHub::programSource() const {
     return m_compositor.data();
 }
 
-void OutputHub::setActiveDeckNodes(NodeId deckA, NodeId deckB) {
+void OutputHub::setActiveDeckNodes(NodeId live, NodeId staging) {
     QMutexLocker locker(&m_sinkMutex);
-    m_activeDeckA = deckA;
-    m_activeDeckB = deckB;
+    m_activeLive = live;
+    m_activeStaging = staging;
 }
 
 void OutputHub::setQmlEngine(QQmlEngine *engine) {
@@ -290,11 +290,11 @@ bool OutputHub::setVirtualCameraEnabled(bool enabled, const QString &devicePath)
 ProgramRecorder *OutputHub::recorderFor(TrackKind kind, NodeId sourceNodeId) const {
     switch (kind) {
     case TrackKind::Program: return m_programRecorder.get();
-    case TrackKind::DeckA:   return m_deckARecorder.get();
-    case TrackKind::DeckB:   return m_deckBRecorder.get();
+    case TrackKind::Live:   return m_liveRecorder.get();
+    case TrackKind::Staging:   return m_stagingRecorder.get();
     case TrackKind::ProgramAudio:
-    case TrackKind::DeckAAudio:
-    case TrackKind::DeckBAudio:
+    case TrackKind::LiveAudio:
+    case TrackKind::StagingAudio:
     case TrackKind::ClipAudio:
         return nullptr;
     case TrackKind::Source: {
@@ -308,8 +308,8 @@ ProgramRecorder *OutputHub::recorderFor(TrackKind kind, NodeId sourceNodeId) con
 ProgramAudioRecorder *OutputHub::audioRecorderFor(TrackKind kind, NodeId sourceNodeId) const {
     switch (kind) {
     case TrackKind::ProgramAudio: return m_programAudioRecorder.get();
-    case TrackKind::DeckAAudio:   return m_deckAAudioRecorder.get();
-    case TrackKind::DeckBAudio:   return m_deckBAudioRecorder.get();
+    case TrackKind::LiveAudio:   return m_liveAudioRecorder.get();
+    case TrackKind::StagingAudio:   return m_stagingAudioRecorder.get();
     case TrackKind::ClipAudio: {
         const auto it = m_clipAudioRecorders.find(sourceNodeId);
         return it != m_clipAudioRecorders.end() ? it->second.get() : nullptr;
@@ -322,13 +322,13 @@ ProgramAudioRecorder *OutputHub::audioRecorderFor(TrackKind kind, NodeId sourceN
 bool OutputHub::isRecording() const {
     if (m_programRecorder && m_programRecorder->isRecording()) return true;
     if (m_programAudioRecorder && m_programAudioRecorder->isRecording()) return true;
-    if (m_deckAAudioRecorder && m_deckAAudioRecorder->isRecording()) return true;
-    if (m_deckBAudioRecorder && m_deckBAudioRecorder->isRecording()) return true;
+    if (m_liveAudioRecorder && m_liveAudioRecorder->isRecording()) return true;
+    if (m_stagingAudioRecorder && m_stagingAudioRecorder->isRecording()) return true;
     for (const auto &entry : m_clipAudioRecorders) {
         if (entry.second && entry.second->isRecording()) return true;
     }
-    if (m_deckARecorder && m_deckARecorder->isRecording()) return true;
-    if (m_deckBRecorder && m_deckBRecorder->isRecording()) return true;
+    if (m_liveRecorder && m_liveRecorder->isRecording()) return true;
+    if (m_stagingRecorder && m_stagingRecorder->isRecording()) return true;
     for (const auto &entry : m_sourceRecorders) {
         if (entry.second && entry.second->isRecording()) return true;
     }
@@ -360,14 +360,14 @@ qint64 OutputHub::longestActiveRecordingMs() const {
             maxMs = qMax(maxMs, rec->recordingDurationMs());
     };
     consider(m_programRecorder.get());
-    consider(m_deckARecorder.get());
-    consider(m_deckBRecorder.get());
+    consider(m_liveRecorder.get());
+    consider(m_stagingRecorder.get());
     if (m_programAudioRecorder && m_programAudioRecorder->isRecording())
         maxMs = qMax(maxMs, m_programAudioRecorder->recordingDurationMs());
-    if (m_deckAAudioRecorder && m_deckAAudioRecorder->isRecording())
-        maxMs = qMax(maxMs, m_deckAAudioRecorder->recordingDurationMs());
-    if (m_deckBAudioRecorder && m_deckBAudioRecorder->isRecording())
-        maxMs = qMax(maxMs, m_deckBAudioRecorder->recordingDurationMs());
+    if (m_liveAudioRecorder && m_liveAudioRecorder->isRecording())
+        maxMs = qMax(maxMs, m_liveAudioRecorder->recordingDurationMs());
+    if (m_stagingAudioRecorder && m_stagingAudioRecorder->isRecording())
+        maxMs = qMax(maxMs, m_stagingAudioRecorder->recordingDurationMs());
     for (const auto &entry : m_clipAudioRecorders) {
         if (entry.second && entry.second->isRecording())
             maxMs = qMax(maxMs, entry.second->recordingDurationMs());
@@ -383,18 +383,18 @@ QStringList OutputHub::activeRecordingTrackLabels() const {
         labels << tr("Program");
     if (m_programAudioRecorder && m_programAudioRecorder->isRecording())
         labels << tr("Program audio");
-    if (m_deckAAudioRecorder && m_deckAAudioRecorder->isRecording())
-        labels << tr("Deck A audio");
-    if (m_deckBAudioRecorder && m_deckBAudioRecorder->isRecording())
-        labels << tr("Deck B audio");
+    if (m_liveAudioRecorder && m_liveAudioRecorder->isRecording())
+        labels << tr("Live audio");
+    if (m_stagingAudioRecorder && m_stagingAudioRecorder->isRecording())
+        labels << tr("Staging audio");
     for (const auto &entry : m_clipAudioRecorders) {
         if (entry.second && entry.second->isRecording())
             labels << entry.second->trackLabel();
     }
-    if (m_deckARecorder && m_deckARecorder->isRecording())
-        labels << tr("Deck A");
-    if (m_deckBRecorder && m_deckBRecorder->isRecording())
-        labels << tr("Deck B");
+    if (m_liveRecorder && m_liveRecorder->isRecording())
+        labels << tr("Live");
+    if (m_stagingRecorder && m_stagingRecorder->isRecording())
+        labels << tr("Staging");
     for (const auto &entry : m_sourceRecorders) {
         if (entry.second && entry.second->isRecording())
             labels << entry.second->trackLabel();
@@ -449,14 +449,14 @@ void OutputHub::stopProgramRecording() {
     emit recordingStateChanged();
 }
 
-bool OutputHub::startDeckARecording() {
+bool OutputHub::startDeckLiveRecording() {
     QMutexLocker locker(&m_sinkMutex);
-    if (!m_frameSource || m_deckARecorder->isRecording()) return m_deckARecorder->isRecording();
-    const QString path = makeTrackOutputPath(QStringLiteral("deckA"));
-    if (!m_deckARecorder->startRecording(path, tr("Deck A"), true,
+    if (!m_frameSource || m_liveRecorder->isRecording()) return m_liveRecorder->isRecording();
+    const QString path = makeTrackOutputPath(QStringLiteral("live"));
+    if (!m_liveRecorder->startRecording(path, tr("Live"), true,
                                      Compositor::programWidth(), Compositor::programHeight()))
         return false;
-    m_deckARecorder->addMarker(tr("Recording started"));
+    m_liveRecorder->addMarker(tr("Recording started"));
     syncFrameConsumers();
     if (m_frameSource)
         m_frameSource->captureOutputFrameNow();
@@ -465,24 +465,24 @@ bool OutputHub::startDeckARecording() {
     return true;
 }
 
-void OutputHub::stopDeckARecording() {
+void OutputHub::stopDeckLiveRecording() {
     QMutexLocker locker(&m_sinkMutex);
     deliverPendingFrames();
-    if (!m_deckARecorder->isRecording()) return;
-    m_deckARecorder->stopRecording();
+    if (!m_liveRecorder->isRecording()) return;
+    m_liveRecorder->stopRecording();
     syncFrameConsumers();
     maybeStopProgressTimer();
     emit recordingStateChanged();
 }
 
-bool OutputHub::startDeckBRecording() {
+bool OutputHub::startDeckStagingRecording() {
     QMutexLocker locker(&m_sinkMutex);
-    if (!m_frameSource || m_deckBRecorder->isRecording()) return m_deckBRecorder->isRecording();
-    const QString path = makeTrackOutputPath(QStringLiteral("deckB"));
-    if (!m_deckBRecorder->startRecording(path, tr("Deck B"), true,
+    if (!m_frameSource || m_stagingRecorder->isRecording()) return m_stagingRecorder->isRecording();
+    const QString path = makeTrackOutputPath(QStringLiteral("staging"));
+    if (!m_stagingRecorder->startRecording(path, tr("Staging"), true,
                                      Compositor::programWidth(), Compositor::programHeight()))
         return false;
-    m_deckBRecorder->addMarker(tr("Recording started"));
+    m_stagingRecorder->addMarker(tr("Recording started"));
     syncFrameConsumers();
     if (m_frameSource)
         m_frameSource->captureOutputFrameNow();
@@ -491,11 +491,11 @@ bool OutputHub::startDeckBRecording() {
     return true;
 }
 
-void OutputHub::stopDeckBRecording() {
+void OutputHub::stopDeckStagingRecording() {
     QMutexLocker locker(&m_sinkMutex);
     deliverPendingFrames();
-    if (!m_deckBRecorder->isRecording()) return;
-    m_deckBRecorder->stopRecording();
+    if (!m_stagingRecorder->isRecording()) return;
+    m_stagingRecorder->stopRecording();
     syncFrameConsumers();
     maybeStopProgressTimer();
     emit recordingStateChanged();
@@ -581,12 +581,12 @@ void OutputHub::submitDeckAudioChunk(int deckIndex, NodeId clipId, const QByteAr
     if (pcm.isEmpty() || (deckIndex != 0 && deckIndex != 1))
         return;
 
-    if (deckIndex == 0 && m_deckAAudioRecorder && m_deckAAudioRecorder->isRecording())
-        m_deckAAudioRecorder->submitPcm(pcm);
-    if (deckIndex == 1 && m_deckBAudioRecorder && m_deckBAudioRecorder->isRecording())
-        m_deckBAudioRecorder->submitPcm(pcm);
+    if (deckIndex == 0 && m_liveAudioRecorder && m_liveAudioRecorder->isRecording())
+        m_liveAudioRecorder->submitPcm(pcm);
+    if (deckIndex == 1 && m_stagingAudioRecorder && m_stagingAudioRecorder->isRecording())
+        m_stagingAudioRecorder->submitPcm(pcm);
 
-    const NodeId activeClip = deckIndex == 0 ? m_activeDeckA : m_activeDeckB;
+    const NodeId activeClip = deckIndex == 0 ? m_activeLive : m_activeStaging;
     if (activeClip == 0 || activeClip != clipId)
         return;
 
@@ -595,50 +595,50 @@ void OutputHub::submitDeckAudioChunk(int deckIndex, NodeId clipId, const QByteAr
         it->second->submitPcm(pcm);
 }
 
-bool OutputHub::startDeckAAudioRecording() {
+bool OutputHub::startDeckLiveAudioRecording() {
     QMutexLocker locker(&m_sinkMutex);
-    if (!m_deckAAudioRecorder || m_deckAAudioRecorder->isRecording())
-        return m_deckAAudioRecorder && m_deckAAudioRecorder->isRecording();
+    if (!m_liveAudioRecorder || m_liveAudioRecorder->isRecording())
+        return m_liveAudioRecorder && m_liveAudioRecorder->isRecording();
 
-    const QString path = makeAudioTrackOutputPath(QStringLiteral("deckA"));
-    if (!m_deckAAudioRecorder->startRecording(path, tr("Deck A audio"), true))
+    const QString path = makeAudioTrackOutputPath(QStringLiteral("live"));
+    if (!m_liveAudioRecorder->startRecording(path, tr("Live audio"), true))
         return false;
 
-    m_deckAAudioRecorder->addMarker(tr("Recording started"));
+    m_liveAudioRecorder->addMarker(tr("Recording started"));
     ensureProgressTimer();
     emit recordingStateChanged();
     return true;
 }
 
-void OutputHub::stopDeckAAudioRecording() {
+void OutputHub::stopDeckLiveAudioRecording() {
     QMutexLocker locker(&m_sinkMutex);
-    if (!m_deckAAudioRecorder || !m_deckAAudioRecorder->isRecording())
+    if (!m_liveAudioRecorder || !m_liveAudioRecorder->isRecording())
         return;
-    m_deckAAudioRecorder->stopRecording();
+    m_liveAudioRecorder->stopRecording();
     maybeStopProgressTimer();
     emit recordingStateChanged();
 }
 
-bool OutputHub::startDeckBAudioRecording() {
+bool OutputHub::startDeckStagingAudioRecording() {
     QMutexLocker locker(&m_sinkMutex);
-    if (!m_deckBAudioRecorder || m_deckBAudioRecorder->isRecording())
-        return m_deckBAudioRecorder && m_deckBAudioRecorder->isRecording();
+    if (!m_stagingAudioRecorder || m_stagingAudioRecorder->isRecording())
+        return m_stagingAudioRecorder && m_stagingAudioRecorder->isRecording();
 
-    const QString path = makeAudioTrackOutputPath(QStringLiteral("deckB"));
-    if (!m_deckBAudioRecorder->startRecording(path, tr("Deck B audio"), true))
+    const QString path = makeAudioTrackOutputPath(QStringLiteral("staging"));
+    if (!m_stagingAudioRecorder->startRecording(path, tr("Staging audio"), true))
         return false;
 
-    m_deckBAudioRecorder->addMarker(tr("Recording started"));
+    m_stagingAudioRecorder->addMarker(tr("Recording started"));
     ensureProgressTimer();
     emit recordingStateChanged();
     return true;
 }
 
-void OutputHub::stopDeckBAudioRecording() {
+void OutputHub::stopDeckStagingAudioRecording() {
     QMutexLocker locker(&m_sinkMutex);
-    if (!m_deckBAudioRecorder || !m_deckBAudioRecorder->isRecording())
+    if (!m_stagingAudioRecorder || !m_stagingAudioRecorder->isRecording())
         return;
-    m_deckBAudioRecorder->stopRecording();
+    m_stagingAudioRecorder->stopRecording();
     maybeStopProgressTimer();
     emit recordingStateChanged();
 }
@@ -683,19 +683,19 @@ void OutputHub::stopAllRecording() {
         m_programRecorder->stopRecording();
     if (m_programAudioRecorder && m_programAudioRecorder->isRecording())
         m_programAudioRecorder->stopRecording();
-    if (m_deckAAudioRecorder && m_deckAAudioRecorder->isRecording())
-        m_deckAAudioRecorder->stopRecording();
-    if (m_deckBAudioRecorder && m_deckBAudioRecorder->isRecording())
-        m_deckBAudioRecorder->stopRecording();
+    if (m_liveAudioRecorder && m_liveAudioRecorder->isRecording())
+        m_liveAudioRecorder->stopRecording();
+    if (m_stagingAudioRecorder && m_stagingAudioRecorder->isRecording())
+        m_stagingAudioRecorder->stopRecording();
     for (auto it = m_clipAudioRecorders.begin(); it != m_clipAudioRecorders.end(); ) {
         if (it->second && it->second->isRecording())
             it->second->stopRecording();
         it = m_clipAudioRecorders.erase(it);
     }
-    if (m_deckARecorder && m_deckARecorder->isRecording())
-        m_deckARecorder->stopRecording();
-    if (m_deckBRecorder && m_deckBRecorder->isRecording())
-        m_deckBRecorder->stopRecording();
+    if (m_liveRecorder && m_liveRecorder->isRecording())
+        m_liveRecorder->stopRecording();
+    if (m_stagingRecorder && m_stagingRecorder->isRecording())
+        m_stagingRecorder->stopRecording();
     for (auto it = m_sourceRecorders.begin(); it != m_sourceRecorders.end(); ) {
         if (it->second && it->second->isRecording())
             it->second->stopRecording();
@@ -714,8 +714,8 @@ void OutputHub::addRecordingMarker(const QString &label) {
             rec->addMarker(label);
     };
     mark(m_programRecorder.get());
-    mark(m_deckARecorder.get());
-    mark(m_deckBRecorder.get());
+    mark(m_liveRecorder.get());
+    mark(m_stagingRecorder.get());
     for (auto &entry : m_sourceRecorders)
         mark(entry.second.get());
     auto markAudio = [&](ProgramAudioRecorder *rec) {
@@ -723,8 +723,8 @@ void OutputHub::addRecordingMarker(const QString &label) {
             rec->addMarker(label);
     };
     markAudio(m_programAudioRecorder.get());
-    markAudio(m_deckAAudioRecorder.get());
-    markAudio(m_deckBAudioRecorder.get());
+    markAudio(m_liveAudioRecorder.get());
+    markAudio(m_stagingAudioRecorder.get());
     for (auto &entry : m_clipAudioRecorders)
         markAudio(entry.second.get());
 }
@@ -748,15 +748,15 @@ void OutputHub::onProgramFrameReady() {
     // GL readback happens here on the GUI thread (it must own the GL context).
     const QImage programFrame = m_frameSource->programFrame();
     const bool needDeck = m_needDeckReadback.load(std::memory_order_relaxed);
-    const QImage deckAFrame = needDeck ? m_frameSource->deckProgramFrame(true)  : QImage();
-    const QImage deckBFrame = needDeck ? m_frameSource->deckProgramFrame(false) : QImage();
+    const QImage liveFrame = needDeck ? m_frameSource->deckProgramFrame(Deck::Live)    : QImage();
+    const QImage stagingFrame = needDeck ? m_frameSource->deckProgramFrame(Deck::Staging) : QImage();
 
     // Hand the heavy sinks (NDI / virtual camera / recorders) to the dispatch
     // thread. Keep only the most recent frame set (drop-old) to stay realtime.
     QMutexLocker lk(&m_mailboxMutex);
     m_pendingProgram = programFrame;
-    m_pendingDeckA   = deckAFrame;
-    m_pendingDeckB   = deckBFrame;
+    m_pendingLive   = liveFrame;
+    m_pendingStaging   = stagingFrame;
     m_frameDirty = true;
     m_mailboxCv.wakeOne();
 }
@@ -795,8 +795,8 @@ int OutputHub::activeFrameConsumerCount() const {
 }
 
 bool OutputHub::needsDeckFrameReadback() const {
-    if (m_deckARecorder && m_deckARecorder->isRecording()) return true;
-    if (m_deckBRecorder && m_deckBRecorder->isRecording()) return true;
+    if (m_liveRecorder && m_liveRecorder->isRecording()) return true;
+    if (m_stagingRecorder && m_stagingRecorder->isRecording()) return true;
     for (const auto &entry : m_sourceRecorders) {
         if (entry.second && entry.second->isRecording()) return true;
     }

@@ -828,18 +828,18 @@ void GraphRuntime::syncAudioScriptNode(NodeId scriptNodeId, double playbackTime,
     sn->setAudioSyncState(playbackTime, playing, speed);
 }
 
-void GraphRuntime::syncAllAudioScripts(NodeId deckAClip, double timeA, bool playingA, double speedA,
-                                       NodeId deckBClip, double timeB, bool playingB, double speedB) {
+void GraphRuntime::syncAllAudioScripts(NodeId liveClip, double timeLive, bool playingLive, double speedLive,
+                                       NodeId stagingClip, double timeStaging, bool playingStaging, double speedStaging) {
     QVector<NodeId> ids;
     for (auto &[id, sn] : d->scripts)
         if (sn->type == NT::AudioScript)
             ids.append(id);
     for (NodeId id : ids) {
         const NodeId clip = m_graph->audioSourceNodeIdForAudioScript(id);
-        if (clip != 0 && clip == deckAClip)
-            syncAudioScriptNode(id, timeA, playingA, speedA);
-        else if (clip != 0 && clip == deckBClip)
-            syncAudioScriptNode(id, timeB, playingB, speedB);
+        if (clip != 0 && clip == liveClip)
+            syncAudioScriptNode(id, timeLive, playingLive, speedLive);
+        else if (clip != 0 && clip == stagingClip)
+            syncAudioScriptNode(id, timeStaging, playingStaging, speedStaging);
         else
             syncAudioScriptNode(id, 0.0, false, 1.0);
     }

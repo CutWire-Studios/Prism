@@ -59,30 +59,30 @@ QList<FrameCaptureHelper::LayerRef> FrameCaptureHelper::enumerateLayers(
     if (!output || !graph || !decks)
         return layers;
 
-    layers.append({LayerKind::Program, false, -1, 0,
+    layers.append({LayerKind::Program, Deck::Live, -1, 0,
                    QStringLiteral("Program Output (full mix)")});
 
-    const auto addDeck = [&](bool deckA) {
-        const NodeId deckNodeId = deckA ? decks->activeNodeA() : decks->activeNodeB();
+    const auto addDeck = [&](Deck deck) {
+        const NodeId deckNodeId = deck == Deck::Live ? decks->activeNode(Deck::Live) : decks->activeNode(Deck::Staging);
         if (!deckNodeId)
             return;
 
         if (!graph->hasNode(deckNodeId))
             return;
 
-        const QString deckLabel = deckA ? QStringLiteral("A") : QStringLiteral("B");
-        layers.append({LayerKind::DeckBase, deckA, -1, deckNodeId,
-                       QStringLiteral("Deck %1 — %2").arg(deckLabel, graph->sourceName(deckNodeId))});
+        const QString deckLabel = deck == Deck::Live ? QStringLiteral("Live") : QStringLiteral("Staging");
+        layers.append({LayerKind::DeckBase, deck, -1, deckNodeId,
+                       QStringLiteral("%1 — %2").arg(deckLabel, graph->sourceName(deckNodeId))});
 
-        const auto &chainSources = deckA ? output->chainSourcesA() : output->chainSourcesB();
+        const auto &chainSources = deck == Deck::Live ? output->chainSourcesLive() : output->chainSourcesStaging();
         for (int i = 0; i < static_cast<int>(chainSources.size()); ++i) {
-            layers.append({LayerKind::DeckChain, deckA, i, deckNodeId,
-                           QStringLiteral("Deck %1 overlay %2").arg(deckLabel).arg(i + 1)});
+            layers.append({LayerKind::DeckChain, deck, i, deckNodeId,
+                           QStringLiteral("%1 overlay %2").arg(deckLabel).arg(i + 1)});
         }
     };
 
-    addDeck(true);
-    addDeck(false);
+    addDeck(Deck::Live);
+    addDeck(Deck::Staging);
     return layers;
 }
 
@@ -94,9 +94,9 @@ QImage FrameCaptureHelper::captureLayer(Compositor *output, const LayerRef &laye
     case LayerKind::Program:
         return output->captureProgramFrame();
     case LayerKind::DeckBase:
-        return frameFromSource(layer.deckA ? output->sourceA() : output->sourceB());
+        return frameFromSource(layer.deck == Deck::Live ? output->sourceLive() : output->sourceStaging());
     case LayerKind::DeckChain: {
-        const auto &chain = layer.deckA ? output->chainSourcesA() : output->chainSourcesB();
+        const auto &chain = layer.deck == Deck::Live ? output->chainSourcesLive() : output->chainSourcesStaging();
         if (layer.chainIndex < 0 || layer.chainIndex >= static_cast<int>(chain.size()))
             return {};
         const MediaSource *src = chain[static_cast<size_t>(layer.chainIndex)].source.get();

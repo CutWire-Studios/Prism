@@ -4,6 +4,7 @@
 #include "mcp/McpServer.h"
 #include "mcp/McpSession.h"
 #include "app/AppController.h"
+#include "core/sources/SourceDescriptor.h"
 #include "app/session/SessionManager.h"
 
 #include <QtTest>
@@ -39,6 +40,9 @@ private slots:
     void addSourceAndInspect();
     void applyBatchStops();
     void addProcessNodeAndConnect();
+    void stagedDeckIsPausedUntilTake();
+    void cutIsImmediateAndTakeIgnoresEmptyStaging();
+    void deckToolsUseLiveStagingNames();
 };
 
 void TestMcp::initTestCase()
@@ -346,10 +350,10 @@ void TestMcp::applyBatchStops()
     const QJsonObject result = dispatcher.apply(QJsonObject{
         {QStringLiteral("ops"),
          QJsonArray{
-             QJsonObject{{QStringLiteral("tool"), QStringLiteral("set_fader")},
+             QJsonObject{{QStringLiteral("tool"), QStringLiteral("set_transition_progress")},
                          {QStringLiteral("args"), QJsonObject{{QStringLiteral("value"), 25}}}},
              QJsonObject{{QStringLiteral("tool"), QStringLiteral("nope")}},
-             QJsonObject{{QStringLiteral("tool"), QStringLiteral("set_fader")},
+             QJsonObject{{QStringLiteral("tool"), QStringLiteral("set_transition_progress")},
                          {QStringLiteral("args"), QJsonObject{{QStringLiteral("value"), 80}}}},
          }}});
     QCOMPARE(result.value(QStringLiteral("ok")).toBool(), false);
@@ -433,6 +437,92 @@ void TestMcp::addProcessNodeAndConnect()
     QVERIFY(dispatcher.applyOne(QStringLiteral("remove_node"), {{QStringLiteral("node"), cropId}})
                 .value(QStringLiteral("ok"))
                 .toBool());
+}
+
+static quint64 addStillClip(AppController &window, const QString &path, const QColor &color)
+{
+    QImage img(32, 32, QImage::Format_RGB888);
+    img.fill(color);
+    if (!img.save(path))
+        return 0;
+    return window.addSourceFromMap({{QStringLiteral("kind"), int(SourceDescriptor::Kind::VideoFile)},
+                                    {QStringLiteral("path"), path}});
+}
+
+void TestMcp::stagedDeckIsPausedUntilTake()
+{
+    QTemporaryDir dir;
+    AppController window(nullptr);
+    const quint64 clip = addStillClip(window, dir.filePath(QStringLiteral("a.png")), Qt::red);
+    QVERIFY(clip);
+    QCOMPARE(window.activeNodeLive(), quint64(0));
+
+    window.stageNode(clip);
+    QTRY_VERIFY(window.compositor()->sourceStaging());
+    QCOMPARE(window.activeNodeStaging(), clip);
+    QVERIFY(!window.isPlayingStaging());
+
+    window.setTransitionDuration(0.05);
+    window.take();
+    QTRY_COMPARE(window.activeNodeLive(), clip);
+    QTRY_VERIFY(window.isPlayingLive());
+    QCOMPARE(window.faderValue(), 0);
+    QVERIFY(!window.transitionRunning());
+}
+
+void TestMcp::cutIsImmediateAndTakeIgnoresEmptyStaging()
+{
+    QTemporaryDir dir;
+    AppController window(nullptr);
+    window.take();
+    window.cut();
+    QCOMPARE(window.activeNodeLive(), quint64(0));
+    QVERIFY(!window.transitionRunning());
+
+    const quint64 clip = addStillClip(window, dir.filePath(QStringLiteral("b.png")), Qt::blue);
+    QVERIFY(clip);
+    window.stageNode(clip);
+    window.cut();
+    QCOMPARE(window.activeNodeLive(), clip);
+    QCOMPARE(window.faderValue(), 0);
+    QVERIFY(window.isPlayingLive());
+    QVERIFY(window.compositor()->crossfade() < 0.01f);
+}
+
+void TestMcp::deckToolsUseLiveStagingNames()
+{
+    QTemporaryDir dir;
+    AppController window(nullptr);
+    prism::mcp::McpDispatcher dispatcher(&window);
+    const quint64 clip = addStillClip(window, dir.filePath(QStringLiteral("c.png")), Qt::green);
+    QVERIFY(clip);
+    const QString id = QString::number(clip);
+
+    const QJsonObject staged = dispatcher.applyOne(QStringLiteral("stage"), {{QStringLiteral("clip"), id}});
+    QVERIFY(staged.value(QStringLiteral("ok")).toBool());
+    QTRY_COMPARE(window.activeNodeStaging(), clip);
+
+    QVERIFY(dispatcher.applyOne(QStringLiteral("play"), {{QStringLiteral("deck"), QStringLiteral("staging")}})
+                .value(QStringLiteral("ok")).toBool());
+    QVERIFY(dispatcher.applyOne(QStringLiteral("pause"), {{QStringLiteral("deck"), QStringLiteral("live")}})
+                .value(QStringLiteral("ok")).toBool());
+    QVERIFY(dispatcher.applyOne(QStringLiteral("seek"),
+                                {{QStringLiteral("deck"), QStringLiteral("staging")},
+                                 {QStringLiteral("at"), 0.0}})
+                .value(QStringLiteral("ok")).toBool());
+    QCOMPARE(dispatcher.applyOne(QStringLiteral("play"), {{QStringLiteral("deck"), QStringLiteral("a")}})
+                 .value(QStringLiteral("error")).toString(),
+             QStringLiteral("bad_args"));
+    QCOMPARE(dispatcher.applyOne(QStringLiteral("play"), {}).value(QStringLiteral("error")).toString(),
+             QStringLiteral("bad_args"));
+    QCOMPARE(dispatcher.applyOne(QStringLiteral("select_a"), {{QStringLiteral("clip"), id}})
+                 .value(QStringLiteral("error")).toString(),
+             QStringLiteral("unknown_op"));
+
+    window.setTransitionDuration(0.05);
+    QVERIFY(dispatcher.applyOne(QStringLiteral("take"), {}).value(QStringLiteral("ok")).toBool());
+    QTRY_COMPARE(window.activeNodeLive(), clip);
+    QCOMPARE(window.faderValue(), 0);
 }
 
 QTEST_MAIN(TestMcp)

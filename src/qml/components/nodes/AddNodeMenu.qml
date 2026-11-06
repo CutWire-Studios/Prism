@@ -38,7 +38,7 @@ Popup {
         for (const fx of NodeCatalog.processEffects())
             list.push({ label: fx.menuLabel, category: qsTr("Process"), type: T.Process, params: { effect: fx.id } })
         list.push({ label: qsTr("Layer"), category: qsTr("Switching"), type: T.Layer })
-        list.push({ label: qsTr("A/B Deck Select"), category: qsTr("Switching"), type: T.AbSelect })
+        list.push({ label: qsTr("Switcher"), category: qsTr("Switching"), type: T.AbSelect })
         for (const fx of NodeCatalog.audioEffects())
             list.push({ label: fx.menuLabel, category: qsTr("Audio Effects"), type: T.AudioEffect, params: { effect: fx.id } })
         list.push({ label: qsTr("Audio Output"), category: qsTr("Audio"), type: T.MasterAudioOutput, unique: true })

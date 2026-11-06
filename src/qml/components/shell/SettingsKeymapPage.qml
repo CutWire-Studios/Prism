@@ -1,7 +1,7 @@
 import QtQuick
 import Prism
 
-// A/B switcher hotkeys: the key sends an input to Deck A, Shift plus the key to Deck B.
+// Switcher hotkeys: the key stages an input, Shift plus the key stages it and cuts to Live.
 // Edits apply and are saved immediately.
 SettingsPage {
     id: page
@@ -15,7 +15,7 @@ SettingsPage {
         width: parent.width
         visible: page.query.length === 0
         wrapMode: Text.WordWrap
-        text: qsTr("Click a shortcut, then press the key. Esc cancels, Backspace clears. Shift plus the key sends the input to Deck B.")
+        text: qsTr("Click a shortcut, then press the key. Esc cancels, Backspace clears. Shift plus the key stages the input and cuts to Live.")
         color: Theme.c.settingsRow.foregroundMuted
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSizeXs
@@ -35,7 +35,7 @@ SettingsPage {
         width: parent.width
         visible: HotkeyEditor.rows.length === 0 && page.query.length === 0
         wrapMode: Text.WordWrap
-        text: qsTr("No A/B switcher inputs yet. Connect sources to an A/B Select node to assign keys.")
+        text: qsTr("No switcher inputs yet. Connect sources to a Switcher node to assign keys.")
         color: Theme.c.settingsRow.foregroundMuted
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSizeXs

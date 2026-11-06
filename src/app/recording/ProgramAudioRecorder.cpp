@@ -73,8 +73,8 @@ bool ProgramAudioRecorder::startRecording(const QString &outputPath, const QStri
     m_markers.clear();
     m_sampleIndex = 0;
     m_lastDurationMs = 0;
-    m_deckQueueA.clear();
-    m_deckQueueB.clear();
+    m_liveQueue.clear();
+    m_stagingQueue.clear();
 
     const QByteArray pathUtf8 = m_outputPath.toUtf8();
 
@@ -209,9 +209,9 @@ void ProgramAudioRecorder::submitDeckChunk(int deckIndex, const QByteArray &pcm)
         return;
 
     if (deckIndex == 0)
-        m_deckQueueA.append(pcm);
+        m_liveQueue.append(pcm);
     else
-        m_deckQueueB.append(pcm);
+        m_stagingQueue.append(pcm);
 
     drainMixQueues();
 }
@@ -253,19 +253,19 @@ void ProgramAudioRecorder::drainPcmQueue(bool flushPartial) {
 void ProgramAudioRecorder::drainMixQueues() {
     const int blockBytes = kMixBlockSamples * kBytesPerSampleFrame;
     QVector<float> mixed(kMixBlockSamples * kChannels);
-    QVector<float> blockA(kMixBlockSamples * kChannels);
-    QVector<float> blockB(kMixBlockSamples * kChannels);
+    QVector<float> blockLive(kMixBlockSamples * kChannels);
+    QVector<float> blockStaging(kMixBlockSamples * kChannels);
     QVector<float> blockM(kMixBlockSamples * kChannels);
 
-    while (!m_deckQueueA.isEmpty() || !m_deckQueueB.isEmpty() || !m_micQueue.isEmpty()) {
-        const int takenA = takeBlockBytes(m_deckQueueA, blockBytes, blockA.data());
-        const int takenB = takeBlockBytes(m_deckQueueB, blockBytes, blockB.data());
+    while (!m_liveQueue.isEmpty() || !m_stagingQueue.isEmpty() || !m_micQueue.isEmpty()) {
+        const int takenLive = takeBlockBytes(m_liveQueue, blockBytes, blockLive.data());
+        const int takenStaging = takeBlockBytes(m_stagingQueue, blockBytes, blockStaging.data());
         const int takenM = takeBlockBytes(m_micQueue, blockBytes, blockM.data());
-        if (takenA == 0 && takenB == 0 && takenM == 0)
+        if (takenLive == 0 && takenStaging == 0 && takenM == 0)
             break;
 
         for (int i = 0; i < kMixBlockSamples * kChannels; ++i) {
-            const float sum = blockA[i] + blockB[i] + blockM[i];
+            const float sum = blockLive[i] + blockStaging[i] + blockM[i];
             mixed[i] = std::clamp(sum, -1.0f, 1.0f);
         }
         encodeMixedBlock(mixed.constData(), kMixBlockSamples);
@@ -384,8 +384,8 @@ QJsonDocument ProgramAudioRecorder::buildMarkersJson(const QString &audioPath,
 }
 
 void ProgramAudioRecorder::cleanup() {
-    m_deckQueueA.clear();
-    m_deckQueueB.clear();
+    m_liveQueue.clear();
+    m_stagingQueue.clear();
     m_micQueue.clear();
     m_pcmQueue.clear();
 

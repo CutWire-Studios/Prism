@@ -35,7 +35,7 @@ QJsonObject initializeResult()
              "Homepage /mcp exposes catalog, toolbox, apply, inspect, capture. "
              "Pinned /mcp/{toolbox} lists that toolbox's ops directly (no catalog/apply there). "
              "Always prefer clip id from inspect({clips:true}). "
-             "Times are seconds. Fader is 0 = deck A, 100 = deck B. "
+             "Times are seconds. Staging is the next-up deck and Live is on air; transition progress 0 = Live, 100 = Staging. "
              "capture() returns a JPEG still of program output.")},
     };
 }

@@ -20,7 +20,7 @@ class PreviewItem : public QQuickItem
     Q_PROPERTY(FillMode fillMode READ fillMode WRITE setFillMode NOTIFY fillModeChanged)
 
 public:
-    enum Source { Program, DeckA, DeckB };
+    enum Source { Program, Live, Staging };
     Q_ENUM(Source)
     enum FillMode { Fit, Fill, Stretch };
     Q_ENUM(FillMode)

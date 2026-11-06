@@ -38,11 +38,11 @@ QString DeckController::formatTimeShort(double secs) {
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
 
-void DeckController::wireAudioPlayerTap(bool deckA, NodeId clipId) {
-    auto &player = deckA ? m_audioPlayerA : m_audioPlayerB;
+void DeckController::wireAudioPlayerTap(Deck deck, NodeId clipId) {
+    auto &player = isLive(deck) ? m_audioPlayerLive : m_audioPlayerStaging;
     if (!player) return;
 
-    const int deckIndex = deckA ? 0 : 1;
+    const int deckIndex = static_cast<int>(deck);
     player->setIsoPcmTap([this, deckIndex, clipId](const QByteArray &pcm) {
         if (m_outputHub)
             m_outputHub->submitDeckAudioChunk(deckIndex, clipId, pcm);
@@ -53,34 +53,32 @@ void DeckController::wireAudioPlayerTap(bool deckA, NodeId clipId) {
     });
 }
 
-void DeckController::stopDeckAudio(bool deckA) {
-    auto &player = deckA ? m_audioPlayerA : m_audioPlayerB;
+void DeckController::stopDeckAudio(Deck deck) {
+    auto &player = isLive(deck) ? m_audioPlayerLive : m_audioPlayerStaging;
     if (player) player->stop();
 }
 
 void DeckController::releaseAllDeckAudio() {
-    m_audioPlayerA.reset();
-    m_audioPlayerB.reset();
+    m_audioPlayerLive.reset();
+    m_audioPlayerStaging.reset();
 }
 
 void DeckController::swapDeckAudio() {
-    std::swap(m_audioPlayerA, m_audioPlayerB);
-    std::swap(m_aClipNodeId, m_bClipNodeId);
-    std::swap(m_lastTimeA, m_lastTimeB);
-    // Speed belongs to the deck, not the clip: the swapped players adopt their
-    // new deck's rate.
-    if (m_audioPlayerA) m_audioPlayerA->setSpeed(m_speedA);
-    if (m_audioPlayerB) m_audioPlayerB->setSpeed(m_speedB);
+    std::swap(m_audioPlayerLive, m_audioPlayerStaging);
+    std::swap(m_audioFollowsFaderLive, m_audioFollowsFaderStaging);
+    std::swap(m_liveNodeId, m_stagingNodeId);
+    std::swap(m_lastTimeLive, m_lastTimeStaging);
+    std::swap(m_speedLive, m_speedStaging);
 }
 
-void DeckController::setDeckSpeed(bool deckA, double speed) {
-    (deckA ? m_speedA : m_speedB) = speed;
-    m_compositor->setDeckSpeed(deckA, speed);
-    const NodeId nodeId = deckA ? m_aClipNodeId : m_bClipNodeId;
+void DeckController::setDeckSpeed(Deck deck, double speed) {
+    (isLive(deck) ? m_speedLive : m_speedStaging) = speed;
+    m_compositor->setDeckSpeed(deck, speed);
+    const NodeId nodeId = isLive(deck) ? m_liveNodeId : m_stagingNodeId;
     // Re-seek the audio to the video position so both resume in sync at the
     // new rate.
     if (nodeId)
-        applyAudioControllerToDeck(deckA, nodeId, true);
+        applyAudioControllerToDeck(deck, nodeId, true);
 }
 
 void DeckController::releaseAllMasterAudioInputs() {
@@ -218,8 +216,8 @@ void DeckController::syncMasterAudioInputs() {
 void DeckController::refreshAudioEffects() {
     if (!m_graph) return;
 
-    const auto refreshDeck = [this](bool deckA, NodeId clipId) {
-        auto &player = deckA ? m_audioPlayerA : m_audioPlayerB;
+    const auto refreshDeck = [this](Deck deck, NodeId clipId) {
+        auto &player = isLive(deck) ? m_audioPlayerLive : m_audioPlayerStaging;
         if (!clipId || !player) return;
         ClipGraph::ResolvedAudioRoute route;
         if (m_graph->resolveAudioStreamRoute(clipId, route))
@@ -227,8 +225,8 @@ void DeckController::refreshAudioEffects() {
         else
             player->setEffectChain({});
     };
-    refreshDeck(true, m_aClipNodeId);
-    refreshDeck(false, m_bClipNodeId);
+    refreshDeck(Deck::Live, m_liveNodeId);
+    refreshDeck(Deck::Staging, m_stagingNodeId);
 
     const auto refreshCaptures = [this](auto &captures) {
         for (auto &[id, capture] : captures) {
@@ -243,12 +241,12 @@ void DeckController::refreshAudioEffects() {
     refreshCaptures(m_loopbackCaptures);
 }
 
-void DeckController::updateDeckAudio(bool deckA, NodeId clipId,
+void DeckController::updateDeckAudio(Deck deck, NodeId clipId,
                                      double currentTimeHint, bool forceSeek) {
     const SourceDescriptor desc = m_graph->sourceDescriptor(clipId);
     if (desc.kind != SourceDescriptor::Kind::VideoFile
         && desc.kind != SourceDescriptor::Kind::AudioFile) {
-        stopDeckAudio(deckA);
+        stopDeckAudio(deck);
         return;
     }
 
@@ -260,18 +258,18 @@ void DeckController::updateDeckAudio(bool deckA, NodeId clipId,
     QString outputDeviceId;
     if (!m_graph->audioSettingsForClip(clipId, volume, muted, routedToMaster, playbackMode, audioDelayMs, outputDeviceId)
         || !routedToMaster) {
-        stopDeckAudio(deckA);
+        stopDeckAudio(deck);
         return;
     }
 
-    auto &player = deckA ? m_audioPlayerA : m_audioPlayerB;
+    auto &player = isLive(deck) ? m_audioPlayerLive : m_audioPlayerStaging;
     if (!player) player = std::make_unique<AudioPlayer>(this);
-    wireAudioPlayerTap(deckA, clipId);
+    wireAudioPlayerTap(deck, clipId);
 
     const bool deviceChanged = (player->outputDeviceId() != outputDeviceId);
     player->setOutputDeviceId(outputDeviceId);
     player->setDelayMs(audioDelayMs);
-    player->setSpeed(deckA ? m_speedA : m_speedB);
+    player->setSpeed(isLive(deck) ? m_speedLive : m_speedStaging);
 
     ClipGraph::ResolvedAudioRoute route;
     if (m_graph->resolveAudioStreamRoute(clipId, route))
@@ -279,83 +277,87 @@ void DeckController::updateDeckAudio(bool deckA, NodeId clipId,
     else
         player->setEffectChain({});
 
+    const bool deckPlaying = isLive(deck) ? m_compositor->isPlayingLive() : m_compositor->isPlayingStaging();
     const QString &path = desc.path;
     // A device change requires re-creating the sink, so restart at the current
     // position rather than just seeking.
     if (player->currentFilePath() != path || deviceChanged) {
         const double startTime = (currentTimeHint >= 0.0) ? currentTimeHint : m_graph->clipSettings(clipId).startTime;
-        if (!player->start(path, startTime)) {
-            stopDeckAudio(deckA);
+        if (!player->start(path, startTime, !deckPlaying)) {
+            stopDeckAudio(deck);
             return;
         }
     } else if (forceSeek && currentTimeHint >= 0.0) {
         player->seek(currentTimeHint);
     }
 
-    auto *out = m_compositor;
-    const float mixB = out->crossfade();
-
-    // ActiveDeck: fade with the crossfader so the clip is only audible while
-    // its own deck is the active side. Always: full volume on either deck.
-    float volumeFactor = 1.0f;
-    if (playbackMode == 1)
-        volumeFactor = deckA ? (1.0f - mixB) : mixB;
+    // ActiveDeck: follow the transition's audio curve so the clip is only audible while its own
+    // deck is on air. Always: full volume on either deck.
+    (isLive(deck) ? m_audioFollowsFaderLive : m_audioFollowsFaderStaging) = playbackMode == 1;
+    player->setCrossfadeFactor(1.0f);
+    updateDeckAudioGain(deck);
 
     player->setVolumePercent(volume);
-    player->setCrossfadeFactor(volumeFactor);
     player->setMuted(muted);
 
-    const bool deckPlaying = deckA ? out->isPlayingA() : out->isPlayingB();
     if (deckPlaying) player->resume();
     else             player->pause();
 }
 
-void DeckController::applyAudioControllerToDeck(bool deckA, NodeId clipId, bool forceSeek) {
+void DeckController::updateDeckAudioGain(Deck deck) {
+    auto &player = isLive(deck) ? m_audioPlayerLive : m_audioPlayerStaging;
+    if (!player || !(isLive(deck) ? m_audioFollowsFaderLive : m_audioFollowsFaderStaging))
+        return;
+    const auto gains = m_compositor->computeAudioGains();
+    player->setCrossfadeFactor(isLive(deck) ? gains.first : gains.second);
+}
+
+void DeckController::applyAudioControllerToDeck(Deck deck, NodeId clipId, bool forceSeek) {
     const auto kind = m_graph->sourceDescriptor(clipId).kind;
     if (kind != SourceDescriptor::Kind::VideoFile && kind != SourceDescriptor::Kind::AudioFile) {
-        stopDeckAudio(deckA);
+        stopDeckAudio(deck);
         return;
     }
     auto *out = m_compositor;
-    const double t = deckA ? out->getCurrentTimeA() : out->getCurrentTimeB();
-    updateDeckAudio(deckA, clipId, t, forceSeek);
+    const double t = isLive(deck) ? out->getCurrentTimeLive() : out->getCurrentTimeStaging();
+    updateDeckAudio(deck, clipId, t, forceSeek);
 }
 
 void DeckController::refreshShaderAudioForActiveDecks() {
     auto *out = m_compositor;
 
     // Drive every audio-script node from whichever deck owns its source clip, so
-    // audio data is produced whether it feeds a shader, a script chain, or an A/B
+    // audio data is produced whether it feeds a shader, a script chain, or a
     // switcher.
     m_runtime->syncAllAudioScripts(
-        m_aClipNodeId, out->getCurrentTimeA(), out->isPlayingA(), m_speedA,
-        m_bClipNodeId, out->getCurrentTimeB(), out->isPlayingB(), m_speedB);
+        m_liveNodeId, out->getCurrentTimeLive(), out->isPlayingLive(), m_speedLive,
+        m_stagingNodeId, out->getCurrentTimeStaging(), out->isPlayingStaging(), m_speedStaging);
 
     // Point each active shader at its (possibly merged) JSON data feed. Shaders
     // are now purely JSON-driven: their uniforms come from the script graph.
-    auto refresh = [&](bool deckA, NodeId nodeId) {
+    auto refresh = [&](Deck deck, NodeId nodeId) {
         if (!nodeId) return;
         if (m_graph->sourceDescriptor(nodeId).kind != SourceDescriptor::Kind::Shader)
             return;
-        MediaSource *src = deckA ? out->sourceA() : out->sourceB();
+        MediaSource *src = isLive(deck) ? out->sourceLive() : out->sourceStaging();
         if (!src) return;
         if (auto *shader = dynamic_cast<ShaderSource *>(src->innermost()))
             shader->setDataSource(m_runtime->scriptOutputForDataNode(nodeId));
     };
 
-    refresh(true,  m_aClipNodeId);
-    refresh(false, m_bClipNodeId);
+    refresh(Deck::Live,  m_liveNodeId);
+    refresh(Deck::Staging, m_stagingNodeId);
 }
 
 void DeckController::refreshTextDataForActiveDecks() {
-    auto refresh = [&](bool deckA, NodeId nodeId) {
+    auto refresh = [&](Deck deck, NodeId nodeId) {
         if (!nodeId) return;
         const auto kind = m_graph->sourceDescriptor(nodeId).kind;
         if (kind != SourceDescriptor::Kind::Text && kind != SourceDescriptor::Kind::SvgTemplate)
             return;
 
         auto *out = m_compositor;
-        MediaSource *src = deckA ? out->sourceA() : out->sourceB();
+        MediaSource *src = isLive(deck) ? out->sourceLive() : out->sourceStaging();
         if (!src) return;
 
         const auto data = m_runtime->scriptOutputForDataNode(nodeId);
@@ -367,8 +369,8 @@ void DeckController::refreshTextDataForActiveDecks() {
         }
     };
 
-    refresh(true,  m_aClipNodeId);
-    refresh(false, m_bClipNodeId);
+    refresh(Deck::Live,  m_liveNodeId);
+    refresh(Deck::Staging, m_stagingNodeId);
 }
 
 // ── Deck assignment ───────────────────────────────────────────────────────────
@@ -382,20 +384,23 @@ DeckController::DeckUiState DeckController::deckUiState(const SourceDescriptor &
     return st;
 }
 
-void DeckController::assignNodeToDeck(NodeId nodeId, bool deckA,
-                                       const QVector<SourceEffectRef> &sourceEffects) {
+void DeckController::assignNodeToDeck(NodeId nodeId, Deck deck,
+                                       const QVector<SourceEffectRef> &sourceEffects,
+                                       bool startPlayback) {
     if (!m_graph->hasNode(nodeId)) return;
     const ClipSettings clip = m_graph->clipSettings(nodeId);
     const bool repeat = m_graph->clipRepeat(nodeId);
 
     // Record which node feeds the deck so later audio updates (seek, play/pause,
     // crossfade, loop restart) can find it again.
-    if (deckA) m_aClipNodeId = nodeId;
-    else       m_bClipNodeId = nodeId;
+    if (isLive(deck)) m_liveNodeId = nodeId;
+    else       m_stagingNodeId = nodeId;
 
     using Kind = SourceDescriptor::Kind;
     const SourceDescriptor desc = m_graph->sourceDescriptor(nodeId);
     auto *out = m_compositor;
+    const bool fileKind = desc.kind == Kind::VideoFile || desc.kind == Kind::AudioFile;
+    const bool play = startPlayback || !fileKind;
 
     // Base placement / crop / flip are applied by AppController from the
     // resolved stream; here we only wire the deck source/audio.
@@ -420,16 +425,16 @@ void DeckController::assignNodeToDeck(NodeId nodeId, bool deckA,
             }
             src = ProcessEffects::applySourceEffects(std::move(src), sourceEffects);
         }
-        if (deckA) {
-            out->setRepeatA(repeat);
-            out->setTrimPointsA(clip.startTime, clip.endTime);
-            out->setSourceA(std::move(src)); out->playA();
+        if (isLive(deck)) {
+            out->setRepeatLive(repeat);
+            out->setTrimPointsLive(clip.startTime, clip.endTime);
+            out->setSourceLive(std::move(src)); if (play) out->playLive();
         } else {
-            out->setRepeatB(repeat);
-            out->setTrimPointsB(clip.startTime, clip.endTime);
-            out->setSourceB(std::move(src)); out->playB();
+            out->setRepeatStaging(repeat);
+            out->setTrimPointsStaging(clip.startTime, clip.endTime);
+            out->setSourceStaging(std::move(src)); if (play) out->playStaging();
         }
-        updateDeckAudio(deckA, nodeId, clip.startTime, true);
+        updateDeckAudio(deck, nodeId, clip.startTime, true);
         return;
     }
 
@@ -437,20 +442,20 @@ void DeckController::assignNodeToDeck(NodeId nodeId, bool deckA,
 
     case Kind::VideoFile:
     case Kind::Image: {
-        if (deckA) {
-            out->setRepeatA(repeat);
-            out->setTrimPointsA(clip.startTime, clip.endTime);
-            out->loadVideoA(desc.path);
-            if (clip.startTime > 0) out->seekA(clip.startTime);
-            out->playA();
+        if (isLive(deck)) {
+            out->setRepeatLive(repeat);
+            out->setTrimPointsLive(clip.startTime, clip.endTime);
+            out->loadVideoLive(desc.path);
+            if (clip.startTime > 0) out->seekLive(clip.startTime);
+            if (play) out->playLive();
         } else {
-            out->setRepeatB(repeat);
-            out->setTrimPointsB(clip.startTime, clip.endTime);
-            out->loadVideoB(desc.path);
-            if (clip.startTime > 0) out->seekB(clip.startTime);
-            out->playB();
+            out->setRepeatStaging(repeat);
+            out->setTrimPointsStaging(clip.startTime, clip.endTime);
+            out->loadVideoStaging(desc.path);
+            if (clip.startTime > 0) out->seekStaging(clip.startTime);
+            if (play) out->playStaging();
         }
-        updateDeckAudio(deckA, nodeId, clip.startTime, true);
+        updateDeckAudio(deck, nodeId, clip.startTime, true);
         return;
     }
 
@@ -469,54 +474,77 @@ void DeckController::assignNodeToDeck(NodeId nodeId, bool deckA,
             if (auto data = m_runtime->scriptOutputForDataNode(nodeId))
                 static_cast<SvgTemplateSource *>(src.get())->setDataSource(data);
         }
-        if (deckA) {
-            out->setSourceA(std::move(src));
-            if (desc.kind != Kind::Canvas) out->playA();
+        if (isLive(deck)) {
+            out->setSourceLive(std::move(src));
+            if (desc.kind != Kind::Canvas && play) out->playLive();
         } else {
-            out->setSourceB(std::move(src));
-            if (desc.kind != Kind::Canvas) out->playB();
+            out->setSourceStaging(std::move(src));
+            if (desc.kind != Kind::Canvas && play) out->playStaging();
         }
         return;
     }
     }
 }
 
-void DeckController::assignSourceToActiveDeck(std::unique_ptr<MediaSource> src,
+void DeckController::assignSourceToLiveDeck(std::unique_ptr<MediaSource> src,
                                                const QString &name) {
     Q_UNUSED(name);
-    const bool toA = (m_compositor->crossfade() <= 0.5f);
-    auto *out = m_compositor;
-    if (toA) { out->setSourceA(std::move(src)); out->playA(); }
-    else     { out->setSourceB(std::move(src)); out->playB(); }
+    m_compositor->setSourceLive(std::move(src));
+    m_compositor->playLive();
 }
 
 void DeckController::assignCompositeToDeck(std::unique_ptr<MediaSource> src, NodeId primaryNodeId,
-                                           bool deckA) {
+                                           Deck deck, bool startPlayback) {
     auto *out = m_compositor;
-    if (deckA) m_aClipNodeId = primaryNodeId; else m_bClipNodeId = primaryNodeId;
+    if (isLive(deck)) m_liveNodeId = primaryNodeId; else m_stagingNodeId = primaryNodeId;
 
     const ClipGraph::Node *primary = primaryNodeId ? m_graph->node(primaryNodeId) : nullptr;
     if (!primary || primary->type != ClipGraph::NodeType::Input) {
-        if (deckA) { out->setSourceA(std::move(src)); out->playA(); }
-        else       { out->setSourceB(std::move(src)); out->playB(); }
-        stopDeckAudio(deckA);
+        if (isLive(deck)) { out->setSourceLive(std::move(src)); out->playLive(); }
+        else       { out->setSourceStaging(std::move(src)); out->playStaging(); }
+        stopDeckAudio(deck);
         return;
     }
 
     const ClipSettings clip = m_graph->clipSettings(primaryNodeId);
     const bool repeat = m_graph->clipRepeat(primaryNodeId);
-    if (deckA) {
-        out->setRepeatA(repeat);
-        out->setTrimPointsA(clip.startTime, clip.endTime);
-        out->setSourceA(std::move(src));
-        if (clip.startTime > 0) out->seekA(clip.startTime);
-        out->playA();
+    const auto primaryKind = m_graph->sourceDescriptor(primaryNodeId).kind;
+    const bool play = startPlayback || (primaryKind != SourceDescriptor::Kind::VideoFile
+                                        && primaryKind != SourceDescriptor::Kind::AudioFile);
+    if (isLive(deck)) {
+        out->setRepeatLive(repeat);
+        out->setTrimPointsLive(clip.startTime, clip.endTime);
+        out->setSourceLive(std::move(src));
+        if (clip.startTime > 0) out->seekLive(clip.startTime);
+        if (play) out->playLive();
     } else {
-        out->setRepeatB(repeat);
-        out->setTrimPointsB(clip.startTime, clip.endTime);
-        out->setSourceB(std::move(src));
-        if (clip.startTime > 0) out->seekB(clip.startTime);
-        out->playB();
+        out->setRepeatStaging(repeat);
+        out->setTrimPointsStaging(clip.startTime, clip.endTime);
+        out->setSourceStaging(std::move(src));
+        if (clip.startTime > 0) out->seekStaging(clip.startTime);
+        if (play) out->playStaging();
     }
-    updateDeckAudio(deckA, primaryNodeId, clip.startTime, true);
+    updateDeckAudio(deck, primaryNodeId, clip.startTime, true);
+}
+
+void DeckController::startDeckPlayback(Deck deck) {
+    const NodeId nodeId = isLive(deck) ? m_liveNodeId : m_stagingNodeId;
+    if (!nodeId) return;
+    const auto kind = m_graph->sourceDescriptor(nodeId).kind;
+    if (kind != SourceDescriptor::Kind::VideoFile && kind != SourceDescriptor::Kind::AudioFile)
+        return;
+    if (isLive(deck)) m_compositor->playLive(); else m_compositor->playStaging();
+    applyAudioControllerToDeck(deck, nodeId, false);
+}
+
+void DeckController::parkDeck(Deck deck) {
+    const NodeId nodeId = isLive(deck) ? m_liveNodeId : m_stagingNodeId;
+    if (!nodeId) return;
+    const auto kind = m_graph->sourceDescriptor(nodeId).kind;
+    if (kind != SourceDescriptor::Kind::VideoFile && kind != SourceDescriptor::Kind::AudioFile)
+        return;
+    const double start = m_graph->clipSettings(nodeId).startTime;
+    if (isLive(deck)) { m_compositor->pauseLive(); m_compositor->seekLive(start); }
+    else       { m_compositor->pauseStaging(); m_compositor->seekStaging(start); }
+    stopDeckAudio(deck);
 }

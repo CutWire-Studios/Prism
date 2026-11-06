@@ -43,7 +43,7 @@ private slots:
     }
 
     void roundTrip_intFloatString() {
-        const OscMessage in{QStringLiteral("/prism/a/slot"), {3, 0.5f, QStringLiteral("blackout")}};
+        const OscMessage in{QStringLiteral("/prism/staging/play"), {3, 0.5f, QStringLiteral("blackout")}};
         const QVector<OscMessage> out = OscProtocol::decode(OscProtocol::encode(in));
         QCOMPARE(out.size(), 1);
         QCOMPARE(out[0].address, in.address);
@@ -76,9 +76,9 @@ private slots:
     }
 
     void decode_noTypeTag() {
-        const QVector<OscMessage> out = OscProtocol::decode(pad("/prism/auto"));
+        const QVector<OscMessage> out = OscProtocol::decode(pad("/prism/take"));
         QCOMPARE(out.size(), 1);
-        QCOMPARE(out[0].address, QStringLiteral("/prism/auto"));
+        QCOMPARE(out[0].address, QStringLiteral("/prism/take"));
         QVERIFY(out[0].args.isEmpty());
     }
 

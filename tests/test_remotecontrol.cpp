@@ -39,16 +39,30 @@ private slots:
                  RemoteProtocol::Route::Fader);
         QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/cut")),
                  RemoteProtocol::Route::Cut);
-        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/auto")),
-                 RemoteProtocol::Route::Auto);
-        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/selectA?id=1")),
-                 RemoteProtocol::Route::SelectA);
-        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/selectB?id=2")),
-                 RemoteProtocol::Route::SelectB);
-        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/togglePlayA")),
-                 RemoteProtocol::Route::TogglePlayA);
-        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/togglePlayB")),
-                 RemoteProtocol::Route::TogglePlayB);
+        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/take")),
+                 RemoteProtocol::Route::Take);
+        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/stage?id=1")),
+                 RemoteProtocol::Route::Stage);
+        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/live/play")),
+                 RemoteProtocol::Route::LivePlay);
+        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/live/pause")),
+                 RemoteProtocol::Route::LivePause);
+        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/live/toggle")),
+                 RemoteProtocol::Route::LiveToggle);
+        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/live/seek?val=3")),
+                 RemoteProtocol::Route::LiveSeek);
+        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/staging/play")),
+                 RemoteProtocol::Route::StagingPlay);
+        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/staging/pause")),
+                 RemoteProtocol::Route::StagingPause);
+        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/staging/toggle")),
+                 RemoteProtocol::Route::StagingToggle);
+        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/staging/seek?val=3")),
+                 RemoteProtocol::Route::StagingSeek);
+        for (const char *old : {"/api/auto", "/api/selectA?id=1", "/api/selectB?id=2", "/api/togglePlayA",
+                                "/api/togglePlayB"})
+            QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QString::fromLatin1(old)),
+                     RemoteProtocol::Route::NotFound);
         QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/setTransitionMode?index=3")),
                  RemoteProtocol::Route::SetTransitionMode);
         QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/setDuration?val=2.5")),
@@ -99,16 +113,16 @@ private slots:
         RemoteProtocol::StatusData status;
         status.fader = 75;
         status.hasDeck = true;
-        status.activeA = 10;
-        status.activeB = 20;
-        status.isPlayingA = true;
-        status.isPlayingB = false;
+        status.live = 10;
+        status.staging = 20;
+        status.isPlayingLive = true;
+        status.isPlayingStaging = false;
 
         RemoteProtocol::ClipInfo clip;
         clip.id = 10;
         clip.name = QStringLiteral("Intro");
-        clip.activeA = true;
-        clip.activeB = false;
+        clip.onLive = true;
+        clip.onStaging = false;
         status.clips.append(clip);
 
         status.hasTransition = true;
@@ -121,10 +135,10 @@ private slots:
         const QJsonObject obj = doc.object();
 
         QCOMPARE(obj.value(QStringLiteral("fader")).toInt(), 75);
-        QCOMPARE(obj.value(QStringLiteral("activeA")).toString(), QStringLiteral("10"));
-        QCOMPARE(obj.value(QStringLiteral("activeB")).toString(), QStringLiteral("20"));
-        QVERIFY(obj.value(QStringLiteral("isPlayingA")).toBool());
-        QVERIFY(!obj.value(QStringLiteral("isPlayingB")).toBool());
+        QCOMPARE(obj.value(QStringLiteral("live")).toString(), QStringLiteral("10"));
+        QCOMPARE(obj.value(QStringLiteral("staging")).toString(), QStringLiteral("20"));
+        QVERIFY(obj.value(QStringLiteral("isPlayingLive")).toBool());
+        QVERIFY(!obj.value(QStringLiteral("isPlayingStaging")).toBool());
         QCOMPARE(obj.value(QStringLiteral("transitionMode")).toInt(), 2);
         QCOMPARE(obj.value(QStringLiteral("transitionDuration")).toDouble(), 1.5);
 
@@ -133,8 +147,8 @@ private slots:
         const QJsonObject clipObj = clips.first().toObject();
         QCOMPARE(clipObj.value(QStringLiteral("id")).toString(), QStringLiteral("10"));
         QCOMPARE(clipObj.value(QStringLiteral("name")).toString(), QStringLiteral("Intro"));
-        QVERIFY(clipObj.value(QStringLiteral("activeA")).toBool());
-        QVERIFY(!clipObj.value(QStringLiteral("activeB")).toBool());
+        QVERIFY(clipObj.value(QStringLiteral("onLive")).toBool());
+        QVERIFY(!clipObj.value(QStringLiteral("onStaging")).toBool());
 
         const QJsonArray modes = obj.value(QStringLiteral("transitionModes")).toArray();
         QCOMPARE(modes.size(), 2);
@@ -148,7 +162,7 @@ private slots:
         const QJsonDocument doc = QJsonDocument::fromJson(RemoteProtocol::buildStatusJson(status));
         const QJsonObject obj = doc.object();
         QCOMPARE(obj.value(QStringLiteral("fader")).toInt(), 0);
-        QVERIFY(!obj.contains(QStringLiteral("activeA")));
+        QVERIFY(!obj.contains(QStringLiteral("live")));
         QVERIFY(!obj.contains(QStringLiteral("transitionMode")));
     }
 

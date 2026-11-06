@@ -17,6 +17,7 @@
 #include <memory>
 #include <optional>
 
+#include "core/Deck.h"
 #include "core/sources/SourceDescriptor.h"
 #include "core/project/ClipSettings.h"
 #include "core/graph/AudioEffects.h"
@@ -200,8 +201,8 @@ public:
     /// True when the graph has no user-placed nodes (Output-only counts as empty).
     bool isEmptyGraph() const;
     NodeId outputNodeId() const { return m_outputNode; }
-    NodeId deckAInput() const { return m_deckAInput; }
-    NodeId deckBInput() const { return m_deckBInput; }
+    NodeId liveInput() const { return m_liveInput; }
+    NodeId stagingInput() const { return m_stagingInput; }
     QString sourceName(NodeId inputNodeId) const;
     /// Input-node payload accessors (defaults for non-Input / unknown ids).
     SourceDescriptor sourceDescriptor(NodeId inputNodeId) const;
@@ -235,7 +236,7 @@ public:
     bool setEffectParams(NodeId id, const QVariantMap &params, bool merge = true);
 
     /// Wire two nodes. kind -1 infers from ports (prefers the video chain).
-    /// toPortIndex is the destination slot (Layer / A/B Select / mixer / device).
+    /// toPortIndex is the destination slot (Layer / Switcher / mixer / device).
     bool connectNodes(NodeId from, NodeId to, int kind = -1, int toPortIndex = -1);
     /// Drag-style connect between two concrete ports; inserts a mixer for
     /// stream -> audio output the way the editor does.
@@ -271,14 +272,16 @@ public:
     bool setLayerCanvasCustom(NodeId layerId, bool custom);
     void setOutputCanvasSize(int w, int h);
 
-    // ── A/B select and decks ─────────────────────────────────────────────────
-    void setActiveDeckClip(NodeId clipId, bool deckA);
-    void assignInputToDeck(NodeId inputProducerNode, bool deckA);
+    // ── Switcher and decks ─────────────────────────────────────────────────
+    void setActiveDeckClip(NodeId clipId, Deck deck);
+    /// Exchanges the Live and Staging inputs (a take).
+    void swapDeckInputs();
+    void assignInputToDeck(NodeId inputProducerNode, Deck deck);
     QVector<AbSlotInfo> abSelectInputs() const;
     /// False if the slot is missing, unconnected, or its switcher isn't wired to the Output.
-    bool triggerAbSlot(const AbSlotRef &ref, bool deckA);
+    bool triggerAbSlot(const AbSlotRef &ref, Deck deck);
     bool abOutputConnected(NodeId abNodeId) const;
-    /// Slot indices currently driving deck A / B, or -1.
+    /// Slot indices currently driving Live / Staging, or -1.
     void abDeckSlots(NodeId abNodeId, int &aSlot, int &bSlot) const;
     /// Applies a script's output object: "a"/"b" name a slot (case-insensitive) or a 1-based index.
     void applyAbScriptOutput(NodeId abNodeId, const QJsonObject &output);
@@ -312,8 +315,9 @@ public:
     // ── Persistence ──────────────────────────────────────────────────────────
     /// The `graph` object of a .psm session, identical to ClipNodeEditor::saveState().
     QJsonObject toJson() const;
-    /// Replaces the graph. Returns false (leaving it empty) for graphVersion < 2.
+    /// Replaces the graph. Returns false (leaving it empty) for graphVersion < kGraphVersion.
     bool fromJson(const QJsonObject &state);
+    static constexpr int kGraphVersion = 4;
     /// The summary ClipNodeEditor::graphSnapshot() returns (MCP / remote control).
     QJsonObject snapshot() const;
 
@@ -324,8 +328,8 @@ signals:
     void edgeAdded(EdgeId id);
     void edgeRemoved(EdgeId id);
     void edgeChanged(EdgeId id);
-    void deckAChanged(NodeId clipId);
-    void deckBChanged(NodeId clipId);
+    void liveChanged(NodeId clipId);
+    void stagingChanged(NodeId clipId);
     /// The whole graph was replaced (fromJson / clear); models must rebuild.
     void graphReset();
     /// Anything that affects compositing or audio routing changed.
@@ -374,7 +378,7 @@ private:
     NodeId clipForAudioScript(NodeId scriptNodeId) const;
     QString deviceIdAt(const Node &out, int index) const;
 
-    void setDeck(NodeId id, bool deckA);
+    void setDeck(NodeId id, Deck deck);
     void notifyNode(NodeId id);
     void notifyChanged();
 
@@ -383,8 +387,8 @@ private:
     QList<Edge> m_edges;
     QMap<AbSlotRef, QString> m_hotkeyLabels;
     NodeId m_outputNode = 0;
-    NodeId m_deckAInput = 0;
-    NodeId m_deckBInput = 0;
+    NodeId m_liveInput = 0;
+    NodeId m_stagingInput = 0;
     NodeId m_nextId = 1;
     EdgeId m_nextEdgeId = 1;
     bool m_restoring = false;

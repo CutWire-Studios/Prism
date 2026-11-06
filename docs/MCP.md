@@ -26,7 +26,7 @@ Prism can expose a localhost MCP server so Cursor, Claude Code, or other agents 
 1. **`catalog`** — toolboxes, per-op “when” hints, endpoints, units, limitations (no schemas).
 2. **`toolbox({name})`** — full JSON schemas for ops in that toolbox.
 3. **`apply({ops:[{tool, args}, …]})`** — run mutations in order.
-4. **`inspect({clips:true, detail:true, graph:true})`** — mixer state, clip ids, graph wiring, decks, fader, recording.
+4. **`inspect({clips:true, detail:true, graph:true})`** — mixer state, clip ids, graph wiring, decks, transition progress, recording.
 5. **`capture()`** — JPEG still of program output (use to verify a take).
 
 Homepage endpoint: `POST /mcp` with `Authorization: Bearer <token>`.
@@ -40,11 +40,12 @@ Pinned endpoints (`/mcp/sources`, `/mcp/decks`, `/mcp/transition`, `/mcp/panic`,
 | Topic | Rule |
 |-------|------|
 | Time | Seconds |
-| Fader | 0 = deck A, 100 = deck B |
+| Decks | Two fixed decks: **Staging** (next up, shown left) and **Live** (on air, shown right). Transition progress (`fader` in `inspect`) runs 0 = Live to 100 = Staging. A `take` animates it to 100, then the Staging content becomes Live, the former Live content moves to Staging, and progress resets to 0 |
 | Clip reference | `clip` id from `inspect({clips:true})`. Required — clip ops never fall back to the current deck assignment |
-| Adding sources | `add_clip` / `add_source` only put a node on the graph. Call `select_a` or `select_b` to put it on a deck |
-| Process / graph | `add_process_node` / `add_layer_node` / `add_ab_select` only place nodes. Call `connect` to wire. `list_nodes` or `inspect({graph:true})` for ids. Output cannot take a video chain and A/B at once |
-| Take | Assign the off-air deck, `capture()` to check, then `cut` or `auto_transition` |
+| Adding sources | `add_clip` / `add_source` only put a node on the graph. Call `stage` to put it on the Staging deck |
+| Process / graph | `add_process_node` / `add_layer_node` / `add_ab_select` only place nodes. Call `connect` to wire. `list_nodes` or `inspect({graph:true})` for ids. Output cannot take a video chain and a Switcher at once |
+| Take | `stage` the clip, `capture()` to check, then `take` (animated) or `cut` (instant) |
+| Per-deck ops | `play`, `pause`, `seek`, and `set_speed` take `deck: "live"` or `"staging"` |
 | Atomicity | `apply` is **not** atomic: on failure the ops before it stay applied. Check `stopped` / `failed` / `done` |
 | Undo | None. Live takes are immediate |
 | Errors | `{ok:false, error:<code>, detail:<text>}` — `bad_args`, `not_found`, `type_mismatch`, `unknown_op`, `unknown_toolbox`, `wrong_endpoint`, `wrong_toolbox`, `apply_failed`, `capture_failed`, `conflict` |
@@ -55,33 +56,33 @@ Pinned endpoints (`/mcp/sources`, `/mcp/decks`, `/mcp/transition`, `/mcp/panic`,
 | Toolbox | When to use |
 |---------|-------------|
 | `sources` | Add/list/rename clips; text/SVG template/shader updates; cameras and NDI |
-| `decks` | Assign A/B, play/pause/seek, speed |
-| `transition` | T-bar, CUT, AUTO, look and duration |
+| `decks` | Stage clips, play/pause/seek per deck, speed |
+| `transition` | `set_transition_progress`, `cut`, `take`, look and duration |
 | `panic` | Blackout, freeze, stay-tuned slate |
 | `output` | Record program, NDI, virtual camera |
 | `session` | Save/load a `.psm` session |
-| `graph` | Process/layer/A/B nodes and wiring on the blue video chain |
+| `graph` | Process/layer/Switcher nodes and wiring on the blue video chain |
 
 ## Example
 
-Import a file and take it to program:
+Import a file and stage it:
 
 ```json
 {
   "ops": [
     {"tool": "add_clip", "args": {"path": "/path/to/clip.mp4"}},
-    {"tool": "select_b", "args": {"clip": "<id from previous result>"}}
+    {"tool": "stage", "args": {"clip": "<id from previous result>"}}
   ]
 }
 ```
 
-`apply` cannot reference an id produced earlier in the same batch. Add first, read `done[0].result.id`, then select:
+`apply` cannot reference an id produced earlier in the same batch. Add first, read `done[0].result.id`, then stage and take:
 
 ```json
 {
   "ops": [
-    {"tool": "select_b", "args": {"clip": "<id>"}},
-    {"tool": "set_fader", "args": {"value": 100}}
+    {"tool": "stage", "args": {"clip": "<id>"}},
+    {"tool": "take", "args": {}}
   ]
 }
 ```

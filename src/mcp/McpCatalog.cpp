@@ -13,7 +13,7 @@ const QStringList kSourceKinds = {
 const QStringList kPanicModes = {QStringLiteral("none"), QStringLiteral("blackout"),
                                  QStringLiteral("freeze"), QStringLiteral("stay_tuned")};
 
-const QStringList kDecks = {QStringLiteral("a"), QStringLiteral("b")};
+const QStringList kDecks = {QStringLiteral("live"), QStringLiteral("staging")};
 
 QJsonObject clipRefProps()
 {
@@ -45,7 +45,7 @@ const QList<Op> &ops()
 {
     static const QList<Op> k = {
         {"list_clips", "sources", "See what is on the graph",
-         "List input clips. Returns {clips:[{id, name, kind, path, activeA, activeB}]}. "
+         "List input clips. Returns {clips:[{id, name, kind, path, onLive, onStaging}]}. "
          "inspect({clips:true}) is richer.",
          objectSchema({}), true, false, true},
         {"list_source_kinds", "sources", "See which source types add_source accepts",
@@ -61,8 +61,8 @@ const QList<Op> &ops()
          objectSchema({}), true, false, true},
         {"add_clip", "sources", "Bring a media file onto the graph",
          "Add a local video, image, or audio file as an input clip. Auto-detects kind from "
-         "the path. Returns {id, name, kind}. Does not assign it to a deck — call select_a "
-         "or select_b with the returned id.",
+         "the path. Returns {id, name, kind}. Does not stage it — call stage "
+         "with the returned id.",
          objectSchema({{QStringLiteral("path"),
                         stringProp(QStringLiteral("Absolute file path"))},
                        {QStringLiteral("name"),
@@ -132,24 +132,21 @@ const QList<Op> &ops()
                                    stringProp(QStringLiteral("GLSL fragment shader"))}}),
                       {QStringLiteral("clip"), QStringLiteral("code")})},
 
-        {"select_a", "decks", "Put a clip on deck A (preview / left)",
-         "Assign a clip to deck A and start it. Same as clicking A on the clip card.",
+        {"stage", "decks", "Put a clip on Staging (next up)",
+         "Load a clip onto the Staging deck (the next-up deck, shown on the left) and start it. "
+         "It does not go on air until take or cut.",
          objectSchema(clipRefProps(), {QStringLiteral("clip")})},
-        {"select_b", "decks", "Put a clip on deck B (program-side / right)",
-         "Assign a clip to deck B and start it. Same as clicking B on the clip card.",
-         objectSchema(clipRefProps(), {QStringLiteral("clip")})},
-        {"play_a", "decks", "Play deck A", "Start playback on deck A.", objectSchema({})},
-        {"pause_a", "decks", "Pause deck A", "Pause playback on deck A.", objectSchema({})},
-        {"play_b", "decks", "Play deck B", "Start playback on deck B.", objectSchema({})},
-        {"pause_b", "decks", "Pause deck B", "Pause playback on deck B.", objectSchema({})},
-        {"seek_a", "decks", "Scrub deck A",
-         "Seek deck A to `at` seconds. No-op for live sources.",
-         objectSchema({{QStringLiteral("at"), numberProp(QStringLiteral("Seconds from start"))}},
-                      {QStringLiteral("at")})},
-        {"seek_b", "decks", "Scrub deck B",
-         "Seek deck B to `at` seconds. No-op for live sources.",
-         objectSchema({{QStringLiteral("at"), numberProp(QStringLiteral("Seconds from start"))}},
-                      {QStringLiteral("at")})},
+        {"play", "decks", "Play a deck", "Start playback on the Live or Staging deck.",
+         objectSchema({{QStringLiteral("deck"), enumProp(QStringLiteral("Which deck"), kDecks)}},
+                      {QStringLiteral("deck")})},
+        {"pause", "decks", "Pause a deck", "Pause playback on the Live or Staging deck.",
+         objectSchema({{QStringLiteral("deck"), enumProp(QStringLiteral("Which deck"), kDecks)}},
+                      {QStringLiteral("deck")})},
+        {"seek", "decks", "Scrub a deck",
+         "Seek the Live or Staging deck to `at` seconds. No-op for live sources.",
+         objectSchema({{QStringLiteral("deck"), enumProp(QStringLiteral("Which deck"), kDecks)},
+                       {QStringLiteral("at"), numberProp(QStringLiteral("Seconds from start"))}},
+                      {QStringLiteral("deck"), QStringLiteral("at")})},
         {"set_speed", "decks", "Change a deck's playback rate",
          "Set deck speed. Clamped to 0.25–4.0. Only affects seekable file sources.",
          objectSchema({{QStringLiteral("deck"), enumProp(QStringLiteral("Which deck"), kDecks)},
@@ -157,15 +154,20 @@ const QList<Op> &ops()
                         numberProp(QStringLiteral("Playback rate (1 = normal)"))}},
                       {QStringLiteral("deck"), QStringLiteral("speed")})},
 
-        {"set_fader", "transition", "Move the T-bar",
-         "Set the crossfader. 0 = full A, 100 = full B. Stops a running AUTO animation.",
+        {"set_transition_progress", "transition", "Move the T-bar",
+         "Set transition progress from Live toward Staging: 0 = Live fully on air, 100 = Staging fully on "
+         "air. Stops a running take. Reading back after a completed take gives 0 because the Staging "
+         "content has become Live.",
          objectSchema({{QStringLiteral("value"),
                         integerProp(QStringLiteral("0..100"))}},
                       {QStringLiteral("value")})},
-        {"cut", "transition", "Hard-cut to the other deck",
-         "Instant cut: snap the fader to the opposite end (A↔B).", objectSchema({})},
-        {"auto_transition", "transition", "Animate the T-bar to the other deck",
-         "Run AUTO: ease the fader to the opposite end over the current transition duration.",
+        {"cut", "transition", "Hard-cut Staging to Live",
+         "Instant cut: Staging content goes on air immediately, the former Live content moves to Staging, "
+         "and progress resets to 0.", objectSchema({})},
+        {"take", "transition", "Animate Staging onto Live",
+         "Animate progress from Live to Staging over the current transition duration using the selected "
+         "transition mode. When it finishes the Staging content becomes Live, the former Live content "
+         "moves to Staging, and progress resets to 0.",
          objectSchema({})},
         {"list_transitions", "transition", "See available transition modes",
          "Returns {modes:[name,…], current, index, duration}.", objectSchema({}), true, false, true},
@@ -175,8 +177,8 @@ const QList<Op> &ops()
                         stringProp(QStringLiteral("Transition name from list_transitions"))},
                        {QStringLiteral("index"),
                         integerProp(QStringLiteral("0-based index if mode is omitted"))}})},
-        {"set_duration", "transition", "How long AUTO takes",
-         "Set AUTO duration in seconds.",
+        {"set_duration", "transition", "How long a take lasts",
+         "Set take duration in seconds.",
          objectSchema({{QStringLiteral("seconds"),
                         numberProp(QStringLiteral("Duration in seconds"))}},
                       {QStringLiteral("seconds")})},
@@ -241,14 +243,14 @@ const QList<Op> &ops()
          "(to_port is the layer slot). Returns {id, type:\"layer\"}.",
          objectSchema({{QStringLiteral("x"), numberProp(QStringLiteral("Scene X"))},
                        {QStringLiteral("y"), numberProp(QStringLiteral("Scene Y"))}})},
-        {"add_ab_select", "graph", "Add an A/B Select switcher",
-         "Place an A/B Deck Select node. Wire inputs with connect (to_port is the slot), then "
+        {"add_ab_select", "graph", "Add an Switcher",
+         "Place a Switcher node. Wire inputs with connect (to_port is the slot), then "
          "wire its output to the Output node with kind ab_to_output. Returns {id, type:\"ab_select\"}.",
          objectSchema({{QStringLiteral("x"), numberProp(QStringLiteral("Scene X"))},
                        {QStringLiteral("y"), numberProp(QStringLiteral("Scene Y"))}})},
         {"connect", "graph", "Wire two nodes",
          "Connect from → to. kind defaults to auto (tries video chain first). to_port is the "
-         "destination slot for Layer / A/B Select (0-based). Returns {from, to, kind, kindName}.",
+         "destination slot for Layer / Switcher (0-based). Returns {from, to, kind, kindName}.",
          objectSchema({{QStringLiteral("from"),
                         stringProp(QStringLiteral("Source node id"))},
                        {QStringLiteral("to"),
@@ -258,7 +260,7 @@ const QList<Op> &ops()
                             "chain (default), ab_to_output, script_to_data, clip_to_shader_audio, "
                             "or omit for auto"))},
                        {QStringLiteral("to_port"),
-                        integerProp(QStringLiteral("Destination input slot (Layer / A/B Select)"))}},
+                        integerProp(QStringLiteral("Destination input slot (Layer / Switcher)"))}},
                       {QStringLiteral("from"), QStringLiteral("to")})},
         {"disconnect", "graph", "Cut a wire",
          "Remove the connection from → to. Optional to_port to target one slot.",
@@ -275,7 +277,7 @@ const QList<Op> &ops()
                         objectProp(QStringLiteral("Keys to merge, e.g. {\"x\":0.1,\"w\":0.8}"))}},
                       {QStringLiteral("node"), QStringLiteral("params")})},
         {"remove_node", "graph", "Delete any graph node",
-         "Remove an input, process, layer, or A/B node. The Output node cannot be deleted while "
+         "Remove an input, process, layer, or Switcher node. The Output node cannot be deleted while "
          "other nodes exist.",
          objectSchema({{QStringLiteral("node"), stringProp(QStringLiteral("Node id"))}},
                       {QStringLiteral("node")}),
@@ -328,12 +330,14 @@ QString agentGuideText()
         "Toolbox ops may also be called by name directly on /mcp instead of through apply.\n"
         "\n"
         "Conventions:\n"
-        "- Times are seconds. Fader 0 = deck A, 100 = deck B.\n"
+        "- Times are seconds. Two fixed decks: Staging (next up, shown left) and Live (on air, shown\n"
+        "  right). Transition progress 0 = Live, 100 = Staging; a take animates it to 100, then Staging\n"
+        "  content becomes Live and progress resets to 0.\n"
         "- Identify clips by id from inspect({clips:true}). Clip ops never fall back to the\n"
         "  current deck assignment — pass clip every time.\n"
-        "- add_clip / add_source only put a node on the graph. Call select_a or select_b to\n"
-        "  put it on a deck, then cut / auto_transition / set_fader to take it to program.\n"
-        "- Process nodes sit on the blue video chain: Input → Process → Output (or Layer / A/B).\n"
+        "- add_clip / add_source only put a node on the graph. Call stage to put it on the Staging\n"
+        "  deck, then take or cut (or set_transition_progress) to bring it on air.\n"
+        "- Process nodes sit on the blue video chain: Input → Process → Output (or Layer / Switcher).\n"
         "  add_process_node does not wire; call connect({from, to}). list_nodes for ids.\n"
         "- Shader inputs are add_source({kind:\"shader\", code}). Process effects are graph ops.\n"
         "- Every op returns {ok:true, …} or {ok:false, error:<code>, detail:<text>}. Codes:\n"
@@ -344,9 +348,9 @@ QString agentGuideText()
         "\n"
         "Live take pattern:\n"
         "1. add_clip or add_source, read id from the reply.\n"
-        "2. select_b (or select_a) with that id — the off-air deck.\n"
+        "2. stage with that id — the off-air Staging deck.\n"
         "3. capture() to confirm the frame.\n"
-        "4. cut or auto_transition to take it to program.\n"
+        "4. take or cut to bring it on air.\n"
         "\n"
         "Process chain pattern:\n"
         "1. add_source({kind:\"shader\"}) or add_clip — read input id.\n"
@@ -366,12 +370,12 @@ QJsonObject catalogPayload()
     };
     static const Box boxes[] = {
         {"sources", "Add, list, rename, and edit input clips (files, text, SVG templates, shaders, cameras)."},
-        {"decks", "Assign clips to A/B, play/pause/seek, deck speed."},
-        {"transition", "T-bar, CUT, AUTO, transition look and duration."},
+        {"decks", "Stage clips, play/pause/seek the Live and Staging decks, deck speed."},
+        {"transition", "Transition progress, CUT, TAKE, transition look and duration."},
         {"panic", "Emergency program output: blackout, freeze, stay-tuned slate."},
         {"output", "Record program, NDI, virtual camera."},
         {"session", "Save or load a .psm session file."},
-        {"graph", "Add process/layer/A/B nodes and wire the blue video chain."},
+        {"graph", "Add process/layer/Switcher nodes and wire the blue video chain."},
     };
 
     QJsonArray toolboxes;
@@ -397,7 +401,7 @@ QJsonObject catalogPayload()
         {QStringLiteral("endpoints"), endpointList()},
         {QStringLiteral("units"),
          QJsonObject{{QStringLiteral("time"), QStringLiteral("seconds")},
-                     {QStringLiteral("fader"), QStringLiteral("0=A, 100=B")},
+                     {QStringLiteral("fader"), QStringLiteral("transition progress: 0=Live, 100=Staging")},
                      {QStringLiteral("clipId"), QStringLiteral("node id from inspect")}}},
         {QStringLiteral("workflow"),
          QStringLiteral("catalog → toolbox({name}) → apply({ops:[{tool,args}…]})")},
@@ -410,10 +414,10 @@ QJsonObject catalogPayload()
              QStringLiteral("apply is not atomic — on failure the ops before it stay applied; check stopped/failed."),
              QStringLiteral("apply cannot run catalog, toolbox, inspect, capture, or apply; call those directly on /mcp."),
              QStringLiteral("Clip ops need clip — they never fall back to the current deck assignment."),
-             QStringLiteral("add_clip / add_source do not put the clip on a deck; call select_a / select_b."),
+             QStringLiteral("add_clip / add_source do not put the clip on a deck; call stage."),
              QStringLiteral("add_process_node / add_layer_node / add_ab_select do not wire; call connect."),
              QStringLiteral("Wiring a chain into Output is single-stream program (T-bar disabled)."),
-             QStringLiteral("Output cannot take a video chain and A/B at the same time — disconnect the other Output input first."),
+             QStringLiteral("Output cannot take a video chain and a Switcher at the same time — disconnect the other Output input first."),
              QStringLiteral("There is no MCP undo. Live takes are immediate."),
              QStringLiteral("Screen and window capture still need an interactive OS picker — they are not MCP-addable."),
          }},
@@ -453,7 +457,7 @@ QJsonArray homepageTools()
     tools.append(toolDef(
         QStringLiteral("inspect"),
         QStringLiteral(
-            "When: Read mixer state. Returns revision, fader, decks, transition, panic, recording, "
+            "When: Read mixer state. Returns revision, fader (transition progress, 0 = Live, 100 = Staging), decks {live, staging} each {clip, name, playing, time, duration, speed}, transition, panic, recording, "
             "NDI, virtual camera, program size. clips=true adds the clip list. detail=true expands "
             "each clip with kind/path/content. graph=true adds nodes and connections. "
             "since=<revision> returns {unchanged:true, revision} when nothing changed."),
@@ -461,7 +465,7 @@ QJsonArray homepageTools()
                       {QStringLiteral("detail"),
                        boolProp(QStringLiteral("Expand clip rows with kind, path, and content fields"))},
                       {QStringLiteral("graph"),
-                       boolProp(QStringLiteral("Include process/layer/A/B/output nodes and connections"))},
+                       boolProp(QStringLiteral("Include process/layer/Switcher/output nodes and connections"))},
                       {QStringLiteral("since"),
                        integerProp(QStringLiteral("Revision from a prior inspect; returns {unchanged:true} when current"))}}),
         toolAnnotations(true, false, true)));
@@ -475,7 +479,7 @@ QJsonArray homepageTools()
             "and apply itself return unknown_op, so call those directly."),
         objectSchema({{QStringLiteral("ops"),
                        arrayProp(objectSchema({{QStringLiteral("tool"),
-                                                stringProp(QStringLiteral("Toolbox op name, e.g. select_a"))},
+                                                stringProp(QStringLiteral("Toolbox op name, e.g. stage"))},
                                                {QStringLiteral("args"),
                                                 QJsonObject{{QStringLiteral("type"),
                                                              QStringLiteral("object")}}}},
