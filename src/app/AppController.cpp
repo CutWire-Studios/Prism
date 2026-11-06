@@ -135,7 +135,6 @@ AppController::AppController(QObject *parent)
     m_outputHub = new OutputHub(this);
     m_outputHub->setProgramSource(m_compositor.get());
     m_outputHub->setOutputDir(recOpts.effectiveOutputDir());
-    m_compositor->addDeckPreviewConsumer();
 
     m_obsIntegration = new ObsIntegration(this);
     m_deckController = new DeckController(m_compositor.get(), m_graph, m_runtime, m_outputHub, this);
@@ -311,7 +310,6 @@ void AppController::shutdown(bool saveAndMarkClean)
     m_outputHub->closeMirrorOutputs();
     m_outputHub->setProgramSource(nullptr);
 
-    m_compositor->removeDeckPreviewConsumer();
     m_compositor->shutdownPlayback();
     m_obsIntegration->disconnectFromObs();
 

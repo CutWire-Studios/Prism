@@ -151,10 +151,6 @@ public:
     void           setTransitionMode(TransitionMode mode) { m_transitionMode = mode; markDirty(); }
     TransitionMode transitionMode() const { return m_transitionMode; }
 
-    // Current frame as QImage for deck preview labels
-    QImage getFrameA() const;
-    QImage getFrameB() const;
-
     // ── Backward-compat single-source API (delegates to source A) ────────────
     void   loadVideo(const QString &path)    { loadVideoA(path); }
     void   play()                            { playA(); }
@@ -174,8 +170,6 @@ public:
     static int programHeight() { return s_programHeight; }
     /// Change the compositor's render resolution, reallocating the program/deck FBOs.
     void setProgramResolution(int width, int height);
-    static int deckPreviewWidth()  { return s_deckPreviewWidth; }
-    static int deckPreviewHeight() { return s_deckPreviewHeight; }
 
     enum class OutputScaleMode { Stretch, Fit, Crop };
     static OutputScaleMode outputScaleMode() { return s_outputScaleMode; }
@@ -211,11 +205,6 @@ public:
     void removeProgramFrameConsumer();
     void setProgramFrameConsumerCount(int count) override;
     QImage programFrame() const override { return m_programFrameCache; }
-
-    /// Enable CPU readback of per-deck FBOs for A/B preview labels.
-    void addDeckPreviewConsumer();
-    void removeDeckPreviewConsumer();
-    void setDeckPreviewConsumerCount(int count);
 
     /// Full-resolution deck iso frames (program resolution) for recording.
     void setDeckFrameConsumerCount(int count) override;
@@ -365,12 +354,9 @@ private:
     void renderDeckToFbo(bool deckA);
     void renderCompositionGL();
     void cacheProgramFrameFromFbo();
-    void cacheDeckPreviewFromFbo(bool deckA);
     void cacheDeckFrameFromFbo(bool deckA);
 
     static int s_programWidth;
-    static int s_deckPreviewWidth;
-    static int s_deckPreviewHeight;
     static OutputScaleMode s_outputScaleMode;
     static int s_programHeight;
 
@@ -383,11 +369,8 @@ private:
     int    m_compW           = 0;
     int    m_compH           = 0;
     int    m_programFrameConsumers = 0;
-    int    m_deckPreviewConsumers  = 0;
     int    m_deckFrameConsumers    = 0;
     QImage m_programFrameCache;
-    QImage m_deckPreviewA;
-    QImage m_deckPreviewB;
     QImage m_deckFrameCacheA;
     QImage m_deckFrameCacheB;
     QRectF m_videoRectProgramA;

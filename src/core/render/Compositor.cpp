@@ -16,8 +16,6 @@
 #include <algorithm>
 
 int Compositor::s_programWidth  = 1280;
-int Compositor::s_deckPreviewWidth  = 640;
-int Compositor::s_deckPreviewHeight = 360;
 Compositor::OutputScaleMode Compositor::s_outputScaleMode = Compositor::OutputScaleMode::Fit;
 int Compositor::s_programHeight = 720;
 
@@ -221,24 +219,9 @@ void Compositor::composeProgramFrame() {
     renderDeckToFbo(true);
     renderDeckToFbo(false);
 
-    const bool wantDeckFrame   = wantsDeckFrame();
-    const bool wantDeckPreview = m_deckPreviewConsumers > 0;
-    if (wantDeckFrame) {
+    if (wantsDeckFrame()) {
         cacheDeckFrameFromFbo(true);
         cacheDeckFrameFromFbo(false);
-    }
-    if (wantDeckPreview) {
-        if (wantDeckFrame) {
-            // Full-res deck frames were just read back; derive the previews from
-            // them instead of a second glReadPixels per deck.
-            m_deckPreviewA = m_deckFrameCacheA.scaled(s_deckPreviewWidth, s_deckPreviewHeight,
-                                                      Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-            m_deckPreviewB = m_deckFrameCacheB.scaled(s_deckPreviewWidth, s_deckPreviewHeight,
-                                                      Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-        } else {
-            cacheDeckPreviewFromFbo(true);
-            cacheDeckPreviewFromFbo(false);
-        }
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, m_programFbo);
@@ -476,13 +459,6 @@ void Compositor::setProgramResolution(int width, int height) {
 
     s_programWidth  = width;
     s_programHeight = height;
-    if (width >= height) {
-        s_deckPreviewWidth  = 640;
-        s_deckPreviewHeight = std::max(1, qRound(640.0 * height / width));
-    } else {
-        s_deckPreviewHeight = 640;
-        s_deckPreviewWidth  = std::max(1, qRound(640.0 * width / height));
-    }
 
     // Program/deck FBOs are lazily (re)created at the new size on the next
     // composeProgramFrame() (see ensureProgramFbo/ensureDeckFbos).
@@ -493,8 +469,6 @@ void Compositor::setProgramResolution(int width, int height) {
     m_programFrameCache = QImage();
     m_deckFrameCacheA   = QImage();
     m_deckFrameCacheB   = QImage();
-    m_deckPreviewA      = QImage();
-    m_deckPreviewB      = QImage();
     markDirty();
 }
 
@@ -527,18 +501,6 @@ void Compositor::setProgramFrameConsumerCount(int count) {
     m_programFrameConsumers = std::max(0, count);
 }
 
-void Compositor::addDeckPreviewConsumer() {
-    ++m_deckPreviewConsumers;
-}
-
-void Compositor::removeDeckPreviewConsumer() {
-    m_deckPreviewConsumers = std::max(0, m_deckPreviewConsumers - 1);
-}
-
-void Compositor::setDeckPreviewConsumerCount(int count) {
-    m_deckPreviewConsumers = std::max(0, count);
-}
-
 void Compositor::setDeckFrameConsumerCount(int count) {
     m_deckFrameConsumers = std::max(0, count);
 }
@@ -562,22 +524,6 @@ void Compositor::cacheProgramFrameFromFbo() {
     m_programFrameCache = QImage(s_programWidth, s_programHeight, QImage::Format_RGBA8888);
     glReadPixels(0, 0, s_programWidth, s_programHeight,
                  GL_RGBA, GL_UNSIGNED_BYTE, m_programFrameCache.bits());
-}
-
-void Compositor::cacheDeckPreviewFromFbo(bool deckA) {
-    const GLuint fbo = deckA ? m_deckFboA : m_deckFboB;
-    if (!fbo) return;
-
-    QImage full(s_programWidth, s_programHeight, QImage::Format_RGBA8888);
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    glReadPixels(0, 0, s_programWidth, s_programHeight,
-                 GL_RGBA, GL_UNSIGNED_BYTE, full.bits());
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    full = full.mirrored(false, true);
-    QImage &cache = deckA ? m_deckPreviewA : m_deckPreviewB;
-    cache = full.scaled(s_deckPreviewWidth, s_deckPreviewHeight,
-                        Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 }
 
 // ── Texture rendering ─────────────────────────────────────────────────────────
@@ -1130,13 +1076,6 @@ QImage Compositor::deckProgramFrame(bool deckA) const {
     return deckA ? m_deckFrameCacheA : m_deckFrameCacheB;
 }
 
-QImage Compositor::getFrameA() const {
-    return m_deckPreviewA;
-}
-
-QImage Compositor::getFrameB() const {
-    return m_deckPreviewB;
-}
 
 // ── GL helpers ────────────────────────────────────────────────────────────────
 
