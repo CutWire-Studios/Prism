@@ -16,9 +16,14 @@ on:
         default: all
         type: string
       channel:
-        description: "stable or nightly. Nightly only changes artifact file names; see nightly.yml"
+        description: "stable or nightly. Nightly has its own app identity; see nightly.yml"
         required: false
         default: stable
+        type: string
+      build_id:
+        description: "Nightly build stamp, YYYYMMDD.<short sha>; ignored on the stable channel"
+        required: false
+        default: ""
         type: string
 
 permissions:
@@ -30,6 +35,11 @@ env:
   # …/releases/download/nightly/Prism-nightly-x86_64.AppImage is a permanent link and the single
   # rewritten pre-release has exactly one file per platform to clobber each night.
   ASSET_LABEL: ${{ inputs.channel == 'nightly' && 'nightly' || inputs.version }}
+  # Passed to every desktop Configure step. A nightly gets its own app id, bundle id, installer
+  # AppId and version suffix out of these.
+  PRISM_CHANNEL_ARGS: >-
+    -DPRISM_CHANNEL=${{ inputs.channel }}
+    -DPRISM_BUILD_ID=${{ inputs.build_id }}
   QT_VERSION: "6.10.3"
   # qtdeclarative carries Qt Quick, QuickControls2 and QuickEffects. It is already in the base
   # install on every desktop kit, so the explicit entry documents the dependency rather than
@@ -106,15 +116,27 @@ jobs:
           path: ${{ github.workspace }}/.flatpak-builder/ccache
           manage-env: 'false'
 
+      # A nightly bundle installed under org.cutwire.Prism would replace the user's stable install,
+      # so it gets its own app id — and with it its own .desktop, icon and AppStream id, which CMake
+      # renames on the nightly channel (flatpak build-export drops anything in /app/share not named
+      # after the app id).
+      - name: Generate the nightly manifest
+        if: inputs.channel == 'nightly'
+        run: |
+          python3 scripts/make-nightly-flatpak-manifest.py "${{ inputs.build_id }}"
+          flatpak-builder --show-manifest flatpak/org.cutwire.Prism.Nightly.yml > /dev/null
+
       # The local manifest (not a Flathub one) builds the working tree, so it validates the commit
       # under test rather than whatever tag a Flathub manifest is pinned to.
       - name: Build flatpak
         id: build
+        env:
+          MANIFEST: ${{ inputs.channel == 'nightly' && 'flatpak/org.cutwire.Prism.Nightly.yml' || 'flatpak/org.cutwire.Prism.yml' }}
         run: |
           flatpak-builder --user --force-clean --ccache --install-deps-from=flathub \
             --repo="${{ runner.temp }}/flatpak-repo" \
             "${{ runner.temp }}/flatpak-build" \
-            flatpak/org.cutwire.Prism.yml
+            "${MANIFEST}"
 
       - name: Save ccache
         if: always() && steps.build.outcome == 'success'
@@ -127,11 +149,13 @@ jobs:
           manage-env: 'false'
 
       - name: Export bundle
+        env:
+          APP_ID: ${{ inputs.channel == 'nightly' && 'org.cutwire.Prism.Nightly' || 'org.cutwire.Prism' }}
         run: |
           mkdir -p dist
           flatpak build-bundle "${{ runner.temp }}/flatpak-repo" \
             "dist/Prism-${{ env.ASSET_LABEL }}-${{ matrix.arch }}.flatpak" \
-            org.cutwire.Prism --arch="${{ matrix.arch }}"
+            "${APP_ID}" --arch="${{ matrix.arch }}"
 
       - name: Upload flatpak bundle
         uses: actions/upload-artifact@v4
@@ -229,7 +253,8 @@ jobs:
             -DFETCHCONTENT_BASE_DIR="${FETCHCONTENT_BASE_DIR}" \
             -DPRISM_WITH_NDI=OFF \
             -DPRISM_WITH_WEBRTC=ON \
-            -DPRISM_WITH_SEGMENTATION=ON
+            -DPRISM_WITH_SEGMENTATION=ON \
+            ${{ env.PRISM_CHANNEL_ARGS }}
 
       # Everything, not just Prism: the unit tests are built here and run in the next step.
       - name: Build
@@ -259,6 +284,24 @@ jobs:
         run: |
           cmake --install build --prefix "${GITHUB_WORKSPACE}/AppDir/usr"
           mkdir -p "${GITHUB_WORKSPACE}/dist"
+
+      # linuxdeploy names the AppImage's launcher entry and icon after these, so on the nightly
+      # channel they have to be the org.cutwire.Prism.Nightly pair — the desktop file CMake
+      # generated at configure time, and a copy of the icon under the matching name (the desktop
+      # file's Icon= key and the icon's filename must agree or linuxdeploy rejects it).
+      - name: Resolve the desktop entry for the AppImage
+        id: appimage_meta
+        shell: bash
+        run: |
+          if [ "${{ inputs.channel }}" = "nightly" ]; then
+            icon="${RUNNER_TEMP}/org.cutwire.Prism.Nightly.png"
+            cp flatpak/share/icons/hicolor/256x256/apps/org.cutwire.Prism.png "${icon}"
+            echo "desktop=build/metadata/org.cutwire.Prism.Nightly.desktop" >> "$GITHUB_OUTPUT"
+            echo "icon=${icon}" >> "$GITHUB_OUTPUT"
+          else
+            echo "desktop=flatpak/org.cutwire.Prism.desktop" >> "$GITHUB_OUTPUT"
+            echo "icon=flatpak/share/icons/hicolor/256x256/apps/org.cutwire.Prism.png" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build AppImage
         shell: bash
@@ -308,8 +351,8 @@ jobs:
           export QML_SOURCES_PATHS="${GITHUB_WORKSPACE}/src/qml"
           ./linuxdeploy.AppImage --appdir AppDir --plugin qt --output appimage \
             --exclude-library "libva*" \
-            -d flatpak/org.cutwire.Prism.desktop \
-            -i flatpak/share/icons/hicolor/256x256/apps/org.cutwire.Prism.png \
+            -d "${{ steps.appimage_meta.outputs.desktop }}" \
+            -i "${{ steps.appimage_meta.outputs.icon }}" \
             -e AppDir/usr/bin/Prism
           test -f "${APPIMAGE_NAME}.zsync"
           mv "${APPIMAGE_NAME}" "${APPIMAGE_NAME}.zsync" dist/
@@ -409,7 +452,8 @@ jobs:
             -DZLIB_LIBRARY=${{ github.workspace }}\vcpkg\installed\x64-windows-static-md\lib\zs.lib `
             -DPRISM_WITH_NDI=OFF `
             -DPRISM_WITH_WEBRTC=ON `
-            -DPRISM_WITH_SEGMENTATION=ON
+            -DPRISM_WITH_SEGMENTATION=ON `
+            ${{ env.PRISM_CHANNEL_ARGS }}
 
       - name: Build
         shell: pwsh
@@ -443,16 +487,21 @@ jobs:
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.6
         with:
           path: installer/windows/Prism.iss
+          # /DNightly gives the installer its own AppId, name and install directory, so it lands
+          # beside a stable install rather than upgrading it.
           options: |
             /DMyAppVersion=${{ inputs.version }}
             /DMyAppSource=${{ github.workspace }}\dist\bin
+            ${{ inputs.channel == 'nightly' && '/DNightly' || '' }}
 
+      # Wildcard rather than a fixed name: the nightly channel's OutputBaseFilename differs, and
+      # the script only ever emits one installer.
       - name: Collect installer
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item installer\windows\output\Prism-Setup-x64.exe `
-            "dist\Prism-Setup-${{ env.ASSET_LABEL }}-x64.exe" -Force
+          $built = Get-ChildItem installer\windows\output\*.exe
+          Copy-Item $built.FullName "dist\Prism-Setup-${{ env.ASSET_LABEL }}-x64.exe" -Force
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
@@ -465,13 +514,17 @@ jobs:
       # Relocatable, not self-contained: settings are still stored per-user under %APPDATA%.
       # 7z rather than Compress-Archive: the staged tree is several hundred MB of Qt and FFmpeg
       # DLLs, which is where Compress-Archive's in-memory approach gets slow.
+      # The inner folder is channel-named too, so unpacking both channels side by side does not
+      # merge two builds into one directory.
       - name: Build portable zip
         shell: pwsh
+        env:
+          FOLDER: ${{ inputs.channel == 'nightly' && 'Prism Nightly' || 'Prism' }}
         run: |
-          New-Item -ItemType Directory -Force -Path "portable\Prism", dist\portable | Out-Null
-          Copy-Item dist\bin\* "portable\Prism" -Recurse -Force
+          New-Item -ItemType Directory -Force -Path "portable\$env:FOLDER", dist\portable | Out-Null
+          Copy-Item dist\bin\* "portable\$env:FOLDER" -Recurse -Force
           & "$env:ProgramFiles\7-Zip\7z.exe" a -tzip -mx=9 `
-            "dist\portable\Prism-Portable-${{ env.ASSET_LABEL }}-x64.zip" ".\portable\Prism"
+            "dist\portable\Prism-Portable-${{ env.ASSET_LABEL }}-x64.zip" ".\portable\$env:FOLDER"
 
       - name: Upload portable artifact
         uses: actions/upload-artifact@v4
@@ -531,7 +584,8 @@ jobs:
             -DFETCHCONTENT_BASE_DIR="${FETCHCONTENT_BASE_DIR}" \
             -DPRISM_WITH_NDI=OFF \
             -DPRISM_WITH_WEBRTC=ON \
-            -DPRISM_WITH_SEGMENTATION=ON
+            -DPRISM_WITH_SEGMENTATION=ON \
+            ${{ env.PRISM_CHANNEL_ARGS }}
 
       - name: Build
         id: build
@@ -564,8 +618,11 @@ jobs:
           NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
           NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
         run: |
+          # --channel has to match the Configure step: it is how the script knows the bundle is
+          # "Prism Nightly.app" rather than "Prism.app".
+          CHANNEL_ARGS=(--channel "${{ inputs.channel }}" --build-id "${{ inputs.build_id }}")
           package_adhoc() {
-            scripts/package-macos.sh --build-dir build-macos --skip-build
+            scripts/package-macos.sh --build-dir build-macos --skip-build "${CHANNEL_ARGS[@]}"
           }
 
           if [ -z "$MACOS_CERTIFICATE" ]; then
@@ -578,7 +635,7 @@ jobs:
           set +e
           (
             set -euo pipefail
-            ARGS=(--build-dir build-macos --skip-build)
+            ARGS=(--build-dir build-macos --skip-build "${CHANNEL_ARGS[@]}")
             KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
             KEYCHAIN_PWD="$(uuidgen)"
             echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
@@ -647,12 +704,25 @@ jobs:
       # makepkg refuses to run as root, and archlinux:base-devel's default
       # user is root — create an unprivileged builder with passwordless sudo
       # (needed for makepkg -s to pacman-install PKGBUILD's own depends).
+      # python is not in base-devel and the nightly PKGBUILD generator needs it before makepkg
+      # installs the PKGBUILD's own makedepends.
       - name: Set up builder user
         run: |
           pacman -Syu --noconfirm
+          pacman -S --needed --noconfirm python
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
           chown -R builder:builder "${GITHUB_WORKSPACE}"
+
+      # Arch is the one platform where the two channels are not co-installable — both packages own
+      # /usr/bin/Prism — so the nightly takes a distinct package name and declares the conflict, the
+      # way an AUR -git package does. The PKGBUILD is derived from the stable one at build time
+      # rather than committed, so a new dependency there cannot be missed here.
+      - name: Generate the nightly PKGBUILD
+        if: inputs.channel == 'nightly'
+        run: |
+          scripts/make-nightly-pkgbuild.sh "${{ inputs.build_id }}" "${{ github.sha }}"
+          chown -R builder:builder packaging/arch/nightly
 
       # The PKGBUILD's source is git+https with a #commit= pin that defaults
       # to the latest tagged release (so a plain `makepkg` — e.g. a real AUR
@@ -660,12 +730,23 @@ jobs:
       # environment first, so pin it to the exact commit that triggered this
       # workflow instead of the tag.
       - name: Build package
-        run: su builder -c "cd '${GITHUB_WORKSPACE}/packaging/arch' && _commit='${{ github.sha }}' makepkg -s --noconfirm"
+        env:
+          PKGDIR: ${{ inputs.channel == 'nightly' && 'packaging/arch/nightly' || 'packaging/arch' }}
+        run: su builder -c "cd '${GITHUB_WORKSPACE}/${PKGDIR}' && _commit='${{ github.sha }}' makepkg -s --noconfirm"
 
+      # makepkg's own filename carries the version, which for a nightly changes every night and
+      # would leave the previous night's asset behind on the one rewritten pre-release. Stable
+      # keeps the name pacman users expect.
       - name: Collect package
+        env:
+          PKGDIR: ${{ inputs.channel == 'nightly' && 'packaging/arch/nightly' || 'packaging/arch' }}
         run: |
           mkdir -p dist
-          cp packaging/arch/*.pkg.tar.zst dist/
+          if [ "${{ inputs.channel }}" = "nightly" ]; then
+            cp "${PKGDIR}"/*.pkg.tar.zst dist/prism-nightly-x86_64.pkg.tar.zst
+          else
+            cp "${PKGDIR}"/*.pkg.tar.zst dist/
+          fi
 
       - name: Upload Arch package artifact
         uses: actions/upload-artifact@v4

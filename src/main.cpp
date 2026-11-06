@@ -7,6 +7,7 @@
 #include "mcp/McpStdio.h"
 #include "core/media/GpuVideoUploader.h"
 #include "core/media/VideoDecoder.h"
+#include "release.h"
 
 #include <QApplication>
 #include <QByteArray>
@@ -25,7 +26,7 @@ int main(int argc, char *argv[]) {
         if (qstrcmp(argv[i], "--mcp-stdio") == 0) {
             QCoreApplication app(argc, argv);
             QCoreApplication::setOrganizationName(QStringLiteral("Prism"));
-            QCoreApplication::setApplicationName(QStringLiteral("Prism"));
+            QCoreApplication::setApplicationName(QStringLiteral(PRISM_APP_NAME));
             return prism::mcp::runStdioAttach();
         }
     }
@@ -54,22 +55,22 @@ int main(int argc, char *argv[]) {
     // Settings are read before QApplication exists: VAAPI zero-copy needs Qt's xcb plugin on
     // EGL, which has to be chosen before the platform plugin loads.
     QCoreApplication::setOrganizationName(QStringLiteral("Prism"));
-    QCoreApplication::setApplicationName(QStringLiteral("Prism"));
+    QCoreApplication::setApplicationName(QStringLiteral(PRISM_APP_NAME));
     prism::applyZeroCopyXcbEgl();
 
     QApplication app(argc, argv);
     app.setOrganizationName("Prism");
-    app.setApplicationName("Prism");
+    app.setApplicationName(PRISM_APP_NAME);
     VideoDecoder::applyModeSetting(VideoDecoder::modeSetting());
     // Resources must be registered before using :/ icons (Windows has no theme icon).
     Q_INIT_RESOURCE(resources);
     // Wayland compositors resolve the window icon by matching the surface's
     // app_id to an installed .desktop file. Qt derives app_id from the desktop
-    // file name, so this must equal the installed org.cutwire.Prism.desktop or
+    // file name, so this must equal the installed desktop file (named after PRISM_APP_ID) or
     // the window falls back to the generic icon. setWindowIcon covers X11.
-    app.setDesktopFileName(QStringLiteral("org.cutwire.Prism"));
+    app.setDesktopFileName(QStringLiteral(PRISM_APP_ID));
     {
-        QIcon appIcon = QIcon::fromTheme(QStringLiteral("org.cutwire.Prism"));
+        QIcon appIcon = QIcon::fromTheme(QStringLiteral(PRISM_APP_ID));
         if (appIcon.isNull())
             appIcon = QIcon(QStringLiteral(":/Prism_icon.png"));
         app.setWindowIcon(appIcon);

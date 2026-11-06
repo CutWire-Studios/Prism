@@ -5,7 +5,7 @@
     <key>CFBundleName</key>
     <string>${MACOSX_BUNDLE_BUNDLE_NAME}</string>
     <key>CFBundleDisplayName</key>
-    <string>CutWire Prism</string>
+    <string>CutWire ${MACOSX_BUNDLE_BUNDLE_NAME}</string>
     <key>CFBundleExecutable</key>
     <string>${MACOSX_BUNDLE_EXECUTABLE_NAME}</string>
     <key>CFBundleIdentifier</key>

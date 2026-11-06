@@ -17,6 +17,33 @@ set(CMAKE_AUTOUIC ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 include(PrismBuildSpeed)
 
+# --- Release channel --------------------------------------------------------
+# Nightly builds are the same source with a different identity: their own app id, their own
+# launcher name, and a version string carrying the build stamp. That lets one install sit beside a
+# stable one (a separate bundle id, Windows AppId and Flatpak id). The nightly workflow passes both
+# of these; nothing else sets them.
+#
+# project(Prism VERSION ...) stays strictly X.Y.Z, so the string the app displays is built here.
+set(PRISM_CHANNEL "stable" CACHE STRING "Release channel: stable or nightly")
+set(PRISM_BUILD_ID "" CACHE STRING "Nightly build stamp, YYYYMMDD.<short sha>")
+
+if(NOT PRISM_CHANNEL STREQUAL "stable" AND NOT PRISM_CHANNEL STREQUAL "nightly")
+    message(FATAL_ERROR "PRISM_CHANNEL must be 'stable' or 'nightly', not '${PRISM_CHANNEL}'")
+endif()
+
+set(PRISM_APP_ID "org.cutwire.Prism")
+set(PRISM_APP_NAME "Prism")
+set(PRISM_VERSION_STRING "${PROJECT_VERSION}")
+if(PRISM_CHANNEL STREQUAL "nightly")
+    set(PRISM_APP_ID "org.cutwire.Prism.Nightly")
+    set(PRISM_APP_NAME "Prism Nightly")
+    if(PRISM_BUILD_ID STREQUAL "")
+        set(PRISM_BUILD_ID "dev")
+    endif()
+    set(PRISM_VERSION_STRING "${PROJECT_VERSION}-nightly.${PRISM_BUILD_ID}")
+endif()
+message(STATUS "Prism channel: ${PRISM_CHANNEL} (${PRISM_VERSION_STRING}, ${PRISM_APP_ID})")
+
 # Skia draws text and shapes on the CPU (see third_party/build-skia.sh for the prebuilt)
 find_package(Skia REQUIRED)
 
@@ -787,8 +814,10 @@ if(APPLE)
     set(_prism_icns "${CMAKE_CURRENT_SOURCE_DIR}/resources/macos/Prism.icns")
     qt_add_executable(Prism MACOSX_BUNDLE src/main.cpp ${_prism_icns})
 
-    set(MACOSX_BUNDLE_BUNDLE_NAME "Prism")
-    set(MACOSX_BUNDLE_GUI_IDENTIFIER "org.cutwire.Prism")
+    # A nightly is "Prism Nightly.app" with its own bundle id, so it installs beside a stable copy.
+    set(MACOSX_BUNDLE_BUNDLE_NAME "${PRISM_APP_NAME}")
+    set(MACOSX_BUNDLE_EXECUTABLE_NAME "${PRISM_APP_NAME}")
+    set(MACOSX_BUNDLE_GUI_IDENTIFIER "${PRISM_APP_ID}")
     set(MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}")
     set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
     set(MACOSX_BUNDLE_ICON_FILE "Prism.icns")
@@ -797,6 +826,7 @@ if(APPLE)
     set_source_files_properties(${_prism_icns} PROPERTIES
         MACOSX_PACKAGE_LOCATION "Resources")
     set_target_properties(Prism PROPERTIES
+        OUTPUT_NAME "${PRISM_APP_NAME}"
         MACOSX_BUNDLE_INFO_PLIST
             "${CMAKE_CURRENT_SOURCE_DIR}/resources/macos/Info.plist.in")
 else()
@@ -840,16 +870,37 @@ install(TARGETS Prism prism_core
 if(UNIX AND NOT APPLE)
     include(GNUInstallDirs)
 
-    install(FILES flatpak/org.cutwire.Prism.desktop
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
-    install(FILES flatpak/org.cutwire.Prism.metainfo.xml
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)
+    # Installs one freedesktop metadata file under the channel's app id. On stable that is the
+    # source file byte for byte. A nightly gets a generated copy with every org.cutwire.Prism
+    # occurrence rewritten (AppStream <id> and <launchable>, the desktop file's Icon=) and the
+    # human-facing name suffixed, so the launcher shows "Prism Nightly" beside a stable entry.
+    function(prism_install_metadata source destination name)
+        if(PRISM_CHANNEL STREQUAL "stable")
+            install(FILES "${source}" DESTINATION "${destination}" RENAME "${name}")
+            return()
+        endif()
+        file(READ "${CMAKE_SOURCE_DIR}/${source}" _content)
+        string(REPLACE "org.cutwire.Prism" "${PRISM_APP_ID}" _content "${_content}")
+        string(REPLACE "Name=Prism\n" "Name=${PRISM_APP_NAME}\n" _content "${_content}")
+        string(REPLACE "<name>Prism</name>" "<name>${PRISM_APP_NAME}</name>" _content "${_content}")
+        set(_generated "${CMAKE_CURRENT_BINARY_DIR}/metadata/${name}")
+        file(WRITE "${_generated}" "${_content}")
+        install(FILES "${_generated}" DESTINATION "${destination}")
+    endfunction()
+
+    # Every one of these is installed under the channel's app id: flatpak build-export silently
+    # drops anything in /app/share whose name does not start with the app id.
+    prism_install_metadata(flatpak/org.cutwire.Prism.desktop
+        "${CMAKE_INSTALL_DATADIR}/applications" "${PRISM_APP_ID}.desktop")
+    prism_install_metadata(flatpak/org.cutwire.Prism.metainfo.xml
+        "${CMAKE_INSTALL_DATADIR}/metainfo" "${PRISM_APP_ID}.metainfo.xml")
 
     # 1024px source is intentionally skipped: flatpak build-export rejects icons
     # larger than 512x512.
     foreach(_size 64 128 256 512)
         install(FILES
             flatpak/share/icons/hicolor/${_size}x${_size}/apps/org.cutwire.Prism.png
-            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${_size}x${_size}/apps)
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${_size}x${_size}/apps
+            RENAME ${PRISM_APP_ID}.png)
     endforeach()
 endif()

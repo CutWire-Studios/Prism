@@ -6,12 +6,24 @@
   #define MyAppSource "dist\\bin"
 #endif
 
-#define MyAppName "Prism"
+#ifdef Nightly
+  #define MyAppName "Prism Nightly"
+  #define MyAppId "AB056FBC-A940-45F2-BFA4-B3D11A1DDA62"
+  #define MyOutputBase "Prism-Setup-Nightly-x64"
+#else
+  #define MyAppName "Prism"
+  #define MyAppId "CD0E807F-9EEC-4F07-B8A2-1433A8E5B3C2"
+  #define MyOutputBase "Prism-Setup-x64"
+#endif
 #define MyAppPublisher "CutWire"
 #define MyAppExeName "Prism.exe"
 
+; /DNightly builds the nightly channel installer: its own AppId, name and install directory, so it
+; sits beside a stable install instead of upgrading it. Never change either AppId: it is what lets
+; an installer upgrade an existing install in place.
+
 [Setup]
-AppId={{CD0E807F-9EEC-4F07-B8A2-1433A8E5B3C2}
+AppId={{{#MyAppId}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -23,7 +35,7 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 OutputDir=output
-OutputBaseFilename=Prism-Setup-x64
+OutputBaseFilename={#MyOutputBase}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

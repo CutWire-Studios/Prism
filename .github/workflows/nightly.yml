@@ -3,10 +3,9 @@ name: Nightly
 # One pre-release, tagged `nightly`, rewritten in place every night — rather than a tag per build,
 # which would bury the stable releases.
 #
-# Unlike Drift, Prism's nightly does not get its own application identity: CMake has no channel
-# switch, so the Flatpak app id, Arch package name, bundle id and installer AppId are the stable
-# ones. Installing a nightly therefore replaces the stable install of the same platform. The
-# release body says so.
+# Nightly builds carry their own application identity on every platform — bundle id, Windows
+# AppId, Flatpak app id, Arch package name — so one can be installed and uninstalled without
+# disturbing a stable install.
 on:
   schedule:
     # Midnight in UTC+05:30, which cron can only express in UTC: 18:30 the previous day.
@@ -43,6 +42,7 @@ jobs:
     outputs:
       should_build: ${{ steps.decide.outputs.should_build }}
       version: ${{ steps.decide.outputs.version }}
+      build_id: ${{ steps.decide.outputs.build_id }}
     steps:
       - uses: actions/checkout@v4
 
@@ -77,6 +77,7 @@ jobs:
           project_version="$(grep -oP '^project\(Prism VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)"
 
           echo "should_build=true" >> "$GITHUB_OUTPUT"
+          echo "build_id=${build_id}" >> "$GITHUB_OUTPUT"
           echo "version=${project_version}-nightly.${build_id}" >> "$GITHUB_OUTPUT"
 
   package:
@@ -91,6 +92,7 @@ jobs:
       version: ${{ needs.check.outputs.version }}
       platform: ${{ inputs.platform || 'all' }}
       channel: nightly
+      build_id: ${{ needs.check.outputs.build_id }}
     secrets: inherit
 
   publish:
@@ -134,8 +136,8 @@ jobs:
             echo "> to start. If you need something that works, use the [latest stable release](https://github.com/${GITHUB_REPOSITORY}/releases/latest)."
             echo
             echo "This pre-release is replaced in place every night, so the download links above always"
-            echo "point at the newest build. **Nightly builds use the same app identity as stable on every"
-            echo "platform**, so installing one replaces the stable Prism of that platform."
+            echo "point at the newest build. Nightly builds have their own app identity on every platform, so"
+            echo "they install beside a stable Prism and keep their own settings."
             echo
             if [ -n "${last_stable}" ]; then
               echo "## Changes since ${last_stable}"
@@ -151,13 +153,15 @@ jobs:
           ## Installing
 
           - **AppImage** (Linux, any distro): `chmod +x Prism-nightly-x86_64.AppImage && ./Prism-nightly-x86_64.AppImage`
-          - **Windows installer**: run `Prism-Setup-nightly-x64.exe`
-          - **Windows portable**: extract `Prism-Portable-nightly-x64.zip` and run `Prism.exe` from the `Prism` folder.
-          - **macOS**: open `Prism-nightly-arm64.dmg` and drag Prism to Applications. Ad-hoc signed unless
+          - **Windows installer**: run `Prism-Setup-nightly-x64.exe`. Installs as "Prism Nightly" in its own
+            directory; it does not touch a stable install.
+          - **Windows portable**: extract `Prism-Portable-nightly-x64.zip` and run `Prism.exe` from the
+            `Prism Nightly` folder inside it.
+          - **macOS**: open `Prism-nightly-arm64.dmg` and drag *Prism Nightly* to Applications. Ad-hoc signed unless
             notarised, so the first launch may need right-click → Open.
-          - **Arch Linux**: `sudo pacman -U prism-*.pkg.tar.zst`
-          - **Flatpak**: `flatpak install --user Prism-nightly-x86_64.flatpak` (or `-aarch64.flatpak`). Uses the
-            stable app id `org.cutwire.Prism`.
+          - **Arch Linux**: `sudo pacman -U prism-nightly-x86_64.pkg.tar.zst` (replaces `prism`).
+          - **Flatpak**: `flatpak install --user Prism-nightly-x86_64.flatpak` (or `-aarch64.flatpak`). App id
+            `org.cutwire.Prism.Nightly`, so it sits beside a Flathub install.
           EOF
           } > notes.md
 

@@ -4,12 +4,14 @@
 #   scripts/package-macos.sh
 #   scripts/package-macos.sh --identity "Developer ID Application: ..." --notarize
 #   scripts/package-macos.sh --build-dir build-macos --skip-build
+#   scripts/package-macos.sh --channel nightly --build-id 20260922.ac5601e
 #   scripts/package-macos.sh --qt-prefix ~/Qt/6.10.3/macos --ffmpeg-dir .deps/ffmpeg
 #
 # --ffmpeg-dir is for an official Qt, which ships its own FFmpeg dylibs under the same install
 # names as the FFmpeg Prism links: that directory's lib/ copies replace Qt's in the bundle.
 #
-# Signing is ad-hoc unless --identity is given. --notarize submits to Apple and staples the
+# --channel nightly builds "Prism Nightly.app" with its own bundle id, so it installs beside a
+# stable copy. Signing is ad-hoc unless --identity is given. --notarize submits to Apple and staples the
 # ticket, using either an App Store Connect API key (NOTARY_KEY holding the .p8 path, NOTARY_KEY_ID,
 # NOTARY_ISSUER_ID) or an Apple ID (NOTARY_APPLE_ID, NOTARY_PASSWORD holding an app-specific
 # password, NOTARY_TEAM_ID).
@@ -22,7 +24,9 @@ IDENTITY=""
 SKIP_BUILD=0
 NOTARIZE=0
 QT_PREFIX=""
+CHANNEL="stable"
 FFMPEG_DIR=""
+BUILD_ID=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -30,6 +34,8 @@ while [[ $# -gt 0 ]]; do
     --build-dir)  BUILD_DIR="$ROOT/$2"; shift 2 ;;
     --qt-prefix)  QT_PREFIX="$2"; shift 2 ;;
     --ffmpeg-dir) FFMPEG_DIR="$2"; shift 2 ;;
+    --channel)    CHANNEL="$2"; shift 2 ;;
+    --build-id)   BUILD_ID="$2"; shift 2 ;;
     --skip-build) SKIP_BUILD=1; shift ;;
     --notarize)   NOTARIZE=1; shift ;;
     -h|--help)    sed -n '2,17p' "$0"; exit 0 ;;
@@ -76,7 +82,15 @@ fi
 VERSION="$(sed -n 's/^project(Prism VERSION \([0-9.]*\).*/\1/p' "$ROOT/CMakeLists.txt")"
 ARCH="$(uname -m)"
 
-APP_NAME="Prism"
+# The bundle name follows the channel because CMake's PRISM_APP_NAME does: a nightly is
+# "Prism Nightly.app" with bundle id org.cutwire.Prism.Nightly, which is what lets the two sit in
+# /Applications together.
+case "$CHANNEL" in
+  stable)  APP_NAME="Prism" ;;
+  nightly) APP_NAME="Prism Nightly"; VERSION="$VERSION-nightly.${BUILD_ID:-dev}" ;;
+  *) echo "--channel must be stable or nightly, not: $CHANNEL" >&2; exit 2 ;;
+esac
+
 APP="$BUILD_DIR/$APP_NAME.app"
 EXE="$APP/Contents/MacOS/$APP_NAME"
 DMG="$DIST_DIR/Prism-$VERSION-$ARCH.dmg"
@@ -87,7 +101,9 @@ if [[ $SKIP_BUILD -eq 0 ]]; then
     -DCMAKE_PREFIX_PATH="$QT_PREFIX;$BREW_PREFIX/opt/openssl@3;$BREW_PREFIX" \
     -DPRISM_WITH_NDI=OFF \
     -DPRISM_WITH_WEBRTC=ON \
-    -DPRISM_WITH_SEGMENTATION=ON
+    -DPRISM_WITH_SEGMENTATION=ON \
+    -DPRISM_CHANNEL="$CHANNEL" \
+    -DPRISM_BUILD_ID="$BUILD_ID"
   cmake --build "$BUILD_DIR" --target Prism --parallel "$(sysctl -n hw.ncpu)"
 fi
 
