@@ -3,6 +3,7 @@
 #include "core/graph/ClipGraph.h"
 
 #include <QJsonObject>
+#include <QSettings>
 
 NodeCatalog::NodeCatalog(QObject *parent)
     : QObject(parent)
@@ -87,4 +88,19 @@ bool NodeCatalog::scriptingAvailable() const
 #else
     return false;
 #endif
+}
+
+QStringList NodeCatalog::recentNodeKeys() const
+{
+    return QSettings().value(QStringLiteral("palette/recent")).toStringList();
+}
+
+void NodeCatalog::noteNodeAdded(const QString &key)
+{
+    QStringList recent = recentNodeKeys();
+    recent.removeAll(key);
+    recent.prepend(key);
+    while (recent.size() > 5)
+        recent.removeLast();
+    QSettings().setValue(QStringLiteral("palette/recent"), recent);
 }

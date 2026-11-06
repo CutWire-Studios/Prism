@@ -48,6 +48,7 @@ FocusScope {
     property int connectKind: 0
     property point connectStart: Qt.point(0, 0)
     property point cursorWorld: Qt.point(0, 0)
+    property point hoverPos: Qt.point(NaN, NaN)
     property string hoverPortKey: ""
     property bool connectClickMode: false
     property bool spaceDown: false
@@ -208,18 +209,23 @@ FocusScope {
         updateSplice(item, ids.length)
     }
 
-    // A lone, unwired Process / Audio FX node dragged over a wire of its own kind splices into it.
+    // A lone, unwired node dragged over a wire it can be spliced into highlights it; releasing
+    // inserts it. Wired nodes are detached first with Alt.
     function updateSplice(item, dragCount) {
         let id = 0
-        if (dragCount === 1 && item.inputPorts.length > 0 && item.outputPorts.length > 0
-                && !item.inputPorts[0].connected && !item.outputPorts[0].connected) {
-            if (item.type === NodePalette.nodeType.Process)
-                id = edges.edgeUnderRect(item.x, item.y, item.width, item.height, NodePalette.edgeKind.Chain)
-            else if (item.type === NodePalette.nodeType.AudioEffect)
-                id = edges.edgeUnderRect(item.x, item.y, item.width, item.height,
-                                         NodePalette.edgeKind.AudioEffectChain)
-        }
+        if (dragCount === 1 && !isWired(item))
+            id = edges.edgeUnderRect(item.x, item.y, item.width, item.height, item.nodeId)
         spliceEdgeId = id
+    }
+
+    function isWired(item) {
+        for (const p of item.inputPorts)
+            if (p.connected)
+                return true
+        for (const p of item.outputPorts)
+            if (p.connected)
+                return true
+        return false
     }
 
     function finishNodeDrag(item) {
@@ -244,7 +250,7 @@ FocusScope {
 
     // Adds a node at a world position and, for a pending connection, wires it to the first
     // compatible port of the new node.
-    function addNodeAt(type, params, wx, wy) {
+    function addNodeAt(type, params, wx, wy, edgeId) {
         const pendingKind = connectKind
         const pendingOut = connectIsOutput
         const pending = controller.connecting
@@ -252,7 +258,8 @@ FocusScope {
         let y = wy - 28
         if (pending && !pendingOut)
             x = wx - NodePalette.defaultWidth[type]
-        const id = controller.addNode(type, x, y, params || {})
+        const id = edgeId ? controller.addNodeIntoEdge(type, x, y, params || {}, edgeId)
+                          : controller.addNode(type, x, y, params || {})
         if (!id) {
             if (pending)
                 controller.cancelConnection()
@@ -425,6 +432,21 @@ FocusScope {
             cancelConnection()
             selectedEdge = 0
             event.accepted = true
+        } else if (event.key === Qt.Key_Tab && !ctrl) {
+            const at = isNaN(hoverPos.x) ? Qt.point(width / 2, height / 2) : hoverPos
+            addMenuRequested(at, toWorld(at.x, at.y))
+            event.accepted = true
+        } else if (ctrl && event.key === Qt.Key_C) {
+            controller.copySelection()
+            event.accepted = true
+        } else if (ctrl && event.key === Qt.Key_V) {
+            const at = isNaN(hoverPos.x) ? Qt.point(width / 2, height / 2) : hoverPos
+            const w = toWorld(at.x, at.y)
+            controller.paste(w.x, w.y)
+            event.accepted = true
+        } else if (ctrl && event.key === Qt.Key_D) {
+            controller.duplicateSelection()
+            event.accepted = true
         } else if (!ctrl && event.key === Qt.Key_F) {
             frameSelection()
             event.accepted = true
@@ -503,7 +525,9 @@ FocusScope {
     }
 
     HoverHandler {
+        onHoveredChanged: if (!hovered) root.hoverPos = Qt.point(NaN, NaN)
         onPointChanged: {
+            root.hoverPos = point.position
             if (root.controller && root.controller.connecting && !root._pressActive) {
                 root.cursorWorld = root.toWorld(point.position.x, point.position.y)
                 const hit = root.portAt(root.cursorWorld)

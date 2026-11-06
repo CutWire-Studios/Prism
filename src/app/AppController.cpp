@@ -29,6 +29,7 @@
 #include <QBuffer>
 #include <QDateTime>
 #include <QDir>
+#include <utility>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -897,7 +898,7 @@ void AppController::pushDecks()
 
 NodeId AppController::addSourceFromDescriptor(const SourceDescriptor &desc, const QImage &thumb)
 {
-    const NodeId id = m_runtime->addSourceNode(desc, thumb);
+    const NodeId id = m_runtime->addSourceNode(desc, thumb, std::exchange(m_pendingSourcePos, QPointF(qQNaN(), qQNaN())));
     if (id && (desc.kind == SourceDescriptor::Kind::VideoFile || desc.kind == SourceDescriptor::Kind::Image)
         && !desc.path.isEmpty() && QFileInfo(desc.path).isFile()) {
         m_clipManager.addFiles({desc.path});
@@ -908,15 +909,23 @@ NodeId AppController::addSourceFromDescriptor(const SourceDescriptor &desc, cons
     return id;
 }
 
-void AppController::importFiles(const QStringList &paths)
+void AppController::importFiles(const QStringList &paths, qreal x, qreal y)
 {
     if (paths.isEmpty())
         return;
+    QPointF at = qIsNaN(x) || qIsNaN(y) ? m_pendingSourcePos : QPointF(x, y);
+    m_pendingSourcePos = QPointF(qQNaN(), qQNaN());
     m_clipManager.addFiles(paths);
+    QVariantList added;
     for (const QString &path : paths) {
-        if (ClipManager::isMediaPath(path))
-            m_runtime->addClipNode(path);
+        if (!ClipManager::isMediaPath(path))
+            continue;
+        if (const NodeId id = m_runtime->addClipNode(path, {}, at))
+            added.append(QVariant::fromValue<quint64>(id));
+        at += QPointF(30, 30);
     }
+    if (!added.isEmpty())
+        m_graphController->select(added);
     mcpBumpRevision();
 }
 
@@ -927,8 +936,9 @@ void AppController::importFolder(const QString &path)
     m_clipManager.addFolder(path);
 }
 
-void AppController::requestAddFiles()
+void AppController::requestAddFiles(qreal x, qreal y)
 {
+    m_pendingSourcePos = QPointF(x, y);
     emit filePickRequested(QStringLiteral("addFiles"), tr("Add Media Files"), QStringLiteral("openMany"),
                            {tr("Media Files (%1)").arg(MediaFormats::globPattern(true, true, true))}, QString());
 }
@@ -956,7 +966,8 @@ quint64 AppController::addVideoUrl(const QString &url, const QString &displayNam
                                .arg(trimmed));
         return 0;
     }
-    const NodeId id = m_runtime->addClipNode(trimmed, ThumbHelper::makeIconThumb(ThumbHelper::Names::Link));
+    const NodeId id = m_runtime->addClipNode(trimmed, ThumbHelper::makeIconThumb(ThumbHelper::Names::Link),
+                                             std::exchange(m_pendingSourcePos, QPointF(qQNaN(), qQNaN())));
     if (id)
         renameNode(id, name);
     mcpBumpRevision();
@@ -1516,8 +1527,9 @@ void AppController::openAgentAccess() { emit appDialogRequested(QStringLiteral("
 
 void AppController::connectObs() { emit appDialogRequested(QStringLiteral("obs")); }
 
-void AppController::requestAddSource(const QString &kind)
+void AppController::requestAddSource(const QString &kind, qreal x, qreal y)
 {
+    m_pendingSourcePos = QPointF(x, y);
     static const QStringList editorKinds = {QStringLiteral("shader"), QStringLiteral("svgTemplate"),
                                             QStringLiteral("text"), QStringLiteral("shape")};
     if (editorKinds.contains(kind))

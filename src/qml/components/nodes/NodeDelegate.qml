@@ -199,6 +199,8 @@ Item {
                     return
                 moved = true
                 root.canvas.userMoved = true
+                if ((mouse.modifiers & Qt.AltModifier) && dragIds.length === 1)
+                    root.controller.detachNode(root.nodeId)
             }
             root.canvas.dragNodes(dragIds, dragStarts, dx, dy, root)
         }

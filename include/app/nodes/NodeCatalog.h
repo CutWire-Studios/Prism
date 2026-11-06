@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
@@ -29,4 +30,8 @@ public:
     /// ClipGraph::PortKind values.
     Q_INVOKABLE bool portsCompatible(int a, int b) const;
     Q_INVOKABLE bool scriptingAvailable() const;
+
+    /// Keys of the last few entries picked in the add-node palette, newest first (QSettings).
+    Q_INVOKABLE QStringList recentNodeKeys() const;
+    Q_INVOKABLE void noteNodeAdded(const QString &key);
 };

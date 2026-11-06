@@ -121,6 +121,18 @@ public:
     Q_INVOKABLE void cancelConnection();
     Q_INVOKABLE bool disconnectEdge(quint64 edgeId);
     Q_INVOKABLE bool insertIntoEdge(quint64 node, quint64 edgeId);
+    Q_INVOKABLE bool canInsertIntoEdge(quint64 node, quint64 edgeId) const;
+    /// Adds a node and splices it into edgeId (0 = plain add) as one undo step.
+    Q_INVOKABLE quint64 addNodeIntoEdge(int type, qreal x, qreal y, const QVariantMap &params, quint64 edgeId);
+    Q_INVOKABLE bool detachNode(quint64 node);
+
+    /// Copies the selection (with the edges between its nodes) to the in-process clipboard and,
+    /// when a GUI application exists, the system clipboard as application/x-prism-nodes.
+    Q_INVOKABLE bool copySelection();
+    /// Pastes the clipboard with its top-left corner at (x, y); NaN offsets it from the original.
+    /// The new nodes become the selection. Returns their ids.
+    Q_INVOKABLE QVariantList paste(qreal x = qQNaN(), qreal y = qQNaN());
+    Q_INVOKABLE QVariantList duplicateSelection();
 
     Q_INVOKABLE void select(const QVariantList &ids, bool additive = false);
     Q_INVOKABLE void clearSelection();
@@ -155,6 +167,7 @@ private:
 
     void init();
     void pushSnapshot(const QString &text, const QJsonObject &before);
+    QVariantList pasteDocument(const QJsonObject &clip, const QPointF &delta, const QString &text);
 
     ClipGraph *m_graph = nullptr;
     ClipGraphNodesModel *m_nodes = nullptr;
@@ -162,6 +175,7 @@ private:
     QUndoStack m_undo;
     QSet<NodeId> m_selection;
     Pending m_pending;
+    QJsonObject m_clipboard;
     bool m_mergeMoves = false;
     int m_revision = 0;
 };

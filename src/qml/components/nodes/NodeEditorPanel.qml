@@ -16,8 +16,6 @@ Item {
     property bool showMinimap: true
 
     signal inspectorRequested()
-    // Source picker for a new Input node; x/y are graph coordinates to place it at.
-    signal addInputNodeRequested(real x, real y)
     signal outputWindowRequested()
     signal runScriptRequested(var nodeId)
     signal pulseTriggerRequested(var nodeId)
@@ -36,10 +34,12 @@ Item {
 
         onAddMenuRequested: (screenPos, worldPos) => {
             addMenu.pendingKind = -1
+            addMenu.edgeId = graphCanvas.selectedEdge || graphCanvas.hoverEdge
             addMenu.worldPos = worldPos
             addMenu.openAt(screenPos.x, screenPos.y)
         }
         onConnectionDropped: (screenPos, worldPos, kind, fromOutput) => {
+            addMenu.edgeId = 0
             addMenu.pendingKind = kind
             addMenu.pendingIsOutput = fromOutput
             addMenu.worldPos = worldPos
@@ -115,6 +115,7 @@ Item {
                 enabled: !!root.controller
                 onClicked: {
                     addMenu.pendingKind = -1
+                    addMenu.edgeId = graphCanvas.selectedEdge
                     const c = graphCanvas.toWorld(graphCanvas.width / 2, graphCanvas.height / 2)
                     addMenu.worldPos = Qt.point(c.x - 60, c.y - 40)
                     addMenu.openAt(Theme.spacingLg, 52)
@@ -186,14 +187,6 @@ Item {
         id: addMenu
         canvas: graphCanvas
 
-        onPicked: (entry) => {
-            if (entry.input) {
-                graphCanvas.cancelConnection()
-                root.addInputNodeRequested(worldPos.x, worldPos.y)
-            } else {
-                graphCanvas.addNodeAt(entry.type, entry.params, worldPos.x, worldPos.y)
-            }
-        }
         onClosed: {
             if (!wasPicked)
                 graphCanvas.cancelConnection()

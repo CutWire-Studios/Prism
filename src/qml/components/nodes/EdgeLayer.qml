@@ -60,19 +60,26 @@ Item {
         return best
     }
 
-    // Id of an edge of the given kind whose curve passes through the rectangle, or 0.
-    function edgeUnderRect(rx, ry, rw, rh, kind) {
+    // Id of an edge passing through the rectangle that the node can be spliced into, or 0.
+    function edgeUnderRect(rx, ry, rw, rh, nodeId) {
         for (let i = 0; i < repeater.count; ++i) {
             const e = repeater.itemAt(i)
-            if (!e || !e.valid || e.edgeKind !== kind)
+            const id = e && e.valid ? e.edgeId : 0
+            if (id === 0 || !root.controller.canInsertIntoEdge(nodeId, id))
                 continue
             for (let s = 0; s <= samples; ++s) {
                 const p = _sample(e, s / samples)
                 if (p.x >= rx && p.x <= rx + rw && p.y >= ry && p.y <= ry + rh)
-                    return e.edgeId
+                    return id
             }
         }
         return 0
+    }
+
+    // [source port kind, target port kind] of an edge, or null.
+    function endKinds(id) {
+        const e = repeater.itemAt(controller.edges.rowOfEdge(id))
+        return e ? e.portKinds : null
     }
 
     Repeater {
@@ -96,6 +103,7 @@ Item {
                 void root.canvas.nodesRevision
                 return root.canvas.nodeItem(model.toNode)
             }
+            readonly property var portKinds: _fp && _tp ? [_fp.kind, _tp.kind] : null
             readonly property bool valid: fromItem !== null && toItem !== null
             readonly property var _fp: fromItem ? fromItem.outputPorts[model.fromPort] : undefined
             readonly property var _tp: toItem ? toItem.inputPorts[model.toPort] : undefined
@@ -117,9 +125,9 @@ Item {
             preferredRendererType: Shape.CurveRenderer
 
             ShapePath {
-                strokeColor: edge.splice ? Qt.alpha(Theme.foreground, 0.35)
+                strokeColor: edge.splice ? Qt.alpha(Theme.primary, 0.5)
                                          : (edge.picked ? Qt.alpha(Theme.primary, 0.25) : "transparent")
-                strokeWidth: 8
+                strokeWidth: edge.splice ? 12 : 8
                 fillColor: "transparent"
                 capStyle: ShapePath.RoundCap
                 startX: edge.p1x

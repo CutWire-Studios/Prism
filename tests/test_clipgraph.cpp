@@ -873,6 +873,115 @@ private slots:
         c.undo();
         QCOMPARE(c.graph()->sourceName(a), QStringLiteral("renamed"));
     }
+
+    void insertIntoEdgeGeneralised() {
+        ClipGraph g;
+        const NodeId a = g.addNode(NT::Input, {}, canvas("a"));
+        const NodeId layer = g.addNode(NT::Layer);
+        QVERIFY(g.connectNodes(a, layer, int(EK::Chain), 0));
+        const EdgeId e = g.edges().first().id;
+
+        const NodeId mic = g.addNode(NT::MasterAudioInput);
+        QVERIFY(!g.canInsertIntoEdge(mic, e));
+        QVERIFY(!g.insertIntoEdge(mic, e));
+        const NodeId fx = g.addNode(NT::AudioEffect, {}, {{"effect", 0}});
+        QVERIFY(!g.canInsertIntoEdge(fx, e));
+
+        const NodeId l2 = g.addNode(NT::Layer);
+        QVERIFY(g.canInsertIntoEdge(l2, e));
+        QVERIFY(g.insertIntoEdge(l2, e));
+        QCOMPARE(g.producerForInput(layer, 0), l2);
+        QCOMPARE(g.producerForInput(l2, 0), a);
+
+        const NodeId p = g.addNode(NT::Process, {}, {{"effect", 4}});
+        const NodeId q = g.addNode(NT::Process, {}, {{"effect", 4}});
+        QVERIFY(g.connectNodes(a, p));
+        QVERIFY(!g.canInsertIntoEdge(p, e));
+        QVERIFY(!g.canInsertIntoEdge(q, 9999));
+    }
+
+    void detachReconnectsNeighbours() {
+        ClipGraphController c;
+        const quint64 a = c.addNode(int(NT::Input), 0, 0, canvas("a"));
+        const quint64 p = c.addNode(int(NT::Process), 0, 0, {{"effect", 4}});
+        const quint64 layer = c.addNode(int(NT::Layer), 0, 0);
+        QVERIFY(c.graph()->connectNodes(a, p));
+        QVERIFY(c.graph()->connectNodes(p, layer, int(EK::Chain), 0));
+        QCOMPARE(c.graph()->edges().size(), 2);
+
+        QVERIFY(c.detachNode(p));
+        QCOMPARE(c.graph()->edges().size(), 1);
+        QCOMPARE(c.graph()->producerForInput(layer, 0), a);
+        QVERIFY(!c.graph()->isPortConnected(p, ClipGraph::PortDirection::In, 0));
+        QVERIFY(!c.detachNode(p));
+
+        c.undo();
+        QCOMPARE(c.graph()->edges().size(), 2);
+        QCOMPARE(c.graph()->producerForInput(layer, 0), p);
+    }
+
+    void copyPasteKeepsInternalEdgesAndNewIds() {
+        ClipGraphController c;
+        const quint64 a = c.addNode(int(NT::Input), 100, 50, canvas("a"));
+        const quint64 p = c.addNode(int(NT::Process), 300, 80, {{"effect", 8}});
+        const quint64 layer = c.addNode(int(NT::Layer), 500, 50);
+        QVERIFY(c.setParams(p, {{"params", QVariantMap{{"radius", 7}}}}));
+        QVERIFY(c.graph()->connectNodes(a, p));
+        QVERIFY(c.graph()->connectNodes(p, layer, int(EK::Chain), 0));
+        const int nodesBefore = c.graph()->nodeIds().size();
+
+        c.select({a, p});
+        QVERIFY(c.copySelection());
+        const QVariantList pasted = c.paste(1000, 400);
+        QCOMPARE(pasted.size(), 2);
+        QCOMPARE(c.graph()->nodeIds().size(), nodesBefore + 2);
+        for (const QVariant &v : pasted)
+            QVERIFY(v.toULongLong() != a && v.toULongLong() != p && v.toULongLong() != layer);
+        QCOMPARE(c.selection(), pasted);
+
+        const quint64 na = pasted[0].toULongLong();
+        const quint64 np = pasted[1].toULongLong();
+        QCOMPARE(c.graph()->node(na)->pos, QPointF(1000, 400));
+        QCOMPARE(c.graph()->node(np)->pos, QPointF(1200, 430));
+        QCOMPARE(c.graph()->node(np)->params["params"].toMap()["radius"].toInt(), 7);
+        QCOMPARE(c.graph()->producerForInput(np, 0), na);
+        // The edge leaving the selection is not copied.
+        QCOMPARE(c.graph()->edges().size(), 3);
+
+        c.undo();
+        QCOMPARE(c.graph()->nodeIds().size(), nodesBefore);
+        QCOMPARE(c.graph()->edges().size(), 2);
+    }
+
+    void duplicateOffsetsAndSkipsOutput() {
+        ClipGraphController c;
+        const quint64 a = c.addNode(int(NT::Input), 10, 20, canvas("a"));
+        const quint64 out = c.graph()->outputNodeId();
+        c.select({a, out});
+        const int before = c.graph()->nodeIds().size();
+        const QVariantList dup = c.duplicateSelection();
+        QCOMPARE(dup.size(), 1);
+        QCOMPARE(c.graph()->nodeIds().size(), before + 1);
+        QCOMPARE(c.graph()->node(dup[0].toULongLong())->pos, QPointF(50, 60));
+        QCOMPARE(c.graph()->sourceName(dup[0].toULongLong()), QStringLiteral("a"));
+        QCOMPARE(c.graph()->liveInput(), NodeId(0));
+        c.undo();
+        QCOMPARE(c.graph()->nodeIds().size(), before);
+    }
+
+    void addNodeIntoEdgeIsOneUndoStep() {
+        ClipGraphController c;
+        const quint64 a = c.addNode(int(NT::Input), 0, 0, canvas("a"));
+        const quint64 layer = c.addNode(int(NT::Layer), 0, 0);
+        QVERIFY(c.graph()->connectNodes(a, layer, int(EK::Chain), 0));
+        const quint64 e = c.graph()->edges().first().id;
+        const quint64 p = c.addNodeIntoEdge(int(NT::Process), 50, 50, {{"effect", 4}}, e);
+        QVERIFY(p != 0);
+        QCOMPARE(c.graph()->producerForInput(layer, 0), p);
+        c.undo();
+        QVERIFY(!c.graph()->hasNode(p));
+        QCOMPARE(c.graph()->producerForInput(layer, 0), a);
+    }
 };
 
 QTEST_MAIN(TestClipGraph)

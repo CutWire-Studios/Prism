@@ -243,8 +243,17 @@ public:
     bool connectPorts(NodeId from, int fromPort, NodeId to, int toPort);
     bool disconnectNodes(NodeId from, NodeId to, int toPortIndex = -1);
     bool disconnectEdge(EdgeId id);
-    /// Splice an unconnected single-in/single-out node (Process, Audio FX) into @p edge.
+    /// Splice @p node into @p edge through its first free input and output ports that are
+    /// compatible with the edge's two ends.
     bool insertIntoEdge(NodeId node, EdgeId edge);
+    bool canInsertIntoEdge(NodeId node, EdgeId edge) const;
+    /// Removes all of a node's edges and reconnects each upstream producer to a downstream
+    /// consumer where the port kinds allow it.
+    bool detachNode(NodeId id);
+    /// Serialises the given nodes (Output and Audio Output are skipped) and the edges between them.
+    QJsonObject copyNodes(const QList<NodeId> &ids) const;
+    /// Recreates a copyNodes() document with new ids, shifted by @p delta. Returns the new ids.
+    QList<NodeId> pasteNodes(const QJsonObject &clip, const QPointF &delta);
 
     // ── Validation ───────────────────────────────────────────────────────────
     static bool portsCompatible(PortKind a, PortKind b);
@@ -337,6 +346,8 @@ signals:
 
 private:
     struct ConnectPlan;
+    struct InsertPlan;
+    std::optional<InsertPlan> planInsert(NodeId node, const Edge &e) const;
 
     Node *mutableNode(NodeId id);
     NodeId allocateId() { return m_nextId++; }

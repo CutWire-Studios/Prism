@@ -1,6 +1,10 @@
 #include "core/graph/ClipGraphModels.h"
 
+#include <QClipboard>
+#include <QGuiApplication>
 #include <QJsonArray>
+#include <QJsonDocument>
+#include <QMimeData>
 #include <QElapsedTimer>
 #include <QSet>
 #include <QUndoCommand>
@@ -427,6 +431,80 @@ bool ClipGraphController::insertIntoEdge(quint64 node, quint64 edgeId) {
     const bool ok = m_graph->insertIntoEdge(node, edgeId);
     if (ok) pushSnapshot(QStringLiteral("Insert node"), before);
     return ok;
+}
+
+bool ClipGraphController::canInsertIntoEdge(quint64 node, quint64 edgeId) const {
+    return m_graph->canInsertIntoEdge(node, edgeId);
+}
+
+quint64 ClipGraphController::addNodeIntoEdge(int type, qreal x, qreal y, const QVariantMap &params,
+                                             quint64 edgeId) {
+    const QJsonObject before = m_graph->toJson();
+    const NodeId id = m_graph->addNode(ClipGraph::NodeType(type), QPointF(x, y), params);
+    if (id != 0 && edgeId != 0) m_graph->insertIntoEdge(id, edgeId);
+    if (id != 0) pushSnapshot(QStringLiteral("Add node"), before);
+    return id;
+}
+
+bool ClipGraphController::detachNode(quint64 node) {
+    const QJsonObject before = m_graph->toJson();
+    const bool ok = m_graph->detachNode(node);
+    if (ok) pushSnapshot(QStringLiteral("Detach node"), before);
+    return ok;
+}
+
+namespace {
+constexpr auto kClipboardMime = "application/x-prism-nodes";
+}
+
+bool ClipGraphController::copySelection() {
+    QList<NodeId> ids;
+    for (const QVariant &v : selection()) ids.append(v.toULongLong());
+    const QJsonObject clip = m_graph->copyNodes(ids);
+    if (clip["nodes"].toArray().isEmpty()) return false;
+    m_clipboard = clip;
+    if (qGuiApp) {
+        auto *mime = new QMimeData;
+        mime->setData(kClipboardMime, QJsonDocument(clip).toJson(QJsonDocument::Compact));
+        QGuiApplication::clipboard()->setMimeData(mime);
+    }
+    return true;
+}
+
+QVariantList ClipGraphController::pasteDocument(const QJsonObject &clip, const QPointF &delta,
+                                                const QString &text) {
+    const QJsonObject before = m_graph->toJson();
+    const QList<NodeId> created = m_graph->pasteNodes(clip, delta);
+    QVariantList out;
+    for (NodeId id : created) out.append(QVariant::fromValue<quint64>(id));
+    if (created.isEmpty()) return out;
+    pushSnapshot(text, before);
+    select(out);
+    return out;
+}
+
+QVariantList ClipGraphController::paste(qreal x, qreal y) {
+    QJsonObject clip = m_clipboard;
+    if (qGuiApp) {
+        const QMimeData *mime = QGuiApplication::clipboard()->mimeData();
+        if (mime && mime->hasFormat(kClipboardMime)) {
+            const QJsonObject fromSystem = QJsonDocument::fromJson(mime->data(kClipboardMime)).object();
+            if (!fromSystem.isEmpty()) clip = fromSystem;
+        }
+    }
+    if (clip["nodes"].toArray().isEmpty()) return {};
+    const QPointF delta = qIsNaN(x) || qIsNaN(y)
+        ? QPointF(40, 40)
+        : QPointF(x - clip["originX"].toDouble(), y - clip["originY"].toDouble());
+    return pasteDocument(clip, delta, QStringLiteral("Paste"));
+}
+
+QVariantList ClipGraphController::duplicateSelection() {
+    QList<NodeId> ids;
+    for (const QVariant &v : selection()) ids.append(v.toULongLong());
+    const QJsonObject clip = m_graph->copyNodes(ids);
+    if (clip["nodes"].toArray().isEmpty()) return {};
+    return pasteDocument(clip, QPointF(40, 40), QStringLiteral("Duplicate"));
 }
 
 QVariantList ClipGraphController::selection() const {

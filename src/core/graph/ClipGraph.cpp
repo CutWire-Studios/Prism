@@ -1028,26 +1028,135 @@ bool ClipGraph::disconnectEdge(EdgeId id) {
     return false;
 }
 
-bool ClipGraph::insertIntoEdge(NodeId nodeId, EdgeId edgeId) {
-    const Node *n = node(nodeId);
-    if (!n) return false;
-    EdgeKind kind;
-    if (n->type == NT::Process) kind = EK::Chain;
-    else if (n->type == NT::AudioEffect) kind = EK::AudioEffectChain;
-    else return false;
-    if (isPortConnected(nodeId, PD::In, 0) || isPortConnected(nodeId, PD::Out, 0)) return false;
+struct ClipGraph::InsertPlan {
+    int in = 0;
+    int out = 0;
+    EdgeKind inKind = EdgeKind::Chain;
+    EdgeKind outKind = EdgeKind::Chain;
+};
 
+std::optional<ClipGraph::InsertPlan> ClipGraph::planInsert(NodeId nodeId, const Edge &e) const {
+    if (!hasNode(nodeId) || e.from == nodeId || e.to == nodeId) return std::nullopt;
+    const QVector<Port> ins = inputPorts(nodeId);
+    const QVector<Port> outs = outputPorts(nodeId);
+    for (const Port &in : ins) {
+        if (isPortConnected(nodeId, PD::In, in.index)) continue;
+        const auto first = planConnection(e.from, e.fromPort, nodeId, in.index);
+        if (!first || first->insertMixer) continue;
+        for (const Port &out : outs) {
+            if (isPortConnected(nodeId, PD::Out, out.index)) continue;
+            const auto second = planConnection(nodeId, out.index, e.to, e.toPort);
+            if (!second || second->insertMixer) continue;
+            return InsertPlan{in.index, out.index, first->kind, second->kind};
+        }
+    }
+    return std::nullopt;
+}
+
+bool ClipGraph::canInsertIntoEdge(NodeId nodeId, EdgeId edgeId) const {
+    const Edge *e = edge(edgeId);
+    return e && planInsert(nodeId, *e).has_value();
+}
+
+bool ClipGraph::insertIntoEdge(NodeId nodeId, EdgeId edgeId) {
     for (int i = 0; i < m_edges.size(); ++i) {
         if (m_edges[i].id != edgeId) continue;
         const Edge e = m_edges[i];
-        if (e.kind != kind || e.from == nodeId || e.to == nodeId) return false;
+        const auto plan = planInsert(nodeId, e);
+        if (!plan) return false;
         removeEdgeAt(i);
-        connectPortsRaw(e.from, e.fromPort, nodeId, 0, kind);
-        connectPortsRaw(nodeId, 0, e.to, e.toPort, kind);
+        connectPortsRaw(e.from, e.fromPort, nodeId, plan->in, plan->inKind);
+        connectPortsRaw(nodeId, plan->out, e.to, e.toPort, plan->outKind);
         afterConnectionsChanged();
         return true;
     }
     return false;
+}
+
+bool ClipGraph::detachNode(NodeId id) {
+    if (!hasNode(id)) return false;
+    QVector<Edge> incoming, outgoing;
+    for (const Edge &e : std::as_const(m_edges)) {
+        if (e.to == id && e.from != id) incoming.append(e);
+        else if (e.from == id && e.to != id) outgoing.append(e);
+    }
+    if (incoming.isEmpty() && outgoing.isEmpty()) return false;
+    removeEdgesOfNode(id);
+    QVector<bool> used(outgoing.size(), false);
+    for (const Edge &in : std::as_const(incoming)) {
+        for (int k = 0; k < outgoing.size(); ++k) {
+            if (used[k]) continue;
+            const Edge &out = outgoing[k];
+            const auto plan = planConnection(in.from, in.fromPort, out.to, out.toPort);
+            if (!plan || plan->insertMixer) continue;
+            if (!connectPortsRaw(in.from, in.fromPort, out.to, out.toPort, plan->kind)) continue;
+            used[k] = true;
+            break;
+        }
+    }
+    afterConnectionsChanged();
+    return true;
+}
+
+QJsonObject ClipGraph::copyNodes(const QList<NodeId> &ids) const {
+    const QSet<NodeId> wanted(ids.begin(), ids.end());
+    QList<NodeId> picked;
+    for (NodeId id : m_order) {
+        const Node *n = node(id);
+        if (wanted.contains(id) && n->type != NT::Output && n->type != NT::MasterAudioOutput)
+            picked.append(id);
+    }
+
+    QJsonArray nodes;
+    qreal minX = 0, minY = 0;
+    for (qsizetype i = 0; i < picked.size(); ++i) {
+        const Node *n = node(picked[i]);
+        if (i == 0) { minX = n->pos.x(); minY = n->pos.y(); }
+        minX = std::min(minX, n->pos.x());
+        minY = std::min(minY, n->pos.y());
+        nodes.append(QJsonObject{{"type", int(n->type)}, {"x", n->pos.x()}, {"y", n->pos.y()},
+                                 {"params", toJsonObject(n->params)}});
+    }
+
+    QJsonArray edges;
+    for (const Edge &e : m_edges) {
+        const qsizetype from = picked.indexOf(e.from);
+        const qsizetype to = picked.indexOf(e.to);
+        if (from < 0 || to < 0) continue;
+        edges.append(QJsonObject{{"from", int(from)}, {"fromPort", e.fromPort}, {"to", int(to)},
+                                 {"toPort", e.toPort}, {"kind", int(e.kind)}});
+    }
+    return QJsonObject{{"originX", minX}, {"originY", minY}, {"nodes", nodes}, {"edges", edges}};
+}
+
+QList<NodeId> ClipGraph::pasteNodes(const QJsonObject &clip, const QPointF &delta) {
+    QList<NodeId> created;
+    for (const QJsonValue &v : clip["nodes"].toArray()) {
+        const QJsonObject o = v.toObject();
+        QVariantMap params = o["params"].toObject().toVariantMap();
+        const NodeType type = NodeType(o["type"].toInt());
+        if (type == NT::Input) {
+            QVariantMap src = params.value("source").toMap();
+            if (!src.value("captureId").toString().isEmpty()) {
+                src["captureId"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
+                params["source"] = src;
+            }
+        }
+        created.append(createNode(type, QPointF(o["x"].toDouble(), o["y"].toDouble()) + delta, params));
+    }
+    for (const QJsonValue &v : clip["edges"].toArray()) {
+        const QJsonObject o = v.toObject();
+        const int from = o["from"].toInt(-1);
+        const int to = o["to"].toInt(-1);
+        if (from < 0 || to < 0 || from >= created.size() || to >= created.size()) continue;
+        connectPortsRaw(created[from], o["fromPort"].toInt(-1), created[to], o["toPort"].toInt(-1),
+                        EdgeKind(o["kind"].toInt()));
+    }
+    if (!created.isEmpty()) {
+        ensureOutputNode();
+        afterConnectionsChanged();
+    }
+    return created;
 }
 
 NodeId ClipGraph::createMixerAt(const QPointF &scenePos) {

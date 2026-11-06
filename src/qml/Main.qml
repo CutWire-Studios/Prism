@@ -155,7 +155,7 @@ ApplicationWindow {
         ThemedMenuItem { text: qsTr("Add Media Folder…"); onTriggered: AppController.requestAddFolder() }
         ThemedMenuItem {
             text: qsTr("Add Source…")
-            onTriggered: Qt.callLater(() => sourceMenu.popup(fileButton, 0, fileButton.height))
+            onTriggered: Qt.callLater(() => sourceMenu.openSourcesBelow(fileButton))
         }
         ThemedMenuSeparator { }
         ThemedMenuItem { text: qsTr("Export Project…"); onTriggered: AppController.requestExportProject() }
@@ -169,7 +169,7 @@ ApplicationWindow {
         ThemedMenuItem { text: qsTr("Clear Graph…"); onTriggered: AppController.clearGraph() }
     }
 
-    AddSourceMenu {
+    AddNodeMenu {
         id: sourceMenu
     }
 

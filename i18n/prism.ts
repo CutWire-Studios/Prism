@@ -58,31 +58,11 @@
 <context>
     <name>AddNodeMenu</name>
     <message>
-        <source>Input Node…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Source</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Process</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Layer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Switching</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Switcher</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Audio FX</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -110,11 +90,103 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Sources: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Media File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Slideshow</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SVG Template</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Live</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Mic Input</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Sources: Live</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Screen Capture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Window Capture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Generated</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Canvas</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shader</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Text</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shape</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Network</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Video URL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>NDI Source</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Phone Camera (WebRTC)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Video FX</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Compositing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Script</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Logic</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Recent</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -127,69 +199,6 @@
     </message>
     <message>
         <source>No matching nodes</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>AddSourceMenu</name>
-    <message>
-        <source>Media File…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Video URL…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Mic Input</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Audio Capture</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Slideshow</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Camera</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Screen Capture</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Window Capture</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Canvas</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Shader…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>SVG Template…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Text…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Shape…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>NDI Source</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Phone Camera (WebRTC)…</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

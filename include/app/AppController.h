@@ -243,10 +243,13 @@ public:
 
     // ── Sources / media (QML) ─────────────────────────────────────────────────
     /// Adds files to the media library and creates a clip node per media file (MainWindow::onAddFilesClicked).
-    Q_INVOKABLE void importFiles(const QStringList &paths);
+    /// x/y: graph position of the first node (NaN = the position remembered by requestAddFiles /
+    /// requestAddSource, else automatic). The new nodes become the selection.
+    Q_INVOKABLE void importFiles(const QStringList &paths, qreal x = qQNaN(), qreal y = qQNaN());
     Q_INVOKABLE QString localPath(const QUrl &url) const;
     Q_INVOKABLE void importFolder(const QString &path);
-    Q_INVOKABLE void requestAddFiles();    // filePickRequested("addFiles", ...)
+    /// x/y: graph position for the node(s) the picker leads to (NaN = automatic).
+    Q_INVOKABLE void requestAddFiles(qreal x = qQNaN(), qreal y = qQNaN());  // filePickRequested("addFiles", ...)
     Q_INVOKABLE void requestAddFolder();   // filePickRequested("addFolder", ...)
     /// Probes the URL first; emits errorOccurred on failure. Returns the new node id or 0.
     Q_INVOKABLE quint64 addVideoUrl(const QString &url, const QString &displayName = {});
@@ -299,7 +302,8 @@ public:
     Q_INVOKABLE void connectObs();
     /// kind: "url" | "webrtc" open an app dialog; "slideshow" | "camera" | "screen" | "window" |
     /// "canvas" | "ndi" are added with defaults by AppDialogs; "shader" | "svgTemplate" | "text" | "shape" emit sourceEditorRequested.
-    Q_INVOKABLE void requestAddSource(const QString &kind);
+    /// x/y: graph position for the new node (NaN = automatic); kept until a source is added.
+    Q_INVOKABLE void requestAddSource(const QString &kind, qreal x = qQNaN(), qreal y = qQNaN());
     /// {exists, name, savedAt} of a session / autosave file, for the recovery dialog.
     Q_INVOKABLE QVariantMap describeSessionFile(const QString &path) const;
     Q_INVOKABLE void switchObsScene(const QString &scene);
@@ -454,6 +458,7 @@ private:
     QString m_sessionPath;
     QStringList m_obsScenes;
     QString m_pendingAfterOutputDir;
+    QPointF m_pendingSourcePos{qQNaN(), qQNaN()};
     int m_mcpEditRevision = 0;
     QHash<QString, std::function<void(bool)>> m_confirmCallbacks;
     int m_nextConfirmId = 0;

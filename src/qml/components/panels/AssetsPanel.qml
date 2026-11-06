@@ -68,7 +68,7 @@ PanelFrame {
         height: Theme.controlHeight + Theme.spacingXl
         title: qsTr("Media")
         importing: library.importingFolder
-        onAddSourceRequested: (anchorItem) => sourceMenu.popup(anchorItem, 0, anchorItem.height)
+        onAddSourceRequested: (anchorItem) => sourceMenu.openSourcesBelow(anchorItem)
         onNewFolderRequested: root.openNameDialog("newFolder", "", "")
         onImportFilesRequested: root.importMedia()
         onImportFolderRequested: root.importFolder()
@@ -106,7 +106,7 @@ PanelFrame {
         active: library.importingFolder
     }
 
-    AddSourceMenu {
+    AddNodeMenu {
         id: sourceMenu
     }
 
