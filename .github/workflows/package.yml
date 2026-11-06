@@ -1,0 +1,674 @@
+name: Package
+
+# The one place every Prism platform build is defined. build.yml (manual, unversioned),
+# release.yml (tag-triggered, publishes) and nightly.yml (rolling pre-release) all reuse this so
+# a fix to a build never has to be applied twice.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version string baked into artifact names"
+        required: true
+        type: string
+      platform:
+        description: "all, flatpak, linux, windows, macos or arch"
+        required: false
+        default: all
+        type: string
+      channel:
+        description: "stable or nightly. Nightly only changes artifact file names; see nightly.yml"
+        required: false
+        default: stable
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CCACHE_VERSION: "4.14.2"
+  # Nightly artifacts are named for the channel rather than the version, so that
+  # …/releases/download/nightly/Prism-nightly-x86_64.AppImage is a permanent link and the single
+  # rewritten pre-release has exactly one file per platform to clobber each night.
+  ASSET_LABEL: ${{ inputs.channel == 'nightly' && 'nightly' || inputs.version }}
+  QT_VERSION: "6.10.3"
+  # qtdeclarative carries Qt Quick, QuickControls2 and QuickEffects. It is already in the base
+  # install on every desktop kit, so the explicit entry documents the dependency rather than
+  # adding a download. qtmultimedia is the FFmpeg-backed audio/video stack; qtimageformats is for
+  # webp/tiff stills.
+  QT_MODULES: >-
+    qtdeclarative
+    qtmultimedia
+    qtimageformats
+    qtwebsockets
+    qtserialport
+  QT_QPA_PLATFORM: offscreen
+  FETCHCONTENT_BASE_DIR: ${{ github.workspace }}/.deps
+  # Pinned to the FFmpeg *branch* QtMultimedia's ffmpeg backend bundles for QT_VERSION above (check
+  # doc.qt.io/qt-6/qtmultimedia-attribution-ffmpeg.html when bumping QT_VERSION). Linking a
+  # mismatched FFmpeg build alongside Qt's own private copy crashes at runtime (two FFmpeg ABIs
+  # loaded in one process).
+  #
+  # CutWire-Studios/FFmpeg-Builds rather than BtbN: BtbN's dated autobuild tags are deleted after a
+  # few weeks, and the n7.1 release on the fork is a stable URL for this soversion. The gpl variant,
+  # not lgpl: lgpl carries no libx264 (the recorder's software H.264 encoder) and no dav1d. Prism
+  # is GPLv3, so linking them is fine. Same pin as Cutwire Drift.
+  FFMPEG_REPO: "CutWire-Studios/FFmpeg-Builds"
+  FFMPEG_TAG: "n7.1"
+
+jobs:
+  flatpak:
+    name: Flatpak bundle (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      actions: write
+    if: inputs.platform == 'all' || inputs.platform == 'flatpak'
+    strategy:
+      # Each arch reports its own result: a failing aarch64 build should not hide x86_64's.
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install flatpak tooling
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder appstream desktop-file-utils ccache
+          flatpak remote-add --if-not-exists --user flathub https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Lint flatpak manifest and metadata
+        run: |
+          appstreamcli validate --no-net flatpak/org.cutwire.Prism.metainfo.xml
+          desktop-file-validate flatpak/org.cutwire.Prism.desktop
+          flatpak-builder --show-manifest flatpak/org.cutwire.Prism.yml > /dev/null
+
+      - name: Cache flatpak runtimes
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/flatpak
+          key: flatpak-runtimes-${{ matrix.arch }}-${{ hashFiles('flatpak/org.cutwire.Prism.yml') }}
+
+      # flatpak-builder --ccache keeps its cache in .flatpak-builder/ccache and points the sandbox's
+      # CCACHE_DIR at it, so the action must not export CCACHE_DIR for the host.
+      - name: Restore ccache
+        uses: ./.github/actions/ccache
+        with:
+          phase: restore
+          key-prefix: ccache-flatpak-${{ matrix.arch }}-
+          max-size: 700M
+          path: ${{ github.workspace }}/.flatpak-builder/ccache
+          manage-env: 'false'
+
+      # The local manifest (not a Flathub one) builds the working tree, so it validates the commit
+      # under test rather than whatever tag a Flathub manifest is pinned to.
+      - name: Build flatpak
+        id: build
+        run: |
+          flatpak-builder --user --force-clean --ccache --install-deps-from=flathub \
+            --repo="${{ runner.temp }}/flatpak-repo" \
+            "${{ runner.temp }}/flatpak-build" \
+            flatpak/org.cutwire.Prism.yml
+
+      - name: Save ccache
+        if: always() && steps.build.outcome == 'success'
+        uses: ./.github/actions/ccache
+        with:
+          phase: save
+          key-prefix: ccache-flatpak-${{ matrix.arch }}-
+          max-size: 700M
+          path: ${{ github.workspace }}/.flatpak-builder/ccache
+          manage-env: 'false'
+
+      - name: Export bundle
+        run: |
+          mkdir -p dist
+          flatpak build-bundle "${{ runner.temp }}/flatpak-repo" \
+            "dist/Prism-${{ env.ASSET_LABEL }}-${{ matrix.arch }}.flatpak" \
+            org.cutwire.Prism --arch="${{ matrix.arch }}"
+
+      - name: Upload flatpak bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-bundle-${{ matrix.arch }}
+          path: dist/*.flatpak
+
+  linux:
+    name: Linux AppImage
+    runs-on: ubuntu-22.04
+    if: inputs.platform == 'all' || inputs.platform == 'linux'
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          # ubuntu-22.04 runner images preinstall several LLVM toolchains, each
+          # with its own libunwind-N-dev that Breaks: libunwind-dev — purge
+          # them first so libgstreamer1.0-dev's plain libunwind-dev dependency
+          # can actually resolve.
+          sudo apt-get purge -y 'libunwind-*-dev' || true
+          sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config ccache lld \
+            libgl1-mesa-dev libegl1-mesa-dev libglib2.0-dev libdbus-1-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libre2-dev libzip-dev libssl-dev liblua5.4-dev libsoundtouch-dev \
+            clang-15 libharfbuzz-dev libexpat1-dev libpng-dev \
+            libfontconfig1-dev libfreetype6-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libx11-dev libx11-xcb-dev libxext-dev libxfixes-dev libxi-dev libxrender-dev \
+            libxcb1-dev libxcb-glx0-dev libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev \
+            libxcb-icccm4-dev libxcb-sync-dev libxcb-xfixes0-dev libxcb-shape0-dev \
+            libxcb-randr0-dev libxcb-render-util0-dev libxcb-xinerama0-dev libxcb-cursor-dev
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          add-tools-to-path: true
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-linux-${{ hashFiles('CMakeLists.txt') }}
+
+      # Skia is built once per script revision and cached: 15-20 minutes on a miss, seconds on a
+      # hit. clang-15 because Skia's GN toolchain files are written for clang and jammy's default
+      # `clang` is 14. SKIA_SYSTEM_ICU=0 compiles Skia's own ICU with embedded data instead of
+      # letting linuxdeploy bundle the distro's libicudata (~30 MB) next to the copy Qt already
+      # ships. The source tree goes straight after: ~1 GB the AppImage step has no use for.
+      - name: Restore Skia
+        id: skia-cache
+        uses: actions/cache@v4
+        with:
+          path: third_party/prebuilt/skia/linux-x64
+          key: v1-skia-linux-x64-${{ hashFiles('third_party/build-skia.sh') }}
+
+      - name: Build Skia
+        if: steps.skia-cache.outputs.cache-hit != 'true'
+        run: |
+          JOBS="$(nproc)" CC=clang-15 CXX=clang++-15 SKIA_SYSTEM_ICU=0 third_party/build-skia.sh linux-x64
+          rm -rf third_party/src
+
+      - name: Fetch pinned FFmpeg
+        shell: bash
+        run: |
+          rm -rf "${GITHUB_WORKSPACE}/.deps/ffmpeg"
+          mkdir -p "${GITHUB_WORKSPACE}/.deps/ffmpeg"
+          curl -fsSL "https://github.com/${FFMPEG_REPO}/releases/download/${FFMPEG_TAG}/ffmpeg-${FFMPEG_TAG}-linux64-gpl-shared.tar.xz" \
+            | tar -xJf - --strip-components=1 -C "${GITHUB_WORKSPACE}/.deps/ffmpeg"
+
+      - name: Restore ccache
+        uses: ./.github/actions/ccache
+        with:
+          phase: restore
+          key-prefix: ccache-linux-
+          max-size: 1G
+
+      - name: Configure
+        run: |
+          export PKG_CONFIG_PATH="${GITHUB_WORKSPACE}/.deps/ffmpeg/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang-15 \
+            -DCMAKE_CXX_COMPILER=clang++-15 \
+            -DPRISM_LINKER=lld \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR};${GITHUB_WORKSPACE}/.deps/ffmpeg" \
+            -DFETCHCONTENT_BASE_DIR="${FETCHCONTENT_BASE_DIR}" \
+            -DPRISM_WITH_NDI=OFF \
+            -DPRISM_WITH_WEBRTC=ON \
+            -DPRISM_WITH_SEGMENTATION=ON
+
+      # Everything, not just Prism: the unit tests are built here and run in the next step.
+      - name: Build
+        id: build
+        run: cmake --build build --parallel
+
+      - name: Save ccache
+        if: always() && steps.build.outcome == 'success'
+        uses: ./.github/actions/ccache
+        with:
+          phase: save
+          key-prefix: ccache-linux-
+          max-size: 1G
+
+      # The tests set QT_QPA_PLATFORM=offscreen themselves (tests/CMakeLists.txt).
+      #
+      # The pinned FFmpeg goes first on LD_LIBRARY_PATH: install-qt-action puts Qt's lib dir
+      # there, and QtMultimedia ships its own libavcodec under the same soname. The test binaries'
+      # RUNPATH covers only their own NEEDED entries, so libavfilter's libpostproc (GPL-only)
+      # would not be found through it either.
+      - name: Test
+        run: |
+          export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/.deps/ffmpeg/lib:${LD_LIBRARY_PATH:-}"
+          ctest --test-dir build --output-on-failure --timeout 300
+
+      - name: Stage install tree
+        run: |
+          cmake --install build --prefix "${GITHUB_WORKSPACE}/AppDir/usr"
+          mkdir -p "${GITHUB_WORKSPACE}/dist"
+
+      - name: Build AppImage
+        shell: bash
+        env:
+          APPIMAGE_NAME: Prism-${{ env.ASSET_LABEL }}-x86_64.AppImage
+        run: |
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage -O linuxdeploy.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage -O linuxdeploy-plugin-qt.AppImage
+          chmod +x linuxdeploy.AppImage linuxdeploy-plugin-qt.AppImage
+          export QMAKE="${QT_ROOT_DIR}/bin/qmake"
+          export VERSION="${{ inputs.version }}"
+          # Embed AppImage update information so AppImageUpdate / AppImageLauncher /
+          # AM / AppManager can do zsync delta updates. linuxdeploy-plugin-appimage reads
+          # LDAI_UPDATE_INFORMATION, with UPDATE_INFORMATION/UPD_INFO as older fallback names; set
+          # all three so whichever plugin version linuxdeploy bundles picks one up. The .zsync
+          # points at the AppImage by basename, so LDAI_OUTPUT is the final asset name.
+          if [ "${{ inputs.channel }}" = "nightly" ]; then
+            UPDATE_INFORMATION="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|nightly|Prism-nightly-x86_64.AppImage.zsync"
+          else
+            UPDATE_INFORMATION="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|latest|Prism-*-x86_64.AppImage.zsync"
+          fi
+          export UPDATE_INFORMATION
+          export LDAI_UPDATE_INFORMATION="${UPDATE_INFORMATION}"
+          export UPD_INFO="${UPDATE_INFORMATION}"
+          export LDAI_OUTPUT="${APPIMAGE_NAME}"
+          # ONNX Runtime is auto-downloaded by CMakeModules/FetchOnnxRuntime.cmake into a
+          # version-suffixed dir under build/_deps; only the Windows path gets a post-build
+          # copy-next-to-exe step, so on Linux linuxdeploy needs it on LD_LIBRARY_PATH to find and
+          # bundle libonnxruntime.so.1 via its ldd-based dependency scan.
+          onnxruntime_lib_dir="$(find "${GITHUB_WORKSPACE}/build/_deps/onnxruntime" -maxdepth 2 -type d -name lib | head -n1)"
+          # The pinned FFmpeg must come before Qt's lib dir: QtMultimedia ships its own libavcodec
+          # under the same soname, built without dav1d or x264, and with Qt's dir first
+          # linuxdeploy bundles that copy instead of the one Prism was built against.
+          #
+          # libva is deliberately not bundled. AppRun puts usr/lib on LD_LIBRARY_PATH, so a
+          # bundled libva.so.2 would win every dlopen and cap VA-API at this runner's version,
+          # which refuses newer host drivers. A host with no libva at all is handled in code:
+          # hwaccel::deviceAvailable() dlopens libva itself before letting FFmpeg near VAAPI.
+          export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/.deps/ffmpeg/lib:${QT_ROOT_DIR}/lib:${onnxruntime_lib_dir}:${LD_LIBRARY_PATH:-}"
+          # The Wayland platform plugin and waylandcompositor's client EGL integration: without the
+          # latter QtWayland cannot create an OpenGL context at all, and without EGL the VAAPI
+          # zero-copy import (dma-buf into EGLImages) is never available. The plugin splits
+          # EXTRA_QT_MODULES on ';'.
+          export EXTRA_PLATFORM_PLUGINS="libqwayland.so"
+          export EXTRA_QT_MODULES="waylandcompositor"
+          # Qt Quick modules are only deployed when linuxdeploy can see the QML that imports them.
+          export QML_SOURCES_PATHS="${GITHUB_WORKSPACE}/src/qml"
+          ./linuxdeploy.AppImage --appdir AppDir --plugin qt --output appimage \
+            --exclude-library "libva*" \
+            -d flatpak/org.cutwire.Prism.desktop \
+            -i flatpak/share/icons/hicolor/256x256/apps/org.cutwire.Prism.png \
+            -e AppDir/usr/bin/Prism
+          test -f "${APPIMAGE_NAME}.zsync"
+          mv "${APPIMAGE_NAME}" "${APPIMAGE_NAME}.zsync" dist/
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: |
+            dist/*.AppImage
+            dist/*.AppImage.zsync
+
+  windows:
+    name: Windows installer and portable zip
+    runs-on: windows-2022
+    if: inputs.platform == 'all' || inputs.platform == 'windows'
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          add-tools-to-path: true
+
+      # The key covers this workflow too: the package list lives in the install step below, and
+      # actions/cache never re-saves on a hit, so a key blind to it would keep serving a cache
+      # that predates skia.
+      - name: Restore vcpkg binary cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}\vcpkg_bincache
+          key: vcpkg-bincache-win-${{ hashFiles('CMakeLists.txt', '.github/workflows/package.yml') }}
+          restore-keys: |
+            vcpkg-bincache-win-
+
+      - name: Install vcpkg dependencies
+        shell: pwsh
+        env:
+          VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg_bincache
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+          if (-not (Test-Path vcpkg\vcpkg.exe)) {
+            git clone --depth 1 https://github.com/microsoft/vcpkg.git vcpkg
+            .\vcpkg\bootstrap-vcpkg.bat
+          }
+          .\vcpkg\vcpkg.exe install re2 libzip openssl soundtouch --triplet x64-windows
+          # Skia comes from vcpkg here rather than third_party/build-skia.sh, which has no Windows target.
+          # x64-windows-static-md, not x64-windows: Skottie needs a static Skia, and -md keeps the dynamic
+          # CRT Qt uses. zlib is installed in the same triplet because Skia's archives link its static
+          # copy (zs.lib); the Configure step hands find_package(ZLIB) that copy by path.
+          .\vcpkg\vcpkg.exe install zlib "skia[gl,harfbuzz,icu,freetype,png]" --triplet x64-windows-static-md
+
+      # Save even when a later step fails so the vcpkg build is not repeated on
+      # the next run (actions/cache only saves on job success).
+      - name: Save vcpkg binary cache
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}\vcpkg_bincache
+          key: vcpkg-bincache-win-${{ hashFiles('CMakeLists.txt', '.github/workflows/package.yml') }}
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-win-${{ hashFiles('CMakeLists.txt') }}
+
+      # Pinned to match the FFmpeg version QtMultimedia's ffmpeg backend bundles instead of
+      # vcpkg's floating ffmpeg port, which does not track Qt's bundled version.
+      - name: Fetch pinned FFmpeg
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force .deps\ffmpeg, .deps\ffmpeg_extracted -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path .deps\ffmpeg | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/$env:FFMPEG_REPO/releases/download/$env:FFMPEG_TAG/ffmpeg-$env:FFMPEG_TAG-win64-gpl-shared.zip" -OutFile ffmpeg.zip
+          Expand-Archive -Path ffmpeg.zip -DestinationPath .deps\ffmpeg_extracted -Force
+          $extractedRoot = (Get-ChildItem .deps\ffmpeg_extracted)[0].FullName
+          Copy-Item -Path "$extractedRoot\*" -Destination .deps\ffmpeg -Recurse -Force
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -B build -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake `
+            -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }};${{ github.workspace }}\.deps\ffmpeg;${{ github.workspace }}\vcpkg\installed\x64-windows-static-md" `
+            -DFETCHCONTENT_BASE_DIR=${{ env.FETCHCONTENT_BASE_DIR }} `
+            -DZLIB_INCLUDE_DIR=${{ github.workspace }}\vcpkg\installed\x64-windows-static-md\include `
+            -DZLIB_LIBRARY=${{ github.workspace }}\vcpkg\installed\x64-windows-static-md\lib\zs.lib `
+            -DPRISM_WITH_NDI=OFF `
+            -DPRISM_WITH_WEBRTC=ON `
+            -DPRISM_WITH_SEGMENTATION=ON
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --config Release --parallel
+
+      # The pinned FFmpeg's bin dir goes ahead of Qt's: Qt ships its own avcodec/avformat DLLs
+      # under the same names. QT_FORCE_STDERR_LOGGING keeps QtTest output visible under ctest,
+      # which otherwise routes it to OutputDebugString.
+      - name: Test
+        shell: pwsh
+        env:
+          QT_FORCE_STDERR_LOGGING: 1
+        run: |
+          $env:PATH = "${{ github.workspace }}\.deps\ffmpeg\bin;${{ github.workspace }}\vcpkg\installed\x64-windows\bin;${{ env.QT_ROOT_DIR }}\bin;$env:PATH"
+          ctest --test-dir build -C Release --output-on-failure --timeout 300
+
+      # windeployqt --qmldir: the Qt Quick modules are only deployed when the QML that imports
+      # them is scanned.
+      - name: Stage runtime files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist\bin | Out-Null
+          Copy-Item build\Release\Prism.exe dist\bin -Force
+          Copy-Item build\Release\softcam.dll dist\bin -Force -ErrorAction SilentlyContinue
+          Copy-Item build\Release\onnxruntime*.dll dist\bin -Force -ErrorAction SilentlyContinue
+          & "${{ env.QT_ROOT_DIR }}\bin\windeployqt.exe" --release --no-translations --qmldir src\qml dist\bin\Prism.exe
+          Copy-Item vcpkg\installed\x64-windows\bin\*.dll dist\bin -Force
+          Copy-Item .deps\ffmpeg\bin\*.dll dist\bin -Force
+
+      - name: Build Inno Setup installer
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.6
+        with:
+          path: installer/windows/Prism.iss
+          options: |
+            /DMyAppVersion=${{ inputs.version }}
+            /DMyAppSource=${{ github.workspace }}\dist\bin
+
+      - name: Collect installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item installer\windows\output\Prism-Setup-x64.exe `
+            "dist\Prism-Setup-${{ env.ASSET_LABEL }}-x64.exe" -Force
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/*.exe
+
+      # The same staged tree the installer wraps, minus the install: a zip holding a single Prism\
+      # folder that runs from wherever it is unpacked, touching no registry key and no Start menu.
+      # Relocatable, not self-contained: settings are still stored per-user under %APPDATA%.
+      # 7z rather than Compress-Archive: the staged tree is several hundred MB of Qt and FFmpeg
+      # DLLs, which is where Compress-Archive's in-memory approach gets slow.
+      - name: Build portable zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "portable\Prism", dist\portable | Out-Null
+          Copy-Item dist\bin\* "portable\Prism" -Recurse -Force
+          & "$env:ProgramFiles\7-Zip\7z.exe" a -tzip -mx=9 `
+            "dist\portable\Prism-Portable-${{ env.ASSET_LABEL }}-x64.zip" ".\portable\Prism"
+
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable
+          path: dist/portable/*.zip
+
+  macos:
+    name: macOS disk image (arm64)
+    runs-on: macos-26
+    if: inputs.platform == 'all' || inputs.platform == 'macos'
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      # Homebrew Qt links the same FFmpeg Prism does, so there is no second libavcodec in the
+      # process to keep ABI-compatible. lua@5.4 is keg-only: its pkg-config directory is added to
+      # PKG_CONFIG_PATH in the Configure step.
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install qt ffmpeg re2 libzip lua@5.4 sound-touch openssl@3 pkgconf ninja ccache
+
+      - name: Restore Skia
+        id: skia-cache
+        uses: actions/cache@v4
+        with:
+          path: third_party/prebuilt/skia/mac-arm64
+          key: v1-skia-mac-arm64-${{ hashFiles('third_party/build-skia.sh') }}
+
+      # Skia for macOS is compiled here from the pinned commit (Homebrew has no Skia).
+      - name: Build Skia
+        if: steps.skia-cache.outputs.cache-hit != 'true'
+        run: |
+          JOBS="$(sysctl -n hw.ncpu)" third_party/build-skia.sh mac-arm64
+          rm -rf third_party/src
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-macos-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Restore ccache
+        uses: ./.github/actions/ccache
+        with:
+          phase: restore
+          key-prefix: ccache-macos-
+          max-size: 700M
+
+      - name: Configure
+        run: |
+          export PKG_CONFIG_PATH="$(brew --prefix lua@5.4)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          cmake -B build-macos -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$(brew --prefix openssl@3);$(brew --prefix)" \
+            -DFETCHCONTENT_BASE_DIR="${FETCHCONTENT_BASE_DIR}" \
+            -DPRISM_WITH_NDI=OFF \
+            -DPRISM_WITH_WEBRTC=ON \
+            -DPRISM_WITH_SEGMENTATION=ON
+
+      - name: Build
+        id: build
+        run: cmake --build build-macos --parallel
+
+      - name: Save ccache
+        if: always() && steps.build.outcome == 'success'
+        uses: ./.github/actions/ccache
+        with:
+          phase: save
+          key-prefix: ccache-macos-
+          max-size: 700M
+
+      - name: Test
+        run: ctest --test-dir build-macos --output-on-failure --timeout 300
+
+      # Signing and notarisation happen only when the secrets are set. Without them — a fork, or
+      # any run that cannot see repository secrets — the image is still built and ad-hoc signed.
+      # A Developer ID / notary failure must not kill the job either: Apple Silicon still needs a
+      # signed binary to launch, so the fallback is the same ad-hoc image a fork would have shipped.
+      - name: Build disk image
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          MACOS_NOTARY_KEY_B64: ${{ secrets.MACOS_NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+        run: |
+          package_adhoc() {
+            scripts/package-macos.sh --build-dir build-macos --skip-build
+          }
+
+          if [ -z "$MACOS_CERTIFICATE" ]; then
+            package_adhoc
+            exit 0
+          fi
+
+          # Drop -e for the signed attempt: a codesign / notarytool failure must not abort the
+          # step. The subshell keeps -e so the first failure there is the status we inspect.
+          set +e
+          (
+            set -euo pipefail
+            ARGS=(--build-dir build-macos --skip-build)
+            KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+            KEYCHAIN_PWD="$(uuidgen)"
+            echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN"
+            security set-keychain-settings -lut 21600 "$KEYCHAIN"
+            security unlock-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN"
+            security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+              -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+            # Without this codesign waits on a keychain access prompt nobody can answer.
+            security set-key-partition-list -S apple-tool:,apple:,codesign: \
+              -s -k "$KEYCHAIN_PWD" "$KEYCHAIN" > /dev/null
+            security list-keychain -d user -s "$KEYCHAIN" login.keychain-db
+            rm -f "$RUNNER_TEMP/cert.p12"
+            ARGS+=(--identity "$MACOS_SIGN_IDENTITY")
+
+            # Either notarisation credential works; the API key wins when both are set.
+            if [ -n "$MACOS_NOTARY_KEY_B64" ]; then
+              echo "$MACOS_NOTARY_KEY_B64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+              export NOTARY_KEY="$RUNNER_TEMP/notary.p8"
+              ARGS+=(--notarize)
+            elif [ -n "$NOTARY_APPLE_ID" ]; then
+              ARGS+=(--notarize)
+            fi
+
+            scripts/package-macos.sh "${ARGS[@]}"
+          )
+          signed_status=$?
+          set -euo pipefail
+
+          if [ "$signed_status" -ne 0 ]; then
+            echo "::warning::Developer ID signing or notarisation failed; packaging an ad-hoc image instead."
+            package_adhoc
+          fi
+
+      - name: Clean up signing material
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/notary.p8" "$RUNNER_TEMP/cert.p12"
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+
+      # The script names the image from the project version; rename it to the channel-constant
+      # asset name the release notes link to.
+      - name: Name the artifact for this release
+        run: |
+          want="dist/Prism-${{ env.ASSET_LABEL }}-arm64.dmg"
+          for f in dist/Prism-*.dmg; do
+            [ "$f" = "$want" ] || mv "$f" "$want"
+          done
+
+      - name: Upload disk image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: dist/*.dmg
+
+  arch:
+    name: Arch package
+    runs-on: ubuntu-24.04
+    if: inputs.platform == 'all' || inputs.platform == 'arch'
+    timeout-minutes: 60
+    container:
+      image: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v4
+
+      # makepkg refuses to run as root, and archlinux:base-devel's default
+      # user is root — create an unprivileged builder with passwordless sudo
+      # (needed for makepkg -s to pacman-install PKGBUILD's own depends).
+      - name: Set up builder user
+        run: |
+          pacman -Syu --noconfirm
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          chown -R builder:builder "${GITHUB_WORKSPACE}"
+
+      # The PKGBUILD's source is git+https with a #commit= pin that defaults
+      # to the latest tagged release (so a plain `makepkg` — e.g. a real AUR
+      # build — stays reproducible), but it reads _commit from the
+      # environment first, so pin it to the exact commit that triggered this
+      # workflow instead of the tag.
+      - name: Build package
+        run: su builder -c "cd '${GITHUB_WORKSPACE}/packaging/arch' && _commit='${{ github.sha }}' makepkg -s --noconfirm"
+
+      - name: Collect package
+        run: |
+          mkdir -p dist
+          cp packaging/arch/*.pkg.tar.zst dist/
+
+      - name: Upload Arch package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: dist/*.pkg.tar.zst

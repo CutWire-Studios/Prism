@@ -1,0 +1,413 @@
+name: Tests
+
+# Runs the CTest suites on every push and pull request. package.yml also runs them, but only on a
+# manual dispatch, a nightly or a release tag — this is what keeps a regression from sitting on
+# main until release day. Each job builds the same way package.yml's job for that platform does
+# and then stops: no install tree, no packaging, no artifacts.
+on:
+  push:
+  pull_request:
+
+# A second push to the same ref makes the in-flight run irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  QT_VERSION: "6.10.3"
+  QT_MODULES: >-
+    qtdeclarative
+    qtmultimedia
+    qtimageformats
+    qtwebsockets
+    qtserialport
+  # The test suites set this themselves (tests/CMakeLists.txt), so it only affects steps outside
+  # ctest. Xvfb is not needed: an offscreen platform is what the suites are written against.
+  QT_QPA_PLATFORM: offscreen
+  FETCHCONTENT_BASE_DIR: ${{ github.workspace }}/.deps
+  # Same pin as package.yml. The gpl variant, not lgpl: x264 and x265 are GPL, so the lgpl builds
+  # carry no H.264/H.265 encoder for the recorder tests to exercise.
+  FFMPEG_REPO: "CutWire-Studios/FFmpeg-Builds"
+  FFMPEG_TAG: "n7.1"
+
+jobs:
+  linux:
+    name: CTest (Linux)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # libva* are runtime, not build, deps: FFmpeg reaches VA-API through implib-gen stubs whose
+      # dlopen failure path is assert(0), so a runner without them aborts on the first hardware
+      # probe instead of falling back to software decode.
+      - name: Install native build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get purge -y 'libunwind-*-dev' || true
+          sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config ccache lld \
+            libgl1-mesa-dev libegl1-mesa-dev libglib2.0-dev libdbus-1-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libre2-dev libzip-dev libssl-dev liblua5.4-dev libsoundtouch-dev \
+            libpulse-dev libasound2-dev \
+            libva2 libva-drm2 libva-x11-2 \
+            clang-15 libharfbuzz-dev libexpat1-dev libpng-dev \
+            libfontconfig1-dev libfreetype6-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libx11-dev libx11-xcb-dev libxext-dev libxfixes-dev libxi-dev libxrender-dev \
+            libxcb1-dev libxcb-glx0-dev libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev \
+            libxcb-icccm4-dev libxcb-sync-dev libxcb-xfixes0-dev libxcb-shape0-dev \
+            libxcb-randr0-dev libxcb-render-util0-dev libxcb-xinerama0-dev libxcb-cursor-dev
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          add-tools-to-path: true
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-linux-${{ hashFiles('CMakeLists.txt') }}
+
+      # The build tree is not cached, so every run reconfigures and recompiles from scratch —
+      # ccache is what makes that cheap. The action saves only from main.
+      - name: Restore ccache
+        uses: ./.github/actions/ccache
+        with:
+          phase: restore
+          key-prefix: ccache-linux-
+          max-size: 1G
+
+      # Same key and command as package.yml's Linux lane, so the two share one Skia build.
+      - name: Restore Skia
+        id: skia-cache
+        uses: actions/cache@v4
+        with:
+          path: third_party/prebuilt/skia/linux-x64
+          key: v1-skia-linux-x64-${{ hashFiles('third_party/build-skia.sh') }}
+
+      - name: Build Skia
+        if: steps.skia-cache.outputs.cache-hit != 'true'
+        run: |
+          JOBS="$(nproc)" CC=clang-15 CXX=clang++-15 SKIA_SYSTEM_ICU=0 third_party/build-skia.sh linux-x64
+          rm -rf third_party/src
+
+      - name: Fetch pinned FFmpeg
+        shell: bash
+        run: |
+          rm -rf "${GITHUB_WORKSPACE}/.deps/ffmpeg"
+          mkdir -p "${GITHUB_WORKSPACE}/.deps/ffmpeg"
+          curl -fsSL "https://github.com/${FFMPEG_REPO}/releases/download/${FFMPEG_TAG}/ffmpeg-${FFMPEG_TAG}-linux64-gpl-shared.tar.xz" \
+            | tar -xJf - --strip-components=1 -C "${GITHUB_WORKSPACE}/.deps/ffmpeg"
+
+      - name: Configure
+        run: |
+          export PKG_CONFIG_PATH="${GITHUB_WORKSPACE}/.deps/ffmpeg/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang-15 \
+            -DCMAKE_CXX_COMPILER=clang++-15 \
+            -DPRISM_LINKER=lld \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR};${GITHUB_WORKSPACE}/.deps/ffmpeg" \
+            -DFETCHCONTENT_BASE_DIR="${FETCHCONTENT_BASE_DIR}" \
+            -DPRISM_WITH_NDI=OFF \
+            -DPRISM_WITH_WEBRTC=ON \
+            -DPRISM_WITH_SEGMENTATION=ON
+
+      - name: Build
+        id: build
+        run: cmake --build build --parallel
+
+      # The pinned FFmpeg goes first on LD_LIBRARY_PATH: QtMultimedia ships its own libavcodec under
+      # the same soname, and libavfilter needs the GPL-only libpostproc that only this build ships.
+      # Serial, not ctest -j: the suites share QStandardPaths::AppDataLocation test-mode state.
+      - name: Test
+        id: test
+        run: |
+          export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/.deps/ffmpeg/lib:${LD_LIBRARY_PATH:-}"
+          ctest --test-dir build --output-on-failure --output-log ctest.log \
+            --output-junit ctest-junit.xml --test-output-size-passed 20000000 --test-output-size-failed 20000000
+
+      - name: Summarize test failures
+        if: failure() && steps.test.outcome == 'failure'
+        shell: bash
+        run: |
+          {
+            echo "### Failed tests"
+            echo '```'
+            sed -n '/^The following tests FAILED:/,/^Errors while running CTest/p' ctest.log | grep -v '^Errors while running CTest'
+            echo
+            grep -E -A1 '^(FAIL!|QFATAL)' ctest.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # A suite that QSKIPs still passes, so the failure summary never shows what did not run.
+      - name: Summarize skipped tests
+        if: always() && steps.test.outcome != 'skipped'
+        shell: bash
+        run: |
+          skipped="$(grep -ho 'SKIP   : [^<]*' build/ctest-junit.xml 2>/dev/null \
+            | sed -e 's/&quot;/"/g' -e "s/&apos;/'/g" -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&amp;/\&/g' \
+            | sort | uniq)"
+          {
+            echo '### Skipped tests'
+            echo '```'
+            if [ -n "$skipped" ]; then echo "$skipped"; else echo none; fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save ccache
+        if: always() && steps.build.outcome == 'success'
+        uses: ./.github/actions/ccache
+        with:
+          phase: save
+          key-prefix: ccache-linux-
+          max-size: 1G
+
+  # Homebrew Qt and FFmpeg on macOS: the one platform where a defect can be reliably fatal while
+  # Linux stays green (allocator and toolchain differences). Not on every branch push — macOS
+  # runner minutes bill at a multiple of Linux, and a PR plus main is where a regression needs
+  # catching.
+  macos:
+    name: CTest (macOS)
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same packages as package.yml's macOS lane; keep the two in step.
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install qt ffmpeg re2 libzip lua@5.4 sound-touch openssl@3 pkgconf ninja ccache
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-macos-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Restore Skia
+        id: skia-cache
+        uses: actions/cache@v4
+        with:
+          path: third_party/prebuilt/skia/mac-arm64
+          key: v1-skia-mac-arm64-${{ hashFiles('third_party/build-skia.sh') }}
+
+      - name: Build Skia
+        if: steps.skia-cache.outputs.cache-hit != 'true'
+        run: |
+          JOBS="$(sysctl -n hw.ncpu)" third_party/build-skia.sh mac-arm64
+          rm -rf third_party/src
+
+      - name: Restore ccache
+        uses: ./.github/actions/ccache
+        with:
+          phase: restore
+          key-prefix: ccache-macos-
+          max-size: 700M
+
+      - name: Configure
+        run: |
+          export PKG_CONFIG_PATH="$(brew --prefix lua@5.4)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$(brew --prefix openssl@3);$(brew --prefix)" \
+            -DFETCHCONTENT_BASE_DIR="${FETCHCONTENT_BASE_DIR}" \
+            -DPRISM_WITH_NDI=OFF \
+            -DPRISM_WITH_WEBRTC=ON \
+            -DPRISM_WITH_SEGMENTATION=ON
+
+      - name: Build
+        id: build
+        run: cmake --build build --parallel
+
+      - name: Test
+        id: test
+        run: |
+          ctest --test-dir build --output-on-failure --output-log ctest.log \
+            --output-junit ctest-junit.xml --test-output-size-passed 20000000 --test-output-size-failed 20000000
+
+      - name: Summarize test failures
+        if: failure() && steps.test.outcome == 'failure'
+        shell: bash
+        run: |
+          {
+            echo "### Failed tests"
+            echo '```'
+            sed -n '/^The following tests FAILED:/,/^Errors while running CTest/p' ctest.log | grep -v '^Errors while running CTest'
+            echo
+            grep -E -A1 '^(FAIL!|QFATAL)' ctest.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Summarize skipped tests
+        if: always() && steps.test.outcome != 'skipped'
+        shell: bash
+        run: |
+          skipped="$(grep -ho 'SKIP   : [^<]*' build/ctest-junit.xml 2>/dev/null \
+            | sed -e 's/&quot;/"/g' -e "s/&apos;/'/g" -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&amp;/\&/g' \
+            | sort | uniq)"
+          {
+            echo '### Skipped tests'
+            echo '```'
+            if [ -n "$skipped" ]; then echo "$skipped"; else echo none; fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save ccache
+        if: always() && steps.build.outcome == 'success'
+        uses: ./.github/actions/ccache
+        with:
+          phase: save
+          key-prefix: ccache-macos-
+          max-size: 700M
+
+  # Windows has its own toolchain (MSVC, vcpkg Skia, Qt's DLL search order), so a Linux or macOS
+  # pass says nothing about it. The vcpkg and FetchContent cache keys match package.yml's so the
+  # two workflows share one entry each.
+  windows:
+    name: CTest (Windows)
+    runs-on: windows-2022
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          add-tools-to-path: true
+
+      - name: Restore vcpkg binary cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}\vcpkg_bincache
+          key: vcpkg-bincache-win-${{ hashFiles('CMakeLists.txt', '.github/workflows/package.yml') }}
+          restore-keys: |
+            vcpkg-bincache-win-
+
+      # Keep the package list and triplets identical to package.yml's Install vcpkg dependencies
+      # step; see the comments there for why zlib and skia are static-md.
+      - name: Install vcpkg dependencies
+        shell: pwsh
+        env:
+          VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg_bincache
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+          if (-not (Test-Path vcpkg\vcpkg.exe)) {
+            git clone --depth 1 https://github.com/microsoft/vcpkg.git vcpkg
+            .\vcpkg\bootstrap-vcpkg.bat
+          }
+          .\vcpkg\vcpkg.exe install re2 libzip openssl soundtouch --triplet x64-windows
+          .\vcpkg\vcpkg.exe install zlib "skia[gl,harfbuzz,icu,freetype,png]" --triplet x64-windows-static-md
+
+      - name: Save vcpkg binary cache
+        if: always() && github.ref == 'refs/heads/main' && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}\vcpkg_bincache
+          key: vcpkg-bincache-win-${{ hashFiles('CMakeLists.txt', '.github/workflows/package.yml') }}
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-win-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Fetch pinned FFmpeg
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force .deps\ffmpeg, .deps\ffmpeg_extracted -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path .deps\ffmpeg | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/$env:FFMPEG_REPO/releases/download/$env:FFMPEG_TAG/ffmpeg-$env:FFMPEG_TAG-win64-gpl-shared.zip" -OutFile ffmpeg.zip
+          Expand-Archive -Path ffmpeg.zip -DestinationPath .deps\ffmpeg_extracted -Force
+          $extractedRoot = (Get-ChildItem .deps\ffmpeg_extracted)[0].FullName
+          Copy-Item -Path "$extractedRoot\*" -Destination .deps\ffmpeg -Recurse -Force
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -B build -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake `
+            -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }};${{ github.workspace }}\.deps\ffmpeg;${{ github.workspace }}\vcpkg\installed\x64-windows-static-md" `
+            -DFETCHCONTENT_BASE_DIR=${{ env.FETCHCONTENT_BASE_DIR }} `
+            -DZLIB_INCLUDE_DIR=${{ github.workspace }}\vcpkg\installed\x64-windows-static-md\include `
+            -DZLIB_LIBRARY=${{ github.workspace }}\vcpkg\installed\x64-windows-static-md\lib\zs.lib `
+            -DPRISM_WITH_NDI=OFF `
+            -DPRISM_WITH_WEBRTC=ON `
+            -DPRISM_WITH_SEGMENTATION=ON
+
+      - name: Build
+        id: build
+        shell: pwsh
+        run: cmake --build build --config Release --parallel
+
+      # .deps\ffmpeg\bin and Qt's bin go first so the suite runs against the FFmpeg it was built
+      # with, not Qt's same-named avcodec DLLs. QT_FORCE_STDERR_LOGGING: without it QPlainTestLogger
+      # sends output to OutputDebugString when stdout is ctest's pipe, hiding every FAIL! line.
+      - name: Test
+        id: test
+        shell: pwsh
+        env:
+          QT_FORCE_STDERR_LOGGING: 1
+        run: |
+          $env:PATH = "${{ github.workspace }}\.deps\ffmpeg\bin;${{ github.workspace }}\vcpkg\installed\x64-windows\bin;${{ env.QT_ROOT_DIR }}\bin;$env:PATH"
+          ctest --test-dir build -C Release --output-on-failure --output-log ctest.log `
+            --output-junit ctest-junit.xml --test-output-size-passed 20000000 --test-output-size-failed 20000000
+
+      - name: Summarize test failures
+        if: failure() && steps.test.outcome == 'failure'
+        shell: bash
+        run: |
+          {
+            echo "### Failed tests"
+            echo '```'
+            sed -n '/^The following tests FAILED:/,/^Errors while running CTest/p' ctest.log | grep -v '^Errors while running CTest'
+            echo
+            grep -E -A1 '^(FAIL!|QFATAL)' ctest.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Summarize skipped tests
+        if: always() && steps.test.outcome != 'skipped'
+        shell: bash
+        run: |
+          skipped="$(grep -ho 'SKIP   : [^<]*' build/ctest-junit.xml 2>/dev/null \
+            | sed -e 's/&quot;/"/g' -e "s/&apos;/'/g" -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&amp;/\&/g' \
+            | sort | uniq)"
+          {
+            echo '### Skipped tests'
+            echo '```'
+            if [ -n "$skipped" ]; then echo "$skipped"; else echo none; fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

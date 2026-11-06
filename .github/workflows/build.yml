@@ -1,46 +1,29 @@
 name: Build
 
+# Manual, unversioned dry run of the release builds. Use this to prove a platform green before
+# pushing a tag — a tag is public the moment release.yml finishes, so a failure there is expensive.
 on:
   workflow_dispatch:
     inputs:
       platform:
-        description: "Which platform(s) to build (use linux, windows, or arch to test one side first)"
+        description: "Which platform(s) to build (pick one to test a single side first)"
         required: true
         default: all
         type: choice
         options:
           - all
+          - flatpak
           - linux
           - windows
+          - macos
           - arch
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: build-${{ github.ref }}
   cancel-in-progress: true
-
-env:
-  QT_VERSION: "6.10.3"
-  QT_MODULES: >-
-    qtmultimedia
-    qtimageformats
-    qtwebsockets
-    qtserialport
-  QT_QPA_PLATFORM: offscreen
-  FETCHCONTENT_BASE_DIR: ${{ github.workspace }}/.deps
-  # Pinned to match the FFmpeg version QtMultimedia's ffmpeg backend bundles for
-  # QT_VERSION above (check doc.qt.io/qt-6/qtmultimedia-attribution-ffmpeg.html
-  # when bumping QT_VERSION) — linking a mismatched FFmpeg build alongside Qt's
-  # own private copy crashes at runtime (two FFmpeg ABIs loaded in one process).
-  #
-  # CutWire-Studios/FFmpeg-Builds rather than BtbN: BtbN's dated autobuild tags are deleted after a
-  # few weeks, and the n7.1 release on the fork is a stable URL for this soversion. The gpl variant,
-  # not lgpl: lgpl carries no libx264 (the recorder's software H.264 encoder) and no dav1d. Prism
-  # is GPLv3, so linking them is fine. Same pin as Cutwire Drift.
-  FFMPEG_REPO: "CutWire-Studios/FFmpeg-Builds"
-  FFMPEG_TAG: "n7.1"
 
 jobs:
   meta:
@@ -52,334 +35,16 @@ jobs:
       - name: Compute version
         id: meta
         shell: bash
-        run: |
-          echo "version=0.0.0-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        run: echo "version=0.0.0-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
-  linux:
-    name: Linux AppImage
-    runs-on: ubuntu-22.04
+  package:
+    name: Package
+    permissions:
+      contents: read
+      actions: write
     needs: meta
-    if: inputs.platform == 'all' || inputs.platform == 'linux'
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install native build dependencies
-        run: |
-          sudo apt-get update
-          # ubuntu-22.04 runner images preinstall several LLVM toolchains, each
-          # with its own libunwind-N-dev that Breaks: libunwind-dev — purge
-          # them first so libgstreamer1.0-dev's plain libunwind-dev dependency
-          # can actually resolve.
-          sudo apt-get purge -y 'libunwind-*-dev' || true
-          sudo apt-get install -y \
-            build-essential cmake ninja-build pkg-config \
-            libgl1-mesa-dev libglib2.0-dev libdbus-1-dev \
-            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            libre2-dev libzip-dev libssl-dev liblua5.4-dev libsoundtouch-dev \
-            clang-15 libharfbuzz-dev libexpat1-dev libpng-dev \
-            libfontconfig1-dev libfreetype6-dev libxkbcommon-dev \
-            libx11-dev libx11-xcb-dev libxext-dev libxfixes-dev libxi-dev libxrender-dev \
-            libxcb1-dev libxcb-glx0-dev libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev \
-            libxcb-icccm4-dev libxcb-sync-dev libxcb-xfixes0-dev libxcb-shape0-dev \
-            libxcb-randr0-dev libxcb-render-util0-dev libxcb-xinerama0-dev libxcb-cursor-dev
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: ${{ env.QT_VERSION }}
-          host: linux
-          target: desktop
-          arch: linux_gcc_64
-          modules: ${{ env.QT_MODULES }}
-          cache: true
-          add-tools-to-path: true
-
-      - name: Cache FetchContent dependencies
-        uses: actions/cache@v4
-        with:
-          path: .deps
-          key: deps-linux-${{ hashFiles('CMakeLists.txt') }}
-
-      # Skia is built once per script revision and cached: 15-20 minutes on a miss, seconds on a
-      # hit. clang-15 because Skia's GN toolchain files are written for clang and jammy's default
-      # `clang` is 14. SKIA_SYSTEM_ICU=0 compiles Skia's own ICU with embedded data instead of
-      # letting linuxdeploy bundle the distro's libicudata (~30 MB) next to the copy Qt already
-      # ships. The source tree goes straight after: ~1 GB the AppImage step has no use for.
-      - name: Restore Skia
-        id: skia-cache
-        uses: actions/cache@v4
-        with:
-          path: third_party/prebuilt/skia/linux-x64
-          key: v1-skia-linux-x64-${{ hashFiles('third_party/build-skia.sh') }}
-
-      - name: Build Skia
-        if: steps.skia-cache.outputs.cache-hit != 'true'
-        run: |
-          JOBS="$(nproc)" CC=clang-15 CXX=clang++-15 SKIA_SYSTEM_ICU=0 third_party/build-skia.sh linux-x64
-          rm -rf third_party/src
-
-      - name: Fetch pinned FFmpeg
-        shell: bash
-        run: |
-          mkdir -p "${GITHUB_WORKSPACE}/.deps/ffmpeg"
-          curl -fsSL "https://github.com/${FFMPEG_REPO}/releases/download/${FFMPEG_TAG}/ffmpeg-${FFMPEG_TAG}-linux64-gpl-shared.tar.xz" \
-            | tar -xJf - --strip-components=1 -C "${GITHUB_WORKSPACE}/.deps/ffmpeg"
-
-      - name: Configure
-        run: |
-          export PKG_CONFIG_PATH="${GITHUB_WORKSPACE}/.deps/ffmpeg/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR};${GITHUB_WORKSPACE}/.deps/ffmpeg" \
-            -DFETCHCONTENT_BASE_DIR="${FETCHCONTENT_BASE_DIR}" \
-            -DPRISM_WITH_NDI=OFF \
-            -DPRISM_WITH_WEBRTC=ON \
-            -DPRISM_WITH_SEGMENTATION=ON
-
-      - name: Build
-        run: |
-          # libdatachannel and its vendored libjuice each define two static-lib
-          # targets (a plain one and a "-static"-suffixed EXCLUDE_FROM_ALL one);
-          # Prism only links the "-static" variants, so the plain `datachannel`
-          # and `juice` targets are never built as a side effect of building
-          # Prism — yet both are still unconditionally install()'d, so `cmake
-          # --install` fails looking for .a files that were never produced
-          # unless built explicitly here.
-          # Everything, not just Prism: the unit tests are built here too.
-          cmake --build build --parallel
-
-      # The tests set QT_QPA_PLATFORM=offscreen themselves (tests/CMakeLists.txt), so the
-      # GPU-upload and hardware-decode cases in test_media QSKIP on this runner.
-      #
-      # The pinned FFmpeg goes first on LD_LIBRARY_PATH: install-qt-action puts Qt's lib dir
-      # there, and QtMultimedia ships its own libavcodec under the same soname. The test binaries'
-      # RUNPATH covers only their own NEEDED entries, so libavfilter's libpostproc (GPL-only)
-      # would not be found through it either.
-      - name: Test
-        run: |
-          export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/.deps/ffmpeg/lib:${LD_LIBRARY_PATH:-}"
-          ctest --test-dir build --output-on-failure --timeout 300
-
-      - name: Stage install tree
-        run: |
-          cmake --install build --prefix "${GITHUB_WORKSPACE}/AppDir/usr"
-          mkdir -p "${GITHUB_WORKSPACE}/dist"
-
-      - name: Build AppImage
-        shell: bash
-        run: |
-          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage -O linuxdeploy.AppImage
-          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage -O linuxdeploy-plugin-qt.AppImage
-          chmod +x linuxdeploy.AppImage linuxdeploy-plugin-qt.AppImage
-          export QMAKE="${QT_ROOT_DIR}/bin/qmake"
-          export VERSION="${{ needs.meta.outputs.version }}"
-          # ONNX Runtime is auto-downloaded by CMakeModules/FetchOnnxRuntime.cmake
-          # into a version-suffixed dir under build/_deps; only its Windows path
-          # gets a post-build copy-next-to-exe step (CMakeLists.txt's `if(WIN32)`
-          # block), so on Linux linuxdeploy needs it on LD_LIBRARY_PATH to find
-          # and bundle libonnxruntime.so.1 via its ldd-based dependency scan.
-          onnxruntime_lib_dir="$(find "${GITHUB_WORKSPACE}/build/_deps/onnxruntime" -maxdepth 2 -type d -name lib | head -n1)"
-          #
-          # The pinned FFmpeg must come before Qt's lib dir: QtMultimedia ships its own libavcodec
-          # under the same soname, built without dav1d or x264, and with Qt's dir first
-          # linuxdeploy bundles that copy instead of the one Prism was built against.
-          #
-          # libva is deliberately not bundled. AppRun puts usr/lib on LD_LIBRARY_PATH, so a
-          # bundled libva.so.2 would win every dlopen and cap VA-API at this runner's version,
-          # which refuses newer host drivers. A host with no libva at all is handled in code:
-          # hwaccel::deviceAvailable() dlopens libva itself before letting FFmpeg near VAAPI.
-          export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/.deps/ffmpeg/lib:${QT_ROOT_DIR}/lib:${onnxruntime_lib_dir}:${LD_LIBRARY_PATH:-}"
-          # The Wayland platform plugin and waylandcompositor's client EGL integration: without the
-          # latter QtWayland cannot create an OpenGL context at all, and without EGL the VAAPI
-          # zero-copy import (dma-buf into EGLImages) is never available. The plugin splits
-          # EXTRA_QT_MODULES on ';'.
-          export EXTRA_PLATFORM_PLUGINS="libqwayland.so"
-          export EXTRA_QT_MODULES="waylandcompositor"
-          ./linuxdeploy.AppImage --appdir AppDir --plugin qt --output appimage \
-            --exclude-library "libva*" \
-            -d flatpak/org.cutwire.Prism.desktop \
-            -i flatpak/share/icons/hicolor/256x256/apps/org.cutwire.Prism.png \
-            -e AppDir/usr/bin/Prism
-          appimage="$(ls ./*.AppImage | grep -iv linuxdeploy | head -n 1)"
-          mv "${appimage}" "dist/Prism-${{ needs.meta.outputs.version }}-x86_64.AppImage"
-
-      - name: Upload AppImage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-appimage
-          path: dist/*.AppImage
-
-  windows:
-    name: Windows installer
-    runs-on: windows-2022
-    needs: meta
-    if: inputs.platform == 'all' || inputs.platform == 'windows'
-    timeout-minutes: 180
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: ${{ env.QT_VERSION }}
-          host: windows
-          target: desktop
-          arch: win64_msvc2022_64
-          modules: ${{ env.QT_MODULES }}
-          cache: true
-          add-tools-to-path: true
-
-      - name: Restore vcpkg binary cache
-        id: vcpkg-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ github.workspace }}\vcpkg_bincache
-          key: vcpkg-bincache-win-${{ hashFiles('CMakeLists.txt', '.github/workflows/build.yml') }}
-          restore-keys: |
-            vcpkg-bincache-win-
-
-      - name: Install vcpkg dependencies
-        shell: pwsh
-        env:
-          VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg_bincache
-        run: |
-          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
-          if (-not (Test-Path vcpkg\vcpkg.exe)) {
-            git clone --depth 1 https://github.com/microsoft/vcpkg.git vcpkg
-            .\vcpkg\bootstrap-vcpkg.bat
-          }
-          .\vcpkg\vcpkg.exe install re2 libzip openssl soundtouch --triplet x64-windows
-          # Skia comes from vcpkg here rather than third_party/build-skia.sh, which has no Windows target.
-          # x64-windows-static-md, not x64-windows: Skottie needs a static Skia, and -md keeps the dynamic
-          # CRT Qt uses. zlib is installed in the same triplet because Skia's archives link its static
-          # copy (zs.lib); the Configure step hands find_package(ZLIB) that copy by path.
-          .\vcpkg\vcpkg.exe install zlib "skia[gl,harfbuzz,icu,freetype,png]" --triplet x64-windows-static-md
-
-      # Save even when a later step fails so the vcpkg build is not repeated on
-      # the next run (actions/cache only saves on job success).
-      - name: Save vcpkg binary cache
-        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}\vcpkg_bincache
-          key: vcpkg-bincache-win-${{ hashFiles('CMakeLists.txt', '.github/workflows/build.yml') }}
-
-      - name: Cache FetchContent dependencies
-        uses: actions/cache@v4
-        with:
-          path: .deps
-          key: deps-win-${{ hashFiles('CMakeLists.txt') }}
-
-      # Pinned to match the FFmpeg version QtMultimedia's ffmpeg backend bundles
-      # (see the FFMPEG_TAG comment at the top of this file) instead of
-      # vcpkg's floating ffmpeg port, which does not track Qt's bundled version
-      # and previously caused two mismatched FFmpeg ABIs to be loaded at once.
-      - name: Fetch pinned FFmpeg
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path .deps\ffmpeg | Out-Null
-          Invoke-WebRequest -Uri "https://github.com/$env:FFMPEG_REPO/releases/download/$env:FFMPEG_TAG/ffmpeg-$env:FFMPEG_TAG-win64-gpl-shared.zip" -OutFile ffmpeg.zip
-          Expand-Archive -Path ffmpeg.zip -DestinationPath .deps\ffmpeg_extracted -Force
-          $extractedRoot = (Get-ChildItem .deps\ffmpeg_extracted)[0].FullName
-          Copy-Item -Path "$extractedRoot\*" -Destination .deps\ffmpeg -Recurse -Force
-
-      - name: Configure
-        shell: pwsh
-        run: |
-          cmake -B build -G "Visual Studio 17 2022" -A x64 `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake `
-            -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }};${{ github.workspace }}\.deps\ffmpeg;${{ github.workspace }}\vcpkg\installed\x64-windows-static-md" `
-            -DFETCHCONTENT_BASE_DIR=${{ env.FETCHCONTENT_BASE_DIR }} `
-            -DZLIB_INCLUDE_DIR=${{ github.workspace }}\vcpkg\installed\x64-windows-static-md\include `
-            -DZLIB_LIBRARY=${{ github.workspace }}\vcpkg\installed\x64-windows-static-md\lib\zs.lib `
-            -DPRISM_WITH_NDI=OFF `
-            -DPRISM_WITH_WEBRTC=ON `
-            -DPRISM_WITH_SEGMENTATION=ON
-
-      - name: Build
-        shell: pwsh
-        run: cmake --build build --config Release --parallel
-
-      # The pinned FFmpeg's bin dir goes ahead of Qt's: Qt ships its own avcodec/avformat DLLs
-      # under the same names. QT_FORCE_STDERR_LOGGING keeps QtTest output visible under ctest,
-      # which otherwise routes it to OutputDebugString.
-      - name: Test
-        shell: pwsh
-        env:
-          QT_FORCE_STDERR_LOGGING: 1
-        run: |
-          $env:PATH = "${{ github.workspace }}\.deps\ffmpeg\bin;${{ github.workspace }}\vcpkg\installed\x64-windows\bin;${{ env.QT_ROOT_DIR }}\bin;$env:PATH"
-          ctest --test-dir build -C Release --output-on-failure --timeout 300
-
-      - name: Stage runtime files
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dist\bin | Out-Null
-          Copy-Item build\Release\Prism.exe dist\bin -Force
-          Copy-Item build\Release\softcam.dll dist\bin -Force -ErrorAction SilentlyContinue
-          Copy-Item build\Release\onnxruntime*.dll dist\bin -Force -ErrorAction SilentlyContinue
-          & "${{ env.QT_ROOT_DIR }}\bin\windeployqt.exe" --release --no-translations dist\bin\Prism.exe
-          Copy-Item vcpkg\installed\x64-windows\bin\*.dll dist\bin -Force
-          Copy-Item .deps\ffmpeg\bin\*.dll dist\bin -Force
-
-      - name: Build Inno Setup installer
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.6
-        with:
-          path: installer/windows/Prism.iss
-          options: |
-            /DMyAppVersion=${{ needs.meta.outputs.version }}
-            /DMyAppSource=${{ github.workspace }}\dist\bin
-
-      - name: Collect installer
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item installer\windows\output\Prism-Setup-x64.exe `
-            "dist\Prism-Setup-${{ needs.meta.outputs.version }}-x64.exe" -Force
-
-      - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-installer
-          path: dist/*.exe
-
-  arch:
-    name: Arch package
-    runs-on: ubuntu-24.04
-    if: inputs.platform == 'all' || inputs.platform == 'arch'
-    timeout-minutes: 60
-    container:
-      image: archlinux:base-devel
-    steps:
-      - uses: actions/checkout@v4
-
-      # makepkg refuses to run as root, and archlinux:base-devel's default
-      # user is root — create an unprivileged builder with passwordless sudo
-      # (needed for makepkg -s to pacman-install PKGBUILD's own depends).
-      - name: Set up builder user
-        run: |
-          pacman -Syu --noconfirm
-          useradd -m builder
-          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-          chown -R builder:builder "${GITHUB_WORKSPACE}"
-
-      # The PKGBUILD's source is git+https with a #commit= pin that defaults
-      # to the latest tagged release (so a plain `makepkg` — e.g. a real AUR
-      # build — stays reproducible), but it reads _commit from the
-      # environment first, so pin it to the exact commit that triggered this
-      # workflow instead of the tag.
-      - name: Build package
-        run: su builder -c "cd '${GITHUB_WORKSPACE}/packaging/arch' && _commit='${{ github.sha }}' makepkg -s --noconfirm"
-
-      - name: Collect package
-        run: |
-          mkdir -p dist
-          cp packaging/arch/*.pkg.tar.zst dist/
-
-      - name: Upload Arch package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: arch-package
-          path: dist/*.pkg.tar.zst
+    uses: ./.github/workflows/package.yml
+    with:
+      version: ${{ needs.meta.outputs.version }}
+      platform: ${{ inputs.platform }}
+    secrets: inherit
