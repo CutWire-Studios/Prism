@@ -2,6 +2,7 @@
 
 #include "app/AppController.h"
 #include "app/hotkeys/HotkeyManager.h"
+#include "app/show/ShowManager.h"
 
 #include <QFile>
 #include <QJsonDocument>
@@ -19,49 +20,38 @@ HotkeyManager *HotkeyEditor::manager() const
     return app ? app->hotkeyManager() : nullptr;
 }
 
-ClipGraph *HotkeyEditor::graph() const
+ShowManager *HotkeyEditor::show() const
 {
     auto *app = AppController::instance();
-    return app ? app->clipGraph() : nullptr;
+    return app ? app->showManager() : nullptr;
 }
 
 void HotkeyEditor::refresh()
 {
     HotkeyManager *mgr = manager();
-    ClipGraph *g = graph();
-    if (!mgr || !g)
+    ShowManager *sm = show();
+    if (!mgr || !sm)
         return;
 
     if (!m_connected) {
         m_connected = true;
         connect(mgr, &HotkeyManager::bindingsChanged, this, &HotkeyEditor::refresh);
-        connect(g, &ClipGraph::changed, this, &HotkeyEditor::refresh);
+        connect(sm, &ShowManager::cuesReset, this, &HotkeyEditor::refresh);
+        connect(sm, &ShowManager::cueAdded, this, &HotkeyEditor::refresh);
     }
 
-    const QVector<ClipGraph::AbSlotInfo> inputs = g->abSelectInputs();
-    QList<NodeId> abNodes;
-    for (const ClipGraph::AbSlotInfo &info : inputs)
-        if (!abNodes.contains(info.ref.abNodeId))
-            abNodes.append(info.ref.abNodeId);
-
-    m_slots.clear();
+    m_cueIds.clear();
     m_rows.clear();
-    for (const ClipGraph::AbSlotInfo &info : inputs) {
-        QString label = info.name.isEmpty() ? tr("In %1").arg(info.ref.slot + 1) : info.name;
-        if (!info.sourceName.isEmpty())
-            label += QStringLiteral(" — %1").arg(info.sourceName);
-        if (abNodes.size() > 1)
-            label = tr("Switcher #%1 · %2").arg(abNodes.indexOf(info.ref.abNodeId) + 1).arg(label);
-
-        const Qt::Key key = mgr->bindingForSlot(info.ref);
+    for (const Cue *cue : sm->cues()) {
+        const Qt::Key key = mgr->bindingForCue(cue->id());
         QString chord;
         QString cutChord;
         if (key != Qt::Key_unknown) {
             chord = QKeySequence(key).toString(QKeySequence::PortableText);
             cutChord = QKeySequence(Qt::SHIFT | key).toString(QKeySequence::PortableText);
         }
-        m_slots.append(info.ref);
-        m_rows.append(QVariantMap{{"label", label}, {"chord", chord}, {"cutChord", cutChord}});
+        m_cueIds.append(cue->id());
+        m_rows.append(QVariantMap{{"label", cue->name()}, {"chord", chord}, {"cutChord", cutChord}});
     }
     emit rowsChanged();
 }
@@ -69,7 +59,7 @@ void HotkeyEditor::refresh()
 QVariantMap HotkeyEditor::setChord(int row, const QString &chord)
 {
     HotkeyManager *mgr = manager();
-    if (!mgr || row < 0 || row >= m_slots.size())
+    if (!mgr || row < 0 || row >= m_cueIds.size())
         return {{"ok", false}, {"message", QString()}};
 
     const QKeySequence seq(chord, QKeySequence::PortableText);
@@ -77,18 +67,18 @@ QVariantMap HotkeyEditor::setChord(int row, const QString &chord)
         return {{"ok", false}, {"message", tr("That key cannot be used.")}};
     const QKeyCombination combo = seq[0];
     if (combo.keyboardModifiers() != Qt::NoModifier)
-        return {{"ok", false}, {"message", tr("Use a key on its own. Shift plus the key stages it and cuts to Live.")}};
+        return {{"ok", false}, {"message", tr("Use a key on its own. Shift plus the key stages it and takes it to Live.")}};
 
     const Qt::Key key = combo.key();
     if (!HotkeyManager::isBindableKey(key))
         return {{"ok", false}, {"message", tr("That key cannot be used.")}};
 
-    const ClipGraph::AbSlotRef owner = mgr->slotForKey(key);
-    if (owner.isValid() && !(owner == m_slots.at(row)))
-        return {{"ok", false}, {"message", tr("%1 is already assigned to another input.")
+    const QString owner = mgr->cueForKey(key);
+    if (!owner.isEmpty() && owner != m_cueIds.at(row))
+        return {{"ok", false}, {"message", tr("%1 is already assigned to another cue.")
                                                .arg(QKeySequence(key).toString())}};
 
-    if (!mgr->setBinding(m_slots.at(row), key))
+    if (!mgr->setBinding(m_cueIds.at(row), key))
         return {{"ok", false}, {"message", tr("That key cannot be used.")}};
     mgr->saveSettingsProfile();
     return {{"ok", true}, {"message", QString()}};
@@ -97,9 +87,9 @@ QVariantMap HotkeyEditor::setChord(int row, const QString &chord)
 void HotkeyEditor::clearRow(int row)
 {
     HotkeyManager *mgr = manager();
-    if (!mgr || row < 0 || row >= m_slots.size())
+    if (!mgr || row < 0 || row >= m_cueIds.size())
         return;
-    mgr->clearBinding(m_slots.at(row));
+    mgr->clearBinding(m_cueIds.at(row));
     mgr->saveSettingsProfile();
 }
 

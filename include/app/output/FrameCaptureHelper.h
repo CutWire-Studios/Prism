@@ -31,7 +31,6 @@ public:
     static QString savePng(const QImage &image, const QString &baseName, const QString &baseDir);
 
     static QList<LayerRef> enumerateLayers(Compositor      *output,
-                                           ClipGraph       *graph,
                                            DeckController  *decks);
 
     static QImage captureLayer(Compositor *output, const LayerRef &layer);

@@ -1,6 +1,7 @@
 #include "app/remote/RemoteControlServer.h"
 #include "core/webrtc/FirewallUtils.h"
 #include "app/AppController.h"
+#include "app/show/ShowManager.h"
 #include "core/Deck.h"
 #include "app/transitions/TransitionController.h"
 #include "core/graph/ClipGraph.h"
@@ -95,20 +96,18 @@ void RemoteControlServer::onReadyRead() {
 
         if (m_mainWindow) {
             status.hasDeck = true;
-            status.live = m_mainWindow->activeNodeLive();
-            status.staging = m_mainWindow->activeNodeStaging();
+            status.live = m_mainWindow->showManager()->liveCueId();
+            status.staging = m_mainWindow->showManager()->stagingCueId();
             status.isPlayingLive = m_mainWindow->isPlayingLive();
             status.isPlayingStaging = m_mainWindow->isPlayingStaging();
 
-            if (auto *graph = m_mainWindow->clipGraph()) {
-                for (NodeId id : graph->nodeIdsOfType(ClipGraph::NodeType::Input)) {
-                    RemoteProtocol::ClipInfo clip;
-                    clip.id = id;
-                    clip.name = graph->sourceName(id);
-                    clip.onLive = (id == m_mainWindow->activeNodeLive());
-                    clip.onStaging = (id == m_mainWindow->activeNodeStaging());
-                    status.clips.append(clip);
-                }
+            for (const Cue *cue : m_mainWindow->showManager()->cues()) {
+                RemoteProtocol::CueInfo info;
+                info.id = cue->id();
+                info.name = cue->name();
+                info.onLive = (info.id == status.live);
+                info.onStaging = (info.id == status.staging);
+                status.cues.append(info);
             }
         }
 
@@ -144,9 +143,9 @@ void RemoteControlServer::onReadyRead() {
         break;
 
     case RemoteProtocol::Route::Stage: {
-        quint64 id = 0;
-        if (RemoteProtocol::uint64Param(request.path, QStringLiteral("id"), id) && m_mainWindow)
-            m_mainWindow->stageNode(id);
+        QString id;
+        if (RemoteProtocol::stringParam(request.path, QStringLiteral("id"), id) && m_mainWindow)
+            m_mainWindow->stageCue(id);
         sendJsonResponse(socket, "{\"status\": \"ok\"}");
         break;
     }
@@ -752,7 +751,7 @@ QString RemoteControlServer::getWebPageHtml() const {
         <section class="deck-monitors">
             <div class="deck-card deck-staging">
                 <div class="deck-label">Staging</div>
-                <div id="stagingClip" class="deck-clip-name">No Clip Loaded</div>
+                <div id="stagingClip" class="deck-clip-name">No Cue Staged</div>
                 <div class="deck-controls">
                     <button id="stagingBtn" class="play-toggle" onclick="togglePlay('staging')">
                         <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -761,7 +760,7 @@ QString RemoteControlServer::getWebPageHtml() const {
             </div>
             <div class="deck-card deck-live">
                 <div class="deck-label">Live</div>
-                <div id="liveClip" class="deck-clip-name">No Clip Loaded</div>
+                <div id="liveClip" class="deck-clip-name">No Cue Staged</div>
                 <div class="deck-controls">
                     <button id="liveBtn" class="play-toggle" onclick="togglePlay('live')">
                         <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -804,7 +803,7 @@ QString RemoteControlServer::getWebPageHtml() const {
         <section class="clips-panel">
             <div class="section-title">Project Clips</div>
             <div id="clipsList" class="clips-list">
-                <div class="no-clips">No clips loaded in project.</div>
+                <div class="no-clips">No cues in project.</div>
             </div>
         </section>
     </div>
@@ -878,7 +877,7 @@ QString RemoteControlServer::getWebPageHtml() const {
             sendCommand(`/api/setDuration?val=${val}`);
         }
 
-        function stageClip(id) {
+        function stageCue(id) {
             sendCommand(`/api/stage?id=${id}`);
         }
 
@@ -920,14 +919,14 @@ QString RemoteControlServer::getWebPageHtml() const {
                     }
                 }
 
-                let liveName = "No Clip Loaded";
-                let stagingName = "No Clip Loaded";
+                let liveName = "No Cue Staged";
+                let stagingName = "No Cue Staged";
                 
-                if (data.clips) {
-                    const liveEntry = data.clips.find(c => c.id === data.live);
+                if (data.cues) {
+                    const liveEntry = data.cues.find(c => c.id === data.live);
                     if (liveEntry) liveName = liveEntry.name;
                     
-                    const stagingEntry = data.clips.find(c => c.id === data.staging);
+                    const stagingEntry = data.cues.find(c => c.id === data.staging);
                     if (stagingEntry) stagingName = stagingEntry.name;
                 }
                 
@@ -950,15 +949,15 @@ QString RemoteControlServer::getWebPageHtml() const {
                     stagingBtn.innerHTML = playIcon;
                 }
 
-                if (data.clips) {
-                    const clipsJson = JSON.stringify(data.clips);
+                if (data.cues) {
+                    const clipsJson = JSON.stringify(data.cues);
                     if (clipsJson !== lastClipsJson) {
                         lastClipsJson = clipsJson;
-                        if (data.clips.length === 0) {
-                            clipsList.innerHTML = '<div class="no-clips">No clips loaded in project.</div>';
+                        if (data.cues.length === 0) {
+                            clipsList.innerHTML = '<div class="no-clips">No cues in project.</div>';
                         } else {
                             clipsList.innerHTML = "";
-                            data.clips.forEach(clip => {
+                            data.cues.forEach(clip => {
                                 const div = document.createElement('div');
                                 div.className = `clip-item ${clip.onLive ? 'active-live' : ''} ${clip.onStaging ? 'active-staging' : ''}`;
                                 
@@ -973,7 +972,7 @@ QString RemoteControlServer::getWebPageHtml() const {
                                 const btnStage = document.createElement('button');
                                 btnStage.className = `clip-select-btn btn-to-staging ${clip.onStaging ? 'active' : ''}`;
                                 btnStage.textContent = "Stage";
-                                btnStage.onclick = () => stageClip(clip.id);
+                                btnStage.onclick = () => stageCue(clip.id);
                                 btnGroup.appendChild(btnStage);
 
                                 div.appendChild(btnGroup);

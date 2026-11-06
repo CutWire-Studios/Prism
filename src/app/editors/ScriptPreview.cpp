@@ -17,7 +17,6 @@ const Preset kPresets[] = {
     { "Counter",        ":/scripts/counter.lua" },
     { "Greeting",       ":/scripts/greeting.lua" },
     { "Bitcoin Price",  ":/scripts/bitcoin_price.lua" },
-    { "Auto Switch", ":/scripts/ab_auto_switch.lua" },
 };
 constexpr int kPresetCount = static_cast<int>(sizeof(kPresets) / sizeof(kPresets[0]));
 

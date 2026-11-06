@@ -40,7 +40,6 @@ public:
         Process,
         AudioEffect,
         Layer,
-        AbSelect,
         Output,
         AudioMixer,
         MasterAudioOutput,
@@ -55,8 +54,6 @@ public:
     enum class PortKind {
         ChainIn,
         ChainOut,
-        AbOut,
-        AbIn,
         AudioOut,
         ShaderAudioIn,
         AudioIn,
@@ -85,7 +82,6 @@ public:
         ClipToShaderAudio = 5,
         ScriptToData = 6,
         InputToMaster = 7,
-        AbToOutput = 8,
         StreamToMixer = 9,
         MixerToOutput = 10,
         AudioEffectChain = 11,
@@ -161,24 +157,6 @@ public:
         int routedOutputPortIndex = -1;
     };
 
-    struct AbSlotRef {
-        NodeId abNodeId = 0;
-        int slot = -1;
-
-        bool isValid() const { return abNodeId != 0 && slot >= 0; }
-        bool operator==(const AbSlotRef &o) const { return abNodeId == o.abNodeId && slot == o.slot; }
-        bool operator<(const AbSlotRef &o) const {
-            return abNodeId != o.abNodeId ? abNodeId < o.abNodeId : slot < o.slot;
-        }
-    };
-
-    struct AbSlotInfo {
-        AbSlotRef ref;
-        QString name;
-        QString sourceName;
-        NodeId producer = 0;
-    };
-
     struct LayerSlotView {
         int index = 0;
         QRectF rect;           // normalized base placement
@@ -201,8 +179,9 @@ public:
     /// True when the graph has no user-placed nodes (Output-only counts as empty).
     bool isEmptyGraph() const;
     NodeId outputNodeId() const { return m_outputNode; }
-    NodeId liveInput() const { return m_liveInput; }
-    NodeId stagingInput() const { return m_stagingInput; }
+    /// Node ids start above this base so ids stay unique across the graphs of a show.
+    void setIdBase(quint64 base) { m_idBase = base; if (m_nextId <= base) m_nextId = base + 1; }
+    quint64 idBase() const { return m_idBase; }
     QString sourceName(NodeId inputNodeId) const;
     /// Input-node payload accessors (defaults for non-Input / unknown ids).
     SourceDescriptor sourceDescriptor(NodeId inputNodeId) const;
@@ -236,7 +215,7 @@ public:
     bool setEffectParams(NodeId id, const QVariantMap &params, bool merge = true);
 
     /// Wire two nodes. kind -1 infers from ports (prefers the video chain).
-    /// toPortIndex is the destination slot (Layer / Switcher / mixer / device).
+    /// toPortIndex is the destination slot (Layer / mixer / device).
     bool connectNodes(NodeId from, NodeId to, int kind = -1, int toPortIndex = -1);
     /// Drag-style connect between two concrete ports; inserts a mixer for
     /// stream -> audio output the way the editor does.
@@ -281,23 +260,6 @@ public:
     bool setLayerCanvasCustom(NodeId layerId, bool custom);
     void setOutputCanvasSize(int w, int h);
 
-    // ── Switcher and decks ─────────────────────────────────────────────────
-    void setActiveDeckClip(NodeId clipId, Deck deck);
-    /// Exchanges the Live and Staging inputs (a take).
-    void swapDeckInputs();
-    void assignInputToDeck(NodeId inputProducerNode, Deck deck);
-    QVector<AbSlotInfo> abSelectInputs() const;
-    /// False if the slot is missing, unconnected, or its switcher isn't wired to the Output.
-    bool triggerAbSlot(const AbSlotRef &ref, Deck deck);
-    bool abOutputConnected(NodeId abNodeId) const;
-    /// Slot indices currently driving Live / Staging, or -1.
-    void abDeckSlots(NodeId abNodeId, int &aSlot, int &bSlot) const;
-    /// Applies a script's output object: "a"/"b" name a slot (case-insensitive) or a 1-based index.
-    void applyAbScriptOutput(NodeId abNodeId, const QJsonObject &output);
-    void setAbSlotHotkeyLabel(const AbSlotRef &ref, const QString &label);
-    void clearAbSlotHotkeyLabels();
-    QString abSlotHotkeyLabel(const AbSlotRef &ref) const;
-
     // ── Audio / script queries ───────────────────────────────────────────────
     bool resolveAudioStreamRoute(NodeId sourceNodeId, ResolvedAudioRoute &route) const;
     /// playbackMode: 0 = always, 1 = only while the clip's deck is active.
@@ -337,8 +299,6 @@ signals:
     void edgeAdded(EdgeId id);
     void edgeRemoved(EdgeId id);
     void edgeChanged(EdgeId id);
-    void liveChanged(NodeId clipId);
-    void stagingChanged(NodeId clipId);
     /// The whole graph was replaced (fromJson / clear); models must rebuild.
     void graphReset();
     /// Anything that affects compositing or audio routing changed.
@@ -368,7 +328,6 @@ private:
     void disconnectPort(NodeId node, PortDirection dir, int index);
     void removeEdgesOfNode(NodeId id);
     bool connectPortsRaw(NodeId from, int fromPort, NodeId to, int toPort, EdgeKind kind);
-    bool outputInputBlocked(NodeId to, int toPort) const;
     std::optional<ConnectPlan> planConnection(NodeId from, int fromPort, NodeId to, int toPort) const;
     void insertMixerForStreamToOutput(NodeId streamNode, int streamPort, NodeId deviceNode, int devicePort);
     NodeId createMixerAt(const QPointF &scenePos);
@@ -389,17 +348,14 @@ private:
     NodeId clipForAudioScript(NodeId scriptNodeId) const;
     QString deviceIdAt(const Node &out, int index) const;
 
-    void setDeck(NodeId id, Deck deck);
     void notifyNode(NodeId id);
     void notifyChanged();
 
     QMap<NodeId, Node> m_nodes;
     QList<NodeId> m_order;
     QList<Edge> m_edges;
-    QMap<AbSlotRef, QString> m_hotkeyLabels;
     NodeId m_outputNode = 0;
-    NodeId m_liveInput = 0;
-    NodeId m_stagingInput = 0;
+    quint64 m_idBase = 0;
     NodeId m_nextId = 1;
     EdgeId m_nextEdgeId = 1;
     bool m_restoring = false;

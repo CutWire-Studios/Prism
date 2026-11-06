@@ -23,6 +23,12 @@ QJsonObject clipRefProps()
                  "Required; ops never fall back to the current deck assignment."))}};
 }
 
+QJsonObject cueRefProps()
+{
+    return {{QStringLiteral("cue"),
+             stringProp(QStringLiteral("Cue id from list_cues, or its 1-based position in the list."))}};
+}
+
 QJsonObject mergeProps(QJsonObject a, const QJsonObject &b)
 {
     for (auto it = b.begin(); it != b.end(); ++it)
@@ -61,8 +67,8 @@ const QList<Op> &ops()
          objectSchema({}), true, false, true},
         {"add_clip", "sources", "Bring a media file onto the graph",
          "Add a local video, image, or audio file as an input clip. Auto-detects kind from "
-         "the path. Returns {id, name, kind}. Does not stage it — call stage "
-         "with the returned id.",
+         "the path. Returns {id, name, kind}. Added to the edited cue; put the cue on a "
+         "deck with stage_cue.",
          objectSchema({{QStringLiteral("path"),
                         stringProp(QStringLiteral("Absolute file path"))},
                        {QStringLiteral("name"),
@@ -132,10 +138,21 @@ const QList<Op> &ops()
                                    stringProp(QStringLiteral("GLSL fragment shader"))}}),
                       {QStringLiteral("clip"), QStringLiteral("code")})},
 
-        {"stage", "decks", "Put a clip on Staging (next up)",
-         "Load a clip onto the Staging deck (the next-up deck, shown on the left) and start it. "
-         "It does not go on air until take or cut.",
-         objectSchema(clipRefProps(), {QStringLiteral("clip")})},
+        {"list_cues", "decks", "See the cue list",
+         "List the show's cues. Returns {cues:[{id, index, name, live, staging, edited, endAction}]}.",
+         objectSchema({}), true, false, true},
+        {"stage_cue", "decks", "Put a cue on Staging (next up)",
+         "Load a cue onto the Staging deck (the next-up deck, shown on the left). It does not go on "
+         "air until take or cut. cue is a cue id or its 1-based position in list_cues.",
+         objectSchema(cueRefProps(), {QStringLiteral("cue")})},
+        {"add_cue", "decks", "Add a cue",
+         "Add a cue with Output and Audio Output nodes after the edited cue. Optional name. "
+         "Returns the new cue.",
+         objectSchema({{QStringLiteral("name"), stringProp(QStringLiteral("Cue name"))}})},
+        {"enter_cue", "decks", "Edit a cue's graph",
+         "Make a cue the one the graph and source tools (list_nodes, add_*_node, connect, add_source, …) "
+         "operate on.",
+         objectSchema(cueRefProps(), {QStringLiteral("cue")})},
         {"play", "decks", "Play a deck", "Start playback on the Live or Staging deck.",
          objectSchema({{QStringLiteral("deck"), enumProp(QStringLiteral("Which deck"), kDecks)}},
                       {QStringLiteral("deck")})},
@@ -225,7 +242,7 @@ const QList<Op> &ops()
          "params. Pass name, slug, or id to add_process_node.",
          objectSchema({}), true, false, true},
         {"list_nodes", "graph", "See the whole node graph",
-         "List every node (input, process, layer, ab_select, output) and connections. "
+         "List every node of the edited cue (input, process, layer, output, …) and connections. "
          "Same payload as inspect({graph:true}).graph. Returns {output, nodes, connections}.",
          objectSchema({}), true, false, true},
         {"add_process_node", "graph", "Add a video effect on the blue chain",
@@ -244,14 +261,9 @@ const QList<Op> &ops()
          "(to_port is the layer slot). Returns {id, type:\"layer\"}.",
          objectSchema({{QStringLiteral("x"), numberProp(QStringLiteral("Scene X"))},
                        {QStringLiteral("y"), numberProp(QStringLiteral("Scene Y"))}})},
-        {"add_ab_select", "graph", "Add an Switcher",
-         "Place a Switcher node. Wire inputs with connect (to_port is the slot), then "
-         "wire its output to the Output node with kind ab_to_output. Returns {id, type:\"ab_select\"}.",
-         objectSchema({{QStringLiteral("x"), numberProp(QStringLiteral("Scene X"))},
-                       {QStringLiteral("y"), numberProp(QStringLiteral("Scene Y"))}})},
         {"connect", "graph", "Wire two nodes",
          "Connect from → to. kind defaults to auto (tries video chain first). to_port is the "
-         "destination slot for Layer / Switcher (0-based). Returns {from, to, kind, kindName}.",
+         "destination slot for Layer / mixer (0-based). Returns {from, to, kind, kindName}.",
          objectSchema({{QStringLiteral("from"),
                         stringProp(QStringLiteral("Source node id"))},
                        {QStringLiteral("to"),
@@ -261,7 +273,7 @@ const QList<Op> &ops()
                             "chain (default), ab_to_output, script_to_data, clip_to_shader_audio, "
                             "or omit for auto"))},
                        {QStringLiteral("to_port"),
-                        integerProp(QStringLiteral("Destination input slot (Layer / Switcher)"))}},
+                        integerProp(QStringLiteral("Destination input slot (Layer / mixer)"))}},
                       {QStringLiteral("from"), QStringLiteral("to")})},
         {"disconnect", "graph", "Cut a wire",
          "Remove the connection from → to. Optional to_port to target one slot.",
@@ -278,7 +290,7 @@ const QList<Op> &ops()
                         objectProp(QStringLiteral("Keys to merge, e.g. {\"x\":0.1,\"w\":0.8}"))}},
                       {QStringLiteral("node"), QStringLiteral("params")})},
         {"remove_node", "graph", "Delete any graph node",
-         "Remove an input, process, layer, or Switcher node. The Output node cannot be deleted while "
+         "Remove an input, process, layer, or mixer node. The Output node cannot be deleted while "
          "other nodes exist.",
          objectSchema({{QStringLiteral("node"), stringProp(QStringLiteral("Node id"))}},
                       {QStringLiteral("node")}),
@@ -334,11 +346,12 @@ QString agentGuideText()
         "- Times are seconds. Two fixed decks: Staging (next up, shown left) and Live (on air, shown\n"
         "  right). Transition progress 0 = Live, 100 = Staging; a take animates it to 100, then Staging\n"
         "  content becomes Live and progress resets to 0.\n"
-        "- Identify clips by id from inspect({clips:true}). Clip ops never fall back to the\n"
-        "  current deck assignment — pass clip every time.\n"
-        "- add_clip / add_source only put a node on the graph. Call stage to put it on the Staging\n"
-        "  deck, then take or cut (or set_transition_progress) to bring it on air.\n"
-        "- Process nodes sit on the blue video chain: Input → Process → Output (or Layer / Switcher).\n"
+        "- The show is a list of cues, each with its own graph. Staging and Live hold cues; stage_cue\n"
+        "  puts one on Staging, take or cut (or set_transition_progress) brings it on air. Graph and\n"
+        "  source ops act on the edited cue (enter_cue).\n"
+        "- Identify clips by id from inspect({clips:true}) (edited cue). Clip ops never fall back to\n"
+        "  the current deck assignment — pass clip every time.\n"
+        "- Process nodes sit on the blue video chain: Input → Process → Output (or Layer).\n"
         "  add_process_node does not wire; call connect({from, to}). list_nodes for ids.\n"
         "- Shader inputs are add_source({kind:\"shader\", code}). Process effects are graph ops.\n"
         "- Every op returns {ok:true, …} or {ok:false, error:<code>, detail:<text>}. Codes:\n"
@@ -348,8 +361,8 @@ QString agentGuideText()
         "- There is no MCP undo. Live takes are immediate.\n"
         "\n"
         "Live take pattern:\n"
-        "1. add_clip or add_source, read id from the reply.\n"
-        "2. stage with that id — the off-air Staging deck.\n"
+        "1. add_cue, then add_clip or add_source (they land in the edited cue); connect the clip to Output.\n"
+        "2. stage_cue with the cue — the off-air Staging deck.\n"
         "3. capture() to confirm the frame.\n"
         "4. take or cut to bring it on air.\n"
         "\n"
@@ -358,7 +371,6 @@ QString agentGuideText()
         "2. add_process_node({effect:\"crop\"}) — read process id.\n"
         "3. list_nodes — read output id.\n"
         "4. connect({from:input, to:process}) then connect({from:process, to:output}).\n"
-        "5. Wiring to Output makes a single-stream program (T-bar disabled).\n"
         "\n"
         "Toolboxes: sources, decks, transition, panic, output, session, graph.\n");
 }
@@ -415,10 +427,8 @@ QJsonObject catalogPayload()
              QStringLiteral("apply is not atomic — on failure the ops before it stay applied; check stopped/failed."),
              QStringLiteral("apply cannot run catalog, toolbox, inspect, capture, or apply; call those directly on /mcp."),
              QStringLiteral("Clip ops need clip — they never fall back to the current deck assignment."),
-             QStringLiteral("add_clip / add_source do not put the clip on a deck; call stage."),
-             QStringLiteral("add_process_node / add_layer_node / add_ab_select do not wire; call connect."),
-             QStringLiteral("Wiring a chain into Output is single-stream program (T-bar disabled)."),
-             QStringLiteral("Output cannot take a video chain and a Switcher at the same time — disconnect the other Output input first."),
+             QStringLiteral("add_clip / add_source add to the edited cue and do not wire; connect to Output, then stage_cue."),
+             QStringLiteral("add_process_node / add_layer_node do not wire; call connect."),
              QStringLiteral("There is no MCP undo. Live takes are immediate."),
              QStringLiteral("Screen and window capture still need an interactive OS picker — they are not MCP-addable."),
          }},

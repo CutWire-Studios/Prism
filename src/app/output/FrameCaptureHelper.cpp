@@ -53,10 +53,10 @@ QString FrameCaptureHelper::savePng(const QImage &image, const QString &baseName
 }
 
 QList<FrameCaptureHelper::LayerRef> FrameCaptureHelper::enumerateLayers(
-    Compositor *output, ClipGraph *graph, DeckController *decks)
+    Compositor *output, DeckController *decks)
 {
     QList<LayerRef> layers;
-    if (!output || !graph || !decks)
+    if (!output || !decks)
         return layers;
 
     layers.append({LayerKind::Program, Deck::Live, -1, 0,
@@ -67,7 +67,8 @@ QList<FrameCaptureHelper::LayerRef> FrameCaptureHelper::enumerateLayers(
         if (!deckNodeId)
             return;
 
-        if (!graph->hasNode(deckNodeId))
+        const ClipGraph *graph = decks->graphOf(deck);
+        if (!graph || !graph->hasNode(deckNodeId))
             return;
 
         const QString deckLabel = deck == Deck::Live ? QStringLiteral("Live") : QStringLiteral("Staging");

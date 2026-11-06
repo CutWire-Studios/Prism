@@ -1,4 +1,5 @@
 #include "app/hotkeys/HotkeyManager.h"
+#include "app/show/ShowManager.h"
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QInputMethodQueryEvent>
@@ -9,10 +10,7 @@
 #include <QDebug>
 
 namespace {
-constexpr int kProfileVersion = 2;   // v1 bound clips; v2 binds switcher inputs
-
-using AbSlotRef = ClipGraph::AbSlotRef;
-using AbSlotInfo = ClipGraph::AbSlotInfo;
+constexpr int kProfileVersion = 3;   // v3 binds cues
 
 // Shift turns the digit row into symbols (US layout), and QKeyEvent::key() reports the symbol.
 Qt::Key unshiftedDigit(int key) {
@@ -41,11 +39,11 @@ bool focusIsTextInput() {
 }
 }
 
-HotkeyManager::HotkeyManager(ClipGraph *graph, QObject *parent)
-    : QObject(parent), m_graph(graph)
+HotkeyManager::HotkeyManager(ShowManager *show, QObject *parent)
+    : QObject(parent), m_show(show)
 {
     loadSettingsProfile();
-    syncWithGraph();
+    syncWithShow();
     if (qApp)
         qApp->installEventFilter(this);
 }
@@ -61,23 +59,23 @@ bool HotkeyManager::eventFilter(QObject *watched, QEvent *event) {
     const Qt::KeyboardModifiers mods = ke->modifiers() & ~Qt::KeypadModifier;
     if (mods != Qt::NoModifier && mods != Qt::ShiftModifier)
         return false;
-    const bool cutToLive = mods == Qt::ShiftModifier;
+    const bool takeNow = mods == Qt::ShiftModifier;
 
     int key = ke->key();
-    if (cutToLive) {
+    if (takeNow) {
         const Qt::Key plain = unshiftedDigit(key);
         if (plain != Qt::Key_unknown)
             key = plain;
     }
-    const AbSlotRef ref = m_keyToSlot.value(static_cast<Qt::Key>(key));
-    if (!ref.isValid() || focusIsTextInput())
+    const QString ref = m_keyToCue.value(static_cast<Qt::Key>(key));
+    if (ref.isEmpty() || focusIsTextInput())
         return false;
 
     if (type == QEvent::ShortcutOverride) {
         event->accept();
         return false;
     }
-    emit slotTriggered(ref, cutToLive);
+    emit cueTriggered(ref, takeNow);
     return true;
 }
 
@@ -93,10 +91,6 @@ const QList<Qt::Key> &HotkeyManager::hotkeySequence() {
         Qt::Key_N, Qt::Key_M,
     };
     return seq;
-}
-
-QString HotkeyManager::slotSettingsKey(const AbSlotRef &slot) {
-    return QStringLiteral("%1/%2").arg(slot.abNodeId).arg(slot.slot);
 }
 
 bool HotkeyManager::isBindableKey(Qt::Key key) {
@@ -118,62 +112,49 @@ bool HotkeyManager::isBindableKey(Qt::Key key) {
     return true;
 }
 
-void HotkeyManager::bindKey(const AbSlotRef &slot, Qt::Key key) {
-    if (m_slotHotkeys.contains(slot)) {
-        const Qt::Key oldKey = m_slotHotkeys.value(slot);
+void HotkeyManager::bindKey(const QString &cueId, Qt::Key key) {
+    if (m_cueHotkeys.contains(cueId)) {
+        const Qt::Key oldKey = m_cueHotkeys.value(cueId);
         if (oldKey != key)
-            m_keyToSlot.remove(oldKey);
+            m_keyToCue.remove(oldKey);
     }
 
-    m_slotHotkeys[slot] = key;
-    m_keyToSlot[key]    = slot;
-
-    m_graph->setAbSlotHotkeyLabel(slot, QKeySequence(key).toString());
+    m_cueHotkeys[cueId] = key;
+    m_keyToCue[key]     = cueId;
 }
 
-void HotkeyManager::releaseSlot(const AbSlotRef &slot) {
-    auto hit = m_slotHotkeys.find(slot);
-    if (hit == m_slotHotkeys.end())
+void HotkeyManager::releaseCue(const QString &cueId) {
+    auto hit = m_cueHotkeys.find(cueId);
+    if (hit == m_cueHotkeys.end())
         return;
 
-    m_keyToSlot.remove(hit.value());
-    m_slotHotkeys.erase(hit);
-
-    m_graph->setAbSlotHotkeyLabel(slot, {});
+    m_keyToCue.remove(hit.value());
+    m_cueHotkeys.erase(hit);
 }
 
-void HotkeyManager::refreshSlotLabels() {
-    m_graph->clearAbSlotHotkeyLabels();
-    for (auto it = m_slotHotkeys.cbegin(); it != m_slotHotkeys.cend(); ++it)
-        m_graph->setAbSlotHotkeyLabel(it.key(), QKeySequence(it.value()).toString());
-}
-
-void HotkeyManager::syncWithGraph() {
-    const QVector<AbSlotInfo> inputs = m_graph->abSelectInputs();
-
-    QList<AbSlotRef> alive;
-    alive.reserve(inputs.size());
-    for (const AbSlotInfo &info : inputs)
-        alive.append(info.ref);
+void HotkeyManager::syncWithShow() {
+    QStringList alive;
+    for (const Cue *cue : m_show->cues())
+        alive.append(cue->id());
 
     bool changed = false;
-    const QList<AbSlotRef> bound = m_slotHotkeys.keys();
-    for (const AbSlotRef &ref : bound) {
+    const QStringList bound = m_cueHotkeys.keys();
+    for (const QString &ref : bound) {
         if (!alive.contains(ref)) {
-            releaseSlot(ref);
+            releaseCue(ref);
             changed = true;
         }
     }
 
-    for (const AbSlotInfo &info : inputs) {
-        if (m_slotHotkeys.contains(info.ref))
+    for (const QString &id : alive) {
+        if (m_cueHotkeys.contains(id))
             continue;
 
-        Qt::Key chosen = m_settingsProfile.value(slotSettingsKey(info.ref), Qt::Key_unknown);
-        if (chosen == Qt::Key_unknown || m_keyToSlot.contains(chosen)) {
+        Qt::Key chosen = m_settingsProfile.value(id, Qt::Key_unknown);
+        if (chosen == Qt::Key_unknown || m_keyToCue.contains(chosen)) {
             chosen = Qt::Key_unknown;
             for (Qt::Key k : hotkeySequence()) {
-                if (!m_keyToSlot.contains(k)) {
+                if (!m_keyToCue.contains(k)) {
                     chosen = k;
                     break;
                 }
@@ -182,94 +163,90 @@ void HotkeyManager::syncWithGraph() {
         if (chosen == Qt::Key_unknown)
             continue;
 
-        bindKey(info.ref, chosen);
+        bindKey(id, chosen);
         changed = true;
     }
 
-    refreshSlotLabels();
     if (changed)
         emit bindingsChanged();
 }
 
-bool HotkeyManager::setBinding(const AbSlotRef &slot, Qt::Key key) {
+bool HotkeyManager::setBinding(const QString &cueId, Qt::Key key) {
     if (key == Qt::Key_unknown) {
-        clearBinding(slot);
+        clearBinding(cueId);
         return true;
     }
     if (!isBindableKey(key))
         return false;
 
-    if (m_keyToSlot.contains(key) && !(m_keyToSlot.value(key) == slot))
+    if (m_keyToCue.contains(key) && m_keyToCue.value(key) != cueId)
         return false;
 
-    if (m_slotHotkeys.value(slot, Qt::Key_unknown) == key)
+    if (m_cueHotkeys.value(cueId, Qt::Key_unknown) == key)
         return true;
 
-    bindKey(slot, key);
-    refreshSlotLabels();
+    bindKey(cueId, key);
     emit bindingsChanged();
     return true;
 }
 
-void HotkeyManager::clearBinding(const AbSlotRef &slot) {
-    releaseSlot(slot);
-    refreshSlotLabels();
+void HotkeyManager::clearBinding(const QString &cueId) {
+    releaseCue(cueId);
     emit bindingsChanged();
 }
 
-Qt::Key HotkeyManager::bindingForSlot(const AbSlotRef &slot) const {
-    return m_slotHotkeys.value(slot, Qt::Key_unknown);
+Qt::Key HotkeyManager::bindingForCue(const QString &cueId) const {
+    return m_cueHotkeys.value(cueId, Qt::Key_unknown);
 }
 
-AbSlotRef HotkeyManager::slotForKey(Qt::Key key) const {
-    return m_keyToSlot.value(key);
+QString HotkeyManager::cueForKey(Qt::Key key) const {
+    return m_keyToCue.value(key);
 }
 
-void HotkeyManager::applyBindings(const QMap<AbSlotRef, Qt::Key> &bindings) {
-    const QList<AbSlotRef> existing = m_slotHotkeys.keys();
-    for (const AbSlotRef &ref : existing)
-        releaseSlot(ref);
+void HotkeyManager::applyBindings(const QMap<QString, Qt::Key> &bindings) {
+    const QStringList existing = m_cueHotkeys.keys();
+    for (const QString &ref : existing)
+        releaseCue(ref);
 
-    QList<AbSlotRef> alive;
-    for (const AbSlotInfo &info : m_graph->abSelectInputs())
-        alive.append(info.ref);
+    QStringList alive;
+    for (const Cue *cue : m_show->cues())
+        alive.append(cue->id());
 
     for (auto it = bindings.cbegin(); it != bindings.cend(); ++it) {
-        const AbSlotRef &slot = it.key();
-        const Qt::Key    key  = it.value();
+        const Qt::Key key = it.value();
         if (key == Qt::Key_unknown || !isBindableKey(key))
             continue;
-        if (m_keyToSlot.contains(key))
+        if (m_keyToCue.contains(key))
             continue;
-        if (!alive.contains(slot))
+        if (!alive.contains(it.key()))
             continue;
 
-        bindKey(slot, key);
+        bindKey(it.key(), key);
     }
 
-    refreshSlotLabels();
     saveSettingsProfile();
     emit bindingsChanged();
 }
 
 QJsonArray HotkeyManager::hotkeysJson() const {
     QJsonArray arr;
-    for (auto it = m_slotHotkeys.cbegin(); it != m_slotHotkeys.cend(); ++it) {
+    for (auto it = m_cueHotkeys.cbegin(); it != m_cueHotkeys.cend(); ++it) {
         QJsonObject hk;
-        hk["abNode"] = (qint64)it.key().abNodeId;
-        hk["slot"]   = it.key().slot;
-        hk["key"]    = (int)it.value();
+        hk["cue"] = it.key();
+        hk["key"] = (int)it.value();
         arr.append(hk);
     }
     return arr;
 }
 
 void HotkeyManager::restoreHotkeys(const QJsonArray &hotkeys) {
-    const QList<AbSlotRef> existing = m_slotHotkeys.keys();
-    for (const AbSlotRef &ref : existing)
-        releaseSlot(ref);
+    const QStringList existing = m_cueHotkeys.keys();
+    for (const QString &ref : existing)
+        releaseCue(ref);
 
-    const QVector<AbSlotInfo> inputs = m_graph->abSelectInputs();
+    QStringList alive;
+    for (const Cue *cue : m_show->cues())
+        alive.append(cue->id());
 
     QStringList skipped;
     for (const auto &val : hotkeys) {
@@ -277,29 +254,13 @@ void HotkeyManager::restoreHotkeys(const QJsonArray &hotkeys) {
         const Qt::Key key = static_cast<Qt::Key>(obj["key"].toInt());
         if (!isBindableKey(key))
             continue;
-        if (m_keyToSlot.contains(key)) {
+        if (m_keyToCue.contains(key)) {
             skipped << QKeySequence(key).toString();
             continue;
         }
 
-        AbSlotRef ref;
-        if (obj.contains("abNode")) {
-            ref = {(NodeId)obj["abNode"].toInteger(), obj["slot"].toInt(-1)};
-        } else {
-            // Legacy clip binding: map to the switcher input the clip feeds.
-            const NodeId clipId = (NodeId)obj["nodeId"].toInteger();
-            for (const AbSlotInfo &info : inputs) {
-                if (info.producer == clipId) {
-                    ref = info.ref;
-                    break;
-                }
-            }
-        }
-
-        bool alive = false;
-        for (const AbSlotInfo &info : inputs)
-            if (info.ref == ref) { alive = true; break; }
-        if (!alive)
+        const QString ref = obj["cue"].toString();
+        if (!alive.contains(ref))
             continue;
 
         bindKey(ref, key);
@@ -308,8 +269,8 @@ void HotkeyManager::restoreHotkeys(const QJsonArray &hotkeys) {
     if (!skipped.isEmpty())
         qWarning() << "HotkeyManager: skipped duplicate keys during restore:" << skipped;
 
-    // Auto-assign whatever the session didn't cover, and repaint badges.
-    syncWithGraph();
+    // Auto-assign whatever the session didn't cover.
+    syncWithShow();
     emit bindingsChanged();
 }
 
@@ -318,9 +279,9 @@ QJsonObject HotkeyManager::exportProfile() const {
     root.insert(QStringLiteral("version"), kProfileVersion);
 
     QJsonArray bindings;
-    for (auto it = m_slotHotkeys.cbegin(); it != m_slotHotkeys.cend(); ++it) {
+    for (auto it = m_cueHotkeys.cbegin(); it != m_cueHotkeys.cend(); ++it) {
         QJsonObject entry;
-        entry.insert(QStringLiteral("slotKey"), slotSettingsKey(it.key()));
+        entry.insert(QStringLiteral("slotKey"), it.key());
         entry.insert(QStringLiteral("key"), static_cast<int>(it.value()));
         bindings.append(entry);
     }
@@ -335,27 +296,25 @@ bool HotkeyManager::importProfile(const QJsonObject &profile, QStringList *warni
         return false;
     }
 
-    QList<AbSlotRef> alive;
-    for (const AbSlotInfo &info : m_graph->abSelectInputs())
-        alive.append(info.ref);
+    QStringList alive;
+    for (const Cue *cue : m_show->cues())
+        alive.append(cue->id());
 
-    QMap<AbSlotRef, Qt::Key> desired;
+    QMap<QString, Qt::Key> desired;
     const QJsonArray bindings = profile.value(QStringLiteral("bindings")).toArray();
     for (const QJsonValue &val : bindings) {
         const QJsonObject entry = val.toObject();
         const QString slotKey   = entry.value(QStringLiteral("slotKey")).toString();
         const Qt::Key key       = static_cast<Qt::Key>(entry.value(QStringLiteral("key")).toInt());
-        const QStringList parts = slotKey.split(QLatin1Char('/'));
-        if (parts.size() != 2 || !isBindableKey(key))
+        if (!isBindableKey(key))
             continue;
 
-        const AbSlotRef ref{parts[0].toULongLong(), parts[1].toInt()};
-        if (!alive.contains(ref)) {
+        if (!alive.contains(slotKey)) {
             if (warnings)
-                warnings->append(QObject::tr("No switcher input matched: %1").arg(slotKey));
+                warnings->append(QObject::tr("No cue matched: %1").arg(slotKey));
             continue;
         }
-        desired.insert(ref, key);
+        desired.insert(slotKey, key);
     }
 
     applyBindings(desired);

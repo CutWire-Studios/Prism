@@ -9,6 +9,10 @@
 #include "app/output/FrameCaptureHelper.h"
 #include "app/output/OutputHub.h"
 #include "app/session/SessionManager.h"
+#include "app/show/Cue.h"
+#include "app/show/CueListModel.h"
+#include "app/show/ShowManager.h"
+#include "app/show/VenueProfile.h"
 #include "app/transitions/TransitionController.h"
 #include "core/graph/ProcessEffects.h"
 #include "core/media/MediaFormats.h"
@@ -126,11 +130,9 @@ AppController::AppController(QObject *parent)
     ErrorReporter::setHandler([this](const QString &text) { emit errorOccurred(text); });
 
     m_compositor = std::make_unique<Compositor>();
-    m_graph = new ClipGraph(this);
-    m_graph->setOutputCanvasSize(Compositor::programWidth(), Compositor::programHeight());
-    m_graphController = new ClipGraphController(m_graph, this);
-    m_runtime = new GraphRuntime(m_graph, this);
-    connect(m_runtime, &GraphRuntime::thumbnailChanged, this, &AppController::nodeThumbnailChanged);
+    m_venue = std::make_unique<VenueProfile>(VenueProfile::fromSettings());
+    m_show = new ShowManager(this);
+    applyVenue(*m_venue, false);
 
     const RecordingOptions recOpts = RecordingOptions::loadSaved();
     m_outputHub = new OutputHub(this);
@@ -138,9 +140,10 @@ AppController::AppController(QObject *parent)
     m_outputHub->setOutputDir(recOpts.effectiveOutputDir());
 
     m_obsIntegration = new ObsIntegration(this);
-    m_deckController = new DeckController(m_compositor.get(), m_graph, m_runtime, m_outputHub, this);
-    m_hotkeyManager = new HotkeyManager(m_graph, this);
-    m_sessionManager = new SessionManager(m_graph, m_compositor.get(), &m_clipManager, this);
+    m_deckController = new DeckController(m_compositor.get(), m_outputHub, this);
+    m_deckController->setDeviceResolver([this](const QString &logical) { return m_venue->resolveDevice(logical); });
+    m_hotkeyManager = new HotkeyManager(m_show, this);
+    m_sessionManager = new SessionManager(m_show, m_compositor.get(), &m_clipManager, this);
     m_transitionCtrl = new TransitionController(m_compositor.get(), this);
     m_remoteServer = new RemoteControlServer(this, this);
     m_oscServer = new OscServer(this, this);
@@ -171,9 +174,7 @@ AppController::~AppController()
     delete m_sessionManager;
     delete m_deckController;
     delete m_outputHub;
-    delete m_runtime;
-    delete m_graphController;
-    delete m_graph;
+    delete m_show;
     m_compositor.reset();
     if (s_instance == this) {
         ErrorReporter::setHandler({});
@@ -202,13 +203,46 @@ void AppController::notifyLibraryChanged()
 
 void AppController::connectSignals()
 {
-    connect(m_graph, &ClipGraph::changed, this, &AppController::onGraphChanged);
-    connect(m_graph, &ClipGraph::liveChanged, this, [this]() { m_pushTimer->start(); });
-    connect(m_graph, &ClipGraph::stagingChanged, this, [this]() { m_pushTimer->start(); });
-    connect(m_graph, &ClipGraph::graphReset, this, [this]() { m_pushTimer->start(); });
-    connect(m_graph, &ClipGraph::nodeChanged, this, &AppController::onNodeChanged);
-    connect(m_graph, &ClipGraph::changed, m_hotkeyManager, &HotkeyManager::syncWithGraph);
-    connect(m_hotkeyManager, &HotkeyManager::slotTriggered, this, &AppController::stageSlot);
+    for (Cue *cue : m_show->cues())
+        attachCue(cue);
+    connect(m_show, &ShowManager::cueAdded, this, &AppController::attachCue);
+    connect(m_show, &ShowManager::changed, this, &AppController::markDirty);
+    connect(m_show, &ShowManager::liveCueChanged, this, [this]() {
+        m_pushTimer->start();
+        emit showChanged();
+    });
+    connect(m_show, &ShowManager::stagingCueChanged, this, [this]() {
+        m_pushTimer->start();
+        emit showChanged();
+    });
+    connect(m_show, &ShowManager::editedCueChanged, this, [this]() {
+        emit showChanged();
+        if (m_show->editedCueId() != m_lastEditedId) {
+            m_lastEditedId = m_show->editedCueId();
+            emit editedGraphChanged();
+        }
+    });
+    connect(m_show, &ShowManager::cuesReset, this, [this]() {
+        m_pushTimer->start();
+        emit showChanged();
+        if (m_show->editedCueId() != m_lastEditedId) {
+            m_lastEditedId = m_show->editedCueId();
+            emit editedGraphChanged();
+        }
+    });
+    connect(m_show, &ShowManager::defaultTransitionChanged, this, [this]() {
+        if (!m_applyingTransition)
+            applyTransition(m_show->defaultTransition().mode, m_show->defaultTransition().durationMs);
+    });
+    connect(m_show, &ShowManager::liveEnded, this, &AppController::onLiveEnded);
+    connect(m_show, &ShowManager::cueAdded, m_hotkeyManager, &HotkeyManager::syncWithShow);
+    connect(m_show, &ShowManager::cuesReset, m_hotkeyManager, &HotkeyManager::syncWithShow);
+    connect(m_hotkeyManager, &HotkeyManager::cueTriggered, this, [this](const QString &id, bool takeNow) {
+        if (takeNow)
+            stageAndTake(id);
+        else
+            stageCue(id);
+    });
 
     connect(m_sessionManager, &SessionManager::sessionLoaded, this, &AppController::onSessionLoaded);
     connect(m_sessionManager, &SessionManager::loadFailed, this, &AppController::errorOccurred);
@@ -229,9 +263,20 @@ void AppController::connectSignals()
     connect(m_transitionCtrl, &TransitionController::takeCommitted, this, &AppController::onTakeCommitted);
     connect(m_transitionCtrl, &TransitionController::takeCancelled, this, [this]() {
         m_deckController->parkDeck(Deck::Staging);
+        applyTransition(m_show->defaultTransition().mode, m_show->defaultTransition().durationMs);
     });
-    connect(m_transitionCtrl, &TransitionController::modeChanged, this, &AppController::transitionSettingsChanged);
-    connect(m_transitionCtrl, &TransitionController::durationChanged, this, &AppController::transitionSettingsChanged);
+    connect(m_transitionCtrl, &TransitionController::modeChanged, this, [this]() {
+        emit transitionSettingsChanged();
+        if (!m_applyingTransition)
+            m_show->setDefaultTransition({m_transitionCtrl->currentModeIndex(),
+                                          qRound(m_transitionCtrl->currentDurationSecs() * 1000.0)});
+    });
+    connect(m_transitionCtrl, &TransitionController::durationChanged, this, [this]() {
+        emit transitionSettingsChanged();
+        if (!m_applyingTransition)
+            m_show->setDefaultTransition({m_transitionCtrl->currentModeIndex(),
+                                          qRound(m_transitionCtrl->currentDurationSecs() * 1000.0)});
+    });
     connect(m_transitionCtrl, &TransitionController::runningChanged, this, [this](bool running) {
         emit transitionRunningChanged();
         if (!running && m_pushDeferred)
@@ -277,6 +322,8 @@ void AppController::start()
     });
 
     m_updateTimer->start(100);
+    for (const QString &id : m_venue->outputs)
+        setOutputEnabled(id, true);
 
     const SessionManager::RecoveryInfo recovery = SessionManager::checkRecovery();
     if (recovery.uncleanShutdown) {
@@ -328,6 +375,18 @@ void AppController::shutdown(bool saveAndMarkClean)
     if (saveAndMarkClean)
         SessionManager::markCleanExit();
 }
+
+// ── Edited cue / show ─────────────────────────────────────────────────────────
+
+ClipGraph *AppController::clipGraph() const { return m_show->editedCue()->graph(); }
+ClipGraphController *AppController::graphController() const { return m_show->editedCue()->controller(); }
+GraphRuntime *AppController::graphRuntime() const { return m_show->editedCue()->runtime(); }
+QAbstractItemModel *AppController::cueModel() const { return m_show->model(); }
+QString AppController::liveCueId() const { return m_show->liveCueId(); }
+QString AppController::stagingCueId() const { return m_show->stagingCueId(); }
+QString AppController::editedCueId() const { return m_show->editedCueId(); }
+bool AppController::inCue() const { return m_show->inCue(); }
+const VenueProfile &AppController::venue() const { return *m_venue; }
 
 // ── Property getters ──────────────────────────────────────────────────────────
 
@@ -473,6 +532,28 @@ void AppController::setOutputScaleModeInt(int mode)
 void AppController::setOutputScaleMode(Compositor::OutputScaleMode mode)
 {
     m_compositor->setOutputScaleMode(mode);
+    static const char *names[] = {"stretch", "fit", "crop"};
+    m_venue->scaleMode = QString::fromLatin1(names[int(mode)]);
+    m_venue->saveToSettings();
+    emit outputScaleModeChanged();
+}
+
+void AppController::applyVenue(const VenueProfile &venue, bool persist)
+{
+    *m_venue = venue;
+    if (venue.width != Compositor::programWidth() || venue.height != Compositor::programHeight())
+        m_compositor->setProgramResolution(venue.width, venue.height);
+    m_compositor->setOutputScaleMode(venue.scaleMode == QLatin1String("fit") ? Compositor::OutputScaleMode::Fit
+                                     : venue.scaleMode == QLatin1String("crop") ? Compositor::OutputScaleMode::Crop
+                                                                              : Compositor::OutputScaleMode::Stretch);
+    m_show->setCanvasSize(venue.width, venue.height);
+    if (persist)
+        venue.saveToSettings();
+    if (m_started) {
+        for (const QString &id : venue.outputs)
+            setOutputEnabled(id, true);
+    }
+    emit programResolutionChanged();
     emit outputScaleModeChanged();
 }
 
@@ -504,19 +585,14 @@ void AppController::setProgramResolution(int width, int height)
     if (m_outputHub->isRecording())
         return;
     m_compositor->setProgramResolution(width, height);
-    m_graph->setOutputCanvasSize(width, height);
+    m_show->setCanvasSize(width, height);
+    m_venue->width = width;
+    m_venue->height = height;
+    m_venue->saveToSettings();
     emit programResolutionChanged();
 }
 
 // ── Decks ─────────────────────────────────────────────────────────────────────
-
-void AppController::selectNode(quint64 nodeId, Deck deck)
-{
-    if (nodeId)
-        m_graph->assignInputToDeck(nodeId, deck);
-    else
-        pushDecks();
-}
 
 void AppController::togglePlay(int deck)
 {
@@ -556,21 +632,86 @@ void AppController::seekDeckFraction(int deck, double fraction)
         m_deckController->updateDeckAudio(d, id, t, true);
 }
 
-void AppController::stageNode(quint64 nodeId)
+bool AppController::stageCue(const QString &id)
 {
-    selectNode(nodeId, Deck::Staging);
+    if (m_transitionCtrl->isRunning() || (!id.isEmpty() && id == m_show->liveCueId()))
+        return false;
+    return m_show->stageCue(id);
 }
 
-void AppController::stageSlot(const ClipGraph::AbSlotRef &ref, bool cutToLive)
+void AppController::stageAndTake(const QString &id)
 {
-    m_graph->triggerAbSlot(ref, Deck::Staging);
-    if (cutToLive)
-        cut();
+    if (stageCue(id))
+        take();
 }
 
-void AppController::stageAbSlot(quint64 node, int slot, bool cutToLive)
+QString AppController::addCue(const QString &name)
 {
-    stageSlot({node, slot}, cutToLive);
+    Cue *cue = m_show->addCue(name, m_show->indexOf(m_show->editedCueId()) + 1);
+    return cue->id();
+}
+
+QString AppController::duplicateCue(const QString &id)
+{
+    Cue *cue = m_show->duplicateCue(id);
+    return cue ? cue->id() : QString();
+}
+
+bool AppController::removeCue(const QString &id)
+{
+    if (m_transitionCtrl->isRunning())
+        return false;
+    return m_show->removeCue(id);
+}
+
+void AppController::enterCue(const QString &id) { m_show->enterCue(id); }
+void AppController::exitCue() { m_show->exitCue(); }
+
+QVariantMap AppController::cueInfo(const QString &id) const
+{
+    const Cue *cue = m_show->cue(id);
+    if (!cue)
+        return {};
+    QVariantMap info{{"id", cue->id()}, {"name", cue->name()}, {"color", cue->color()},
+                     {"notes", cue->notes()}, {"endAction", Cue::endActionName(cue->endAction())},
+                     {"autoAdvanceMs", cue->autoAdvanceMs()},
+                     {"advanceOnMediaEnd", cue->advanceOnMediaEnd()}};
+    if (cue->incoming())
+        info["transition"] = QVariantMap{{"mode", cue->incoming()->mode}, {"durationMs", cue->incoming()->durationMs}};
+    else
+        info["transition"] = QVariant();
+    return info;
+}
+
+void AppController::setCueProps(const QString &id, const QVariantMap &props)
+{
+    Cue *cue = m_show->cue(id);
+    if (!cue)
+        return;
+    if (props.contains("name"))
+        cue->setName(props.value("name").toString().trimmed());
+    if (props.contains("color"))
+        cue->setColor(props.value("color").toString());
+    if (props.contains("notes"))
+        cue->setNotes(props.value("notes").toString());
+    if (props.contains("endAction"))
+        cue->setEndAction(Cue::endActionFromName(props.value("endAction").toString()));
+    if (props.contains("autoAdvanceMs"))
+        cue->setAutoAdvanceMs(qMax(0, props.value("autoAdvanceMs").toInt()));
+    if (props.contains("advanceOnMediaEnd"))
+        cue->setAdvanceOnMediaEnd(props.value("advanceOnMediaEnd").toBool());
+    if (props.contains("transition")) {
+        const QVariantMap t = props.value("transition").toMap();
+        if (t.isEmpty())
+            cue->setIncoming(std::nullopt);
+        else
+            cue->setIncoming(TransitionSpec{t.value("mode").toInt(), qMax(0, t.value("durationMs").toInt())});
+    }
+    if (cue->id() == m_show->liveCueId()) {
+        applyLiveEndAction();
+        m_show->rearmEndTimer();
+    }
+    mcpBumpRevision();
 }
 
 void AppController::swapDeckState()
@@ -584,9 +725,54 @@ void AppController::swapDeckState()
 void AppController::onTakeCommitted()
 {
     swapDeckState();
-    m_graph->swapDeckInputs();
+    m_show->swapLiveStaging();
+    m_liveBlack = false;
+    m_livePlayingPrev = false;
     m_deckController->parkDeck(Deck::Staging);
+    m_deckController->syncMasterAudioInputs();
+    applyLiveEndAction();
+    applyTransition(m_show->defaultTransition().mode, m_show->defaultTransition().durationMs);
     emit decksChanged();
+}
+
+void AppController::applyTransition(int mode, int durationMs)
+{
+    m_applyingTransition = true;
+    m_transitionCtrl->setTransitionModeIndex(mode);
+    m_transitionCtrl->setTransitionDuration(durationMs / 1000.0);
+    m_applyingTransition = false;
+}
+
+void AppController::applyLiveEndAction()
+{
+    const Cue *live = m_show->liveCue();
+    if (live && live->endAction() == Cue::EndAction::Loop)
+        m_compositor->setRepeatLive(true);
+}
+
+void AppController::blackLive()
+{
+    m_liveBlack = true;
+    m_compositor->clearDeckLive();
+    m_deckController->setActiveNode(Deck::Live, 0);
+    m_deckController->stopDeckAudio(Deck::Live);
+    m_deckBase[0].clear();
+    m_deckOverlays[0].clear();
+    m_deckUi[0] = DeckUi{};
+    emit decksChanged();
+}
+
+void AppController::onLiveEnded()
+{
+    const Cue *live = m_show->liveCue();
+    if (!live || m_transitionCtrl->isRunning())
+        return;
+    if (live->endAction() == Cue::EndAction::Black) {
+        blackLive();
+    } else if (live->endAction() == Cue::EndAction::AutoAdvance) {
+        if (const Cue *next = m_show->nextCue(live->id()))
+            stageAndTake(next->id());
+    }
 }
 
 void AppController::cut()
@@ -604,13 +790,15 @@ void AppController::take()
         m_pushTimer->stop();
         pushDecks();
     }
+    const TransitionSpec spec = m_show->resolveTransition(m_show->stagingCue());
+    applyTransition(spec.mode, spec.durationMs);
     m_transitionCtrl->autoTransition();
 }
 
 void AppController::clearGraph()
 {
     emit confirmRequested(QStringLiteral("clearAll"), tr("Clear All"),
-                          tr("Remove all clips and nodes from the grid? This cannot be undone."));
+                          tr("Remove all nodes from the cue being edited? This cannot be undone."));
 }
 
 void AppController::onTimerTick()
@@ -637,6 +825,18 @@ void AppController::onTimerTick()
         }
     }
 
+    {
+        const bool playing = m_compositor->isPlayingLive();
+        const double dur = m_compositor->getDurationLive();
+        if (m_livePlayingPrev && !playing && dur > 0 && !m_liveBlack) {
+            const NodeId node = m_deckController->activeNode(Deck::Live);
+            const double trimEnd = node ? m_deckController->graphOf(Deck::Live)->clipSettings(node).endTime : 0.0;
+            if (m_compositor->getCurrentTimeLive() >= (trimEnd > 0 ? trimEnd : dur) - 0.25)
+                m_show->notifyLiveMediaEnded();
+        }
+        m_livePlayingPrev = playing;
+    }
+
     m_deckController->refreshShaderAudioForActiveDecks();
     m_outputHub->setActiveDeckNodes(m_deckController->activeNode(Deck::Live), m_deckController->activeNode(Deck::Staging));
     emit deckClockChanged();
@@ -654,11 +854,21 @@ void AppController::markDirty()
     emit sessionDirtyChanged();
 }
 
-void AppController::onGraphChanged()
+void AppController::attachCue(Cue *cue)
+{
+    ClipGraph *graph = cue->graph();
+    connect(graph, &ClipGraph::changed, this, [this, cue]() { onCueGraphChanged(cue); });
+    connect(graph, &ClipGraph::graphReset, this, [this]() { m_pushTimer->start(); });
+    connect(graph, &ClipGraph::nodeChanged, this, [this, cue](NodeId id) { onNodeChanged(cue, id); });
+    connect(cue->runtime(), &GraphRuntime::thumbnailChanged, this, &AppController::nodeThumbnailChanged);
+}
+
+void AppController::onCueGraphChanged(Cue *cue)
 {
     if (m_shuttingDown)
         return;
-    markDirty();
+    if (cue != m_show->liveCue() && cue != m_show->stagingCue())
+        return;
     m_pushTimer->start();
     if (m_deckController->activeNode(Deck::Live))
         m_deckController->applyAudioControllerToDeck(Deck::Live, m_deckController->activeNode(Deck::Live), false);
@@ -670,20 +880,21 @@ void AppController::onGraphChanged()
     m_deckController->refreshAudioEffects();
 }
 
-void AppController::onNodeChanged(NodeId id)
+void AppController::onNodeChanged(Cue *cue, NodeId id)
 {
     if (m_shuttingDown || !id)
         return;
-    const bool isLiveNode = id == m_deckController->activeNode(Deck::Live);
-    const bool isStagingNode = id == m_deckController->activeNode(Deck::Staging);
+    const bool isLiveNode = cue == m_show->liveCue() && id == m_deckController->activeNode(Deck::Live);
+    const bool isStagingNode = cue == m_show->stagingCue() && id == m_deckController->activeNode(Deck::Staging);
     if (!isLiveNode && !isStagingNode)
         return;
-    const bool repeat = m_graph->clipRepeat(id);
-    const ClipSettings s = m_graph->clipSettings(id);
+    const bool repeat = cue->graph()->clipRepeat(id);
+    const ClipSettings s = cue->graph()->clipSettings(id);
     if (isLiveNode) {
         m_compositor->setRepeatLive(repeat);
         m_compositor->setTrimPointsLive(s.startTime, s.endTime);
         m_deckController->applyClipSpeed(Deck::Live);
+        applyLiveEndAction();
     }
     if (isStagingNode) {
         m_compositor->setRepeatStaging(repeat);
@@ -704,43 +915,38 @@ void AppController::pushDecks()
     m_pushing = true;
 
     Compositor *out = m_compositor.get();
-    const bool single = m_graph->outputIsSingleStream();
-    out->setSingleStreamMode(single);
-    if (single != m_singleStream) {
-        m_singleStream = single;
-        emit singleStreamChanged();
-    }
 
     using Layer = ClipGraph::ResolvedLayer;
     using Stream = ClipGraph::ResolvedStream;
 
-    std::function<QString(const Layer &)> layerKey = [&](const Layer &l) -> QString {
+    std::function<QString(const ClipGraph *, const Layer &)> layerKey =
+        [&](const ClipGraph *g, const Layer &l) -> QString {
         if (l.composite) {
             QString k = QStringLiteral("L%1:%2x%3{")
                 .arg(l.layerNodeId).arg(l.composite->canvasWidth).arg(l.composite->canvasHeight);
             for (const Layer &sl : l.composite->layers) {
-                k += layerKey(sl)
+                k += layerKey(g, sl)
                    + QStringLiteral("@%1,%2,%3,%4,%5;")
                        .arg(sl.baseX).arg(sl.baseY).arg(sl.baseW).arg(sl.baseH)
                        .arg(sl.visible ? 1 : 0);
             }
             return k + QStringLiteral("}") + ProcessEffects::sourceEffectsKey(l.sourceEffects);
         }
-        if (!m_graph->hasNode(l.inputNodeId))
+        if (!g->hasNode(l.inputNodeId))
             return QStringLiteral("%1:?").arg(l.inputNodeId);
-        const SourceDescriptor d = m_graph->sourceDescriptor(l.inputNodeId);
-        const ClipSettings cs = m_graph->clipSettings(l.inputNodeId);
+        const SourceDescriptor d = g->sourceDescriptor(l.inputNodeId);
+        const ClipSettings cs = g->clipSettings(l.inputNodeId);
         return QStringLiteral("%1:%2:%3:%4:%5:%6:%7:%8")
             .arg(l.inputNodeId).arg(int(d.kind)).arg(d.path)
             .arg(cs.startTime).arg(cs.endTime).arg(d.captureId)
             .arg(ProcessEffects::sourceEffectsKey(l.sourceEffects))
             .arg(qHash(d.contentKey()));
     };
-    auto keysOf = [&](const Stream &s, QString &base, QStringList &ov) {
+    auto keysOf = [&](const ClipGraph *g, const Stream &s, QString &base, QStringList &ov) {
         base.clear(); ov.clear();
         if (s.layers.isEmpty()) return;
-        base = layerKey(s.layers.first());
-        for (int i = 1; i < s.layers.size(); ++i) ov << layerKey(s.layers[i]);
+        base = layerKey(g, s.layers.first());
+        for (int i = 1; i < s.layers.size(); ++i) ov << layerKey(g, s.layers[i]);
     };
     auto sameStream = [](const QString &b1, const QStringList &o1, const QString &b2, const QStringList &o2) {
         return b1 == b2 && o1 == o2;
@@ -749,23 +955,20 @@ void AppController::pushDecks()
         a.sort(); b.sort(); return a == b;
     };
 
-    const NodeId prodLive = single ? m_graph->outputSingleProducer() : m_graph->liveInput();
-    const NodeId prodStaging = single ? 0 : m_graph->stagingInput();
-    Stream streamLive = prodLive ? m_graph->evaluateVideoInput(prodLive) : Stream{};
-    Stream streamStaging = prodStaging ? m_graph->evaluateVideoInput(prodStaging) : Stream{};
-
-    QString dBaseLive, dBaseStaging;
-    QStringList dOvLive, dOvStaging;
-    keysOf(streamLive, dBaseLive, dOvLive);
-    keysOf(streamStaging, dBaseStaging, dOvStaging);
-
-    const bool liveWantsStaging = !dBaseLive.isEmpty() && sameStream(dBaseLive, dOvLive, m_deckBase[1], m_deckOverlays[1]);
-    const bool stagingWantsLive = !dBaseStaging.isEmpty() && sameStream(dBaseStaging, dOvStaging, m_deckBase[0], m_deckOverlays[0]);
-    const bool liveUnchanged = sameStream(dBaseLive, dOvLive, m_deckBase[0], m_deckOverlays[0]);
-    const bool stagingUnchanged = sameStream(dBaseStaging, dOvStaging, m_deckBase[1], m_deckOverlays[1]);
-    if (!(liveUnchanged && stagingUnchanged) && (liveWantsStaging || stagingWantsLive)) {
-        out->swapDeckContents();
-        swapDeckState();
+    Cue *cues[2] = {m_show->liveCue(), m_show->stagingCue()};
+    ClipGraph *graphs[2] = {nullptr, nullptr};
+    Stream streams[2];
+    QString dBase[2];
+    QStringList dOv[2];
+    for (int i = 0; i < 2; ++i) {
+        const Deck deck = static_cast<Deck>(i);
+        graphs[i] = cues[i] ? cues[i]->graph() : nullptr;
+        m_deckController->setDeckGraph(deck, graphs[i], cues[i] ? cues[i]->runtime() : nullptr);
+        if (!graphs[i] || (i == 0 && m_liveBlack))
+            continue;
+        if (const NodeId producer = graphs[i]->outputSingleProducer())
+            streams[i] = graphs[i]->evaluateVideoInput(producer);
+        keysOf(graphs[i], streams[i], dBase[i], dOv[i]);
     }
 
     auto clearDeck = [&](Deck deck) {
@@ -776,7 +979,9 @@ void AppController::pushDecks()
 
     auto pushDeck = [&](Deck deck, const Stream &stream, const QString &dBase, const QStringList &dOv) {
         const int di = static_cast<int>(deck);
-        const bool startPlayback = single || isLive(deck);
+        ClipGraph *graph = graphs[di];
+        GraphRuntime *runtime = cues[di] ? cues[di]->runtime() : nullptr;
+        const bool startPlayback = isLive(deck);
         QString &curBase = m_deckBase[di];
         QStringList &curOv = m_deckOverlays[di];
         DeckUi &ui = m_deckUi[di];
@@ -810,9 +1015,9 @@ void AppController::pushDecks()
         if (base.composite) {
             const NodeId primaryId = base.composite->layers.isEmpty()
                 ? 0 : base.composite->layers.first().inputNodeId;
-            if (primaryId && m_graph->hasNode(primaryId)) {
-                const SourceDescriptor pd = m_graph->sourceDescriptor(primaryId);
-                const auto st = DeckController::deckUiState(pd, m_graph->sourceName(primaryId));
+            if (primaryId && graph->hasNode(primaryId)) {
+                const SourceDescriptor pd = graph->sourceDescriptor(primaryId);
+                const auto st = DeckController::deckUiState(pd, graph->sourceName(primaryId));
                 ui.name = st.name; ui.hasTransport = st.hasTransport;
             } else {
                 ui = DeckUi{};
@@ -820,7 +1025,7 @@ void AppController::pushDecks()
             if (sameStream(dBase, dOv, curBase, curOv)) {
                 applyBaseFor(base, true);
             } else {
-                auto src = SourceFactory::buildLayerSource(base, m_graph, m_runtime);
+                auto src = SourceFactory::buildLayerSource(base, graph, runtime);
                 if (!src) {
                     clearDeck(deck);
                     curBase.clear(); curOv.clear();
@@ -835,10 +1040,10 @@ void AppController::pushDecks()
             return;
         }
 
-        if (!m_graph->hasNode(base.inputNodeId))
+        if (!graph->hasNode(base.inputNodeId))
             return;
-        const SourceDescriptor desc = m_graph->sourceDescriptor(base.inputNodeId);
-        const QString name = m_graph->sourceName(base.inputNodeId);
+        const SourceDescriptor desc = graph->sourceDescriptor(base.inputNodeId);
+        const QString name = graph->sourceName(base.inputNodeId);
         const auto st = DeckController::deckUiState(desc, name);
         ui.name = st.name; ui.hasTransport = st.hasTransport;
 
@@ -871,7 +1076,7 @@ void AppController::pushDecks()
             overlay.canvasHeight = stream.canvasHeight;
             for (int i = 1; i < stream.layers.size(); ++i)
                 overlay.layers.push_back(stream.layers[i]);
-            auto chain = SourceFactory::buildStream(overlay, m_graph, m_runtime);
+            auto chain = SourceFactory::buildStream(overlay, graph, runtime);
             if (isLive(deck)) out->setNodeChainLive(std::move(chain));
             else       out->setNodeChainStaging(std::move(chain));
             m_obsIntegration->onClipTriggered(desc);
@@ -879,8 +1084,9 @@ void AppController::pushDecks()
         }
     };
 
-    pushDeck(Deck::Live, streamLive, dBaseLive, dOvLive);
-    pushDeck(Deck::Staging, streamStaging, dBaseStaging, dOvStaging);
+    pushDeck(Deck::Live, streams[0], dBase[0], dOv[0]);
+    pushDeck(Deck::Staging, streams[1], dBase[1], dOv[1]);
+    applyLiveEndAction();
 
     m_outputHub->setActiveDeckNodes(m_deckController->activeNode(Deck::Live), m_deckController->activeNode(Deck::Staging));
     m_pushing = false;
@@ -891,13 +1097,13 @@ void AppController::pushDecks()
 
 NodeId AppController::addSourceFromDescriptor(const SourceDescriptor &desc, const QImage &thumb)
 {
-    const NodeId id = m_runtime->addSourceNode(desc, thumb, std::exchange(m_pendingSourcePos, QPointF(qQNaN(), qQNaN())));
+    const NodeId id = graphRuntime()->addSourceNode(desc, thumb, std::exchange(m_pendingSourcePos, QPointF(qQNaN(), qQNaN())));
     if (id && (desc.kind == SourceDescriptor::Kind::VideoFile || desc.kind == SourceDescriptor::Kind::Image)
         && !desc.path.isEmpty() && QFileInfo(desc.path).isFile()) {
         m_clipManager.addFiles({desc.path});
     }
     if (id)
-        m_graphController->select({QVariant::fromValue<quint64>(id)});
+        graphController()->select({QVariant::fromValue<quint64>(id)});
     mcpBumpRevision();
     return id;
 }
@@ -913,13 +1119,19 @@ void AppController::importFiles(const QStringList &paths, qreal x, qreal y)
     for (const QString &path : paths) {
         if (!ClipManager::isMediaPath(path))
             continue;
-        if (const NodeId id = m_runtime->addClipNode(path, {}, at))
+        if (const NodeId id = graphRuntime()->addClipNode(path, {}, at))
             added.append(QVariant::fromValue<quint64>(id));
         at += QPointF(30, 30);
     }
     if (!added.isEmpty())
-        m_graphController->select(added);
+        graphController()->select(added);
     mcpBumpRevision();
+}
+
+void AppController::addToLibrary(const QStringList &paths)
+{
+    if (!paths.isEmpty())
+        m_clipManager.addFiles(paths);
 }
 
 void AppController::importFolder(const QString &path)
@@ -959,7 +1171,7 @@ quint64 AppController::addVideoUrl(const QString &url, const QString &displayNam
                                .arg(trimmed));
         return 0;
     }
-    const NodeId id = m_runtime->addClipNode(trimmed, ThumbHelper::makeIconThumb(ThumbHelper::Names::Link),
+    const NodeId id = graphRuntime()->addClipNode(trimmed, ThumbHelper::makeIconThumb(ThumbHelper::Names::Link),
                                              std::exchange(m_pendingSourcePos, QPointF(qQNaN(), qQNaN())));
     if (id)
         renameNode(id, name);
@@ -970,14 +1182,14 @@ quint64 AppController::addVideoUrl(const QString &url, const QString &displayNam
 quint64 AppController::addSourceFromMap(const QVariantMap &descriptor, const QPointF &pos)
 {
     mcpBumpRevision();
-    return m_graph->addNode(ClipGraph::NodeType::Input, pos, {{"source", descriptor}});
+    return clipGraph()->addNode(ClipGraph::NodeType::Input, pos, {{"source", descriptor}});
 }
 
 void AppController::removeNode(quint64 nodeId)
 {
-    if (!m_graph->hasNode(nodeId))
+    if (!clipGraph()->hasNode(nodeId))
         return;
-    m_graph->removeNode(nodeId);
+    clipGraph()->removeNode(nodeId);
     if (m_deckController->activeNode(Deck::Live) == nodeId) m_deckController->setActiveNode(Deck::Live, 0);
     if (m_deckController->activeNode(Deck::Staging) == nodeId) m_deckController->setActiveNode(Deck::Staging, 0);
     m_pushTimer->stop();
@@ -987,43 +1199,43 @@ void AppController::removeNode(quint64 nodeId)
 
 void AppController::renameNode(quint64 nodeId, const QString &name)
 {
-    const ClipGraph::Node *n = m_graph->node(nodeId);
+    const ClipGraph::Node *n = clipGraph()->node(nodeId);
     if (!n)
         return;
     if (n->type == ClipGraph::NodeType::Input) {
-        SourceDescriptor desc = m_graph->sourceDescriptor(nodeId);
+        SourceDescriptor desc = clipGraph()->sourceDescriptor(nodeId);
         desc.displayName = name;
-        m_graphController->setSourceDescriptor(nodeId, desc);
+        graphController()->setSourceDescriptor(nodeId, desc);
     } else {
-        m_graphController->setParams(nodeId, {{"name", name.trimmed()}});
+        graphController()->setParams(nodeId, {{"name", name.trimmed()}});
     }
     mcpBumpRevision();
 }
 
 void AppController::linkNodeObsScene(quint64 nodeId, const QString &sceneName)
 {
-    SourceDescriptor desc = m_graph->sourceDescriptor(nodeId);
+    SourceDescriptor desc = clipGraph()->sourceDescriptor(nodeId);
     desc.obsSceneName = sceneName;
-    m_graphController->setSourceDescriptor(nodeId, desc);
+    graphController()->setSourceDescriptor(nodeId, desc);
 }
 
-int AppController::nodeThumbnailRevision(quint64 nodeId) const { return m_runtime->thumbnailRevision(nodeId); }
+int AppController::nodeThumbnailRevision(quint64 nodeId) const { return graphRuntime()->thumbnailRevision(nodeId); }
 
-bool AppController::runScript(quint64 nodeId) { return m_runtime->runScript(nodeId); }
+bool AppController::runScript(quint64 nodeId) { return graphRuntime()->runScript(nodeId); }
 
-bool AppController::pulseTrigger(quint64 nodeId) { return m_runtime->pulseTrigger(nodeId); }
+bool AppController::pulseTrigger(quint64 nodeId) { return graphRuntime()->pulseTrigger(nodeId); }
 
 ScriptBinding AppController::scriptBindingFor(NodeId dataNodeId) const
 {
-    return m_runtime->scriptBindingFor(dataNodeId);
+    return graphRuntime()->scriptBindingFor(dataNodeId);
 }
 
 bool AppController::mcpUpdateSource(NodeId id, const SourceDescriptor &desc, const QImage &thumb)
 {
-    if (!m_graph->setSourceDescriptor(id, desc))
+    if (!clipGraph()->setSourceDescriptor(id, desc))
         return false;
     if (!thumb.isNull())
-        m_runtime->setThumbnail(id, thumb);
+        graphRuntime()->setThumbnail(id, thumb);
     pushDecks();
     mcpBumpRevision();
     return true;
@@ -1031,7 +1243,7 @@ bool AppController::mcpUpdateSource(NodeId id, const SourceDescriptor &desc, con
 
 bool AppController::mcpRenameClip(NodeId id, const QString &name)
 {
-    if (!m_graph->hasNode(id))
+    if (!clipGraph()->hasNode(id))
         return false;
     renameNode(id, name);
     return true;
@@ -1039,7 +1251,7 @@ bool AppController::mcpRenameClip(NodeId id, const QString &name)
 
 bool AppController::mcpRemoveClip(NodeId id)
 {
-    if (!m_graph->hasNode(id))
+    if (!clipGraph()->hasNode(id))
         return false;
     removeNode(id);
     return true;
@@ -1050,9 +1262,7 @@ bool AppController::mcpRemoveClip(NodeId id)
 QJsonObject AppController::currentSessionJson(const QString &sessionFilePath) const
 {
     return m_sessionManager->buildJson(
-        faderValue(), m_transitionCtrl->currentModeIndex(), m_transitionCtrl->currentDurationSecs(),
-        m_deckController->activeNode(Deck::Live), m_deckController->activeNode(Deck::Staging),
-        m_hotkeyManager->hotkeysJson(),
+        faderValue(), m_hotkeyManager->hotkeysJson(),
         sessionFilePath.isEmpty() ? SessionManager::autosavePath() : sessionFilePath);
 }
 
@@ -1093,33 +1303,34 @@ bool AppController::loadSessionFile(const QString &path)
     m_deckController->setActiveNode(Deck::Staging, 0);
     m_deckController->stopDeckAudio(Deck::Live);
     m_deckController->stopDeckAudio(Deck::Staging);
-    return m_sessionManager->loadFromFile(path);
+    for (int i = 0; i < 2; ++i) {
+        m_deckBase[i].clear();
+        m_deckOverlays[i].clear();
+    }
+    m_liveBlack = false;
+    if (!m_sessionManager->loadFromFile(path))
+        return false;
+    VenueProfile venueFile;
+    if (VenueProfile::loadFile(QFileInfo(path).absoluteDir().filePath(QString::fromUtf8(VenueProfile::kFileName)), venueFile))
+        applyVenue(venueFile, false);
+    return true;
 }
 
 void AppController::onSessionLoaded()
 {
     m_hotkeyManager->restoreHotkeys(m_sessionManager->restoredHotkeys());
     m_transitionCtrl->setFaderValue(m_sessionManager->restoredTransitionProgress());
-    m_transitionCtrl->setTransitionModeIndex(m_sessionManager->restoredTransitionMode());
-    m_transitionCtrl->setTransitionDuration(m_sessionManager->restoredTransitionDuration());
-
-    const NodeId savedLive = m_sessionManager->restoredActiveNodeLive();
-    const NodeId savedStaging = m_sessionManager->restoredActiveNodeStaging();
-    if (savedLive) selectNode(savedLive, Deck::Live);
-    if (savedStaging) selectNode(savedStaging, Deck::Staging);
-
-    m_graph->setOutputCanvasSize(Compositor::programWidth(), Compositor::programHeight());
+    applyTransition(m_show->defaultTransition().mode, m_show->defaultTransition().durationMs);
+    m_pushTimer->start();
 
     m_dirty = false;
     emit sessionDirtyChanged();
-    emit programResolutionChanged();
-    emit outputScaleModeChanged();
     emit sessionLoaded();
 }
 
 void AppController::doNewSession()
 {
-    m_graph->clear();
+    m_show->reset();
     m_deckController->setActiveNode(Deck::Live, 0);
     m_deckController->setActiveNode(Deck::Staging, 0);
     m_deckController->stopDeckAudio(Deck::Live);
@@ -1131,6 +1342,7 @@ void AppController::doNewSession()
         m_deckOverlays[i].clear();
         m_deckUi[i] = DeckUi{};
     }
+    m_liveBlack = false;
     setSessionPath(QString());
     m_dirty = false;
     emit sessionDirtyChanged();
@@ -1215,7 +1427,10 @@ void AppController::requestImportProject()
 void AppController::exportProject(const QString &packagePathIn)
 {
     const QString path = MainWindowUtils::ensureExtension(packagePathIn, QString::fromUtf8(ProjectPackager::kExtension));
-    const ProjectPackager::Report report = ProjectPackager::exportPackage(currentSessionJson(), *m_graph, path);
+    QVector<const ClipGraph *> graphs;
+    for (const Cue *cue : m_show->cues())
+        graphs.append(cue->graph());
+    const ProjectPackager::Report report = ProjectPackager::exportPackage(currentSessionJson(), graphs, path, m_venue->toJson());
     if (!report.success) {
         emit errorOccurred(report.error.isEmpty() ? tr("Export failed.") : report.error);
         return;
@@ -1274,18 +1489,7 @@ void AppController::confirmAnswered(const QString &id, bool accepted)
     if (!accepted)
         return;
     if (id == QLatin1String("clearAll")) {
-        m_graph->clear();
-        m_deckController->setActiveNode(Deck::Live, 0);
-        m_deckController->setActiveNode(Deck::Staging, 0);
-        m_deckController->stopDeckAudio(Deck::Live);
-        m_deckController->stopDeckAudio(Deck::Staging);
-        m_compositor->clearDeckLive();
-        m_compositor->clearDeckStaging();
-        for (int i = 0; i < 2; ++i) {
-            m_deckBase[i].clear();
-            m_deckOverlays[i].clear();
-            m_deckUi[i] = DeckUi{};
-        }
+        m_show->editedCue()->clearGraph();
         emit decksChanged();
     } else if (id == QLatin1String("newSession")) {
         doNewSession();
@@ -1466,7 +1670,7 @@ bool AppController::mcpStartRecording(const QString &dir, QString *error)
 QVariantList AppController::captureLayers() const
 {
     QVariantList list;
-    const auto layers = FrameCaptureHelper::enumerateLayers(m_compositor.get(), m_graph, m_deckController);
+    const auto layers = FrameCaptureHelper::enumerateLayers(m_compositor.get(), m_deckController);
     for (int i = 0; i < layers.size(); ++i)
         list.append(QVariantMap{{"label", layers[i].label}, {"index", i}});
     return list;
@@ -1474,7 +1678,7 @@ QVariantList AppController::captureLayers() const
 
 QVariantMap AppController::captureFrame(int layerIndex, bool savePng, bool addAsElement, bool holdAsStill)
 {
-    const auto layers = FrameCaptureHelper::enumerateLayers(m_compositor.get(), m_graph, m_deckController);
+    const auto layers = FrameCaptureHelper::enumerateLayers(m_compositor.get(), m_deckController);
     if (layerIndex < 0 || layerIndex >= layers.size())
         return {{"ok", false}, {"error", tr("No layers are available to capture.")}};
 
@@ -1584,7 +1788,7 @@ QJsonObject AppController::mcpInspect(bool includeClips, bool detail, int sinceR
         const NodeId id = m_deckController->activeNode(deck);
         return QJsonObject{
             {QStringLiteral("clip"), id ? QString::number(id) : QJsonValue(QJsonValue::Null)},
-            {QStringLiteral("name"), id ? m_graph->sourceName(id) : QString()},
+            {QStringLiteral("name"), id ? m_deckController->graphOf(deck)->sourceName(id) : QString()},
             {QStringLiteral("playing"), isLive(deck) ? isPlayingLive() : isPlayingStaging()},
             {QStringLiteral("time"), isLive(deck) ? deckTimeLive() : deckTimeStaging()},
             {QStringLiteral("duration"), isLive(deck) ? deckDurationLive() : deckDurationStaging()},
@@ -1595,6 +1799,17 @@ QJsonObject AppController::mcpInspect(bool includeClips, bool detail, int sinceR
     for (const QString &name : m_transitionCtrl->transitionModeNames())
         transitionModes.append(name);
 
+    QJsonArray cuesJson;
+    for (const Cue *cue : m_show->cues()) {
+        cuesJson.append(QJsonObject{
+            {QStringLiteral("id"), cue->id()},
+            {QStringLiteral("name"), cue->name()},
+            {QStringLiteral("live"), cue->id() == m_show->liveCueId()},
+            {QStringLiteral("staging"), cue->id() == m_show->stagingCueId()},
+            {QStringLiteral("endAction"), Cue::endActionName(cue->endAction())},
+        });
+    }
+
     auto *hub = m_outputHub;
     QJsonObject body{
         {QStringLiteral("revision"), m_mcpEditRevision},
@@ -1602,6 +1817,8 @@ QJsonObject AppController::mcpInspect(bool includeClips, bool detail, int sinceR
         {QStringLiteral("panic"), mcpPanicMode()},
         {QStringLiteral("decks"), QJsonObject{{QStringLiteral("live"), deckJson(Deck::Live)},
                                                {QStringLiteral("staging"), deckJson(Deck::Staging)}}},
+        {QStringLiteral("cues"), cuesJson},
+        {QStringLiteral("editedCue"), m_show->editedCueId()},
         {QStringLiteral("transition"), QJsonObject{
             {QStringLiteral("index"), m_transitionCtrl->currentModeIndex()},
             {QStringLiteral("duration"), m_transitionCtrl->currentDurationSecs()},
@@ -1621,14 +1838,14 @@ QJsonObject AppController::mcpInspect(bool includeClips, bool detail, int sinceR
                                                        {QStringLiteral("enabled"), hub->virtualCameraEnabled()}}},
     };
 
-    const QVector<NodeId> inputs = m_graph->nodeIdsOfType(ClipGraph::NodeType::Input);
+    const QVector<NodeId> inputs = clipGraph()->nodeIdsOfType(ClipGraph::NodeType::Input);
     if (includeClips) {
         QJsonArray clips;
         for (NodeId id : inputs) {
-            const SourceDescriptor d = m_graph->sourceDescriptor(id);
+            const SourceDescriptor d = clipGraph()->sourceDescriptor(id);
             QJsonObject row{
                 {QStringLiteral("id"), QString::number(id)},
-                {QStringLiteral("name"), m_graph->sourceName(id)},
+                {QStringLiteral("name"), clipGraph()->sourceName(id)},
                 {QStringLiteral("kind"), mcpKindName(d.kind)},
                 {QStringLiteral("onLive"), id == activeNodeLive()},
                 {QStringLiteral("onStaging"), id == activeNodeStaging()},
@@ -1653,7 +1870,7 @@ QJsonObject AppController::mcpInspect(bool includeClips, bool detail, int sinceR
     }
 
     if (includeGraph)
-        body.insert(QStringLiteral("graph"), m_graph->snapshot());
+        body.insert(QStringLiteral("graph"), clipGraph()->snapshot());
 
     return ok(body);
 }

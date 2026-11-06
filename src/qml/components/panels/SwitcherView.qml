@@ -6,8 +6,6 @@ import Prism
 ColumnLayout {
     id: root
 
-    readonly property bool locked: AppController.singleStream
-
     spacing: Theme.spacingSm
 
     // Slide-to-go-live: dragging scrubs the transition, reaching the end commits the take,
@@ -25,7 +23,6 @@ ColumnLayout {
         radius: thumb.radius + thumb.inset
         color: Theme.sliderTrack
         border.color: Theme.panelBorder
-        opacity: root.locked ? 0.5 : 1
 
         Accessible.role: Accessible.Slider
         Accessible.name: qsTr("Slide to go live")
@@ -73,7 +70,7 @@ ColumnLayout {
                 property real level: 1
             }
             SequentialAnimation {
-                running: !root.locked && slide.pos === 0 && slide.visible
+                running: slide.pos === 0 && slide.visible
                 loops: Animation.Infinite
                 onStopped: breathe.level = 1
                 NumberAnimation { target: breathe; property: "level"; to: 0.45; duration: 1100; easing.type: Easing.InOutSine }
@@ -107,7 +104,7 @@ ColumnLayout {
             property real grabOffset: 0
 
             anchors.fill: parent
-            enabled: !root.locked && !AppController.transitionRunning
+            enabled: !AppController.transitionRunning
             cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
 
             onPressed: mouse => {
@@ -142,19 +139,17 @@ ColumnLayout {
         ThemedButton {
             text: qsTr("Cut")
             tooltip: qsTr("Instant cut from Staging to Live (Space)")
-            enabled: !root.locked
             onClicked: AppController.cut()
         }
         ThemedButton {
             text: qsTr("Take")
             variant: "primary"
             tooltip: qsTr("Transition Staging to Live using the selected mode (Enter)")
-            enabled: !root.locked && !AppController.transitionRunning
+            enabled: !AppController.transitionRunning
             onClicked: AppController.take()
         }
         ThemedComboBox {
             Layout.fillWidth: true
-            enabled: !root.locked
             model: AppController.transitionModeNames
             currentIndex: AppController.transitionMode
             onActivated: index => AppController.transitionMode = index
@@ -169,7 +164,6 @@ ColumnLayout {
         ThemedSlider {
             id: durSlider
             Layout.fillWidth: true
-            enabled: !root.locked
             label: qsTr("Transition duration")
             from: 0.05
             to: 5

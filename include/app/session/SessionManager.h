@@ -11,6 +11,7 @@
 #include "core/graph/ClipGraph.h"
 
 class Compositor;
+class ShowManager;
 class ClipManager;
 
 /// Handles session save/load, periodic autosave, and crash recovery.
@@ -23,7 +24,7 @@ public:
         QStringList backupPaths;
     };
 
-    SessionManager(ClipGraph *graph, Compositor *compositor, ClipManager *clipManager,
+    SessionManager(ShowManager *show, Compositor *compositor, ClipManager *clipManager,
                    QObject *parent = nullptr);
 
     bool loadFromFile(const QString &path);
@@ -48,19 +49,12 @@ public:
     static QStringList listBackupFiles();
     static void pruneBackups(int keepCount = kDefaultBackupRetention);
 
-    static constexpr int kFormatVersion = 2;
+    static constexpr int kFormatVersion = 3;
 
-    QJsonObject buildJson(int transitionProgress, int transitionMode,
-                          double transitionDuration,
-                          NodeId activeLive, NodeId activeStaging,
-                          const QJsonArray &hotkeys,
+    QJsonObject buildJson(int transitionProgress, const QJsonArray &hotkeys,
                           const QString &sessionFilePath = {}) const;
 
     int    restoredTransitionProgress()  const { return m_restoredTransitionProgress; }
-    int    restoredTransitionMode()    const { return m_restoredTransitionMode; }
-    double restoredTransitionDuration() const { return m_restoredTransitionDuration; }
-    NodeId restoredActiveNodeLive()    const { return m_restoredActiveNodeLive; }
-    NodeId restoredActiveNodeStaging() const { return m_restoredActiveNodeStaging; }
 
     QJsonArray restoredHotkeys() const { return m_restoredHotkeys; }
 
@@ -72,14 +66,10 @@ signals:
 private:
     static void relativizeGraphPaths(QJsonObject &graph, const QDir &sessionDir);
 
-    ClipGraph   *m_graph;
+    ShowManager *m_show;
     Compositor  *m_compositor;
     ClipManager *m_clipManager;
 
     int    m_restoredTransitionProgress = 0;
-    int    m_restoredTransitionMode    = 0;
-    double m_restoredTransitionDuration = 1.0;
-    NodeId m_restoredActiveNodeLive    = 0;
-    NodeId m_restoredActiveNodeStaging = 0;
     QJsonArray m_restoredHotkeys;
 };

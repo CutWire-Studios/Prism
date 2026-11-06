@@ -4,6 +4,8 @@
 #include "core/webrtc/NetworkUtils.h"
 #include "core/sources/SourceDescriptor.h"
 #include "core/project/ClipSettings.h"
+#include "app/show/ShowManager.h"
+#include "app/show/VenueProfile.h"
 #include "core/graph/ClipGraph.h"
 
 #include <QtTest>
@@ -83,60 +85,84 @@ private slots:
         QTemporaryDir dir;
         QVERIFY(dir.isValid());
 
-        const QString imagePath = dir.filePath(QStringLiteral("clip.png"));
         QVERIFY(TestSupport::writePng(dir.path(), QStringLiteral("clip.png"), Qt::blue));
+        QVERIFY(TestSupport::writePng(dir.path(), QStringLiteral("other.png"), Qt::green));
 
-        ClipGraph clipGraph;
+        ShowManager show;
+        Cue *second = show.addCue(QStringLiteral("Second"));
         SourceDescriptor desc;
         desc.kind = SourceDescriptor::Kind::Image;
-        desc.path = imagePath;
-        QVERIFY(clipGraph.addInputNode(desc) != 0);
+        desc.path = dir.filePath(QStringLiteral("clip.png"));
+        QVERIFY(show.cues().first()->graph()->addInputNode(desc) != 0);
+        desc.path = dir.filePath(QStringLiteral("other.png"));
+        QVERIFY(second->graph()->addInputNode(desc) != 0);
 
-        QJsonObject session;
-        session.insert(QStringLiteral("version"), 1);
-        QJsonObject graph;
-        QJsonArray nodes;
-        QJsonObject node;
-        QJsonObject source;
-        source.insert(QStringLiteral("kind"), QStringLiteral("Image"));
-        source.insert(QStringLiteral("path"), imagePath);
-        node.insert(QStringLiteral("source"), source);
-        node.insert(QStringLiteral("settings"), ClipSettings{}.toJson());
-        nodes.append(node);
-        graph.insert(QStringLiteral("clipNodes"), nodes);
-        session.insert(QStringLiteral("graph"), graph);
+        QJsonObject session = show.toJson();
+        session.insert(QStringLiteral("version"), 3);
+
+        QVector<const ClipGraph *> graphs;
+        for (const Cue *cue : show.cues())
+            graphs.append(cue->graph());
+
+        VenueProfile venue;
+        venue.width = 1920;
+        venue.height = 1080;
+        venue.deviceMap.insert(QStringLiteral("stage-left"), QStringLiteral("hw:2"));
 
         const QString packagePath = dir.filePath(QStringLiteral("project.prism"));
-        const auto exportReport = ProjectPackager::exportPackage(session, clipGraph, packagePath);
+        const auto exportReport = ProjectPackager::exportPackage(session, graphs, packagePath, venue.toJson());
         QVERIFY2(exportReport.success, qPrintable(exportReport.error));
         QVERIFY(QFileInfo::exists(packagePath));
-        QVERIFY(exportReport.assetCount >= 1);
+        QCOMPARE(exportReport.assetCount, 2);
 
         const QString extractDir = dir.filePath(QStringLiteral("extracted"));
         const auto importResult = ProjectPackager::importPackage(packagePath, extractDir, true);
         QVERIFY2(importResult.success, qPrintable(importResult.error));
         QVERIFY(QFileInfo::exists(importResult.sessionPath));
-        QVERIFY(importResult.assetCount >= 1);
 
         QFile sessionFile(importResult.sessionPath);
         QVERIFY(sessionFile.open(QIODevice::ReadOnly));
         const QJsonObject imported = QJsonDocument::fromJson(sessionFile.readAll()).object();
-        const QJsonArray importedNodes =
-            imported.value(QStringLiteral("graph")).toObject()
-                .value(QStringLiteral("clipNodes")).toArray();
-        QVERIFY(!importedNodes.isEmpty());
-        const QString packagedPath =
-            importedNodes.first().toObject().value(QStringLiteral("source")).toObject()
-                .value(QStringLiteral("path")).toString();
-        QVERIFY(!QDir::isAbsolutePath(packagedPath));
-        QVERIFY(QFileInfo::exists(QDir(extractDir).filePath(packagedPath)));
+        const QJsonArray cues = imported.value(QStringLiteral("cues")).toArray();
+        QCOMPARE(cues.size(), 2);
+        for (const QJsonValue &cue : cues) {
+            const QJsonArray nodes = cue.toObject().value(QStringLiteral("graph")).toObject()
+                                         .value(QStringLiteral("inputNodes")).toArray();
+            QCOMPARE(nodes.size(), 1);
+            const QString packagedPath =
+                nodes.first().toObject().value(QStringLiteral("source")).toObject()
+                    .value(QStringLiteral("path")).toString();
+            QVERIFY(!QDir::isAbsolutePath(packagedPath));
+            QVERIFY(QFileInfo::exists(QDir(extractDir).filePath(packagedPath)));
+        }
+
+        VenueProfile loaded;
+        QVERIFY(VenueProfile::loadFile(QDir(extractDir).filePath(QString::fromUtf8(VenueProfile::kFileName)), loaded));
+        QCOMPARE(loaded.width, 1920);
+        QCOMPARE(loaded.resolveDevice(QStringLiteral("stage-left")), QStringLiteral("hw:2"));
+        QCOMPARE(loaded.resolveDevice(QStringLiteral("unmapped")), QStringLiteral("unmapped"));
+    }
+
+    void projectPackager_oldFormatIsRejected() {
+        QTemporaryDir dir;
+        const QString zipPath = dir.filePath(QStringLiteral("old.prism"));
+        QJsonObject manifest;
+        manifest.insert(QStringLiteral("format"), QStringLiteral("prism-project"));
+        manifest.insert(QStringLiteral("formatVersion"), ProjectPackager::kFormatVersion - 1);
+        QMap<QString, QByteArray> entries;
+        entries.insert(QString::fromUtf8(ProjectPackager::kManifestName),
+                       QJsonDocument(manifest).toJson(QJsonDocument::Compact));
+        QVERIFY(TestSupport::createZip(zipPath, entries));
+        const auto result = ProjectPackager::importPackage(zipPath, dir.filePath(QStringLiteral("out")), true);
+        QVERIFY(!result.success);
+        QVERIFY(result.error.contains(QStringLiteral("older version")));
     }
 
     void projectPackager_exportEmptySession() {
         QTemporaryDir dir;
-        const QJsonObject session{{QStringLiteral("version"), 1}};
+        const QJsonObject session{{QStringLiteral("version"), 3}};
         const QString packagePath = dir.filePath(QStringLiteral("empty.prism"));
-        const auto report = ProjectPackager::exportPackage(session, ClipGraph(), packagePath);
+        const auto report = ProjectPackager::exportPackage(session, {}, packagePath);
         QVERIFY2(report.success, qPrintable(report.error));
         QVERIFY(QFileInfo::exists(packagePath));
         QCOMPARE(report.assetCount, 0);
@@ -145,6 +171,7 @@ private slots:
             packagePath, dir.filePath(QStringLiteral("out")), true);
         QVERIFY2(imported.success, qPrintable(imported.error));
         QVERIFY(QFileInfo::exists(imported.sessionPath));
+        QVERIFY(!QFileInfo::exists(QDir(dir.filePath(QStringLiteral("out"))).filePath(QString::fromUtf8(VenueProfile::kFileName))));
     }
 
     void projectPackager_importWithoutIntegrityCheck() {

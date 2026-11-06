@@ -85,8 +85,7 @@ class ClipGraphController : public QObject {
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY undoStateChanged)
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY undoStateChanged)
     Q_PROPERTY(bool connecting READ connecting NOTIFY connectingChanged)
-    /// Bumped whenever routing, params or deck assignment change; bind to it to re-query
-    /// derived state (abState) that no model role carries.
+    /// Bumped whenever routing or params change; bind to it to re-query derived state.
     Q_PROPERTY(int revision READ revision NOTIFY revisionChanged)
 
 public:
@@ -143,10 +142,8 @@ public:
     /// coords is a flat [x0, y0, x1, y1, ...] list parallel to ids. Consecutive calls with the
     /// same ids collapse into one undo step until endMove().
     Q_INVOKABLE void moveNodes(const QVariantList &ids, const QVariantList &coords);
-    /// Reorders two slots of a Layer / Switcher / Audio Mixer and the edges wired to them.
+    /// Reorders two slots of a Layer / Audio Mixer and the edges wired to them.
     Q_INVOKABLE bool swapSlots(quint64 id, int a, int b);
-    /// {live, staging, outputConnected} for a Switcher node; live/staging are slot indices or -1.
-    Q_INVOKABLE QVariantMap abState(quint64 node) const;
 
     Q_INVOKABLE void undo();
     Q_INVOKABLE void redo();

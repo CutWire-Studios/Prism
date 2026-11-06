@@ -35,7 +35,6 @@ constexpr qreal kSmallH = 110.0;
 constexpr qreal kProcW = 116.0;
 constexpr qreal kProcH = 66.0;
 constexpr qreal kLayerW = 158.0, kLayerHdr = 20.0, kLayerRow = 22.0, kLayerFoot = 26.0;
-constexpr qreal kAbW = 168.0, kAbHdr = 20.0, kAbRow = 24.0, kAbFoot = 6.0;
 constexpr qreal kOutW = 116.0, kOutH = 78.0, kOutBodyH = 52.0;
 constexpr qreal kMixW = 158.0, kMixHdr = 20.0, kMixRow = 22.0, kMixFoot = 26.0;
 constexpr qreal kAoW = 168.0, kAoHdr = 22.0, kAoRow = 20.0;
@@ -88,8 +87,6 @@ QVariantMap defaultParams(NT type) {
     case NT::Layer:
         return {{"canvasCustom", false}, {"canvasW", 1280}, {"canvasH", 720},
                 {"slots", QVariantList{defaultSlot(NT::Layer)}}};
-    case NT::AbSelect:
-        return {{"slots", QVariantList{defaultSlot(NT::AbSelect)}}};
     case NT::AudioMixer:
         return {{"slots", QVariantList{defaultSlot(NT::AudioMixer)}}};
     case NT::MasterAudioOutput:
@@ -219,7 +216,6 @@ QString sourceKindName(int kind) {
 bool ClipGraph::portsCompatible(PortKind a, PortKind b) {
     if (a == b) return false;
     if ((a == PK::ChainOut && b == PK::ChainIn) || (a == PK::ChainIn && b == PK::ChainOut)) return true;
-    if ((a == PK::AbOut && b == PK::AbIn) || (a == PK::AbIn && b == PK::AbOut)) return true;
     if ((isAudioStreamOutKind(a) && isAudioMixerInKind(b)) ||
         (isAudioMixerInKind(a) && isAudioStreamOutKind(b))) return true;
     if ((isAudioStreamOutKind(a) && isAudioEffectInKind(b)) ||
@@ -248,7 +244,6 @@ bool ClipGraph::isSingleConnection(PortKind kind) {
     if (isAudioMixerInKind(kind)) return true;
     if (isMixedAudioOutKind(kind)) return true;
     if (isMixedAudioInKind(kind)) return true;
-    if (kind == PK::AbIn) return false;
     if (kind == PK::ScriptOut) return false;
     if (kind == PK::DataIn) return false;
     return true;
@@ -257,7 +252,6 @@ bool ClipGraph::isSingleConnection(PortKind kind) {
 ClipGraph::PortDirection ClipGraph::directionOf(PortKind kind) {
     switch (kind) {
     case PK::ChainIn:
-    case PK::AbIn:
     case PK::ShaderAudioIn:
     case PK::AudioIn:
     case PK::MasterAudioIn:
@@ -273,7 +267,6 @@ ClipGraph::PortDirection ClipGraph::directionOf(PortKind kind) {
 QString ClipGraph::edgeKindName(int kind) {
     switch (EK(kind)) {
     case EK::Chain:              return QStringLiteral("chain");
-    case EK::AbToOutput:         return QStringLiteral("ab_to_output");
     case EK::ScriptToData:       return QStringLiteral("script_to_data");
     case EK::ClipToShaderAudio:  return QStringLiteral("clip_to_shader_audio");
     case EK::ClipToAudioScript:  return QStringLiteral("clip_to_audio_script");
@@ -373,8 +366,6 @@ QSizeF ClipGraph::nodeSize(const Node &n) const {
         return {kProcW, kProcH};
     case NT::Layer:
         return {kLayerW, kLayerHdr + slotCount(n) * kLayerRow + kLayerFoot};
-    case NT::AbSelect:
-        return {kAbW, kAbHdr + slotCount(n) * kAbRow + kAbFoot};
     case NT::Output:
         return {kOutW, kOutH};
     case NT::AudioMixer:
@@ -435,18 +426,8 @@ void ClipGraph::buildPorts(const Node &n, QVector<Port> &in, QVector<Port> &out)
         add(out, PK::ChainOut, PD::Out, QStringLiteral("out"), false, {kLayerW, sz.height() / 2.0});
         break;
     }
-    case NT::AbSelect: {
-        const QVariantList slotList = n.params.value("slots").toList();
-        for (int i = 0; i < slotList.size(); ++i)
-            add(in, PK::ChainIn, PD::In, slotLabel(slotList, i), true,
-                {0.0, kAbHdr + i * kAbRow + kAbRow / 2});
-        add(in, PK::DataIn, PD::In, QStringLiteral("data"), false, {0.0, sz.height()});
-        add(out, PK::AbOut, PD::Out, QStringLiteral("Switcher"), false, {kAbW, sz.height() / 2.0});
-        break;
-    }
     case NT::Output:
-        add(in, PK::ChainIn, PD::In, QStringLiteral("video"), true, {0.0, kOutBodyH * 0.33});
-        add(in, PK::AbIn, PD::In, QStringLiteral("Switcher"), true, {0.0, kOutBodyH * 0.67});
+        add(in, PK::ChainIn, PD::In, QStringLiteral("video"), true, {0.0, kOutBodyH / 2});
         break;
     case NT::AudioMixer: {
         const QVariantList slotList = n.params.value("slots").toList();
@@ -525,7 +506,7 @@ int ClipGraph::findPortIndex(NodeId id, PortKind kind, int slot) const {
         if (p.kind == kind) matches.append(p.index);
     if (matches.isEmpty()) return -1;
 
-    const bool slotKind = ((n->type == NT::Layer || n->type == NT::AbSelect) && kind == PK::ChainIn)
+    const bool slotKind = (n->type == NT::Layer && kind == PK::ChainIn)
         || (n->type == NT::AudioMixer && kind == PK::AudioMixerIn);
     if (slotKind)
         return (slot >= 0 && slot < matches.size()) ? matches[slot] : -1;
@@ -552,10 +533,6 @@ bool ClipGraph::lookupConnectionPorts(NodeId from, NodeId to, int kind, int slot
     case EK::Chain:
         *fromPort = findPortIndex(from, PK::ChainOut, -1);
         *toPort = findPortIndex(to, PK::ChainIn, slot);
-        break;
-    case EK::AbToOutput:
-        *fromPort = findPortIndex(from, PK::AbOut, -1);
-        *toPort = findPortIndex(to, PK::AbIn, -1);
         break;
     case EK::ClipToShaderAudio:
         *fromPort = findPortIndex(from, PK::AudioControllerOut, -1);
@@ -623,7 +600,6 @@ void ClipGraph::refreshNode(Node &n) {
         break;
     }
     case NT::Layer:             n.title = QStringLiteral("Layer"); break;
-    case NT::AbSelect:          n.title = QStringLiteral("Switcher"); break;
     case NT::Output:            n.title = QStringLiteral("Output"); break;
     case NT::AudioMixer:        n.title = QStringLiteral("Audio Mixer"); break;
     case NT::MasterAudioOutput: n.title = QStringLiteral("Audio Output"); break;
@@ -645,7 +621,6 @@ QPointF ClipGraph::autoPosition(NodeType type) const {
     switch (type) {
     case NT::Process:  return {220.0 + idx * 16.0, 48.0 + idx * 78.0};
     case NT::Layer:    return {280.0 + idx * 16.0, 48.0 + idx * 78.0};
-    case NT::AbSelect: return {320.0 + idx * 16.0, 48.0 + idx * 78.0};
     default:           return {idx * 160.0 + 20.0, idx * 60.0 + 20.0};
     }
 }
@@ -743,7 +718,6 @@ NodeId ClipGraph::addNode(NodeType type, const QPointF &pos, const QVariantMap &
     case NT::Process:
     case NT::AudioEffect:
     case NT::Layer:
-    case NT::AbSelect:
     case NT::AudioMixer:
         ensureOutputNode();
         break;
@@ -823,12 +797,6 @@ bool ClipGraph::removeNode(NodeId id) {
     if (id == m_outputNode && m_nodes.size() > 1) return false;
 
     removeEdgesOfNode(id);
-    if (m_liveInput == id) { m_liveInput = 0; emit liveChanged(0); }
-    if (m_stagingInput == id) { m_stagingInput = 0; emit stagingChanged(0); }
-    for (auto it = m_hotkeyLabels.begin(); it != m_hotkeyLabels.end();) {
-        if (it.key().abNodeId == id) it = m_hotkeyLabels.erase(it);
-        else ++it;
-    }
     m_nodes.remove(id);
     m_order.removeOne(id);
     if (id == m_outputNode) m_outputNode = 0;
@@ -838,17 +806,11 @@ bool ClipGraph::removeNode(NodeId id) {
 }
 
 void ClipGraph::clear() {
-    const bool hadA = m_liveInput != 0, hadB = m_stagingInput != 0;
     m_nodes.clear();
     m_order.clear();
     m_edges.clear();
-    m_hotkeyLabels.clear();
     m_outputNode = 0;
-    m_liveInput = 0;
-    m_stagingInput = 0;
     emit graphReset();
-    if (hadA) emit liveChanged(0);
-    if (hadB) emit stagingChanged(0);
     emit changed();
 }
 
@@ -888,16 +850,10 @@ void ClipGraph::removeEdgesOfNode(NodeId id) {
             removeEdgeAt(i);
 }
 
-bool ClipGraph::outputInputBlocked(NodeId to, int toPort) const {
-    if (to == 0 || to != m_outputNode) return false;
-    return isPortConnected(to, PD::In, toPort == 0 ? 1 : 0);
-}
-
 bool ClipGraph::connectPortsRaw(NodeId from, int fromPort, NodeId to, int toPort, EdgeKind kind) {
     const QVector<Port> outs = outputPorts(from);
     const QVector<Port> ins = inputPorts(to);
     if (fromPort < 0 || fromPort >= outs.size() || toPort < 0 || toPort >= ins.size()) return false;
-    if (outputInputBlocked(to, toPort)) return false;
     if (isSingleConnection(outs[fromPort].kind)) disconnectPort(from, PD::Out, fromPort);
     if (isSingleConnection(ins[toPort].kind)) disconnectPort(to, PD::In, toPort);
     appendEdge(from, fromPort, to, toPort, kind);
@@ -916,7 +872,7 @@ bool ClipGraph::connectNodes(NodeId from, NodeId to, int kind, int toPortIndex) 
     if (from == 0 || to == 0 || from == to || !hasNode(from) || !hasNode(to)) return false;
 
     static const EK kTryOrder[] = {
-        EK::Chain, EK::AbToOutput, EK::ScriptToData, EK::ClipToShaderAudio, EK::AudioEffectChain,
+        EK::Chain, EK::ScriptToData, EK::ClipToShaderAudio, EK::AudioEffectChain,
         EK::StreamToMixer, EK::MixerToOutput, EK::ControllerToMaster, EK::InputToMaster,
         EK::ClipToAudioScript,
     };
@@ -927,7 +883,6 @@ bool ClipGraph::connectNodes(NodeId from, NodeId to, int kind, int toPortIndex) 
     for (int k : kinds) {
         int fp = -1, tp = -1;
         if (!lookupConnectionPorts(from, to, k, toPortIndex, &fp, &tp)) continue;
-        if (outputInputBlocked(to, tp)) return false;
         if (!connectPortsRaw(from, fp, to, tp, EK(k))) return false;
         afterConnectionsChanged();
         return true;
@@ -938,7 +893,7 @@ bool ClipGraph::connectNodes(NodeId from, NodeId to, int kind, int toPortIndex) 
 bool ClipGraph::canConnectNodes(NodeId from, NodeId to, int kind, int toPortIndex) const {
     if (from == 0 || to == 0 || from == to || !hasNode(from) || !hasNode(to)) return false;
     static const EK kTryOrder[] = {
-        EK::Chain, EK::AbToOutput, EK::ScriptToData, EK::ClipToShaderAudio, EK::AudioEffectChain,
+        EK::Chain, EK::ScriptToData, EK::ClipToShaderAudio, EK::AudioEffectChain,
         EK::StreamToMixer, EK::MixerToOutput, EK::ControllerToMaster, EK::InputToMaster,
         EK::ClipToAudioScript,
     };
@@ -948,7 +903,7 @@ bool ClipGraph::canConnectNodes(NodeId from, NodeId to, int kind, int toPortInde
     for (int k : kinds) {
         int fp = -1, tp = -1;
         if (!lookupConnectionPorts(from, to, k, toPortIndex, &fp, &tp)) continue;
-        return !outputInputBlocked(to, tp);
+        return true;
     }
     return false;
 }
@@ -969,7 +924,6 @@ std::optional<ClipGraph::ConnectPlan> ClipGraph::planConnection(NodeId from, int
 
     ConnectPlan plan;
     if (a == PK::ChainOut && b == PK::ChainIn) plan.kind = EK::Chain;
-    else if (a == PK::AbOut && b == PK::AbIn) plan.kind = EK::AbToOutput;
     else if (a == PK::AudioControllerOut && b == PK::ShaderAudioIn) plan.kind = EK::ClipToShaderAudio;
     else if (isAudioStreamOutKind(a) && b == PK::AudioIn) plan.kind = EK::ClipToAudioScript;
     else if (isAudioStreamOutKind(a) && isMixedAudioInKind(b)) plan.insertMixer = true;
@@ -984,7 +938,6 @@ std::optional<ClipGraph::ConnectPlan> ClipGraph::planConnection(NodeId from, int
     if (plan.kind == EK::Chain && tn->type == NT::Process
         && fn->type != NT::Input && fn->type != NT::Process)
         return std::nullopt;
-    if (outputInputBlocked(to, toPort)) return std::nullopt;
     return plan;
 }
 
@@ -1275,8 +1228,8 @@ void ClipGraph::normalizeSwitchingInputs() {
         if (!s.layers.isEmpty()) return sourceName(s.layers.first().inputNodeId);
         return {};
     };
-    for (NodeType type : {NT::Layer, NT::AbSelect}) {
-        for (NodeId id : nodeIdsOfType(type)) {
+    {
+        for (NodeId id : nodeIdsOfType(NT::Layer)) {
             Node *n = mutableNode(id);
             bool changed = normalizeSlots(*n);
             QVariantList slotList = n->params.value("slots").toList();
@@ -1527,117 +1480,6 @@ void ClipGraph::setOutputCanvasSize(int w, int h) {
     if (anyFollowing) notifyChanged();
 }
 
-// ── Switcher and decks ────────────────────────────────────────────────────
-
-void ClipGraph::setDeck(NodeId id, Deck deck) {
-    if (deck == Deck::Live) { m_liveInput = id; emit liveChanged(id); }
-    else                    { m_stagingInput = id; emit stagingChanged(id); }
-}
-
-void ClipGraph::setActiveDeckClip(NodeId clipId, Deck deck) {
-    setDeck(clipId, deck);
-    notifyChanged();
-}
-
-void ClipGraph::assignInputToDeck(NodeId inputProducerNode, Deck deck) {
-    const Deck other = otherDeck(deck);
-    if ((other == Deck::Live ? m_liveInput : m_stagingInput) == inputProducerNode) setDeck(0, other);
-    setDeck(inputProducerNode, deck);
-    notifyChanged();
-}
-
-void ClipGraph::swapDeckInputs() {
-    std::swap(m_liveInput, m_stagingInput);
-    emit liveChanged(m_liveInput);
-    emit stagingChanged(m_stagingInput);
-    notifyChanged();
-}
-
-QVector<ClipGraph::AbSlotInfo> ClipGraph::abSelectInputs() const {
-    QVector<AbSlotInfo> out;
-    for (NodeId id : nodeIdsOfType(NT::AbSelect)) {
-        const QVariantList slotList = node(id)->params.value("slots").toList();
-        for (int i = 0; i < slotList.size(); ++i) {
-            const NodeId prod = producerForInput(id, i);
-            if (prod == 0) continue;
-            AbSlotInfo info;
-            info.ref = {id, i};
-            info.name = slotList[i].toMap().value("name").toString();
-            info.producer = prod;
-            const ResolvedStream stream = evaluateVideoInput(prod);
-            if (!stream.layers.isEmpty())
-                info.sourceName = sourceName(stream.layers.first().inputNodeId);
-            out.append(info);
-        }
-    }
-    return out;
-}
-
-bool ClipGraph::abOutputConnected(NodeId abNodeId) const {
-    const Node *n = node(abNodeId);
-    return n && n->type == NT::AbSelect && isPortConnected(abNodeId, PD::Out, 0);
-}
-
-void ClipGraph::abDeckSlots(NodeId abNodeId, int &aSlot, int &bSlot) const {
-    aSlot = bSlot = -1;
-    const Node *n = node(abNodeId);
-    if (!n || n->type != NT::AbSelect) return;
-    for (int i = 0; i < slotCount(*n); ++i) {
-        const NodeId prod = producerForInput(abNodeId, i);
-        if (prod != 0 && prod == m_liveInput) aSlot = i;
-        if (prod != 0 && prod == m_stagingInput) bSlot = i;
-    }
-}
-
-bool ClipGraph::triggerAbSlot(const AbSlotRef &ref, Deck deck) {
-    if (!abOutputConnected(ref.abNodeId)) return false;
-    const NodeId prod = producerForInput(ref.abNodeId, ref.slot);
-    if (prod == 0) return false;
-    assignInputToDeck(prod, deck);
-    return true;
-}
-
-void ClipGraph::applyAbScriptOutput(NodeId abNodeId, const QJsonObject &output) {
-    const Node *n = node(abNodeId);
-    if (!n || n->type != NT::AbSelect) return;
-    const QVariantList slotList = n->params.value("slots").toList();
-
-    auto resolveSlot = [&](const QJsonValue &target) -> int {
-        if (target.isString()) {
-            const QString name = target.toString();
-            for (int i = 0; i < slotList.size(); ++i)
-                if (slotList[i].toMap().value("name").toString().compare(name, Qt::CaseInsensitive) == 0)
-                    return i;
-            return -1;
-        }
-        if (target.isDouble()) return target.toInt() - 1;
-        return -1;
-    };
-
-    if (output.contains("a")) {
-        const int slot = resolveSlot(output.value("a"));
-        if (slot >= 0) triggerAbSlot({abNodeId, slot}, Deck::Live);
-    }
-    if (output.contains("b")) {
-        const int slot = resolveSlot(output.value("b"));
-        if (slot >= 0) triggerAbSlot({abNodeId, slot}, Deck::Staging);
-    }
-}
-
-void ClipGraph::setAbSlotHotkeyLabel(const AbSlotRef &ref, const QString &label) {
-    const Node *n = node(ref.abNodeId);
-    if (!n || n->type != NT::AbSelect || ref.slot < 0 || ref.slot >= slotCount(*n)) return;
-    m_hotkeyLabels[ref] = label;
-}
-
-void ClipGraph::clearAbSlotHotkeyLabels() {
-    m_hotkeyLabels.clear();
-}
-
-QString ClipGraph::abSlotHotkeyLabel(const AbSlotRef &ref) const {
-    return m_hotkeyLabels.value(ref);
-}
-
 // ── Audio / script queries ──────────────────────────────────────────────────
 
 bool ClipGraph::edgeFromAudioStreamOut(NodeId from, const Edge **out) const {
@@ -1851,10 +1693,8 @@ QJsonObject ClipGraph::toJson() const {
     QJsonObject root;
     root["graphVersion"] = kGraphVersion;
     root["nextId"] = (qint64)m_nextId;
-    root["liveInput"] = (qint64)m_liveInput;
-    root["stagingInput"] = (qint64)m_stagingInput;
 
-    QJsonArray inputNodes, processNodes, audioEffectNodes, layerNodes, abSelectNodes,
+    QJsonArray inputNodes, processNodes, audioEffectNodes, layerNodes,
         audioMixerNodes, scriptNodes, masterAudioNodes, masterAudioInputNodes,
         masterAudioCaptureNodes;
 
@@ -1877,7 +1717,6 @@ QJsonObject ClipGraph::toJson() const {
             break;
         case NT::AudioEffect:       audioEffectNodes.append(o); break;
         case NT::Layer:             layerNodes.append(o); break;
-        case NT::AbSelect:          abSelectNodes.append(o); break;
         case NT::AudioMixer:        audioMixerNodes.append(o); break;
         case NT::Output:
             root["outputNode"] = QJsonObject{{"id", (qint64)n.id}, {"posX", n.pos.x()}, {"posY", n.pos.y()}};
@@ -1899,7 +1738,6 @@ QJsonObject ClipGraph::toJson() const {
     root["processNodes"] = processNodes;
     root["audioEffectNodes"] = audioEffectNodes;
     root["layerNodes"] = layerNodes;
-    root["abSelectNodes"] = abSelectNodes;
     root["audioMixerNodes"] = audioMixerNodes;
     root["scriptNodes"] = scriptNodes;
     root["masterAudioNodes"] = masterAudioNodes;
@@ -1926,17 +1764,12 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
     m_nodes.clear();
     m_order.clear();
     m_edges.clear();
-    m_hotkeyLabels.clear();
     m_outputNode = 0;
-    m_liveInput = 0;
-    m_stagingInput = 0;
-    m_nextId = 1;
+    m_nextId = m_idBase + 1;
 
     auto finish = [this](bool ok) {
         m_restoring = false;
         emit graphReset();
-        emit liveChanged(m_liveInput);
-        emit stagingChanged(m_stagingInput);
         emit changed();
         return ok;
     };
@@ -2038,11 +1871,6 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
                                  {"slots", readSlots(obj, NT::Layer)}});
     }
 
-    for (const QJsonValue &val : state["abSelectNodes"].toArray()) {
-        const QJsonObject obj = val.toObject();
-        restore(obj, NT::AbSelect, {{"slots", readSlots(obj, NT::AbSelect)}});
-    }
-
     if (state.contains("outputNode"))
         restore(state["outputNode"].toObject(), NT::Output, {});
 
@@ -2113,7 +1941,7 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         }
     }
 
-    m_nextId = std::max<NodeId>(maxId + 1, (NodeId)state["nextId"].toInteger(0));
+    m_nextId = std::max({maxId + 1, (NodeId)state["nextId"].toInteger(0), NodeId(m_idBase + 1)});
 
     for (const QJsonValue &val : state["connections"].toArray()) {
         const QJsonObject obj = val.toObject();
@@ -2131,8 +1959,6 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
     if (m_outputNode == 0 && !m_nodes.isEmpty())
         ensureOutputNode();
 
-    m_liveInput = (NodeId)state["liveInput"].toInteger(0);
-    m_stagingInput = (NodeId)state["stagingInput"].toInteger(0);
     return finish(true);
 }
 
@@ -2146,7 +1972,7 @@ QJsonObject ClipGraph::snapshot() const {
         nodes.append(extra);
     };
 
-    for (NodeType type : {NT::Input, NT::Process, NT::Layer, NT::AbSelect}) {
+    for (NodeType type : {NT::Input, NT::Process, NT::Layer}) {
         for (NodeId id : nodeIdsOfType(type)) {
             const Node &n = *node(id);
             switch (type) {
@@ -2168,7 +1994,6 @@ QJsonObject ClipGraph::snapshot() const {
                 append(n, QStringLiteral("layer"), {{QStringLiteral("slots"), slotCount(n)}});
                 break;
             default:
-                append(n, QStringLiteral("ab_select"), {{QStringLiteral("slots"), slotCount(n)}});
                 break;
             }
         }

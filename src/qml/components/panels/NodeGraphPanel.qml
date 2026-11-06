@@ -6,9 +6,18 @@ PanelFrame {
 
     signal inspectorRequested()
 
+    EmptyState {
+        anchors.centerIn: parent
+        visible: !AppController.inCue
+        glyph: "pencil"
+        title: qsTr("No cue open")
+        hint: qsTr("Press a cue's edit button to work on its graph")
+    }
+
     NodeEditorPanel {
         id: editor
         anchors.fill: parent
+        visible: AppController.inCue
         controller: AppController.graph
 
         onInspectorRequested: root.inspectorRequested()

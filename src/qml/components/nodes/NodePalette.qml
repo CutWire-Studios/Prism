@@ -8,28 +8,27 @@ QtObject {
     id: root
 
     readonly property var nodeType: ({
-        Input: 0, Process: 1, AudioEffect: 2, Layer: 3, AbSelect: 4, Output: 5, AudioMixer: 6,
-        MasterAudioOutput: 7, MasterAudioInput: 8, MasterAudioCapture: 9, Script: 10,
-        AudioScript: 11, Trigger: 12
+        Input: 0, Process: 1, AudioEffect: 2, Layer: 3, Output: 4, AudioMixer: 5,
+        MasterAudioOutput: 6, MasterAudioInput: 7, MasterAudioCapture: 8, Script: 9,
+        AudioScript: 10, Trigger: 11
     })
 
     readonly property var portKind: ({
-        ChainIn: 0, ChainOut: 1, AbOut: 2, AbIn: 3, AudioOut: 4, ShaderAudioIn: 5, AudioIn: 6,
-        AudioControllerOut: 7, MasterAudioIn: 8, MasterAudioInputOut: 9, ScriptOut: 10, DataIn: 11,
-        AudioMixerIn: 12, AudioMixerOut: 13, AudioEffectIn: 14, AudioEffectOut: 15
+        ChainIn: 0, ChainOut: 1, AudioOut: 2, ShaderAudioIn: 3, AudioIn: 4,
+        AudioControllerOut: 5, MasterAudioIn: 6, MasterAudioInputOut: 7, ScriptOut: 8, DataIn: 9,
+        AudioMixerIn: 10, AudioMixerOut: 11, AudioEffectIn: 12, AudioEffectOut: 13
     })
 
     readonly property var edgeKind: ({
         Chain: 0, TransformToContext: 1, AudioToController: 2, ControllerToMaster: 3,
         LegacyClipToTransform: 4, ClipToShaderAudio: 5, ScriptToData: 6, InputToMaster: 7,
-        AbToOutput: 8, StreamToMixer: 9, MixerToOutput: 10, AudioEffectChain: 11,
+        StreamToMixer: 9, MixerToOutput: 10, AudioEffectChain: 11,
         ClipToAudioScript: 12
     })
 
-    // Domain hues. These carry meaning (video / switcher / raw audio / mixed audio / script data) and
-    // have no counterpart in the theme tokens, so they stay fixed; the switcher hue follows the theme.
+    // Domain hues. These carry meaning (video / raw audio / mixed audio / script data) and
+    // have no counterpart in the theme tokens, so they stay fixed;
     readonly property color chainHue: "#50a8d8"
-    readonly property color abHue: Theme.destructive
     readonly property color streamHue: "#e4b042"
     readonly property color mixedHue: "#e88030"
     readonly property color scriptHue: "#70c0a8"
@@ -45,9 +44,6 @@ QtObject {
         case k.ChainIn:
         case k.ChainOut:
             return desat(chainHue, 0.8)
-        case k.AbIn:
-        case k.AbOut:
-            return desat(abHue, 0.8)
         case k.AudioOut:
         case k.ShaderAudioIn:
         case k.AudioIn:
@@ -71,7 +67,6 @@ QtObject {
         const k = portKind
         switch (kind) {
         case k.ChainIn: case k.ChainOut: return qsTr("Video")
-        case k.AbIn: case k.AbOut: return qsTr("Switcher")
         case k.AudioControllerOut: case k.MasterAudioInputOut: return qsTr("Audio stream")
         case k.AudioMixerIn: return qsTr("Mixer input")
         case k.AudioMixerOut: return qsTr("Mixed audio")
@@ -87,7 +82,6 @@ QtObject {
         const e = edgeKind
         switch (kind) {
         case e.Chain: return desat("#70b8ff", 0.8)
-        case e.AbToOutput: return desat(abHue, 0.8)
         case e.AudioToController: return desat(mixedHue, 0.8)
         case e.ClipToShaderAudio: return desat("#e89040", 0.8)
         case e.ClipToAudioScript:
@@ -108,43 +102,38 @@ QtObject {
     // kinds a freshly added node carries (used to filter the add menu on an edge drop).
     readonly property var meta: [
         { name: qsTr("Input"), icon: "clapperboard", hue: "#78aad2", header: 20, category: "source",
-          inKinds: [], outKinds: [1, 7] },
+          inKinds: [], outKinds: [1, 5] },
         { name: qsTr("Process"), icon: "wand-sparkles", hue: "#78aad2", header: 20, category: "video",
           inKinds: [0], outKinds: [1] },
         { name: qsTr("Audio FX"), icon: "audio-waveform", hue: "#e4b042", header: 20, category: "audio",
-          inKinds: [14], outKinds: [15] },
+          inKinds: [12], outKinds: [13] },
         { name: qsTr("Layer"), icon: "layers", hue: "#78aad2", header: 20, category: "video",
           inKinds: [0], outKinds: [1] },
-        { name: qsTr("Switcher"), icon: "split", hue: "#e67878", header: 20, category: "video",
-          inKinds: [0, 11], outKinds: [2] },
         { name: qsTr("Output"), icon: "cast", hue: "#96c8f0", header: 20, category: "video",
-          inKinds: [0, 3], outKinds: [] },
+          inKinds: [0], outKinds: [] },
         { name: qsTr("Mixer"), icon: "sliders-vertical", hue: "#e4b042", header: 20, category: "audio",
-          inKinds: [12], outKinds: [13] },
+          inKinds: [10], outKinds: [11] },
         { name: qsTr("Audio Output"), icon: "speaker", hue: "#e88030", header: 22, category: "audio",
-          inKinds: [8], outKinds: [] },
+          inKinds: [6], outKinds: [] },
         { name: qsTr("Mic Input"), icon: "mic", hue: "#e4b042", header: 20, category: "audio",
-          inKinds: [], outKinds: [9] },
+          inKinds: [], outKinds: [7] },
         { name: qsTr("Audio Capture"), icon: "audio-lines", hue: "#e4b042", header: 20, category: "audio",
-          inKinds: [], outKinds: [9] },
+          inKinds: [], outKinds: [7] },
         { name: qsTr("Script"), icon: "binary", hue: "#78dcaa", header: 20, category: "script",
-          inKinds: [11], outKinds: [10] },
+          inKinds: [9], outKinds: [8] },
         { name: qsTr("Audio Script"), icon: "activity", hue: "#e6be5a", header: 20, category: "script",
-          inKinds: [6], outKinds: [10] },
+          inKinds: [4], outKinds: [8] },
         { name: qsTr("Trigger"), icon: "clock", hue: "#78bee6", header: 20, category: "script",
-          inKinds: [], outKinds: [10] }
+          inKinds: [], outKinds: [8] }
     ]
 
     // Default node width per type, used to place a node so its port lands under the cursor.
-    readonly property var defaultWidth: [122, 116, 116, 158, 168, 116, 158, 168, 100, 100, 100, 100, 100]
+    readonly property var defaultWidth: [122, 116, 116, 158, 116, 158, 168, 100, 100, 100, 100, 100]
 
     function tooltip(type) {
         switch (type) {
         case nodeType.Layer:
             return qsTr("Double-click a layer name to rename. The eye toggles visibility; the arrows reorder.")
-        case nodeType.AbSelect:
-            return qsTr("Double-click an input name to rename. Stage sends the input to Staging; Cut to Live sends it straight to Live. "
-                        + "Wire a Script node's output here to automate switching.")
         case nodeType.AudioMixer:
             return qsTr("Double-click a name to rename. Select the node to set per-input volume and mute.")
         }

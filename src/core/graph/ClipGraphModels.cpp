@@ -326,8 +326,6 @@ void ClipGraphController::init() {
     });
     auto bump = [this] { ++m_revision; emit revisionChanged(); };
     connect(m_graph, &ClipGraph::changed, this, bump);
-    connect(m_graph, &ClipGraph::liveChanged, this, bump);
-    connect(m_graph, &ClipGraph::stagingChanged, this, bump);
     connect(m_graph, &ClipGraph::graphReset, this, bump);
 }
 
@@ -573,7 +571,6 @@ bool ClipGraphController::swapSlots(quint64 id, int a, int b) {
     const char *key = nullptr;
     switch (n->type) {
     case ClipGraph::NodeType::Layer:      key = "layerNodes"; break;
-    case ClipGraph::NodeType::AbSelect:   key = "abSelectNodes"; break;
     case ClipGraph::NodeType::AudioMixer: key = "audioMixerNodes"; break;
     default: return false;
     }
@@ -610,10 +607,4 @@ bool ClipGraphController::swapSlots(quint64 id, int a, int b) {
     m_graph->fromJson(state);
     pushSnapshot(QStringLiteral("Reorder"), before);
     return true;
-}
-
-QVariantMap ClipGraphController::abState(quint64 node) const {
-    int a = -1, b = -1;
-    m_graph->abDeckSlots(node, a, b);
-    return {{"live", a}, {"staging", b}, {"outputConnected", m_graph->abOutputConnected(node)}};
 }

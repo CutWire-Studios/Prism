@@ -35,8 +35,8 @@ enum class Route {
     MethodNotAllowed,
 };
 
-struct ClipInfo {
-    quint64 id = 0;
+struct CueInfo {
+    QString id;
     QString name;
     bool    onLive = false;
     bool    onStaging = false;
@@ -45,11 +45,11 @@ struct ClipInfo {
 struct StatusData {
     int              fader = 0;
     bool             hasDeck = false;
-    quint64          live = 0;
-    quint64          staging = 0;
+    QString          live;
+    QString          staging;
     bool             isPlayingLive = false;
     bool             isPlayingStaging = false;
-    QVector<ClipInfo> clips;
+    QVector<CueInfo> cues;
     bool             hasTransition = false;
     int              transitionMode = 0;
     double           transitionDuration = 0.0;
@@ -61,7 +61,7 @@ Route       matchRoute(const QString &method, const QString &path);
 
 bool intParam(const QString &path, const QString &key, int &out);
 bool doubleParam(const QString &path, const QString &key, double &out);
-bool uint64Param(const QString &path, const QString &key, quint64 &out);
+bool stringParam(const QString &path, const QString &key, QString &out);
 
 QByteArray buildStatusJson(const StatusData &data);
 QByteArray buildHttpResponse(int statusCode, const QByteArray &contentType, const QByteArray &body);

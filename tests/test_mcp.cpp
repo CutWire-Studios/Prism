@@ -4,6 +4,7 @@
 #include "mcp/McpServer.h"
 #include "mcp/McpSession.h"
 #include "app/AppController.h"
+#include "app/show/ShowManager.h"
 #include "core/sources/SourceDescriptor.h"
 #include "app/session/SessionManager.h"
 
@@ -45,6 +46,7 @@ private slots:
     void stagedDeckIsPausedUntilTake();
     void cutIsImmediateAndTakeIgnoresEmptyStaging();
     void deckToolsUseLiveStagingNames();
+    void cueToolsAddAndEnter();
 };
 
 void TestMcp::initTestCase()
@@ -491,15 +493,27 @@ static quint64 addStillClip(AppController &window, const QString &path, const QC
                                     {QStringLiteral("path"), path}});
 }
 
+// A new cue holding one still clip wired to its Output node; leaves it as the edited cue.
+static QString addClipCue(AppController &window, const QString &path, const QColor &color, quint64 *clipOut)
+{
+    const QString cue = window.addCue();
+    window.enterCue(cue);
+    *clipOut = addStillClip(window, path, color);
+    if (!*clipOut || !window.clipGraph()->connectNodes(*clipOut, window.clipGraph()->outputNodeId()))
+        return {};
+    return cue;
+}
+
 void TestMcp::stagedDeckIsPausedUntilTake()
 {
     QTemporaryDir dir;
     AppController window(nullptr);
-    const quint64 clip = addStillClip(window, dir.filePath(QStringLiteral("a.png")), Qt::red);
-    QVERIFY(clip);
+    quint64 clip = 0;
+    const QString cue = addClipCue(window, dir.filePath(QStringLiteral("a.png")), Qt::red, &clip);
+    QVERIFY(!cue.isEmpty());
     QCOMPARE(window.activeNodeLive(), quint64(0));
 
-    window.stageNode(clip);
+    QVERIFY(window.stageCue(cue));
     QTRY_VERIFY(window.compositor()->sourceStaging());
     QCOMPARE(window.activeNodeStaging(), clip);
     QVERIFY(!window.isPlayingStaging());
@@ -510,6 +524,9 @@ void TestMcp::stagedDeckIsPausedUntilTake()
     QTRY_VERIFY(window.isPlayingLive());
     QCOMPARE(window.faderValue(), 0);
     QVERIFY(!window.transitionRunning());
+    QCOMPARE(window.liveCueId(), cue);
+    QVERIFY(!window.stagingCueId().isEmpty());
+    QVERIFY(window.stagingCueId() != cue);
 }
 
 void TestMcp::cutIsImmediateAndTakeIgnoresEmptyStaging()
@@ -521,9 +538,10 @@ void TestMcp::cutIsImmediateAndTakeIgnoresEmptyStaging()
     QCOMPARE(window.activeNodeLive(), quint64(0));
     QVERIFY(!window.transitionRunning());
 
-    const quint64 clip = addStillClip(window, dir.filePath(QStringLiteral("b.png")), Qt::blue);
-    QVERIFY(clip);
-    window.stageNode(clip);
+    quint64 clip = 0;
+    const QString cue = addClipCue(window, dir.filePath(QStringLiteral("b.png")), Qt::blue, &clip);
+    QVERIFY(!cue.isEmpty());
+    QVERIFY(window.stageCue(cue));
     window.cut();
     QCOMPARE(window.activeNodeLive(), clip);
     QCOMPARE(window.faderValue(), 0);
@@ -536,12 +554,22 @@ void TestMcp::deckToolsUseLiveStagingNames()
     QTemporaryDir dir;
     AppController window(nullptr);
     prism::mcp::McpDispatcher dispatcher(&window);
-    const quint64 clip = addStillClip(window, dir.filePath(QStringLiteral("c.png")), Qt::green);
-    QVERIFY(clip);
+    quint64 clip = 0;
+    const QString cue = addClipCue(window, dir.filePath(QStringLiteral("c.png")), Qt::green, &clip);
+    QVERIFY(!cue.isEmpty());
     const QString id = QString::number(clip);
 
-    const QJsonObject staged = dispatcher.applyOne(QStringLiteral("stage"), {{QStringLiteral("clip"), id}});
+    const QJsonObject cues = dispatcher.applyOne(QStringLiteral("list_cues"), {});
+    QCOMPARE(cues.value(QStringLiteral("cues")).toArray().size(), 2);
+    QCOMPARE(dispatcher.applyOne(QStringLiteral("stage"), {{QStringLiteral("clip"), id}})
+                 .value(QStringLiteral("error")).toString(),
+             QStringLiteral("unknown_op"));
+    QCOMPARE(dispatcher.applyOne(QStringLiteral("stage_cue"), {{QStringLiteral("cue"), QStringLiteral("nope")}})
+                 .value(QStringLiteral("error")).toString(),
+             QStringLiteral("not_found"));
+    const QJsonObject staged = dispatcher.applyOne(QStringLiteral("stage_cue"), {{QStringLiteral("cue"), 2}});
     QVERIFY(staged.value(QStringLiteral("ok")).toBool());
+    QCOMPARE(staged.value(QStringLiteral("id")).toString(), cue);
     QTRY_COMPARE(window.activeNodeStaging(), clip);
 
     QVERIFY(dispatcher.applyOne(QStringLiteral("play"), {{QStringLiteral("deck"), QStringLiteral("staging")}})
@@ -565,6 +593,21 @@ void TestMcp::deckToolsUseLiveStagingNames()
     QVERIFY(dispatcher.applyOne(QStringLiteral("take"), {}).value(QStringLiteral("ok")).toBool());
     QTRY_COMPARE(window.activeNodeLive(), clip);
     QCOMPARE(window.faderValue(), 0);
+}
+
+void TestMcp::cueToolsAddAndEnter()
+{
+    AppController window(nullptr);
+    prism::mcp::McpDispatcher dispatcher(&window);
+    const QJsonObject added = dispatcher.applyOne(QStringLiteral("add_cue"), {{QStringLiteral("name"), QStringLiteral("Intro")}});
+    QVERIFY(added.value(QStringLiteral("ok")).toBool());
+    QCOMPARE(added.value(QStringLiteral("name")).toString(), QStringLiteral("Intro"));
+    const QString id = added.value(QStringLiteral("id")).toString();
+    QVERIFY(dispatcher.applyOne(QStringLiteral("enter_cue"), {{QStringLiteral("cue"), id}})
+                .value(QStringLiteral("ok")).toBool());
+    QCOMPARE(window.editedCueId(), id);
+    QCOMPARE(dispatcher.applyOne(QStringLiteral("add_ab_select"), {}).value(QStringLiteral("error")).toString(),
+             QStringLiteral("unknown_op"));
 }
 
 QTEST_MAIN(TestMcp)

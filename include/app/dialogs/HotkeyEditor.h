@@ -1,18 +1,17 @@
 #pragma once
 
-#include <QList>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
 
-#include "core/graph/ClipGraph.h"
-
 class HotkeyManager;
+class ShowManager;
 
-/// QML-facing view of HotkeyManager's switcher key bindings. Edits apply and persist
-/// immediately; a key already used by another input is refused.
+/// QML-facing view of HotkeyManager's cue key bindings. Edits apply and persist
+/// immediately; a key already used by another cue is refused.
 class HotkeyEditor : public QObject {
     Q_OBJECT
     QML_ELEMENT
@@ -39,9 +38,9 @@ signals:
 
 private:
     HotkeyManager *manager() const;
-    ClipGraph *graph() const;
+    ShowManager *show() const;
 
-    QList<ClipGraph::AbSlotRef> m_slots;
+    QStringList m_cueIds;
     QVariantList m_rows;
     bool m_connected = false;
 };

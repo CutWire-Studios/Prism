@@ -29,6 +29,8 @@ class HotkeyManager;
 class ObsIntegration;
 class OscServer;
 class OutputHub;
+class QAbstractItemModel;
+class ShowManager;
 class QJSEngine;
 class QQmlEngine;
 class QQuickWindow;
@@ -36,11 +38,13 @@ class QTimer;
 class RemoteControlServer;
 class SessionManager;
 class TransitionController;
+class Cue;
+struct VenueProfile;
 
 namespace prism::mcp { class McpServer; }
 
 /// The application's backend coordinator and the single object the QML shell drives. It owns the
-/// Compositor, ClipGraph (+ its QML controller), GraphRuntime, DeckController, SessionManager,
+/// Compositor, the ShowManager (cues, each with its graph, QML controller and runtime), DeckController, SessionManager,
 /// TransitionController, OutputHub, hotkeys, OBS, and the remote/OSC/MCP servers; it ports the
 /// non-widget logic of the old MainWindow (deck routing, transitions, panic, sessions, recording
 /// hooks, output windows, MCP/remote helper API).
@@ -53,8 +57,17 @@ class AppController : public QObject {
     QML_SINGLETON
 
     // ── Graph / compositor ────────────────────────────────────────────────────
-    Q_PROPERTY(ClipGraphController *graph READ graphController CONSTANT)
+    /// The graph controller of the cue being edited.
+    Q_PROPERTY(ClipGraphController *graph READ graphController NOTIFY editedGraphChanged)
     Q_PROPERTY(Compositor *compositor READ compositor CONSTANT)
+
+    // ── Show / cues ───────────────────────────────────────────────────────────
+    Q_PROPERTY(QAbstractItemModel *cues READ cueModel CONSTANT)
+    Q_PROPERTY(QString liveCueId READ liveCueId NOTIFY showChanged)
+    Q_PROPERTY(QString stagingCueId READ stagingCueId NOTIFY showChanged)
+    Q_PROPERTY(QString editedCueId READ editedCueId NOTIFY showChanged)
+    /// False after exitCue(): the node editor then asks for a cue to be entered.
+    Q_PROPERTY(bool inCue READ inCue NOTIFY showChanged)
 
     // ── Decks (clock properties refresh every 100 ms via deckClockChanged) ────
     Q_PROPERTY(quint64 activeNodeLive READ activeNodeLive NOTIFY decksChanged)
@@ -87,8 +100,6 @@ class AppController : public QObject {
     Q_PROPERTY(double transitionDuration READ transitionDuration WRITE setTransitionDuration NOTIFY transitionSettingsChanged)
     /// An AUTO sweep is animating the fader.
     Q_PROPERTY(bool transitionRunning READ transitionRunning NOTIFY transitionRunningChanged)
-    /// The output graph is a single stream: fader and transition controls are disabled.
-    Q_PROPERTY(bool singleStream READ singleStream NOTIFY singleStreamChanged)
 
     // ── Panic ─────────────────────────────────────────────────────────────────
     /// "none" | "blackout" | "freeze" | "stay_tuned".
@@ -138,9 +149,11 @@ public:
 
     // ── Owned objects ─────────────────────────────────────────────────────────
     Compositor *compositor() const { return m_compositor.get(); }
-    ClipGraph *clipGraph() const { return m_graph; }
-    ClipGraphController *graphController() const { return m_graphController; }
-    GraphRuntime *graphRuntime() const { return m_runtime; }
+    ShowManager *showManager() const { return m_show; }
+    /// Graph, controller and runtime of the cue being edited.
+    ClipGraph *clipGraph() const;
+    ClipGraphController *graphController() const;
+    GraphRuntime *graphRuntime() const;
     DeckController *deckController() const { return m_deckController; }
     SessionManager *sessionManager() const { return m_sessionManager; }
     TransitionController *transitionController() const { return m_transitionCtrl; }
@@ -176,7 +189,11 @@ public:
     QStringList transitionModeNames() const;
     double transitionDuration() const;
     bool transitionRunning() const;
-    bool singleStream() const { return m_singleStream; }
+    QAbstractItemModel *cueModel() const;
+    QString liveCueId() const;
+    QString stagingCueId() const;
+    QString editedCueId() const;
+    bool inCue() const;
 
     QString panicMode() const;
 
@@ -211,13 +228,19 @@ public:
     void setMcpEnabled(bool on);
 
     // ── Decks / transitions (QML) ─────────────────────────────────────────────
-    /// Send an Input/producer node to a deck (ClipGraph::assignInputToDeck). 0 re-pushes the decks.
-    void selectNode(quint64 nodeId, Deck deck);
-    /// Send an Input/producer node to the Staging deck.
-    Q_INVOKABLE void stageNode(quint64 nodeId);
-    /// Send a switcher slot to Staging; with @p cutToLive it is then cut straight to Live.
-    void stageSlot(const ClipGraph::AbSlotRef &ref, bool cutToLive);
-    Q_INVOKABLE void stageAbSlot(quint64 node, int slot, bool cutToLive);
+    /// Puts a cue on Staging. False for an unknown cue, the Live cue, or while a take is running.
+    Q_INVOKABLE bool stageCue(const QString &id);
+    Q_INVOKABLE void stageAndTake(const QString &id);
+    /// Adds a cue after the edited one and returns its id.
+    Q_INVOKABLE QString addCue(const QString &name = {});
+    Q_INVOKABLE QString duplicateCue(const QString &id);
+    Q_INVOKABLE bool removeCue(const QString &id);
+    Q_INVOKABLE void enterCue(const QString &id);
+    Q_INVOKABLE void exitCue();
+    /// {id, name, color, notes, transition:{mode,durationMs}|null, endAction, autoAdvanceMs, advanceOnMediaEnd}.
+    Q_INVOKABLE QVariantMap cueInfo(const QString &id) const;
+    /// Applies the keys present in @p props (same names as cueInfo; transition null clears the override).
+    Q_INVOKABLE void setCueProps(const QString &id, const QVariantMap &props);
     /// The @p deck arguments below are int(Deck): 0 = Live, 1 = Staging.
     Q_INVOKABLE void togglePlay(int deck);
     Q_INVOKABLE void playDeck(int deck, bool play);
@@ -237,6 +260,8 @@ public:
     /// x/y: graph position of the first node (NaN = the position remembered by requestAddFiles /
     /// requestAddSource, else automatic). The new nodes become the selection.
     Q_INVOKABLE void importFiles(const QStringList &paths, qreal x = qQNaN(), qreal y = qQNaN());
+    /// Adds files to the media library only, without creating nodes.
+    Q_INVOKABLE void addToLibrary(const QStringList &paths);
     Q_INVOKABLE QString localPath(const QUrl &url) const;
     Q_INVOKABLE void importFolder(const QString &path);
     /// x/y: graph position for the node(s) the picker leads to (NaN = automatic).
@@ -338,8 +363,11 @@ public:
     /// Re-reads the osc/* settings and (re)starts or stops the OSC server.
     void applyOscSettings();
 
-    /// Rebuilds the compositor decks from the graph (MainWindow::pushDecks).
+    /// Rebuilds the compositor decks from the Live and Staging cues.
     void pushDecks();
+    /// Applies resolution, scaling and outputs; @p persist stores it as this machine's default.
+    void applyVenue(const VenueProfile &venue, bool persist);
+    const VenueProfile &venue() const;
     QJsonObject currentSessionJson(const QString &sessionFilePath = {}) const;
 
 signals:
@@ -351,7 +379,8 @@ signals:
     void faderValueChanged();
     void transitionSettingsChanged();
     void transitionRunningChanged();
-    void singleStreamChanged();
+    void editedGraphChanged();
+    void showChanged();
     void panicModeChanged();
     void sessionPathChanged();
     void sessionDirtyChanged();
@@ -396,7 +425,6 @@ private:
 
     void connectSignals();
     void onTimerTick();
-    void onGraphChanged();
     void applyPanic(const QString &mode);
     void onSessionLoaded();
     bool loadSessionFile(const QString &path);
@@ -407,16 +435,22 @@ private:
     bool ensureOutputDir(const QString &followUpId);
     void doOpenSession(const QString &path);
     void doNewSession();
-    void onNodeChanged(NodeId id);
+    void onNodeChanged(Cue *cue, NodeId id);
+    void onCueGraphChanged(Cue *cue);
+    void attachCue(Cue *cue);
+    void applyTransition(int mode, int durationMs);
+    void onLiveEnded();
+    void applyLiveEndAction();
+    void blackLive();
     void refreshOutputsList();
 
     static AppController *s_instance;
 
     QQmlEngine *m_engine = nullptr;
     std::unique_ptr<Compositor> m_compositor;
-    ClipGraph *m_graph = nullptr;
-    ClipGraphController *m_graphController = nullptr;
-    GraphRuntime *m_runtime = nullptr;
+    ShowManager *m_show = nullptr;
+    std::unique_ptr<VenueProfile> m_venue;
+    QString m_lastEditedId;
     DeckController *m_deckController = nullptr;
     SessionManager *m_sessionManager = nullptr;
     TransitionController *m_transitionCtrl = nullptr;
@@ -438,7 +472,9 @@ private:
     DeckUi m_deckUi[2];
 
     QString m_panic = QStringLiteral("none");
-    bool m_singleStream = false;
+    bool m_liveBlack = false;
+    bool m_livePlayingPrev = false;
+    bool m_applyingTransition = false;
     bool m_shuttingDown = false;
     bool m_started = false;
     bool m_dirty = false;

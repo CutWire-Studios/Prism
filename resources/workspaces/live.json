@@ -14,7 +14,7 @@
             "split": "h",
             "sizes": [0.14, 0.62, 0.24],
             "children": [
-              { "panels": [ { "type": "assets" } ], "active": 0 },
+              { "panels": [ { "type": "cues" }, { "type": "assets" } ], "active": 0 },
               { "panels": [ { "type": "nodeGraph" } ], "active": 0 },
               { "panels": [ { "type": "inspector" }, { "type": "mixer" }, { "type": "outputs" } ], "active": 0 }
             ]

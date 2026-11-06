@@ -1,5 +1,6 @@
 #include "mcp/McpDispatcher.h"
 #include "mcp/McpCatalog.h"
+#include "app/show/ShowManager.h"
 #include "mcp/McpJson.h"
 
 #include "core/media/ThumbnailExtractor.h"
@@ -12,6 +13,7 @@
 #include "core/sources/SvgTemplateSource.h"
 #include "core/sources/TextSource.h"
 #include "app/AppController.h"
+#include "app/show/ShowManager.h"
 #include "core/graph/ClipGraph.h"
 #include "core/graph/ProcessEffects.h"
 #include "app/output/OutputHub.h"
@@ -259,8 +261,14 @@ QJsonObject McpDispatcher::applyOne(const QString &tool, const QJsonObject &args
         return opSetSvgParams(args);
     if (tool == QLatin1String("set_shader"))
         return opSetShader(args);
-    if (tool == QLatin1String("stage"))
-        return opStage(args);
+    if (tool == QLatin1String("list_cues"))
+        return opListCues();
+    if (tool == QLatin1String("stage_cue"))
+        return opStageCue(args);
+    if (tool == QLatin1String("add_cue"))
+        return opAddCue(args);
+    if (tool == QLatin1String("enter_cue"))
+        return opEnterCue(args);
     if (tool == QLatin1String("play"))
         return opPlayDeck(args, true);
     if (tool == QLatin1String("pause"))
@@ -305,8 +313,6 @@ QJsonObject McpDispatcher::applyOne(const QString &tool, const QJsonObject &args
         return opAddProcessNode(args);
     if (tool == QLatin1String("add_layer_node"))
         return opAddLayerNode(args);
-    if (tool == QLatin1String("add_ab_select"))
-        return opAddAbSelect(args);
     if (tool == QLatin1String("connect"))
         return opConnect(args);
     if (tool == QLatin1String("disconnect"))
@@ -727,15 +733,72 @@ QString deckName(Deck deck)
 }
 }
 
-QJsonObject McpDispatcher::opStage(const QJsonObject &args)
+namespace {
+// "cue" is a cue id or a 1-based position in the cue list.
+Cue *resolveCue(AppController *w, const QJsonObject &args, QJsonObject *error)
+{
+    const QJsonValue v = args.value(QStringLiteral("cue"));
+    Cue *cue = nullptr;
+    if (v.isDouble()) {
+        const int index = v.toInt() - 1;
+        const QList<Cue *> &cues = w->showManager()->cues();
+        cue = index >= 0 && index < cues.size() ? cues.at(index) : nullptr;
+    } else if (v.isString()) {
+        cue = w->showManager()->cue(v.toString());
+    }
+    if (!cue && error)
+        *error = err("not_found", QStringLiteral("No such cue"));
+    return cue;
+}
+
+QJsonObject cueJson(const ShowManager *show, const Cue *cue)
+{
+    return {{QStringLiteral("id"), cue->id()},
+            {QStringLiteral("index"), show->indexOf(cue->id()) + 1},
+            {QStringLiteral("name"), cue->name()},
+            {QStringLiteral("live"), cue->id() == show->liveCueId()},
+            {QStringLiteral("staging"), cue->id() == show->stagingCueId()},
+            {QStringLiteral("edited"), show->inCue() && cue->id() == show->editedCueId()},
+            {QStringLiteral("endAction"), Cue::endActionName(cue->endAction())}};
+}
+}
+
+QJsonObject McpDispatcher::opListCues() const
+{
+    QJsonArray cues;
+    for (const Cue *cue : m_window->showManager()->cues())
+        cues.append(cueJson(m_window->showManager(), cue));
+    return ok({{QStringLiteral("cues"), cues}});
+}
+
+QJsonObject McpDispatcher::opStageCue(const QJsonObject &args)
 {
     QJsonObject error;
-    const NodeId node = resolveClip(m_window, args, &error);
-    if (!node)
+    Cue *cue = resolveCue(m_window, args, &error);
+    if (!cue)
         return error;
-    m_window->stageNode(node);
+    if (!m_window->stageCue(cue->id()))
+        return err("conflict", QStringLiteral("Cue is Live or a take is running"));
     m_window->mcpBumpRevision();
-    return clipOk(m_window->clipGraph(), node, {{QStringLiteral("deck"), QStringLiteral("staging")}});
+    return ok(cueJson(m_window->showManager(), cue));
+}
+
+QJsonObject McpDispatcher::opAddCue(const QJsonObject &args)
+{
+    const QString id = m_window->addCue(args.value(QStringLiteral("name")).toString().trimmed());
+    m_window->mcpBumpRevision();
+    return ok(cueJson(m_window->showManager(), m_window->showManager()->cue(id)));
+}
+
+QJsonObject McpDispatcher::opEnterCue(const QJsonObject &args)
+{
+    QJsonObject error;
+    Cue *cue = resolveCue(m_window, args, &error);
+    if (!cue)
+        return error;
+    m_window->enterCue(cue->id());
+    m_window->mcpBumpRevision();
+    return ok(cueJson(m_window->showManager(), cue));
 }
 
 QJsonObject McpDispatcher::opPlayDeck(const QJsonObject &args, bool play)
@@ -1030,25 +1093,6 @@ QJsonObject McpDispatcher::opAddLayerNode(const QJsonObject &args)
     m_window->mcpBumpRevision();
     return ok({{QStringLiteral("id"), QString::number(id)},
                {QStringLiteral("type"), QStringLiteral("layer")}});
-}
-
-QJsonObject McpDispatcher::opAddAbSelect(const QJsonObject &args)
-{
-    auto *editor = m_window->clipGraph();
-    if (!editor)
-        return err("not_found", QStringLiteral("No node editor"));
-    const double x = args.contains(QStringLiteral("x"))
-                         ? jsonNumber(args.value(QStringLiteral("x")), 0)
-                         : qQNaN();
-    const double y = args.contains(QStringLiteral("y"))
-                         ? jsonNumber(args.value(QStringLiteral("y")), 0)
-                         : qQNaN();
-    const NodeId id = editor->addNode(ClipGraph::NodeType::AbSelect, QPointF(x, y));
-    if (!id)
-        return err("conflict", QStringLiteral("Could not add Switcher node"));
-    m_window->mcpBumpRevision();
-    return ok({{QStringLiteral("id"), QString::number(id)},
-               {QStringLiteral("type"), QStringLiteral("ab_select")}});
 }
 
 QJsonObject McpDispatcher::opConnect(const QJsonObject &args)

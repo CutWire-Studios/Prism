@@ -83,7 +83,7 @@ ThemedDialog {
                             horizontalAlignment: Text.AlignRight
                             wrapMode: Text.NoWrap
                             text: row.modelData.cutChord.length > 0
-                                  ? qsTr("Cut: %1").arg(Theme.shortcutDisplay(row.modelData.cutChord)) : ""
+                                  ? qsTr("Take: %1").arg(Theme.shortcutDisplay(row.modelData.cutChord)) : ""
                         }
                     }
                 }
@@ -93,7 +93,7 @@ ThemedDialog {
         ThemedLabel {
             width: parent.width
             visible: HotkeyEditor.rows.length === 0
-            text: qsTr("No switcher inputs yet. Connect sources to a Switcher node to assign keys.")
+            text: qsTr("No cues yet. Add a cue to assign keys.")
         }
 
         ThemedLabel {

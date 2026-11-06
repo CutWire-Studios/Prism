@@ -1,4 +1,5 @@
 #include "app/session/SessionManager.h"
+#include "app/show/ShowManager.h"
 #include "core/project/AssetPathResolver.h"
 #include "core/project/ClipManager.h"
 #include "core/render/Compositor.h"
@@ -47,10 +48,10 @@ bool isProcessAlive(qint64 pid)
 
 } // namespace
 
-SessionManager::SessionManager(ClipGraph *graph, Compositor *compositor,
+SessionManager::SessionManager(ShowManager *show, Compositor *compositor,
                                ClipManager *clipManager, QObject *parent)
     : QObject(parent)
-    , m_graph(graph)
+    , m_show(show)
     , m_compositor(compositor)
     , m_clipManager(clipManager)
 {
@@ -183,25 +184,11 @@ void SessionManager::relativizeGraphPaths(QJsonObject &graph, const QDir &sessio
     graph["inputNodes"] = nodes;
 }
 
-QJsonObject SessionManager::buildJson(int transitionProgress, int transitionMode,
-                                      double transitionDuration,
-                                      NodeId activeLive, NodeId activeStaging,
-                                      const QJsonArray &hotkeys,
+QJsonObject SessionManager::buildJson(int transitionProgress, const QJsonArray &hotkeys,
                                       const QString &sessionFilePath) const {
     QJsonObject root;
     root["version"]            = kFormatVersion;
     root["transitionProgress"] = transitionProgress;
-    root["transitionMode"]     = transitionMode;
-    root["transitionDuration"] = transitionDuration;
-    root["activeNodeLive"]     = (qint64)activeLive;
-    root["activeNodeStaging"]  = (qint64)activeStaging;
-    root["outputResolution"]   = QJsonObject{{"w", Compositor::programWidth()},
-                                             {"h", Compositor::programHeight()}};
-    switch (Compositor::outputScaleMode()) {
-    case Compositor::OutputScaleMode::Stretch: root["outputScaleMode"] = "stretch"; break;
-    case Compositor::OutputScaleMode::Fit:     root["outputScaleMode"] = "fit";     break;
-    case Compositor::OutputScaleMode::Crop:    root["outputScaleMode"] = "crop";    break;
-    }
 
     const QDir sessionDir = sessionFilePath.isEmpty()
         ? QDir()
@@ -210,10 +197,19 @@ QJsonObject SessionManager::buildJson(int transitionProgress, int transitionMode
         root["sessionDir"] = sessionDir.absolutePath();
 
     root["hotkeys"] = hotkeys;
-    QJsonObject graph = m_graph->toJson();
-    if (sessionDir.isAbsolute())
-        relativizeGraphPaths(graph, sessionDir);
-    root["graph"]   = graph;
+    const QJsonObject showJson = m_show->toJson();
+    root["show"] = showJson["show"];
+    QJsonArray cues = showJson["cues"].toArray();
+    if (sessionDir.isAbsolute()) {
+        for (int i = 0; i < cues.size(); ++i) {
+            QJsonObject cue = cues.at(i).toObject();
+            QJsonObject graph = cue["graph"].toObject();
+            relativizeGraphPaths(graph, sessionDir);
+            cue["graph"] = graph;
+            cues[i] = cue;
+        }
+    }
+    root["cues"] = cues;
 
     QJsonArray assetLibrary;
     for (const QString &path : m_clipManager->getClips()) {
@@ -280,7 +276,7 @@ bool SessionManager::loadFromFile(const QString &path) {
     m_compositor->setNodeChainLive({});
     m_compositor->setNodeChainStaging({});
 
-    if (!m_graph->fromJson(root["graph"].toObject())) {
+    if (!m_show->fromJson(root)) {
         emit loadFailed(tr("This project was saved by an older version of Prism and cannot be opened."));
         return false;
     }
@@ -327,34 +323,19 @@ bool SessionManager::loadFromFile(const QString &path) {
             m_clipManager->setDisplayName(resolved, it.value().toString());
     }
 
-    for (const NodeId id : m_graph->nodeIdsOfType(ClipGraph::NodeType::Input)) {
-        m_graph->setSourceDescriptor(id, AssetPathResolver::relinkDescriptor(
-            m_graph->sourceDescriptor(id), relinkOpts, &relinkReport));
+    for (Cue *cue : m_show->cues()) {
+        ClipGraph *graph = cue->graph();
+        for (const NodeId id : graph->nodeIdsOfType(ClipGraph::NodeType::Input)) {
+            graph->setSourceDescriptor(id, AssetPathResolver::relinkDescriptor(
+                graph->sourceDescriptor(id), relinkOpts, &relinkReport));
+        }
     }
 
     if (relinkReport.stillMissing > 0)
         emit assetsMissing(relinkReport.stillMissing, relinkReport.notes.join('\n'));
 
-    // Restored hotkeys are passed through as-is; HotkeyManager understands both
-    // the current {abNode, slot, key} entries and legacy {nodeId, key} ones.
     m_restoredHotkeys = root["hotkeys"].toArray();
-
-    // Restore UI values ───────────────────────────────────────────────────────
     m_restoredTransitionProgress = root["transitionProgress"].toInt(0);
-    m_restoredTransitionMode     = root["transitionMode"].toInt(0);
-    m_restoredTransitionDuration = root["transitionDuration"].toDouble(1.0);
-    m_restoredActiveNodeLive     = (NodeId)root["activeNodeLive"].toInteger();
-    m_restoredActiveNodeStaging  = (NodeId)root["activeNodeStaging"].toInteger();
-
-    const QJsonObject res = root["outputResolution"].toObject();
-    const int resW = res["w"].toInt();
-    const int resH = res["h"].toInt();
-    if (resW >= 160 && resH >= 90)
-        m_compositor->setProgramResolution(resW, resH);
-    const QString scaleMode = root["outputScaleMode"].toString();
-    if (scaleMode == "stretch")   m_compositor->setOutputScaleMode(Compositor::OutputScaleMode::Stretch);
-    else if (scaleMode == "fit")  m_compositor->setOutputScaleMode(Compositor::OutputScaleMode::Fit);
-    else if (scaleMode == "crop") m_compositor->setOutputScaleMode(Compositor::OutputScaleMode::Crop);
 
     emit sessionLoaded();
     return true;

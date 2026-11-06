@@ -19,6 +19,7 @@
 #include <QMetaObject>
 #include <QMutexLocker>
 #include <QPointer>
+#include <QSet>
 #include <QThread>
 #include <QThreadPool>
 #include <QTime>
@@ -30,22 +31,22 @@
 #include <map>
 #include <numeric>
 
-namespace {
-
-using NT = ClipGraph::NodeType;
-
-constexpr int kPollIntervalMs = 33;
-
-struct ThumbState {
+struct NodeThumbStore {
     QMutex mutex;
     QHash<NodeId, QImage> images;
     QHash<NodeId, int> revisions;
     int counter = 0;
 };
 
+namespace {
+
+using NT = ClipGraph::NodeType;
+
+constexpr int kPollIntervalMs = 33;
+
 class NodeThumbProvider : public QQuickImageProvider {
 public:
-    explicit NodeThumbProvider(std::shared_ptr<ThumbState> state)
+    explicit NodeThumbProvider(std::shared_ptr<NodeThumbStore> state)
         : QQuickImageProvider(QQuickImageProvider::Image), m_state(std::move(state)) {}
 
     QImage requestImage(const QString &id, QSize *size, const QSize &requestedSize) override {
@@ -73,7 +74,7 @@ public:
     }
 
 private:
-    std::shared_ptr<ThumbState> m_state;
+    std::shared_ptr<NodeThumbStore> m_state;
 };
 
 bool isInput(const ClipGraph *graph, NodeId id) {
@@ -435,9 +436,10 @@ bool isScriptType(NT t) { return t == NT::Script || t == NT::AudioScript || t ==
 struct GraphRuntime::Impl {
     std::map<NodeId, std::unique_ptr<ScriptNode>> scripts;
     QHash<NodeId, uint> lastMergedVersion;
-    QHash<NodeId, uint> lastAbVersion;
     mutable QHash<NodeId, std::shared_ptr<ScriptOutput>> dataInputs;
-    std::shared_ptr<ThumbState> thumbs = std::make_shared<ThumbState>();
+    std::shared_ptr<NodeThumbStore> thumbs;
+    QSet<NodeId> thumbIds;
+    bool active = true;
     QHash<NodeId, QString> thumbKeys;
     QTimer *pollTimer = nullptr;
 
@@ -513,7 +515,6 @@ struct GraphRuntime::Impl {
     void rebuild(ClipGraph *graph) {
         scripts.clear();
         lastMergedVersion.clear();
-        lastAbVersion.clear();
         dataInputs.clear();
         for (NodeId id : graph->nodeIds())
             sync(graph, id);
@@ -522,17 +523,22 @@ struct GraphRuntime::Impl {
     void removeNode(NodeId id) {
         scripts.erase(id);
         lastMergedVersion.remove(id);
-        lastAbVersion.remove(id);
         dataInputs.remove(id);
         thumbKeys.remove(id);
+        thumbIds.remove(id);
         QMutexLocker lock(&thumbs->mutex);
         thumbs->images.remove(id);
         thumbs->revisions.remove(id);
     }
 };
 
-GraphRuntime::GraphRuntime(ClipGraph *graph, QObject *parent)
+std::shared_ptr<NodeThumbStore> GraphRuntime::createThumbStore() {
+    return std::make_shared<NodeThumbStore>();
+}
+
+GraphRuntime::GraphRuntime(ClipGraph *graph, QObject *parent, std::shared_ptr<NodeThumbStore> thumbs)
     : QObject(parent), d(std::make_unique<Impl>()), m_graph(graph) {
+    d->thumbs = thumbs ? std::move(thumbs) : createThumbStore();
     d->rebuild(m_graph);
 
     connect(m_graph, &ClipGraph::nodeAdded, this, [this](NodeId id) {
@@ -557,9 +563,12 @@ GraphRuntime::GraphRuntime(ClipGraph *graph, QObject *parent)
     connect(m_graph, &ClipGraph::graphReset, this, [this]() {
         {
             QMutexLocker lock(&d->thumbs->mutex);
-            d->thumbs->images.clear();
-            d->thumbs->revisions.clear();
+            for (NodeId id : std::as_const(d->thumbIds)) {
+                d->thumbs->images.remove(id);
+                d->thumbs->revisions.remove(id);
+            }
         }
+        d->thumbIds.clear();
         d->thumbKeys.clear();
         emit thumbnailChanged(0);
         d->rebuild(m_graph);
@@ -620,6 +629,7 @@ void GraphRuntime::setThumbnail(NodeId id, const QImage &image) {
         d->thumbs->images.insert(id, image);
         d->thumbs->revisions[id] = ++d->thumbs->counter;
     }
+    d->thumbIds.insert(id);
     emit thumbnailChanged(id);
 }
 
@@ -653,8 +663,30 @@ int GraphRuntime::thumbnailRevision(NodeId id) const {
     return d->thumbs->revisions.value(id, 0);
 }
 
-QQuickImageProvider *GraphRuntime::createImageProvider() {
-    return new NodeThumbProvider(d->thumbs);
+QQuickImageProvider *GraphRuntime::createImageProvider(std::shared_ptr<NodeThumbStore> thumbs) {
+    return new NodeThumbProvider(std::move(thumbs));
+}
+
+void GraphRuntime::setActive(bool active) {
+    if (d->active == active)
+        return;
+    d->active = active;
+    if (active)
+        d->pollTimer->start(kPollIntervalMs);
+    else
+        d->pollTimer->stop();
+    for (auto &[id, sn] : d->scripts) {
+        if (sn->type == NT::Script) {
+            QMetaObject::invokeMethod(sn->runtime, "applySettings", Qt::QueuedConnection,
+                                      Q_ARG(QString, sn->code), Q_ARG(int, active ? sn->triggerMode : 2),
+                                      Q_ARG(int, sn->intervalMs));
+        } else if (sn->type == NT::Trigger) {
+            if (active)
+                sn->applyTiming();
+            else
+                sn->trigTimer->stop();
+        }
+    }
 }
 
 void GraphRuntime::pollDataConsumers() {
@@ -689,30 +721,6 @@ void GraphRuntime::pollDataConsumers() {
             it.value()->json = merged;
         }
         it.value()->version.fetch_add(1, std::memory_order_release);
-    }
-
-    const QVector<NodeId> abNodes = m_graph->nodeIdsOfType(NT::AbSelect);
-    for (NodeId abId : abNodes) {
-        if (m_graph->scriptProducersForData(abId).isEmpty())
-            continue;
-        const auto output = scriptOutputForDataNode(abId);
-        if (!output)
-            continue;
-
-        const uint ver = output->version.load(std::memory_order_acquire);
-        if (ver == d->lastAbVersion.value(abId, 0))
-            continue;
-        d->lastAbVersion[abId] = ver;
-
-        QString json;
-        {
-            QMutexLocker lock(&output->mutex);
-            json = output->json;
-        }
-        const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
-        if (!doc.isObject())
-            continue;
-        m_graph->applyAbScriptOutput(abId, doc.object());
     }
 }
 

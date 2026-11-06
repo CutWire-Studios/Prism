@@ -2,33 +2,6 @@
 <!DOCTYPE TS>
 <TS version="2.1">
 <context>
-    <name>AbSelectBody</name>
-    <message>
-        <source>+ connect input</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>in %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Stage</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Send to Staging</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cut</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cut to Live</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>AccelerationFailedDialog</name>
     <message>
         <source>Hardware acceleration isn&apos;t working</source>
@@ -59,10 +32,6 @@
     <name>AddNodeMenu</name>
     <message>
         <source>Layer</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Switcher</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -293,7 +262,7 @@ Workflow: catalog, toolbox({name}), apply({ops}).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Remove all clips and nodes from the grid? This cannot be undone.</source>
+        <source>Remove all nodes from the cue being edited? This cannot be undone.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -810,6 +779,93 @@ low/mid/high · beat</source>
     </message>
 </context>
 <context>
+    <name>CuesPanel</name>
+    <message>
+        <source>Back to show</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show / %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add cue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>T</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>STAGING</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>LIVE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit cue graph</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Duplicate cue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete cue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transition</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show default</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Duration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>At end</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hold</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Loop</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Auto-advance</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Black</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>After</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>When media ends</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>DeckView</name>
     <message>
         <source>ON AIR</source>
@@ -908,23 +964,15 @@ low/mid/high · beat</source>
 <context>
     <name>HotkeyEditor</name>
     <message>
-        <source>In %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>That key cannot be used.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Switcher #%1 · %2</source>
+        <source>Use a key on its own. Shift plus the key stages it and takes it to Live.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Use a key on its own. Shift plus the key stages it and cuts to Live.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 is already assigned to another input.</source>
+        <source>%1 is already assigned to another cue.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -972,11 +1020,11 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cut: %1</source>
+        <source>Take: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No switcher inputs yet. Connect sources to a Switcher node to assign keys.</source>
+        <source>No cues yet. Add a cue to assign keys.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1259,10 +1307,6 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Send to Staging</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Custom canvas size</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1300,14 +1344,6 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Slot %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Stage</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cut to Live</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1958,6 +1994,17 @@ low/mid/high · beat</source>
     </message>
 </context>
 <context>
+    <name>NodeGraphPanel</name>
+    <message>
+        <source>No cue open</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Press a cue&apos;s edit button to work on its graph</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>NodeMinimap</name>
     <message>
         <source>Empty</source>
@@ -1972,10 +2019,6 @@ low/mid/high · beat</source>
     <name>NodePalette</name>
     <message>
         <source>Video</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Switcher</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2032,10 +2075,6 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Script</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Double-click an input name to rename. Stage sends the input to Staging; Cut to Live sends it straight to Live. Wire a Script node&apos;s output here to automate switching.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2165,10 +2204,6 @@ low/mid/high · beat</source>
     <name>OutputBody</name>
     <message>
         <source>video</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Switcher</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2684,7 +2719,7 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No switcher input matched: %1</source>
+        <source>No cue matched: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3256,7 +3291,7 @@ Technical detail: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No switcher inputs yet. Connect sources to a Switcher node to assign keys.</source>
+        <source>No cues yet. Add a cue to assign keys.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3917,6 +3952,17 @@ Technical detail: %1</source>
     </message>
     <message>
         <source>Click to set</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ShowManager</name>
+    <message>
+        <source>Cue %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 copy</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -5332,6 +5378,10 @@ pulse</source>
     </message>
     <message>
         <source>Outputs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cues</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

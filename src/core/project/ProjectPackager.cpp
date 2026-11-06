@@ -196,18 +196,23 @@ QJsonObject rewriteSessionPaths(const QJsonObject &session,
     QJsonObject out = session;
     out.remove(QStringLiteral("sessionDir"));
 
-    QJsonObject graph = out.value(QStringLiteral("graph")).toObject();
-    QJsonArray clipNodes = graph.value(QStringLiteral("clipNodes")).toArray();
-    for (int i = 0; i < clipNodes.size(); ++i) {
-        QJsonObject node = clipNodes.at(i).toObject();
-        QJsonObject source = node.value(QStringLiteral("source")).toObject();
-        rewriteSourcePath(source, pathMap);
-        node.insert(QStringLiteral("source"), source);
-
-        clipNodes[i] = node;
+    QJsonArray cues = out.value(QStringLiteral("cues")).toArray();
+    for (int c = 0; c < cues.size(); ++c) {
+        QJsonObject cue = cues.at(c).toObject();
+        QJsonObject graph = cue.value(QStringLiteral("graph")).toObject();
+        QJsonArray inputNodes = graph.value(QStringLiteral("inputNodes")).toArray();
+        for (int i = 0; i < inputNodes.size(); ++i) {
+            QJsonObject node = inputNodes.at(i).toObject();
+            QJsonObject source = node.value(QStringLiteral("source")).toObject();
+            rewriteSourcePath(source, pathMap);
+            node.insert(QStringLiteral("source"), source);
+            inputNodes[i] = node;
+        }
+        graph.insert(QStringLiteral("inputNodes"), inputNodes);
+        cue.insert(QStringLiteral("graph"), graph);
+        cues[c] = cue;
     }
-    graph.insert(QStringLiteral("clipNodes"), clipNodes);
-    out.insert(QStringLiteral("graph"), graph);
+    out.insert(QStringLiteral("cues"), cues);
     return out;
 }
 
@@ -381,14 +386,16 @@ bool verifyManifest(const QDir &root, const QJsonObject &manifest, QString *erro
 } // namespace
 
 ProjectPackager::Report ProjectPackager::exportPackage(const QJsonObject &sessionJson,
-                                                       const ClipGraph &graph,
-                                                       const QString &outputPath) {
+                                                       const QVector<const ClipGraph *> &graphs,
+                                                       const QString &outputPath,
+                                                       const QJsonObject &venue) {
     Report report;
 
     QSet<QString> files;
     QSet<QString> directories;
-    for (NodeId id : graph.nodeIdsOfType(ClipGraph::NodeType::Input)) {
-        collectFromDescriptor(graph.sourceDescriptor(id), files, directories, &report.warnings);
+    for (const ClipGraph *graph : graphs) {
+        for (NodeId id : graph->nodeIdsOfType(ClipGraph::NodeType::Input))
+            collectFromDescriptor(graph->sourceDescriptor(id), files, directories, &report.warnings);
     }
 
     QTemporaryDir staging;
@@ -418,6 +425,10 @@ ProjectPackager::Report ProjectPackager::exportPackage(const QJsonObject &sessio
     const QJsonObject packagedSession = rewriteSessionPaths(sessionJson, pathMap);
     const QString sessionPath = stagingDir.filePath(QString::fromUtf8(kSessionName));
     if (!writeJsonFile(packagedSession, sessionPath, &report.error))
+        return report;
+
+    if (!venue.isEmpty()
+        && !writeJsonFile(venue, stagingDir.filePath(QString::fromUtf8(kVenueName)), &report.error))
         return report;
 
     QJsonObject manifest;

@@ -73,7 +73,7 @@ ApplicationWindow {
                 files.push(path)
         }
         if (files.length > 0)
-            AppController.importFiles(files)
+            AppController.addToLibrary(files)
     }
 
     PanelPool {
@@ -86,6 +86,7 @@ ApplicationWindow {
         host: window.contentItem
     }
 
+    // Catches drops that land outside the node canvas, which adds nodes itself; these only fill the media bin.
     DropArea {
         anchors.fill: parent
         keys: ["text/uri-list"]
@@ -134,12 +135,12 @@ ApplicationWindow {
     }
     Shortcut {
         sequence: "Space"
-        enabled: window.shortcutsLive && !window.inCanvas && !AppController.singleStream
+        enabled: window.shortcutsLive && !window.inCanvas
         onActivated: AppController.cut()
     }
     Shortcut {
         sequences: ["Return", "Enter"]
-        enabled: window.shortcutsLive && !window.inCanvas && !AppController.singleStream
+        enabled: window.shortcutsLive && !window.inCanvas
         onActivated: AppController.take()
     }
 

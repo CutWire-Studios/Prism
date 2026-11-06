@@ -5,7 +5,6 @@
 #include <QPointer>
 #include <QVariantList>
 #include "core/Deck.h"
-#include "core/graph/ClipGraph.h"
 #include "app/remote/OscProtocol.h"
 
 class QTimer;
@@ -38,7 +37,7 @@ private slots:
 
 private:
     struct DeckState {
-        NodeId  input = ~NodeId(0); // sentinel so the first poll reports everything
+        QString input = QStringLiteral("?"); // sentinel so the first poll reports everything
         int     slot = 0;
         QString name;
         bool    playing = false;

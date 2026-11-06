@@ -242,23 +242,6 @@ private slots:
         QCOMPARE(stream.layers.first().sourceEffects.first().params.value(QStringLiteral("x")).toDouble(), 0.25);
     }
 
-    void refuseOutputWhenAbWired() {
-        SourceDescriptor src;
-        src.kind = SourceDescriptor::Kind::Canvas;
-        src.displayName = QStringLiteral("Clip");
-        const NodeId inId = m_graph->addInputNode(src);
-        QVERIFY(inId != 0);
-        const NodeId abId = m_graph->addNode(ClipGraph::NodeType::AbSelect);
-        QVERIFY(abId != 0);
-        QVERIFY(m_graph->connectNodes(inId, abId, 0, 0));
-        QVERIFY(m_graph->connectNodes(abId, m_graph->outputNodeId(), 8));
-
-        const NodeId cropId = m_graph->addNode(ClipGraph::NodeType::Process, {},
-                                               {{QStringLiteral("effect"), 0}});
-        QVERIFY(m_graph->connectNodes(inId, cropId, 0));
-        QVERIFY(!m_graph->connectNodes(cropId, m_graph->outputNodeId(), 0));
-    }
-
     void audioEffectRegistryIsConsistent() {
         for (const AudioEffectDescriptor &d : AudioEffects::all()) {
             QVERIFY(d.id >= 0);

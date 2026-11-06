@@ -2,8 +2,11 @@
 
 #include <QObject>
 #include "core/Deck.h"
+#include <functional>
 #include <memory>
 #include <unordered_map>
+#include <QString>
+#include <QVector>
 #include "app/graph/GraphRuntime.h"
 #include "core/graph/ClipGraph.h"
 #include "core/render/Compositor.h"
@@ -17,10 +20,17 @@ class DeckController : public QObject {
     Q_OBJECT
 public:
     explicit DeckController(Compositor *compositor,
-                            ClipGraph  *graph,
-                            GraphRuntime *runtime,
                             OutputHub  *outputHub,
                             QObject    *parent = nullptr);
+
+    // ── Cue binding ──────────────────────────────────────────────────────────
+    /// The graph and runtime of the cue a deck plays; node ids passed to the deck calls
+    /// below belong to that graph. Swapped together with the audio in swapDeckAudio().
+    void setDeckGraph(Deck deck, ClipGraph *graph, GraphRuntime *runtime);
+    ClipGraph *graphOf(Deck deck) const { return m_deckGraph[int(deck)]; }
+    GraphRuntime *runtimeOf(Deck deck) const { return m_deckRuntime[int(deck)]; }
+    /// Maps a logical device name used in a cue (audio ports, capture devices) to this venue's hardware.
+    void setDeviceResolver(std::function<QString(const QString &)> resolver) { m_deviceResolver = std::move(resolver); }
 
     // ── Deck assignment ──────────────────────────────────────────────────────
     /// Assign a node to a deck and start playback. With @p startPlayback false (Staging deck),
@@ -58,6 +68,7 @@ public:
     void applyAudioControllerToDeck(Deck deck, NodeId clipId, bool forceSeek = true);
     void refreshShaderAudioForActiveDecks();
     void refreshTextDataForActiveDecks();
+    /// Opens one capture per physical mic / loopback device used by the Live and Staging cues.
     void syncMasterAudioInputs();
     /// Re-resolve effect chains for the playing decks and master inputs without seeking or restarting.
     void refreshAudioEffects();
@@ -86,10 +97,18 @@ public:
 private:
     void wireAudioPlayerTap(Deck deck, NodeId clipId);
 
+    QString physicalDevice(const QString &logical) const;
+
+    template <class Capture> struct CaptureEntry {
+        std::unique_ptr<Capture> capture;
+        QVector<std::pair<GraphRuntime *, NodeId>> consumers;
+    };
+
     Compositor   *m_compositor;
-    ClipGraph    *m_graph;
-    GraphRuntime *m_runtime;
     OutputHub    *m_outputHub;
+    ClipGraph    *m_deckGraph[2] = {nullptr, nullptr};
+    GraphRuntime *m_deckRuntime[2] = {nullptr, nullptr};
+    std::function<QString(const QString &)> m_deviceResolver;
 
     NodeId m_liveNodeId = 0;
     NodeId m_stagingNodeId = 0;
@@ -100,6 +119,6 @@ private:
     bool m_audioFollowsFaderStaging = false;
     std::unique_ptr<AudioPlayer> m_audioPlayerLive;
     std::unique_ptr<AudioPlayer> m_audioPlayerStaging;
-    std::unordered_map<NodeId, std::unique_ptr<AudioInputCapture>> m_inputCaptures;
-    std::unordered_map<NodeId, std::unique_ptr<AudioLoopbackCapture>> m_loopbackCaptures;
+    std::unordered_map<QString, CaptureEntry<AudioInputCapture>> m_inputCaptures;
+    std::unordered_map<QString, CaptureEntry<AudioLoopbackCapture>> m_loopbackCaptures;
 };

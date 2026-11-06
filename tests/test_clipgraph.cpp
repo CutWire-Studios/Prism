@@ -77,13 +77,7 @@ QJsonObject connJson(qint64 from, qint64 to, EK kind, int toPortIndex) {
     return QJsonObject{{"from", from}, {"to", to}, {"kind", int(kind)}, {"toPortIndex", toPortIndex}};
 }
 
-QJsonObject slotsOf(std::initializer_list<const char *> names) {
-    QJsonArray arr;
-    for (const char *n : names) arr.append(QJsonObject{{"name", n}});
-    return QJsonObject{{"slots", arr}};
-}
-
-// Clips 1-2 feed a Layer through a Flip; clips 3-4 feed an A/B Select. Clip 1's audio and a
+// Clips 1-2 feed a Layer through a Flip; clips 3-4 are unwired. Clip 1's audio and a
 // mic go through a mixer to the audio output. Layer -> Output.
 QJsonObject realisticState() {
     QJsonArray inputs{
@@ -105,11 +99,6 @@ QJsonObject realisticState() {
     QJsonObject layer{{"id", 11}, {"posX", 400.0}, {"posY", 50.0}, {"canvasW", 1920},
                       {"canvasH", 1080}, {"slots", layerSlots}};
 
-    QJsonObject ab = slotsOf({"A", "B"});
-    ab["id"] = 12;
-    ab["posX"] = 400.0;
-    ab["posY"] = 400.0;
-
     QJsonObject mixer{{"id", 13}, {"posX", 600.0}, {"posY", 300.0},
                       {"slots", QJsonArray{QJsonObject{{"volume", 70}, {"muted", false}, {"name", "music"}},
                                            QJsonObject{{"volume", 100}, {"muted", true}, {"name", ""}}}}};
@@ -126,8 +115,6 @@ QJsonObject realisticState() {
         connJson(10, 11, EK::Chain, 0),
         connJson(2, 11, EK::Chain, 1),
         connJson(11, 20, EK::Chain, 0),
-        connJson(3, 12, EK::Chain, 0),
-        connJson(4, 12, EK::Chain, 1),
         connJson(1, 13, EK::StreamToMixer, 0),
         connJson(14, 13, EK::StreamToMixer, 1),
         connJson(13, 15, EK::MixerToOutput, 1),
@@ -135,12 +122,9 @@ QJsonObject realisticState() {
 
     QJsonObject state;
     state["graphVersion"] = ClipGraph::kGraphVersion;
-    state["liveInput"] = 3;
-    state["stagingInput"] = 4;
     state["inputNodes"] = inputs;
     state["processNodes"] = QJsonArray{flip};
     state["layerNodes"] = QJsonArray{layer};
-    state["abSelectNodes"] = QJsonArray{ab};
     state["audioMixerNodes"] = QJsonArray{mixer};
     state["masterAudioInputNodes"] = QJsonArray{mic};
     state["masterAudioNodes"] = QJsonArray{master};
@@ -164,8 +148,6 @@ private slots:
     void jsonMatchesStoredFixture() {
         const QJsonObject input = QJsonDocument::fromJson(QByteArray(R"json({
             "graphVersion": 4,
-            "liveInput": 0,
-            "stagingInput": 0,
             "inputNodes": [
                 {"id": 1, "posX": 20, "posY": 20, "hasAudio": false,
                  "source": {"kind": 5, "displayName": "Cam 1"}}
@@ -182,8 +164,6 @@ private slots:
         const QJsonObject expectedGraph = QJsonDocument::fromJson(QByteArray(R"json({
             "graphVersion": 4,
             "nextId": 4,
-            "liveInput": 0,
-            "stagingInput": 0,
             "inputNodes": [
                 {"id": 1, "posX": 20, "posY": 20, "hasAudio": false, "audioOnly": false,
                  "repeat": false,
@@ -203,7 +183,6 @@ private slots:
             ],
             "audioEffectNodes": [],
             "layerNodes": [],
-            "abSelectNodes": [],
             "audioMixerNodes": [],
             "scriptNodes": [],
             "masterAudioNodes": [],
@@ -247,22 +226,17 @@ private slots:
     void jsonRoundTripFromRawState() {
         ClipGraph graph;
         QVERIFY(graph.fromJson(realisticState()));
-        QCOMPARE(graph.nodeIds().size(), 11);
-        QCOMPARE(graph.liveInput(), NodeId(3));
-        QCOMPARE(graph.stagingInput(), NodeId(4));
+        QCOMPARE(graph.nodeIds().size(), 10);
 
         const QJsonObject out = graph.toJson();
         QVERIFY(out["nextId"].toInteger() > 20);
         QCOMPARE(out["inputNodes"].toArray().size(), 4);
         QCOMPARE(out["processNodes"].toArray().size(), 1);
         QCOMPARE(out["layerNodes"].toArray().size(), 1);
-        QCOMPARE(out["abSelectNodes"].toArray().size(), 1);
         QCOMPARE(out["audioMixerNodes"].toArray().size(), 1);
         QCOMPARE(out["masterAudioInputNodes"].toArray().size(), 1);
         QCOMPARE(out["masterAudioNodes"].toArray().size(), 1);
         QCOMPARE(out["outputNode"].toObject()["id"].toInt(), 20);
-        QCOMPARE(out["liveInput"].toInteger(), 3);
-        QCOMPARE(out["stagingInput"].toInteger(), 4);
 
         ClipGraph second;
         QVERIFY(second.fromJson(out));
@@ -287,24 +261,6 @@ private slots:
         QVERIFY(graph.isEmptyGraph());
     }
 
-    void swapDeckInputsSwapsAndEmits() {
-        ClipGraph g;
-        const NodeId a = g.addNode(NT::Input, {}, canvas("a", false));
-        const NodeId b = g.addNode(NT::Input, {}, canvas("b", false));
-        g.setActiveDeckClip(a, Deck::Live);
-        g.setActiveDeckClip(b, Deck::Staging);
-
-        QSignalSpy liveSpy(&g, &ClipGraph::liveChanged);
-        QSignalSpy stagingSpy(&g, &ClipGraph::stagingChanged);
-        g.swapDeckInputs();
-        QCOMPARE(g.liveInput(), b);
-        QCOMPARE(g.stagingInput(), a);
-        QCOMPARE(liveSpy.size(), 1);
-        QCOMPARE(stagingSpy.size(), 1);
-        QCOMPARE(liveSpy.first().first().toULongLong(), quint64(b));
-        QCOMPARE(stagingSpy.first().first().toULongLong(), quint64(a));
-    }
-
     void trailingSlotsAndDefaultNames() {
         ClipGraph graph;
         QVERIFY(graph.fromJson(realisticState()));
@@ -312,10 +268,6 @@ private slots:
         QVERIFY(layer);
         QCOMPARE(layer->params["slots"].toList().size(), 3);   // two wired + trailing empty
         QCOMPARE(graph.inputPorts(11).size(), 3);
-
-        const auto *ab = graph.node(12);
-        QCOMPARE(ab->params["slots"].toList().size(), 3);
-        QCOMPARE(graph.inputPorts(12).size(), 4);   // 3 slots + DataIn
 
         QCOMPARE(graph.node(13)->params["slots"].toList().size(), 3);
     }
@@ -328,7 +280,6 @@ private slots:
             {{"source", QVariantMap{{"kind", int(SourceDescriptor::Kind::Text)}, {"displayName", "t"}}}});
         const NodeId proc = g.addNode(NT::Process, {10, 10}, {{"effect", 4}});
         const NodeId layer = g.addNode(NT::Layer);
-        const NodeId ab = g.addNode(NT::AbSelect);
         const NodeId out = g.outputNodeId();
         const NodeId mixer = g.addNode(NT::AudioMixer);
         const NodeId master = g.addNode(NT::MasterAudioOutput);
@@ -336,7 +287,7 @@ private slots:
         const NodeId fx = g.addNode(NT::AudioEffect, {}, {{"effect", AudioEffects::kAudioFxEffectId}});
         const NodeId script = g.addNode(NT::Script);
         const NodeId audioScript = g.addNode(NT::AudioScript);
-        QVERIFY(clip && silent && text && proc && layer && ab && out && mixer && master && mic
+        QVERIFY(clip && silent && text && proc && layer && out && mixer && master && mic
                 && fx && script && audioScript);
 
         // Chain
@@ -351,13 +302,8 @@ private slots:
         QVERIFY(g.canConnectNodes(layer, proc, int(EK::Chain)));
         QVERIFY(g.canConnectPorts(clip, 0, proc, 0));
 
-        // AbToOutput
-        QVERIFY(g.canConnectNodes(ab, out, int(EK::AbToOutput)));
-        QVERIFY(!g.canConnectNodes(layer, out, int(EK::AbToOutput)));
-
         // ScriptToData
         QVERIFY(g.canConnectNodes(script, text, int(EK::ScriptToData)));
-        QVERIFY(g.canConnectNodes(script, ab, int(EK::ScriptToData)));
         QVERIFY(!g.canConnectNodes(script, clip, int(EK::ScriptToData)));
 
         // ClipToShaderAudio: no node exposes a ShaderAudioIn port
@@ -396,8 +342,6 @@ private slots:
         QVERIFY(ClipGraph::portsCompatible(PK::ChainOut, PK::ChainIn));
         QVERIFY(ClipGraph::portsCompatible(PK::ChainIn, PK::ChainOut));
         QVERIFY(!ClipGraph::portsCompatible(PK::ChainOut, PK::ChainOut));
-        QVERIFY(!ClipGraph::portsCompatible(PK::ChainOut, PK::AbIn));
-        QVERIFY(ClipGraph::portsCompatible(PK::AbOut, PK::AbIn));
         QVERIFY(ClipGraph::portsCompatible(PK::AudioControllerOut, PK::AudioMixerIn));
         QVERIFY(ClipGraph::portsCompatible(PK::AudioEffectOut, PK::MasterAudioIn));
         QVERIFY(ClipGraph::portsCompatible(PK::AudioMixerOut, PK::MasterAudioIn));
@@ -409,19 +353,6 @@ private slots:
         QVERIFY(!ClipGraph::isSingleConnection(PK::AudioControllerOut));
         QVERIFY(!ClipGraph::isSingleConnection(PK::DataIn));
         QVERIFY(!ClipGraph::isSingleConnection(PK::ScriptOut));
-    }
-
-    void outputTakesChainOrAbNotBoth() {
-        ClipGraph g;
-        const NodeId a = g.addNode(NT::Input, {}, canvas("a"));
-        const NodeId ab = g.addNode(NT::AbSelect);
-        const NodeId out = g.outputNodeId();
-        QVERIFY(g.connectNodes(a, out, int(EK::Chain)));
-        QVERIFY(!g.canConnectNodes(ab, out, int(EK::AbToOutput)));
-        QVERIFY(!g.connectNodes(ab, out, int(EK::AbToOutput)));
-        QVERIFY(g.disconnectNodes(a, out));
-        QVERIFY(g.connectNodes(ab, out, int(EK::AbToOutput)));
-        QVERIFY(!g.canConnectNodes(a, out, int(EK::Chain)));
     }
 
     void chainOutputIsSingleAndReplaces() {
@@ -494,58 +425,25 @@ private slots:
         QCOMPARE(g.producerForInput(layer, 0), b);
     }
 
-    void abSelectDecks() {
+    void idBaseKeepsIdsAboveBase() {
+        const quint64 base = quint64(3) << 40;
         ClipGraph g;
-        const NodeId a = g.addNode(NT::Input, {}, canvas("camA"));
-        const NodeId b = g.addNode(NT::Input, {}, canvas("camB"));
-        const NodeId ab = g.addNode(NT::AbSelect);
-        QVERIFY(g.connectNodes(a, ab, int(EK::Chain), 0));
-        QVERIFY(g.connectNodes(b, ab, int(EK::Chain), 1));
+        g.setIdBase(base);
+        const NodeId a = g.addNode(NT::Input, {}, canvas("a"));
+        QCOMPARE(a, base + 1);
+        QVERIFY(g.outputNodeId() > base);
 
-        const auto inputs = g.abSelectInputs();
-        QCOMPARE(inputs.size(), 2);
-        QCOMPARE(inputs[0].name, QStringLiteral("camA"));
-        QCOMPARE(inputs[1].sourceName, QStringLiteral("camB"));
-        QCOMPARE(inputs[1].producer, b);
+        ClipGraph again;
+        again.setIdBase(base);
+        QVERIFY(again.fromJson(g.toJson()));
+        QVERIFY(again.hasNode(a));
+        QCOMPARE(again.addNode(NT::Process, {}, {{"effect", 4}}), again.toJson()["nextId"].toInteger() - 1);
+        QVERIFY(again.nodeIds().last() > base);
 
-        // Needs the switcher wired to the Output first
-        QVERIFY(!g.triggerAbSlot({ab, 0}, Deck::Live));
-        QVERIFY(g.connectNodes(ab, g.outputNodeId(), int(EK::AbToOutput)));
-        QVERIFY(g.abOutputConnected(ab));
-
-        QSignalSpy liveSpy(&g, &ClipGraph::liveChanged);
-        QSignalSpy stagingSpy(&g, &ClipGraph::stagingChanged);
-        QVERIFY(g.triggerAbSlot({ab, 0}, Deck::Live));
-        QVERIFY(g.triggerAbSlot({ab, 1}, Deck::Staging));
-        QCOMPARE(g.liveInput(), a);
-        QCOMPARE(g.stagingInput(), b);
-        QCOMPARE(liveSpy.size(), 1);
-
-        int aSlot = -1, bSlot = -1;
-        g.abDeckSlots(ab, aSlot, bSlot);
-        QCOMPARE(aSlot, 0);
-        QCOMPARE(bSlot, 1);
-
-        // Sending A's input to deck B clears deck A
-        g.assignInputToDeck(a, Deck::Staging);
-        QCOMPARE(g.liveInput(), NodeId(0));
-        QCOMPARE(g.stagingInput(), a);
-
-        QVERIFY(!g.triggerAbSlot({ab, 2}, Deck::Live));   // trailing empty slot
-        QVERIFY(!g.triggerAbSlot({999, 0}, Deck::Live));
-
-        g.applyAbScriptOutput(ab, QJsonObject{{"a", "CAMB"}, {"b", 1}});
-        QCOMPARE(g.liveInput(), b);
-        QCOMPARE(g.stagingInput(), a);
-
-        g.setAbSlotHotkeyLabel({ab, 0}, "F1");
-        QCOMPARE(g.abSlotHotkeyLabel({ab, 0}), QStringLiteral("F1"));
-        g.clearAbSlotHotkeyLabels();
-        QVERIFY(g.abSlotHotkeyLabel({ab, 0}).isEmpty());
-
-        // Removing a deck producer clears the deck
-        QVERIFY(g.removeNode(b));
-        QCOMPARE(g.liveInput(), NodeId(0));
+        ClipGraph empty;
+        empty.setIdBase(base);
+        QVERIFY(empty.fromJson(QJsonObject{{"graphVersion", ClipGraph::kGraphVersion}}));
+        QCOMPARE(empty.addNode(NT::Input, {}, canvas("b")), base + 1);
     }
 
     void audioRouting() {
@@ -964,7 +862,6 @@ private slots:
         QCOMPARE(c.graph()->nodeIds().size(), before + 1);
         QCOMPARE(c.graph()->node(dup[0].toULongLong())->pos, QPointF(50, 60));
         QCOMPARE(c.graph()->sourceName(dup[0].toULongLong()), QStringLiteral("a"));
-        QCOMPARE(c.graph()->liveInput(), NodeId(0));
         c.undo();
         QCOMPARE(c.graph()->nodeIds().size(), before);
     }

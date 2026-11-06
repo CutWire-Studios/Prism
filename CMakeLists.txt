@@ -370,6 +370,10 @@ set(SOURCES
     src/core/graph/ClipGraph.cpp
     src/core/graph/ClipGraphModels.cpp
     src/app/graph/GraphRuntime.cpp
+    src/app/show/Cue.cpp
+    src/app/show/CueListModel.cpp
+    src/app/show/ShowManager.cpp
+    src/app/show/VenueProfile.cpp
     src/core/graph/ProcessEffects.cpp
     src/core/graph/AudioEffects.cpp
     src/app/output/OutputHub.cpp
@@ -492,6 +496,10 @@ set(HEADERS
     include/core/graph/ClipGraph.h
     include/core/graph/ClipGraphModels.h
     include/app/graph/GraphRuntime.h
+    include/app/show/Cue.h
+    include/app/show/CueListModel.h
+    include/app/show/ShowManager.h
+    include/app/show/VenueProfile.h
     include/core/graph/ProcessEffects.h
     include/core/graph/AudioEffects.h
     include/app/output/OutputHub.h

@@ -1,6 +1,7 @@
 #include "app/bin/MediaBinModel.h"
 
 #include "app/AppController.h"
+#include "app/show/ShowManager.h"
 #include "app/bin/MediaMetaCache.h"
 #include "app/graph/GraphRuntime.h"
 #include "core/graph/ClipGraph.h"
@@ -742,7 +743,8 @@ bool MediaBinModel::applyRelink(const QString &oldPath, const QString &newPath)
     if (!cm || !cm->relinkClip(oldPath, newPath))
         return false;
     if (auto *app = AppController::instance()) {
-        if (ClipGraph *graph = app->clipGraph()) {
+        for (const Cue *cue : app->showManager()->cues()) {
+            ClipGraph *graph = cue->graph();
             for (const NodeId id : graph->nodeIdsOfType(ClipGraph::NodeType::Input)) {
                 SourceDescriptor desc = graph->sourceDescriptor(id);
                 const bool fileKind = desc.kind == SourceDescriptor::Kind::VideoFile

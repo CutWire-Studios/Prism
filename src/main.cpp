@@ -1,4 +1,5 @@
 #include "app/AppController.h"
+#include "app/show/ShowManager.h"
 #include "app/GraphicsApiChoice.h"
 #include "app/gpu/GpuPreference.h"
 #include "app/graph/GraphRuntime.h"
@@ -105,8 +106,7 @@ int main(int argc, char *argv[]) {
 
     QQmlApplicationEngine engine;
     controller.setEngine(&engine);
-    if (auto *runtime = controller.graphRuntime())
-        engine.addImageProvider(QStringLiteral("nodethumb"), runtime->createImageProvider());
+    engine.addImageProvider(QStringLiteral("nodethumb"), controller.showManager()->createImageProvider());
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
                      [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &controller,

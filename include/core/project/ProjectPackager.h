@@ -12,6 +12,7 @@ class ClipGraph;
 /// Archive layout:
 ///   manifest.json
 ///   session.psm
+///   venue.json   (optional)
 ///   assets/...
 class ProjectPackager {
 public:
@@ -27,14 +28,16 @@ public:
     };
 
     static constexpr const char *kExtension      = ".prism";
-    static constexpr int         kFormatVersion  = 2;
+    static constexpr int         kFormatVersion  = 3;
     static constexpr const char *kManifestName   = "manifest.json";
     static constexpr const char *kSessionName    = "session.psm";
     static constexpr const char *kAssetsDirName  = "assets";
+    static constexpr const char *kVenueName      = "venue.json";
 
     static Report exportPackage(const QJsonObject &sessionJson,
-                                const ClipGraph &graph,
-                                const QString &outputPath);
+                                const QVector<const ClipGraph *> &graphs,
+                                const QString &outputPath,
+                                const QJsonObject &venue = {});
 
     static ImportResult importPackage(const QString &packagePath,
                                       const QString &extractDir,

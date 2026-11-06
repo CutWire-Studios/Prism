@@ -41,10 +41,11 @@ Pinned endpoints (`/mcp/sources`, `/mcp/decks`, `/mcp/transition`, `/mcp/panic`,
 |-------|------|
 | Time | Seconds |
 | Decks | Two fixed decks: **Staging** (next up, shown left) and **Live** (on air, shown right). Transition progress (`fader` in `inspect`) runs 0 = Live to 100 = Staging. A `take` animates it to 100, then the Staging content becomes Live, the former Live content moves to Staging, and progress resets to 0 |
-| Clip reference | `clip` id from `inspect({clips:true})`. Required — clip ops never fall back to the current deck assignment |
-| Adding sources | `add_clip` / `add_source` only put a node on the graph. Call `stage` to put it on the Staging deck |
-| Process / graph | `add_process_node` / `add_layer_node` / `add_ab_select` only place nodes. Call `connect` to wire. `list_nodes` or `inspect({graph:true})` for ids. Output cannot take a video chain and a Switcher at once |
-| Take | `stage` the clip, `capture()` to check, then `take` (animated) or `cut` (instant) |
+| Cues | The show is a list of cues, each with its own graph. `list_cues` shows them; `stage_cue` puts one on Staging (by id or 1-based position); `enter_cue` selects the cue that clip and graph ops act on. `add_cue` appends a cue |
+| Clip reference | `clip` id from `inspect({clips:true})` (the edited cue). Required — clip ops never fall back to the current deck assignment |
+| Adding sources | `add_clip` / `add_source` only put a node on the edited cue's graph. Wire it to Output with `connect`, then `stage_cue` the cue |
+| Process / graph | `add_process_node` / `add_layer_node` only place nodes. Call `connect` to wire. `list_nodes` or `inspect({graph:true})` for ids |
+| Take | `stage_cue`, `capture()` to check, then `take` (animated) or `cut` (instant) |
 | Per-deck ops | `play`, `pause`, and `seek` take `deck: "live"` or `"staging"` |
 | Atomicity | `apply` is **not** atomic: on failure the ops before it stay applied. Check `stopped` / `failed` / `done` |
 | Undo | None. Live takes are immediate |
@@ -56,32 +57,33 @@ Pinned endpoints (`/mcp/sources`, `/mcp/decks`, `/mcp/transition`, `/mcp/panic`,
 | Toolbox | When to use |
 |---------|-------------|
 | `sources` | Add/list/rename clips; set clip speed; text/SVG template/shader updates; cameras and NDI |
-| `decks` | Stage clips, play/pause/seek per deck |
+| `decks` | List/add/enter/stage cues, play/pause/seek per deck |
 | `transition` | `set_transition_progress`, `cut`, `take`, look and duration |
 | `panic` | Blackout, freeze, stay-tuned slate |
 | `output` | Record program, NDI, virtual camera |
 | `session` | Save/load a `.psm` session |
-| `graph` | Process/layer/Switcher nodes and wiring on the blue video chain |
+| `graph` | Process/layer nodes and wiring on the blue video chain |
 
 ## Example
 
-Import a file and stage it:
+Add a cue with a file, wire it to the Output node, and stage it:
 
 ```json
 {
   "ops": [
-    {"tool": "add_clip", "args": {"path": "/path/to/clip.mp4"}},
-    {"tool": "stage", "args": {"clip": "<id from previous result>"}}
+    {"tool": "add_cue", "args": {"name": "Intro"}},
+    {"tool": "enter_cue", "args": {"cue": "<id from previous result>"}},
+    {"tool": "add_clip", "args": {"path": "/path/to/clip.mp4"}}
   ]
 }
 ```
 
-`apply` cannot reference an id produced earlier in the same batch. Add first, read `done[0].result.id`, then stage and take:
+`apply` cannot reference an id produced earlier in the same batch. Add first, read `done[n].result.id`, `list_nodes` for the Output id, `connect({from:<clip>, to:<output>})`, then stage and take:
 
 ```json
 {
   "ops": [
-    {"tool": "stage", "args": {"clip": "<id>"}},
+    {"tool": "stage_cue", "args": {"cue": "<id>"}},
     {"tool": "take", "args": {}}
   ]
 }
@@ -93,7 +95,7 @@ Then verify visually — `capture` is a homepage tool and returns `unknown_op` i
 {"name": "capture", "arguments": {}}
 ```
 
-Shader plus a Crop process, wired to Output (single-stream program):
+Shader plus a Crop process, wired to Output:
 
 ```json
 {"name": "add_source", "arguments": {"kind": "shader"}}

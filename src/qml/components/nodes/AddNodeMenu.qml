@@ -74,7 +74,6 @@ Popup {
         "keystone": ["perspective", "warp", "skew"],
         "poly mask": ["mask", "polygon"],
         "Layer": ["composite", "overlay", "stack", "pip"],
-        "AbSelect": ["switch", "mix", "cut", "transition", "ab"],
         "audio fx": ["pedalboard", "effects", "reverb", "eq", "compressor"],
         "MasterAudioOutput": ["speaker", "master", "device"],
         "AudioMixer": ["mix", "volume", "sum"],
@@ -116,7 +115,6 @@ Popup {
             list.push({ key: "fx:" + fx.id, alias: fx.name.toLowerCase(), label: fx.menuLabel,
                         category: qsTr("Video FX"), type: T.Process, params: { effect: fx.id } })
         node(qsTr("Compositing"), "type:" + T.Layer, qsTr("Layer"), T.Layer)
-        node(qsTr("Compositing"), "type:" + T.AbSelect, qsTr("Switcher"), T.AbSelect)
         for (const fx of NodeCatalog.audioEffects())
             list.push({ key: "afx:" + fx.id, alias: "audio fx", label: fx.menuLabel,
                         category: qsTr("Audio"), type: T.AudioEffect, params: { effect: fx.id } })

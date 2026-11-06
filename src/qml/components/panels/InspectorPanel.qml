@@ -68,7 +68,7 @@ PanelFrame {
                             readonly property var nt: NodePalette.nodeType
                             readonly property var meta: NodePalette.meta[del.type]
                             readonly property string editKind: NodePalette.editorKind(del.type, del.params)
-                            readonly property bool hasSlots: del.type === nt.Layer || del.type === nt.AbSelect
+                            readonly property bool hasSlots: del.type === nt.Layer
                                                              || del.type === nt.AudioMixer
                             readonly property var slots: del.params.slots ? del.params.slots : []
 
@@ -109,18 +109,6 @@ PanelFrame {
                                 onEditingFinished: {
                                     if (text !== del.title)
                                         AppController.renameNode(del.nodeId, text)
-                                }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                visible: del.type === body.nt.Input
-                                spacing: Theme.spacingSm
-
-                                ThemedButton {
-                                    Layout.fillWidth: true
-                                    text: qsTr("Send to Staging")
-                                    onClicked: AppController.stageNode(del.nodeId)
                                 }
                             }
 
@@ -289,16 +277,6 @@ PanelFrame {
                                             text: slotRow.modelData.name && slotRow.modelData.name.length > 0
                                                   ? slotRow.modelData.name
                                                   : qsTr("Slot %1").arg(slotRow.index + 1)
-                                        }
-                                        ThemedButton {
-                                            visible: del.type === body.nt.AbSelect
-                                            text: qsTr("Stage")
-                                            onClicked: AppController.stageAbSlot(del.nodeId, slotRow.index, false)
-                                        }
-                                        ThemedButton {
-                                            visible: del.type === body.nt.AbSelect
-                                            text: qsTr("Cut to Live")
-                                            onClicked: AppController.stageAbSlot(del.nodeId, slotRow.index, true)
                                         }
                                         ThemedSwitch {
                                             visible: del.type === body.nt.AudioMixer

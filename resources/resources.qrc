@@ -258,7 +258,6 @@
         <file>scripts/counter.lua</file>
         <file>scripts/greeting.lua</file>
         <file>scripts/bitcoin_price.lua</file>
-        <file>scripts/ab_auto_switch.lua</file>
         <file>shaders/slideshow/cube.glsl</file>
         <file>shaders/slideshow/flip.glsl</file>
         <file>shaders/slideshow/pagecurl.glsl</file>

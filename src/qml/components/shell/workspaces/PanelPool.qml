@@ -19,6 +19,7 @@ Item {
     Component { id: inspectorC; InspectorPanel { editors: root.editors } }
     Component { id: mixerC; MixerPanel {} }
     Component { id: outputsC; OutputsPanel {} }
+    Component { id: cuesC; CuesPanel {} }
 
     function componentFor(type) {
         switch (type) {
@@ -30,6 +31,7 @@ Item {
         case "inspector": return inspectorC
         case "mixer": return mixerC
         case "outputs": return outputsC
+        case "cues": return cuesC
         }
         return null
     }

@@ -6,6 +6,7 @@
 #include "core/sources/SourceDescriptor.h"
 #include "core/webrtc/NetworkUtils.h"
 #include "app/session/SessionManager.h"
+#include "app/show/ShowManager.h"
 #include "core/graph/ClipGraph.h"
 
 #include <QtTest>
@@ -245,13 +246,42 @@ private slots:
         file.write(QJsonDocument(root).toJson());
         file.close();
 
-        ClipGraph graph;
+        ShowManager show;
         ClipManager clips;
-        SessionManager session(&graph, nullptr, &clips);
+        SessionManager session(&show, nullptr, &clips);
         QSignalSpy failed(&session, &SessionManager::loadFailed);
         QVERIFY(!session.loadFromFile(path));
         QCOMPARE(failed.size(), 1);
         QVERIFY(failed.first().first().toString().contains(QStringLiteral("older version")));
+    }
+
+    void sessionJsonIsShowShaped() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        ShowManager show;
+        Cue *second = show.addCue(QStringLiteral("Second"));
+        SourceDescriptor desc;
+        desc.kind = SourceDescriptor::Kind::Image;
+        desc.path = dir.filePath(QStringLiteral("media/pic.png"));
+        QVERIFY(second->graph()->addInputNode(desc) != 0);
+        show.stageCue(second->id());
+
+        ClipManager clips;
+        SessionManager session(&show, nullptr, &clips);
+        const QString sessionFile = dir.filePath(QStringLiteral("show.psm"));
+        const QJsonObject root = session.buildJson(0, {}, sessionFile);
+
+        QCOMPARE(root["version"].toInt(), 3);
+        QVERIFY(!root.contains(QStringLiteral("graph")));
+        QVERIFY(!root.contains(QStringLiteral("activeNodeLive")));
+        QVERIFY(!root.contains(QStringLiteral("outputResolution")));
+        QVERIFY(!root.contains(QStringLiteral("outputScaleMode")));
+        QCOMPARE(root["show"].toObject()["state"].toObject()["stagingCueId"].toString(), second->id());
+        const QJsonArray cues = root["cues"].toArray();
+        QCOMPARE(cues.size(), 2);
+        const QJsonObject nodeSource = cues.at(1).toObject()["graph"].toObject()["inputNodes"].toArray()
+                                           .first().toObject()["source"].toObject();
+        QCOMPARE(nodeSource["path"].toString(), QStringLiteral("media/pic.png"));
     }
 
     void sessionManager_recoveryAndBackups() {

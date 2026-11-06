@@ -32,7 +32,10 @@ private:
     QJsonObject opSetSvgParams(const QJsonObject &args);
     QJsonObject opSetShader(const QJsonObject &args);
     static bool parseDeck(const QJsonObject &args, Deck &deck, QJsonObject *error);
-    QJsonObject opStage(const QJsonObject &args);
+    QJsonObject opListCues() const;
+    QJsonObject opStageCue(const QJsonObject &args);
+    QJsonObject opAddCue(const QJsonObject &args);
+    QJsonObject opEnterCue(const QJsonObject &args);
     QJsonObject opPlayDeck(const QJsonObject &args, bool play);
     QJsonObject opSeekDeck(const QJsonObject &args);
     QJsonObject opSetSpeed(const QJsonObject &args);
@@ -54,7 +57,6 @@ private:
     QJsonObject opListNodes() const;
     QJsonObject opAddProcessNode(const QJsonObject &args);
     QJsonObject opAddLayerNode(const QJsonObject &args);
-    QJsonObject opAddAbSelect(const QJsonObject &args);
     QJsonObject opConnect(const QJsonObject &args);
     QJsonObject opDisconnect(const QJsonObject &args);
     QJsonObject opSetProcessParams(const QJsonObject &args);

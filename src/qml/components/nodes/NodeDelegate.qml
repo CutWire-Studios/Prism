@@ -231,7 +231,6 @@ Item {
     Component { id: processBody; ProcessBody { node: root } }
     Component { id: audioEffectBody; AudioEffectBody { node: root } }
     Component { id: layerBody; LayerBody { node: root } }
-    Component { id: abSelectBody; AbSelectBody { node: root } }
     Component { id: outputBody; OutputBody { node: root } }
     Component { id: audioMixerBody; AudioMixerBody { node: root } }
     Component { id: masterAudioOutputBody; MasterAudioOutputBody { node: root } }
@@ -249,7 +248,6 @@ Item {
             case NodePalette.nodeType.Process: return processBody
             case NodePalette.nodeType.AudioEffect: return audioEffectBody
             case NodePalette.nodeType.Layer: return layerBody
-            case NodePalette.nodeType.AbSelect: return abSelectBody
             case NodePalette.nodeType.Output: return outputBody
             case NodePalette.nodeType.AudioMixer: return audioMixerBody
             case NodePalette.nodeType.MasterAudioOutput: return masterAudioOutputBody

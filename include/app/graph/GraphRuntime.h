@@ -15,17 +15,23 @@
 
 class QQuickImageProvider;
 class QTimer;
+struct NodeThumbStore;
 
 /// Runtime half of the node graph: everything ClipNodeEditor did beyond holding the model.
 /// Owns the per-node script engines (Script / Audio Script / Trigger), merges script outputs
-/// into DataIn feeds, applies switcher script results, drives audio-script nodes from the
+/// into DataIn feeds, drives audio-script nodes from the
 /// decks, and caches node thumbnails for QML (image://nodethumb/<id>).
 /// It follows the ClipGraph's nodeAdded/nodeRemoved/nodeChanged/graphReset signals to
 /// create, update and destroy its per-node runtime objects.
 class GraphRuntime : public QObject {
     Q_OBJECT
 public:
-    explicit GraphRuntime(ClipGraph *graph, QObject *parent = nullptr);
+    /// @p thumbs is shared between the runtimes of a show so one image provider serves every cue.
+    explicit GraphRuntime(ClipGraph *graph, QObject *parent = nullptr,
+                          std::shared_ptr<NodeThumbStore> thumbs = {});
+    static std::shared_ptr<NodeThumbStore> createThumbStore();
+    /// An inactive runtime stops polling and pauses its Lua scripts and triggers; activating restarts them.
+    void setActive(bool active);
     ~GraphRuntime() override;
 
     ClipGraph *graph() const { return m_graph; }
@@ -48,10 +54,10 @@ public:
     void generateMissingThumbnails();
     /// For image://nodethumb/<id>. Ownership passes to the caller (QQmlEngine::addImageProvider).
     /// The provider keeps working only while this GraphRuntime is alive and reads it thread-safely.
-    QQuickImageProvider *createImageProvider();
+    static QQuickImageProvider *createImageProvider(std::shared_ptr<NodeThumbStore> thumbs);
 
     // ── Script / data runtime ─────────────────────────────────────────────────
-    /// One poll step (script-node input feeds, merged feeds, switcher scripts). Driven by an
+    /// One poll step (script-node input feeds, merged feeds). Driven by an
     /// internal timer; public for tests.
     void pollDataConsumers();
     QString mergeScriptInputs(const QVector<NodeId> &producers, uint &verSum) const;

@@ -109,18 +109,13 @@ bool doubleParam(const QString &path, const QString &key, double &out)
     return true;
 }
 
-bool uint64Param(const QString &path, const QString &key, quint64 &out)
+bool stringParam(const QString &path, const QString &key, QString &out)
 {
     const QUrlQuery query = queryFromPath(path);
     if (!query.hasQueryItem(key))
         return false;
 
-    bool ok = false;
-    const quint64 val = query.queryItemValue(key).toULongLong(&ok);
-    if (!ok)
-        return false;
-
-    out = val;
+    out = query.queryItemValue(key);
     return true;
 }
 
@@ -130,21 +125,21 @@ QByteArray buildStatusJson(const StatusData &data)
     statusObj.insert(QStringLiteral("fader"), data.fader);
 
     if (data.hasDeck) {
-        statusObj.insert(QStringLiteral("live"), QString::number(data.live));
-        statusObj.insert(QStringLiteral("staging"), QString::number(data.staging));
+        statusObj.insert(QStringLiteral("live"), data.live);
+        statusObj.insert(QStringLiteral("staging"), data.staging);
         statusObj.insert(QStringLiteral("isPlayingLive"), data.isPlayingLive);
         statusObj.insert(QStringLiteral("isPlayingStaging"), data.isPlayingStaging);
 
-        QJsonArray clipsArray;
-        for (const ClipInfo &clip : data.clips) {
-            QJsonObject clipObj;
-            clipObj.insert(QStringLiteral("id"), QString::number(clip.id));
-            clipObj.insert(QStringLiteral("name"), clip.name);
-            clipObj.insert(QStringLiteral("onLive"), clip.onLive);
-            clipObj.insert(QStringLiteral("onStaging"), clip.onStaging);
-            clipsArray.append(clipObj);
+        QJsonArray cuesArray;
+        for (const CueInfo &cue : data.cues) {
+            QJsonObject cueObj;
+            cueObj.insert(QStringLiteral("id"), cue.id);
+            cueObj.insert(QStringLiteral("name"), cue.name);
+            cueObj.insert(QStringLiteral("onLive"), cue.onLive);
+            cueObj.insert(QStringLiteral("onStaging"), cue.onStaging);
+            cuesArray.append(cueObj);
         }
-        statusObj.insert(QStringLiteral("clips"), clipsArray);
+        statusObj.insert(QStringLiteral("cues"), cuesArray);
     }
 
     if (data.hasTransition) {

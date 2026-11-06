@@ -1,6 +1,7 @@
 #include "app/remote/OscServer.h"
 
 #include "app/AppController.h"
+#include "app/show/ShowManager.h"
 #include "app/transitions/TransitionController.h"
 
 #include <QHostInfo>
@@ -127,7 +128,7 @@ void OscServer::dispatch(const OscProtocol::OscMessage &msg)
         handleDeck(cmd == QLatin1String("live") ? Deck::Live : Deck::Staging, parts.at(2), args);
     } else if (parts.size() == 2 && cmd == QLatin1String("cut")) {
         m_mainWindow->cut();
-    } else if (parts.size() == 2 && cmd == QLatin1String("stage")) {
+    } else if (parts.size() == 3 && cmd == QLatin1String("cue") && parts.at(2) == QLatin1String("stage")) {
         handleStage(args);
     } else if (parts.size() == 2 && cmd == QLatin1String("take")) {
         m_mainWindow->take();
@@ -174,13 +175,17 @@ void OscServer::handleDeck(Deck deck, const QString &cmd, const QVariantList &ar
 
 void OscServer::handleStage(const QVariantList &args)
 {
-    ClipGraph *editor = m_mainWindow->clipGraph();
-    if (!editor || args.isEmpty() || !isNumber(args.first()))
+    if (args.isEmpty())
         return;
-    const QVector<ClipGraph::AbSlotInfo> inputs = editor->abSelectInputs();
-    const int index = args.first().toInt() - 1;
-    if (index >= 0 && index < inputs.size())
-        m_mainWindow->stageAbSlot(inputs.at(index).ref.abNodeId, inputs.at(index).ref.slot, false);
+    const QVariant &arg = args.first();
+    if (isNumber(arg)) {
+        const int index = arg.toInt() - 1;
+        const QList<Cue *> &cues = m_mainWindow->showManager()->cues();
+        if (index >= 0 && index < cues.size())
+            m_mainWindow->stageCue(cues.at(index)->id());
+    } else {
+        m_mainWindow->stageCue(arg.toString());
+    }
 }
 
 OscServer::State OscServer::captureState() const
@@ -198,38 +203,17 @@ OscServer::State OscServer::captureState() const
         s.duration = transition->currentDurationSecs();
     }
 
-    ClipGraph *editor = m_mainWindow->clipGraph();
-    if (!editor)
-        return s;
-    s.live.input = m_mainWindow->activeNodeLive();
-    s.staging.input = m_mainWindow->activeNodeStaging();
-
-    const bool liveChanged = s.live.input != m_state.live.input;
-    const bool stagingChanged = s.staging.input != m_state.staging.input;
-    s.live.slot = m_state.live.slot;
-    s.live.name = m_state.live.name;
-    s.staging.slot = m_state.staging.slot;
-    s.staging.name = m_state.staging.name;
-    if (!liveChanged && !stagingChanged)
-        return s;
-
-    // abSelectInputs() resolves every slot's stream, so only walk it when a deck input changed.
-    const QVector<ClipGraph::AbSlotInfo> inputs = editor->abSelectInputs();
-    auto resolve = [&](DeckState &deck) {
-        deck.slot = 0;
-        deck.name.clear();
-        for (int i = 0; i < inputs.size(); ++i) {
-            if (deck.input && inputs.at(i).producer == deck.input) {
-                deck.slot = i + 1;
-                deck.name = inputs.at(i).name.isEmpty() ? inputs.at(i).sourceName : inputs.at(i).name;
-                return;
-            }
-        }
-        if (editor->hasNode(deck.input))
-            deck.name = editor->sourceName(deck.input);
+    const ShowManager *show = m_mainWindow->showManager();
+    auto fill = [&](DeckState &deck, const Cue *cue) {
+        deck.input = cue ? cue->id() : QString();
+        deck.slot = cue ? show->indexOf(cue->id()) + 1 : 0;
+        deck.name = cue ? cue->name() : QString();
     };
-    if (liveChanged) resolve(s.live);
-    if (stagingChanged) resolve(s.staging);
+    const bool livePlaying = s.live.playing, stagingPlaying = s.staging.playing;
+    fill(s.live, show->liveCue());
+    fill(s.staging, show->stagingCue());
+    s.live.playing = livePlaying;
+    s.staging.playing = stagingPlaying;
     return s;
 }
 

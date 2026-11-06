@@ -102,28 +102,29 @@ private slots:
         QCOMPARE(val, 2.5);
     }
 
-    void uint64Param_present() {
-        quint64 id = 0;
-        QVERIFY(RemoteProtocol::uint64Param(QStringLiteral("/api/selectA?id=42"),
+    void stringParam_present() {
+        QString id;
+        QVERIFY(RemoteProtocol::stringParam(QStringLiteral("/api/stage?id=abc-42"),
                                           QStringLiteral("id"), id));
-        QCOMPARE(id, quint64(42));
+        QCOMPARE(id, QStringLiteral("abc-42"));
+        QVERIFY(!RemoteProtocol::stringParam(QStringLiteral("/api/stage"), QStringLiteral("id"), id));
     }
 
     void buildStatusJson_roundTrip() {
         RemoteProtocol::StatusData status;
         status.fader = 75;
         status.hasDeck = true;
-        status.live = 10;
-        status.staging = 20;
+        status.live = QStringLiteral("cue-a");
+        status.staging = QStringLiteral("cue-b");
         status.isPlayingLive = true;
         status.isPlayingStaging = false;
 
-        RemoteProtocol::ClipInfo clip;
-        clip.id = 10;
+        RemoteProtocol::CueInfo clip;
+        clip.id = QStringLiteral("cue-a");
         clip.name = QStringLiteral("Intro");
         clip.onLive = true;
         clip.onStaging = false;
-        status.clips.append(clip);
+        status.cues.append(clip);
 
         status.hasTransition = true;
         status.transitionMode = 2;
@@ -135,17 +136,17 @@ private slots:
         const QJsonObject obj = doc.object();
 
         QCOMPARE(obj.value(QStringLiteral("fader")).toInt(), 75);
-        QCOMPARE(obj.value(QStringLiteral("live")).toString(), QStringLiteral("10"));
-        QCOMPARE(obj.value(QStringLiteral("staging")).toString(), QStringLiteral("20"));
+        QCOMPARE(obj.value(QStringLiteral("live")).toString(), QStringLiteral("cue-a"));
+        QCOMPARE(obj.value(QStringLiteral("staging")).toString(), QStringLiteral("cue-b"));
         QVERIFY(obj.value(QStringLiteral("isPlayingLive")).toBool());
         QVERIFY(!obj.value(QStringLiteral("isPlayingStaging")).toBool());
         QCOMPARE(obj.value(QStringLiteral("transitionMode")).toInt(), 2);
         QCOMPARE(obj.value(QStringLiteral("transitionDuration")).toDouble(), 1.5);
 
-        const QJsonArray clips = obj.value(QStringLiteral("clips")).toArray();
+        const QJsonArray clips = obj.value(QStringLiteral("cues")).toArray();
         QCOMPARE(clips.size(), 1);
         const QJsonObject clipObj = clips.first().toObject();
-        QCOMPARE(clipObj.value(QStringLiteral("id")).toString(), QStringLiteral("10"));
+        QCOMPARE(clipObj.value(QStringLiteral("id")).toString(), QStringLiteral("cue-a"));
         QCOMPARE(clipObj.value(QStringLiteral("name")).toString(), QStringLiteral("Intro"));
         QVERIFY(clipObj.value(QStringLiteral("onLive")).toBool());
         QVERIFY(!clipObj.value(QStringLiteral("onStaging")).toBool());

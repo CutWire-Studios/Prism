@@ -9,20 +9,11 @@ Item {
 
     NodeLabel {
         x: 12
-        y: 17.16 - 6
+        y: 26 - 6
         height: 12
         muted: true
         font.pixelSize: Theme.fontSizeTiny
         text: qsTr("video")
-    }
-
-    NodeLabel {
-        x: 12
-        y: 34.84 - 6
-        height: 12
-        muted: true
-        font.pixelSize: Theme.fontSizeTiny
-        text: qsTr("Switcher")
     }
 
     NodeButton {
