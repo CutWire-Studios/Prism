@@ -41,12 +41,10 @@ env:
     -DPRISM_CHANNEL=${{ inputs.channel }}
     -DPRISM_BUILD_ID=${{ inputs.build_id }}
   QT_VERSION: "6.10.3"
-  # qtdeclarative carries Qt Quick, QuickControls2 and QuickEffects. It is already in the base
-  # install on every desktop kit, so the explicit entry documents the dependency rather than
-  # adding a download. qtmultimedia is the FFmpeg-backed audio/video stack; qtimageformats is for
+  # qtdeclarative (Qt Quick, QuickControls2, QuickEffects) ships in the base install and is not an
+  # aqt add-on module: listing it makes aqtinstall fail. qtmultimedia is the FFmpeg-backed audio/video stack; qtimageformats is for
   # webp/tiff stills.
   QT_MODULES: >-
-    qtdeclarative
     qtmultimedia
     qtimageformats
     qtwebsockets

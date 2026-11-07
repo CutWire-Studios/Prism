@@ -19,7 +19,6 @@ permissions:
 env:
   QT_VERSION: "6.10.3"
   QT_MODULES: >-
-    qtdeclarative
     qtmultimedia
     qtimageformats
     qtwebsockets

@@ -97,14 +97,16 @@ bool generateSelfSigned(const QString &bindAddress, QByteArray &certPem, QByteAr
     X509_gmtime_adj(X509_get_notBefore(cert.get()), 0);
     X509_gmtime_adj(X509_get_notAfter(cert.get()), 365L * 86400 * 10);
 
-    X509_NAME *subject = X509_get_subject_name(cert.get());
-    X509_NAME_add_entry_by_txt(subject, "CN", MBSTRING_ASC,
+    // Built separately: OpenSSL 4 returns the certificate's own subject as const.
+    std::unique_ptr<X509_NAME, decltype(&X509_NAME_free)> subject(X509_NAME_new(), X509_NAME_free);
+    X509_NAME_add_entry_by_txt(subject.get(), "CN", MBSTRING_ASC,
                                reinterpret_cast<const unsigned char *>("cutwire.org"),
                                -1, -1, 0);
-    X509_NAME_add_entry_by_txt(subject, "O", MBSTRING_ASC,
+    X509_NAME_add_entry_by_txt(subject.get(), "O", MBSTRING_ASC,
                                reinterpret_cast<const unsigned char *>("CutWire Studios"),
                                -1, -1, 0);
-    X509_set_issuer_name(cert.get(), subject);
+    X509_set_subject_name(cert.get(), subject.get());
+    X509_set_issuer_name(cert.get(), subject.get());
     X509_set_pubkey(cert.get(), pkey.get());
 
     const QString san = QStringLiteral("DNS:localhost,DNS:cutwire.org,IP:127.0.0.1,IP:%1")
