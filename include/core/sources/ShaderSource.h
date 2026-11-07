@@ -1,6 +1,9 @@
 #pragma once
 #include "core/sources/MediaSource.h"
+#include "core/effects/ShaderEffects.h"
 #include "core/scripting/ScriptOutput.h"
+#include <QJsonObject>
+#include <QList>
 #include <QString>
 #include <QSize>
 #include <QByteArray>
@@ -12,6 +15,7 @@ class QOpenGLContext;
 class QOpenGLFramebufferObject;
 class QOpenGLShaderProgram;
 class AudioAnalyzer;
+struct ShaderGeneratorSpec;
 
 /// Renders a GLSL fragment shader to an offscreen FBO each frame, optionally
 /// fed by an AudioAnalyzer for audio-reactive uniforms. Exposes the result as a
@@ -26,6 +30,14 @@ public:
     QString shaderCode()  const { return m_shaderCode; }
     bool    isCompiled()  const { return m_compiled; }
     QString lastError()   const { return m_lastError; }
+
+    /// Switch to a generator preset: assembles its shader and declares its params as uniforms,
+    /// starting at the defaults.
+    void setPreset(const ShaderGeneratorSpec &spec);
+    /// Param values for a preset, applied as uniforms on the next frame without recompiling.
+    bool updateParams(const QJsonObject &params) override;
+    /// Number of times the shader program has been compiled.
+    int  compileCount() const { return m_compileCount; }
 
     void setAudioSource(const QString &filePath);
     void setAudioSyncState(double playbackTime, bool playing, double speed = 1.0);
@@ -46,11 +58,15 @@ private:
     void destroyGL();
     bool compileProgram();
     void renderToBuffer();
+    void applyParamUniforms();
     /// Map an arbitrary JSON object to shader uniforms (generic key→u_key plus the
     /// stable named audio block). Sets @p hasAudioBlock when audio fields present.
     void applyDataUniforms(const class QJsonObject &obj, bool &hasAudioBlock);
 
     QString    m_shaderCode;
+    QList<ShaderParam> m_paramSpecs;
+    QJsonObject        m_params;
+    int        m_compileCount = 0;
     QSize      m_size;
     QByteArray m_buffer;  // RGB24, top-to-bottom
 

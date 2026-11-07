@@ -1,4 +1,5 @@
 #include "core/sources/ShaderSource.h"
+#include "core/effects/Generators.h"
 #include "core/media/AudioAnalyzer.h"
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
@@ -35,6 +36,17 @@ void ShaderSource::setShaderCode(const QString &code) {
     m_shaderCode  = code;
     m_shaderDirty = true;
     m_compiled    = false;
+}
+
+void ShaderSource::setPreset(const ShaderGeneratorSpec &spec) {
+    m_paramSpecs = spec.params;
+    m_params = spec.defaultParams();
+    setShaderCode(QString::fromUtf8(Generators::fragmentSource(spec)));
+}
+
+bool ShaderSource::updateParams(const QJsonObject &params) {
+    m_params = params;
+    return true;
 }
 
 void ShaderSource::setAudioSource(const QString &filePath) {
@@ -208,6 +220,7 @@ void ShaderSource::destroyGL() {
 }
 
 bool ShaderSource::compileProgram() {
+    ++m_compileCount;
     delete m_program;
     m_program = new QOpenGLShaderProgram();
 
@@ -321,6 +334,42 @@ void ShaderSource::applyDataUniforms(const QJsonObject &obj, bool &hasAudioBlock
     }
 }
 
+void ShaderSource::applyParamUniforms() {
+    for (const ShaderParam &p : std::as_const(m_paramSpecs)) {
+        const QByteArray name = ShaderEffects::uniformName(p);
+        const QJsonValue v = m_params.value(p.name);
+        switch (p.type) {
+        case ShaderParam::Bool:
+            m_program->setUniformValue(name.constData(), GLint(v.toBool(p.def != 0.0)));
+            break;
+        case ShaderParam::Int:
+        case ShaderParam::Choice:
+            m_program->setUniformValue(name.constData(), GLint(std::lround(v.toDouble(p.def))));
+            break;
+        case ShaderParam::Color: {
+            const QJsonArray a = v.toArray();
+            const QColor d = p.defColor;
+            m_program->setUniformValue(name.constData(), a.size() == 4
+                ? QVector4D(a.at(0).toDouble(), a.at(1).toDouble(), a.at(2).toDouble(), a.at(3).toDouble())
+                : QVector4D(d.redF(), d.greenF(), d.blueF(), d.alphaF()));
+            break;
+        }
+        case ShaderParam::Point: {
+            const QJsonArray a = v.toArray();
+            m_program->setUniformValue(name.constData(), a.size() == 2
+                ? QVector2D(a.at(0).toDouble(), a.at(1).toDouble())
+                : QVector2D(p.defPoint));
+            break;
+        }
+        case ShaderParam::File:
+            break;
+        default:
+            m_program->setUniformValue(name.constData(), GLfloat(v.toDouble(p.def)));
+            break;
+        }
+    }
+}
+
 void ShaderSource::renderToBuffer() {
     auto *f = m_context->functions();
 
@@ -335,6 +384,12 @@ void ShaderSource::renderToBuffer() {
                   static_cast<float>(m_size.height())));
     m_program->setUniformValue("u_time",
         static_cast<float>(m_timer.elapsed() * 0.001));
+
+    applyParamUniforms();
+
+    f->glActiveTexture(GL_TEXTURE0);
+    f->glBindTexture(GL_TEXTURE_2D, m_spectrumTex);
+    m_program->setUniformValue("u_spectrum", 0);
 
     // ── JSON data → shader uniforms ─────────────────────────────────────────
     // The script graph hands us an arbitrary JSON object; we expose everything

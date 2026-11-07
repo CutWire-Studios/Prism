@@ -2,6 +2,7 @@
 
 #include "core/graph/ClipGraph.h"
 
+#include "core/effects/Generators.h"
 #include "core/effects/ShaderEffects.h"
 #include "core/audio/AudioRack.h"
 #include "core/audio/dsp/PedalCatalog.h"
@@ -32,14 +33,13 @@ QVariantList NodeCatalog::processEffects() const
     return out;
 }
 
-QVariantList NodeCatalog::processEffectParams(int id) const
+namespace {
+
+QVariantList paramDescriptors(const QList<ShaderParam> &params)
 {
     QVariantList out;
-    const ShaderEffectSpec *spec = ShaderEffects::byId(id);
-    if (!spec)
-        return out;
     static const char *const kTypes[] = {"float", "int", "bool", "choice", "color", "point", "file"};
-    for (const ShaderParam &p : spec->params) {
+    for (const ShaderParam &p : params) {
         QVariant def = p.def;
         if (p.type == ShaderParam::Bool)
             def = p.def != 0.0;
@@ -62,6 +62,37 @@ QVariantList NodeCatalog::processEffectParams(int id) const
         });
     }
     return out;
+}
+
+} // namespace
+
+QVariantList NodeCatalog::processEffectParams(int id) const
+{
+    const ShaderEffectSpec *spec = ShaderEffects::byId(id);
+    return spec ? paramDescriptors(spec->params) : QVariantList();
+}
+
+QVariantList NodeCatalog::generators() const
+{
+    QVariantList out;
+    for (const ShaderGeneratorSpec &g : Generators::all())
+        out.append(QVariantMap{{"slug", g.slug}, {"name", g.name}, {"category", g.category},
+                               {"description", g.description}});
+    return out;
+}
+
+QVariantList NodeCatalog::generatorParams(const QString &slug) const
+{
+    const ShaderGeneratorSpec *spec = Generators::bySlug(slug);
+    return spec ? paramDescriptors(spec->params) : QVariantList();
+}
+
+QString NodeCatalog::generatorShaderCode(const QString &slug, const QVariantMap &values) const
+{
+    const ShaderGeneratorSpec *spec = Generators::bySlug(slug);
+    if (!spec)
+        return {};
+    return QString::fromUtf8(Generators::standaloneSource(*spec, QJsonObject::fromVariantMap(values)));
 }
 
 QVariantList NodeCatalog::audioEffects() const
@@ -285,6 +316,11 @@ QList<QuickAddEntry> buildCatalogue()
     src(QStringLiteral("webrtc"), NodeCatalog::tr("Phone Camera (WebRTC)"),
         NodeCatalog::tr("Use your phone's camera as a video source."),
         QStringLiteral("phone mobile smartphone"));
+
+    for (const ShaderGeneratorSpec &g : Generators::all())
+        add(QStringLiteral("source:generator:") + g.slug, g.name, NodeCatalog::tr("Generate"), g.description,
+            QStringLiteral("generator procedural ") + g.slug.split(QLatin1Char('_')).join(QLatin1Char(' ')), NT::Input,
+            {}, kinds({PK::ChainOut}), {}, QStringLiteral("generator:") + g.slug);
 
     const QString fxCat = NodeCatalog::tr("Video FX");
     for (const ProcessEffectDescriptor &d : ProcessEffects::all()) {

@@ -201,7 +201,7 @@ private slots:
                             "captureId": "", "slideshowIntervalMs": 3000,
                             "slideshowEffect": 0, "slideshowTransitionMs": 800,
                             "canvasWidth": 1280, "canvasHeight": 720, "canvasFill": 0,
-                            "shaderCode": "", "obsSceneName": "", "textTemplate": "",
+                            "shaderCode": "", "preset": "", "obsSceneName": "", "textTemplate": "",
                             "textStyle": "", "shapeStyle": "", "svgTemplateId": "",
                             "svgParams": "", "sceneId": "", "webrtcRelayUrl": ""}}
             ],

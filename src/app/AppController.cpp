@@ -16,6 +16,7 @@
 #include "app/show/VenueProfile.h"
 #include "core/sources/SharedSourcePool.h"
 #include "app/transitions/TransitionController.h"
+#include "core/effects/Generators.h"
 #include "core/graph/ProcessEffects.h"
 #include "core/media/MediaFormats.h"
 #include "core/media/MediaProbe.h"
@@ -1305,6 +1306,8 @@ void AppController::pushDecks()
         if (!g->hasNode(l.inputNodeId))
             return QStringLiteral("%1:?").arg(l.inputNodeId);
         const SourceDescriptor d = g->sourceDescriptor(l.inputNodeId);
+        pk += QString::fromUtf8(QJsonDocument(g->sourceParams(l.inputNodeId)).toJson(QJsonDocument::Compact))
+              + QLatin1Char('|');
         const ClipSettings cs = g->clipSettings(l.inputNodeId);
         QString nested;
         if (d.kind == SourceDescriptor::Kind::Scene && sceneKeyDepth < SourceFactory::kMaxSceneDepth) {
@@ -2259,6 +2262,19 @@ void AppController::requestAddSource(const QString &kind, qreal x, qreal y)
         SourceDescriptor desc;
         desc.kind = SourceDescriptor::Kind::Scene;
         desc.displayName = tr("Scene");
+        addSourceFromDescriptor(desc, {});
+        return;
+    }
+    if (kind.startsWith(QLatin1String("generator:"))) {
+        const ShaderGeneratorSpec *spec = Generators::bySlug(kind.mid(10));
+        if (!spec) {
+            m_pendingSourcePos = QPointF(qQNaN(), qQNaN());
+            return;
+        }
+        SourceDescriptor desc;
+        desc.kind = SourceDescriptor::Kind::Shader;
+        desc.preset = spec->slug;
+        desc.displayName = spec->name;
         addSourceFromDescriptor(desc, {});
         return;
     }

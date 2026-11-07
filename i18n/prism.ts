@@ -119,6 +119,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Sources: Generate</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Network</source>
         <translation type="unfinished"></translation>
     </message>
@@ -311,6 +315,10 @@ Workflow: catalog, toolbox({name}), apply({ops}).</source>
     </message>
     <message>
         <source>Scene loops back into itself: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1641,6 +1649,14 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Edit code</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Turn this into a custom shader with the current values baked in</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Custom canvas size</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2610,6 +2626,10 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Generate</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Video FX</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3442,6 +3462,10 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Frame history memory</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Missing device</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3709,6 +3733,18 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
     </message>
     <message>
         <source>Edit scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Frame history needs about %1 MB at %2x%3 (cap %4 MB across the app); %5</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>history frames will be reduced in resolution or skipped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>consider a smaller canvas or fewer time effects</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

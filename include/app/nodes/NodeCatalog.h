@@ -42,6 +42,13 @@ public:
     Q_INVOKABLE QVariantList processEffectParams(int id) const;
     Q_INVOKABLE QVariantList audioEffects() const;
 
+    /// [{slug, name, category, description}] of the shader generators (Shader inputs with a preset).
+    Q_INVOKABLE QVariantList generators() const;
+    /// Param descriptors of a generator, in the shape processEffectParams returns.
+    Q_INVOKABLE QVariantList generatorParams(const QString &slug) const;
+    /// Standalone GLSL for a generator with @p values (missing ones default) baked in as constants.
+    Q_INVOKABLE QString generatorShaderCode(const QString &slug, const QVariantMap &values) const;
+
     /// Button text for a Process / AudioEffect node (dynamic label of its current params).
     /// nodeType is a ClipGraph::NodeType; params is the node's params map.
     Q_INVOKABLE QString effectLabel(int nodeType, const QVariantMap &params) const;

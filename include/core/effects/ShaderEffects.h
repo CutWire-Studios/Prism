@@ -50,6 +50,18 @@ const ShaderEffectSpec *byId(int id);
 /// body resource is missing.
 QByteArray fragmentSource(const ShaderEffectSpec &spec);
 
+/// Parses one entry of a "params" array (shared with the generator manifest).
+ShaderParam parseParam(const QJsonObject &o);
+
+/// Default values keyed by param name, in the shape ShaderEffectSpec::defaultParams returns.
+QJsonObject defaultParamValues(const QList<ShaderParam> &params);
+
+/// GLSL type of the uniform that carries a param of type @p t.
+const char *glslTypeName(ShaderParam::Type t);
+
+/// Contents of prelude.glsl.
+QByteArray preludeSource();
+
 /// Name of the uniform that carries @p p.
 QByteArray uniformName(const ShaderParam &p);
 

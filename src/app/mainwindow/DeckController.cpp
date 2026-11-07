@@ -416,8 +416,9 @@ void DeckController::assignNodeToDeck(NodeId nodeId, Deck deck,
         auto src = SourceFactory::create(desc);
         if (src) {
             if (desc.kind == Kind::Shader) {
-                static_cast<ShaderSource *>(src.get())->setDataSource(
-                    rt->scriptOutputForDataNode(nodeId));
+                auto *shader = static_cast<ShaderSource *>(src.get());
+                shader->setDataSource(rt->scriptOutputForDataNode(nodeId));
+                shader->updateParams(g->sourceParams(nodeId));
             } else if (desc.kind == Kind::Text) {
                 if (auto data = rt->scriptOutputForDataNode(nodeId))
                     static_cast<TextSource *>(src.get())->setDataSource(data);
@@ -468,8 +469,9 @@ void DeckController::assignNodeToDeck(NodeId nodeId, Deck deck,
         // All other source kinds: use SourceFactory.
         auto src = SourceFactory::create(desc);
         if (desc.kind == Kind::Shader) {
-            static_cast<ShaderSource *>(src.get())->setDataSource(
-                rt->scriptOutputForDataNode(nodeId));
+            auto *shader = static_cast<ShaderSource *>(src.get());
+            shader->setDataSource(rt->scriptOutputForDataNode(nodeId));
+            shader->updateParams(g->sourceParams(nodeId));
         }
         if (desc.kind == Kind::Text) {
             if (auto data = rt->scriptOutputForDataNode(nodeId))

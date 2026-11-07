@@ -325,5 +325,21 @@
         <file>shaders/slideshow/mosaicflip.glsl</file>
         <file>shaders/slideshow/swirl.glsl</file>
         <file>models/selfie_segmentation.onnx</file>
+        <file>shaders/generators/generators.json</file>
+        <file>shaders/generators/common.glsl</file>
+        <file>shaders/generators/noise_fbm.glsl</file>
+        <file>shaders/generators/noise_worley.glsl</file>
+        <file>shaders/generators/gradient_linear.glsl</file>
+        <file>shaders/generators/gradient_radial.glsl</file>
+        <file>shaders/generators/gradient_conic.glsl</file>
+        <file>shaders/generators/pattern_checker.glsl</file>
+        <file>shaders/generators/pattern_stripes.glsl</file>
+        <file>shaders/generators/pattern_grid.glsl</file>
+        <file>shaders/generators/pattern_dots.glsl</file>
+        <file>shaders/generators/shape_sdf.glsl</file>
+        <file>shaders/generators/spectrum_bars.glsl</file>
+        <file>shaders/generators/waveform.glsl</file>
+        <file>shaders/generators/radial_spectrum.glsl</file>
+        <file>shaders/generators/starfield.glsl</file>
     </qresource>
 </RCC>

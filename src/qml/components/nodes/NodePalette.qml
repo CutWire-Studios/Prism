@@ -160,7 +160,7 @@ QtObject {
         switch (type) {
         case nodeType.Input:
             switch (params.source ? params.source.kind : -1) {
-            case 7: return "shader"
+            case 7: return params.source.preset ? "" : "shader"
             case 11: return "text"
             case 13: return "shape"
             case 14: return "svgTemplate"

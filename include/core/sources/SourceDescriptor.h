@@ -50,6 +50,7 @@ struct SourceDescriptor {
     int     canvasHeight     = 720;     // Canvas kind
     CanvasFill canvasFill    = CanvasFill::Checkered; // Canvas kind
     QString shaderCode;                 // Shader kind
+    QString preset;                     // Shader kind — generator slug; when set it replaces shaderCode, param values live in the node's "params"
     QString obsSceneName;               // OBS program scene to switch when clip is triggered
     QString textTemplate;               // Text kind — may contain {parameter} placeholders
     QString webrtcRelayUrl;             // WebRtc kind — wss://…/ws when using public signaling relay
@@ -65,7 +66,7 @@ struct SourceDescriptor {
     // reloads any deck currently showing the source.
     QString contentKey() const {
         return QStringList{
-            shaderCode, textTemplate, textStyleJson, shapeStyleJson, svgTemplateId, svgParamsJson, sceneId,
+            shaderCode, preset, textTemplate, textStyleJson, shapeStyleJson, svgTemplateId, svgParamsJson, sceneId,
             QString::number(color.rgba()),
             QString::number(cameraIndex),
             QString::number(screenIndex),

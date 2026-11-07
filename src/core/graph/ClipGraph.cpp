@@ -1,6 +1,7 @@
 #include "core/graph/ClipGraph.h"
 
 #include "core/audio/AudioRack.h"
+#include "core/effects/Generators.h"
 #include "core/effects/ShaderEffects.h"
 #include "core/media/AudioAnalyzer.h"
 #include "core/project/ClipSettings.h"
@@ -149,6 +150,7 @@ QJsonObject descriptorToJson(const SourceDescriptor &d) {
     o["canvasHeight"]       = d.canvasHeight;
     o["canvasFill"]         = (int)d.canvasFill;
     o["shaderCode"]         = d.shaderCode;
+    o["preset"]             = d.preset;
     o["obsSceneName"]       = d.obsSceneName;
     o["textTemplate"]       = d.textTemplate;
     o["textStyle"]          = d.textStyleJson;
@@ -182,6 +184,7 @@ SourceDescriptor descriptorFromJson(const QJsonObject &o) {
     d.canvasHeight       = o["canvasHeight"].toInt(720);
     d.canvasFill         = (SourceDescriptor::CanvasFill)o["canvasFill"].toInt();
     d.shaderCode         = o["shaderCode"].toString();
+    d.preset             = o["preset"].toString();
     d.obsSceneName       = o["obsSceneName"].toString();
     d.textTemplate       = o["textTemplate"].toString();
     d.textStyleJson      = o["textStyle"].toString();
@@ -387,6 +390,15 @@ SourceDescriptor ClipGraph::sourceDescriptor(NodeId inputNodeId) const {
     const Node *n = node(inputNodeId);
     if (!n || n->type != NT::Input) return {};
     return descriptorFromJson(QJsonObject::fromVariantMap(n->params.value("source").toMap()));
+}
+
+QJsonObject ClipGraph::sourceParams(NodeId inputNodeId) const {
+    const Node *n = node(inputNodeId);
+    if (!n || n->type != NT::Input) return {};
+    const ShaderGeneratorSpec *spec =
+        Generators::bySlug(n->params.value("source").toMap().value("preset").toString());
+    if (!spec) return {};
+    return Generators::resolveParams(*spec, toJsonObject(n->params.value("params").toMap()));
 }
 
 ClipSettings ClipGraph::clipSettings(NodeId inputNodeId) const {
@@ -2400,6 +2412,7 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         p["settings"] = (obj.contains("settings")
             ? ClipSettings::fromJson(obj["settings"].toObject()) : ClipSettings{}).toJson().toVariantMap();
         p["repeat"] = obj["repeat"].toBool();
+        if (obj["params"].isObject()) p["params"] = obj["params"].toObject().toVariantMap();
         restore(obj, NT::Input, p);
     }
 

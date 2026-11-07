@@ -56,6 +56,7 @@ Popup {
         "window": ["app", "application"],
         "canvas": ["solid", "color", "background", "checkered"],
         "shader": ["glsl", "generator", "effect"],
+        "generator": ["generate", "procedural", "gradient", "noise", "pattern", "shape", "spectrum"],
         "text": ["title", "caption", "label", "subtitle"],
         "shape": ["rectangle", "circle", "box"],
         "scene": ["nested", "embed", "picture in picture"],
@@ -110,6 +111,9 @@ Popup {
         src(qsTr("Generated"), "text", qsTr("Text"))
         src(qsTr("Generated"), "shape", qsTr("Shape"))
         src(qsTr("Generated"), "scene", qsTr("Scene"))
+        for (const g of NodeCatalog.generators())
+            list.push({ key: "src:generator:" + g.slug, alias: "generator", label: g.name,
+                        category: qsTr("Sources: Generate"), source: "generator:" + g.slug })
         src(qsTr("Network"), "url", qsTr("Video URL"))
         src(qsTr("Network"), "ndi", qsTr("NDI Source"), SourcePrompts.ndiAvailable)
         src(qsTr("Network"), "webrtc", qsTr("Phone Camera (WebRTC)"), SourcePrompts.webrtcAvailable)

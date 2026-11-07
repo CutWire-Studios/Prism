@@ -1,4 +1,5 @@
 #include "app/mainwindow/SourceFactory.h"
+#include "core/effects/Generators.h"
 #include "core/sources/VideoFileSource.h"
 #include "core/sources/ImageSource.h"
 #include "core/sources/SlideshowSource.h"
@@ -174,8 +175,12 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
                 : CanvasSource::Fill::Checkered,
             QSize(desc.canvasWidth, desc.canvasHeight),
             desc.color);
-    case Kind::Shader:
-        return std::make_unique<ShaderSource>(desc.shaderCode);
+    case Kind::Shader: {
+        auto shader = std::make_unique<ShaderSource>(desc.shaderCode);
+        if (const ShaderGeneratorSpec *spec = Generators::bySlug(desc.preset))
+            shader->setPreset(*spec);
+        return shader;
+    }
     case Kind::AudioFile:
         // Audio-only: the deck's AudioPlayer plays it, there is no video source.
         return nullptr;
@@ -256,6 +261,10 @@ bool SourceFactory::updateLayerParams(MediaSource *top, const ClipGraph::Resolve
     MediaSource *base = ProcessEffects::updateSourceEffects(top, layer.sourceEffects, auxUpdater(graph));
     if (!base || !graph->hasNode(layer.inputNodeId)) return false;
     const SourceDescriptor desc = graph->sourceDescriptor(layer.inputNodeId);
+    if (desc.kind == SourceDescriptor::Kind::Shader && !desc.preset.isEmpty()) {
+        auto *shader = dynamic_cast<ShaderSource *>(base);
+        return shader && shader->updateParams(graph->sourceParams(layer.inputNodeId));
+    }
     if (desc.kind != SourceDescriptor::Kind::Scene) return true;
     auto *scene = dynamic_cast<SceneSource *>(base);
     if (!scene) return false;
@@ -320,6 +329,8 @@ std::unique_ptr<MediaSource> SourceFactory::buildLayerSource(const ClipGraph::Re
             if (auto *shaderSrc = dynamic_cast<ShaderSource *>(src.get()))
                 shaderSrc->setDataSource(data);
         }
+        if (auto *shaderSrc = dynamic_cast<ShaderSource *>(src.get()))
+            shaderSrc->updateParams(graph->sourceParams(layer.inputNodeId));
     }
 
     return ProcessEffects::applySourceEffects(std::move(src), layer.sourceEffects,

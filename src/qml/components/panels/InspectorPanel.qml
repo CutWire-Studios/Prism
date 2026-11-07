@@ -250,6 +250,52 @@ PanelFrame {
 
                             Loader {
                                 Layout.fillWidth: true
+                                active: del.type === body.nt.Input && !!del.params.source && !!del.params.source.preset
+                                visible: active
+                                sourceComponent: generatorForm
+                            }
+
+                            Component {
+                                id: generatorForm
+
+                                ColumnLayout {
+                                    readonly property string preset: del.params.source.preset
+
+                                    spacing: Theme.spacingMd
+
+                                    ThemedLabel {
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap
+                                        text: {
+                                            const g = NodeCatalog.generators().find(x => x.slug === preset)
+                                            return g ? g.description : ""
+                                        }
+                                    }
+
+                                    ShaderParamForm {
+                                        nodeId: del.nodeId
+                                        params: del.params
+                                        specs: NodeCatalog.generatorParams(preset)
+                                    }
+
+                                    ThemedButton {
+                                        Layout.fillWidth: true
+                                        text: qsTr("Edit code")
+                                        tooltip: qsTr("Turn this into a custom shader with the current values baked in")
+                                        onClicked: root.graph.setParams(del.nodeId, {
+                                            source: Object.assign({}, del.params.source, {
+                                                preset: "",
+                                                shaderCode: NodeCatalog.generatorShaderCode(preset, del.params.params || {})
+                                            }),
+                                            params: {},
+                                            expressions: {}
+                                        })
+                                    }
+                                }
+                            }
+
+                            Loader {
+                                Layout.fillWidth: true
                                 active: del.type === body.nt.Process
                                 visible: active
                                 sourceComponent: del.params.effect >= 12 ? shaderParamForm : processForm

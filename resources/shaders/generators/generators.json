@@ -1,0 +1,876 @@
+{
+  "generators": [
+    {
+      "slug": "noise_fbm",
+      "name": "Fractal Noise",
+      "category": "Generate",
+      "description": "Soft drifting clouds of layered noise.",
+      "frag": "noise_fbm.glsl",
+      "params": [
+        {
+          "name": "scale",
+          "type": "float",
+          "label": "Scale",
+          "min": 0.5,
+          "max": 20,
+          "default": 3.5,
+          "step": 0.01
+        },
+        {
+          "name": "speed",
+          "type": "float",
+          "label": "Speed",
+          "min": 0,
+          "max": 2,
+          "default": 0.15,
+          "step": 0.01
+        },
+        {
+          "name": "octaves",
+          "type": "int",
+          "label": "Detail",
+          "min": 1,
+          "max": 6,
+          "default": 5,
+          "step": 1
+        },
+        {
+          "name": "contrast",
+          "type": "float",
+          "label": "Contrast",
+          "min": 0.2,
+          "max": 3,
+          "default": 1.3,
+          "step": 0.01
+        },
+        {
+          "name": "color_a",
+          "type": "color",
+          "label": "Dark colour",
+          "default": "#0b1020"
+        },
+        {
+          "name": "color_b",
+          "type": "color",
+          "label": "Light colour",
+          "default": "#6ee7ff"
+        }
+      ]
+    },
+    {
+      "slug": "noise_worley",
+      "name": "Cellular Noise",
+      "category": "Generate",
+      "description": "Animated cells or cracks, like water caustics or cracked earth.",
+      "frag": "noise_worley.glsl",
+      "params": [
+        {
+          "name": "scale",
+          "type": "float",
+          "label": "Scale",
+          "min": 1,
+          "max": 30,
+          "default": 6,
+          "step": 0.01
+        },
+        {
+          "name": "speed",
+          "type": "float",
+          "label": "Speed",
+          "min": 0,
+          "max": 3,
+          "default": 0.5,
+          "step": 0.01
+        },
+        {
+          "name": "style",
+          "type": "choice",
+          "label": "Style",
+          "choices": [
+            "Cells",
+            "Cracks"
+          ],
+          "default": 0
+        },
+        {
+          "name": "color_a",
+          "type": "color",
+          "label": "Colour A",
+          "default": "#06121f"
+        },
+        {
+          "name": "color_b",
+          "type": "color",
+          "label": "Colour B",
+          "default": "#43e6c4"
+        }
+      ]
+    },
+    {
+      "slug": "gradient_linear",
+      "name": "Linear Gradient",
+      "category": "Generate",
+      "description": "A smooth blend between two or three colours along a direction.",
+      "frag": "gradient_linear.glsl",
+      "params": [
+        {
+          "name": "angle",
+          "type": "float",
+          "label": "Angle",
+          "min": 0,
+          "max": 360,
+          "default": 0,
+          "step": 1
+        },
+        {
+          "name": "speed",
+          "type": "float",
+          "label": "Scroll speed",
+          "min": -2,
+          "max": 2,
+          "default": 0,
+          "step": 0.01
+        },
+        {
+          "name": "color_a",
+          "type": "color",
+          "label": "Colour A",
+          "default": "#ff3d81"
+        },
+        {
+          "name": "color_b",
+          "type": "color",
+          "label": "Colour B",
+          "default": "#2d6bff"
+        },
+        {
+          "name": "color_mid",
+          "type": "color",
+          "label": "Middle colour",
+          "default": "#ffd23d"
+        },
+        {
+          "name": "use_mid",
+          "type": "bool",
+          "label": "Use middle colour",
+          "default": false
+        }
+      ]
+    },
+    {
+      "slug": "gradient_radial",
+      "name": "Radial Gradient",
+      "category": "Generate",
+      "description": "Colours that spread out from a point, with an optional pulse.",
+      "frag": "gradient_radial.glsl",
+      "params": [
+        {
+          "name": "center",
+          "type": "point",
+          "label": "Centre",
+          "default": [
+            0.5,
+            0.5
+          ]
+        },
+        {
+          "name": "radius",
+          "type": "float",
+          "label": "Radius",
+          "min": 0.05,
+          "max": 3,
+          "default": 0.8,
+          "step": 0.01
+        },
+        {
+          "name": "pulse",
+          "type": "float",
+          "label": "Pulse",
+          "min": 0,
+          "max": 0.8,
+          "default": 0.1,
+          "step": 0.01
+        },
+        {
+          "name": "speed",
+          "type": "float",
+          "label": "Pulse speed",
+          "min": 0,
+          "max": 4,
+          "default": 0.4,
+          "step": 0.01
+        },
+        {
+          "name": "color_a",
+          "type": "color",
+          "label": "Colour A",
+          "default": "#ff3d81"
+        },
+        {
+          "name": "color_b",
+          "type": "color",
+          "label": "Colour B",
+          "default": "#2d6bff"
+        },
+        {
+          "name": "color_mid",
+          "type": "color",
+          "label": "Middle colour",
+          "default": "#ffd23d"
+        },
+        {
+          "name": "use_mid",
+          "type": "bool",
+          "label": "Use middle colour",
+          "default": false
+        }
+      ]
+    },
+    {
+      "slug": "gradient_conic",
+      "name": "Conic Gradient",
+      "category": "Generate",
+      "description": "Colours that sweep around a point like a colour wheel.",
+      "frag": "gradient_conic.glsl",
+      "params": [
+        {
+          "name": "center",
+          "type": "point",
+          "label": "Centre",
+          "default": [
+            0.5,
+            0.5
+          ]
+        },
+        {
+          "name": "angle",
+          "type": "float",
+          "label": "Rotation",
+          "min": 0,
+          "max": 360,
+          "default": 0,
+          "step": 1
+        },
+        {
+          "name": "speed",
+          "type": "float",
+          "label": "Spin",
+          "min": -2,
+          "max": 2,
+          "default": 0.1,
+          "step": 0.01
+        },
+        {
+          "name": "repeat",
+          "type": "int",
+          "label": "Repeats",
+          "min": 1,
+          "max": 8,
+          "default": 1,
+          "step": 1
+        },
+        {
+          "name": "color_a",
+          "type": "color",
+          "label": "Colour A",
+          "default": "#ff3d81"
+        },
+        {
+          "name": "color_b",
+          "type": "color",
+          "label": "Colour B",
+          "default": "#2d6bff"
+        },
+        {
+          "name": "color_mid",
+          "type": "color",
+          "label": "Middle colour",
+          "default": "#ffd23d"
+        },
+        {
+          "name": "use_mid",
+          "type": "bool",
+          "label": "Use middle colour",
+          "default": false
+        }
+      ]
+    },
+    {
+      "slug": "pattern_checker",
+      "name": "Checkerboard",
+      "category": "Generate",
+      "description": "A scrolling two-colour checkerboard.",
+      "frag": "pattern_checker.glsl",
+      "params": [
+        {
+          "name": "count",
+          "type": "float",
+          "label": "Squares",
+          "min": 1,
+          "max": 60,
+          "default": 8,
+          "step": 0.5
+        },
+        {
+          "name": "angle",
+          "type": "float",
+          "label": "Rotation",
+          "min": 0,
+          "max": 360,
+          "default": 0,
+          "step": 1
+        },
+        {
+          "name": "speed",
+          "type": "float",
+          "label": "Scroll speed",
+          "min": -3,
+          "max": 3,
+          "default": 0.25,
+          "step": 0.01
+        },
+        {
+          "name": "color_a",
+          "type": "color",
+          "label": "Colour A",
+          "default": "#111111"
+        },
+        {
+          "name": "color_b",
+          "type": "color",
+          "label": "Colour B",
+          "default": "#f2f2f2"
+        }
+      ]
+    },
+    {
+      "slug": "pattern_stripes",
+      "name": "Stripes",
+      "category": "Generate",
+      "description": "Moving bands in two colours.",
+      "frag": "pattern_stripes.glsl",
+      "params": [
+        {
+          "name": "count",
+          "type": "float",
+          "label": "Stripes",
+          "min": 1,
+          "max": 60,
+          "default": 12,
+          "step": 0.5
+        },
+        {
+          "name": "angle",
+          "type": "float",
+          "label": "Angle",
+          "min": 0,
+          "max": 360,
+          "default": 45,
+          "step": 1
+        },
+        {
+          "name": "speed",
+          "type": "float",
+          "label": "Speed",
+          "min": -3,
+          "max": 3,
+          "default": 0.3,
+          "step": 0.01
+        },
+        {
+          "name": "duty",
+          "type": "float",
+          "label": "Stripe width",
+          "min": 0.05,
+          "max": 0.95,
+          "default": 0.5,
+          "step": 0.01
+        },
+        {
+          "name": "softness",
+          "type": "float",
+          "label": "Softness",
+          "min": 0,
+          "max": 0.5,
+          "default": 0.02,
+          "step": 0.01
+        },
+        {
+          "name": "color_a",
+          "type": "color",
+          "label": "Colour A",
+          "default": "#101820"
+        },
+        {
+          "name": "color_b",
+          "type": "color",
+          "label": "Colour B",
+          "default": "#fee715"
+        }
+      ]
+    },
+    {
+      "slug": "pattern_grid",
+      "name": "Grid",
+      "category": "Generate",
+      "description": "Drifting grid lines over a plain background.",
+      "frag": "pattern_grid.glsl",
+      "params": [
+        {
+          "name": "count",
+          "type": "float",
+          "label": "Cells",
+          "min": 1,
+          "max": 40,
+          "default": 8,
+          "step": 0.5
+        },
+        {
+          "name": "width",
+          "type": "float",
+          "label": "Line width",
+          "min": 0.005,
+          "max": 0.45,
+          "default": 0.04,
+          "step": 0.01
+        },
+        {
+          "name": "softness",
+          "type": "float",
+          "label": "Softness",
+          "min": 0,
+          "max": 0.3,
+          "default": 0.02,
+          "step": 0.01
+        },
+        {
+          "name": "speed",
+          "type": "float",
+          "label": "Scroll speed",
+          "min": -3,
+          "max": 3,
+          "default": 0.15,
+          "step": 0.01
+        },
+        {
+          "name": "color_bg",
+          "type": "color",
+          "label": "Background",
+          "default": "#050816"
+        },
+        {
+          "name": "color_line",
+          "type": "color",
+          "label": "Lines",
+          "default": "#35f0ff"
+        }
+      ]
+    },
+    {
+      "slug": "pattern_dots",
+      "name": "Dots",
+      "category": "Generate",
+      "description": "A field of round dots that gently pulse.",
+      "frag": "pattern_dots.glsl",
+      "params": [
+        {
+          "name": "count",
+          "type": "float",
+          "label": "Dots",
+          "min": 1,
+          "max": 40,
+          "default": 10,
+          "step": 0.5
+        },
+        {
+          "name": "radius",
+          "type": "float",
+          "label": "Dot size",
+          "min": 0.02,
+          "max": 0.7,
+          "default": 0.32,
+          "step": 0.01
+        },
+        {
+          "name": "softness",
+          "type": "float",
+          "label": "Softness",
+          "min": 0,
+          "max": 0.3,
+          "default": 0.04,
+          "step": 0.01
+        },
+        {
+          "name": "pulse",
+          "type": "float",
+          "label": "Pulse",
+          "min": 0,
+          "max": 0.8,
+          "default": 0.2,
+          "step": 0.01
+        },
+        {
+          "name": "speed",
+          "type": "float",
+          "label": "Scroll speed",
+          "min": -3,
+          "max": 3,
+          "default": 0.1,
+          "step": 0.01
+        },
+        {
+          "name": "stagger",
+          "type": "bool",
+          "label": "Stagger rows",
+          "default": true
+        },
+        {
+          "name": "color_bg",
+          "type": "color",
+          "label": "Background",
+          "default": "#14061f"
+        },
+        {
+          "name": "color_dot",
+          "type": "color",
+          "label": "Dots",
+          "default": "#ff7ad9"
+        }
+      ]
+    },
+    {
+      "slug": "shape_sdf",
+      "name": "Shape",
+      "category": "Generate",
+      "description": "A crisp circle, box, triangle, star or ring with soft edges.",
+      "frag": "shape_sdf.glsl",
+      "params": [
+        {
+          "name": "shape",
+          "type": "choice",
+          "label": "Shape",
+          "choices": [
+            "Circle",
+            "Box",
+            "Triangle",
+            "Star",
+            "Ring"
+          ],
+          "default": 0
+        },
+        {
+          "name": "center",
+          "type": "point",
+          "label": "Centre",
+          "default": [
+            0.5,
+            0.5
+          ]
+        },
+        {
+          "name": "size",
+          "type": "float",
+          "label": "Size",
+          "min": 0.02,
+          "max": 1,
+          "default": 0.3,
+          "step": 0.01
+        },
+        {
+          "name": "thickness",
+          "type": "float",
+          "label": "Ring thickness",
+          "min": 0.005,
+          "max": 0.3,
+          "default": 0.05,
+          "step": 0.01
+        },
+        {
+          "name": "softness",
+          "type": "float",
+          "label": "Softness",
+          "min": 0,
+          "max": 0.2,
+          "default": 0.004,
+          "step": 0.001
+        },
+        {
+          "name": "spin",
+          "type": "float",
+          "label": "Spin (deg/s)",
+          "min": -360,
+          "max": 360,
+          "default": 20,
+          "step": 1
+        },
+        {
+          "name": "pulse",
+          "type": "float",
+          "label": "Pulse",
+          "min": 0,
+          "max": 0.5,
+          "default": 0.05,
+          "step": 0.01
+        },
+        {
+          "name": "color_bg",
+          "type": "color",
+          "label": "Background",
+          "default": "#0a0a14"
+        },
+        {
+          "name": "color_fg",
+          "type": "color",
+          "label": "Shape",
+          "default": "#ff5a36"
+        }
+      ]
+    },
+    {
+      "slug": "spectrum_bars",
+      "name": "Spectrum Bars",
+      "category": "Generate",
+      "description": "Vertical bars that follow the audio spectrum. Needs an Audio Analyzer wired to the data port.",
+      "frag": "spectrum_bars.glsl",
+      "params": [
+        {
+          "name": "bars",
+          "type": "int",
+          "label": "Bars",
+          "min": 4,
+          "max": 128,
+          "default": 48,
+          "step": 1
+        },
+        {
+          "name": "gap",
+          "type": "float",
+          "label": "Gap",
+          "min": 0,
+          "max": 0.9,
+          "default": 0.25,
+          "step": 0.01
+        },
+        {
+          "name": "gain",
+          "type": "float",
+          "label": "Gain",
+          "min": 0.2,
+          "max": 4,
+          "default": 1.2,
+          "step": 0.01
+        },
+        {
+          "name": "mirror",
+          "type": "bool",
+          "label": "Mirror from centre",
+          "default": false
+        },
+        {
+          "name": "color_bg",
+          "type": "color",
+          "label": "Background",
+          "default": "#05060d"
+        },
+        {
+          "name": "color_low",
+          "type": "color",
+          "label": "Low colour",
+          "default": "#2d6bff"
+        },
+        {
+          "name": "color_high",
+          "type": "color",
+          "label": "High colour",
+          "default": "#ff3d81"
+        }
+      ]
+    },
+    {
+      "slug": "waveform",
+      "name": "Waveform",
+      "category": "Generate",
+      "description": "A glowing line that wobbles with the audio. Built from the spectrum, since no raw waveform is available.",
+      "frag": "waveform.glsl",
+      "params": [
+        {
+          "name": "amplitude",
+          "type": "float",
+          "label": "Amplitude",
+          "min": 0.1,
+          "max": 4,
+          "default": 1.5,
+          "step": 0.01
+        },
+        {
+          "name": "thickness",
+          "type": "float",
+          "label": "Thickness",
+          "min": 0.002,
+          "max": 0.08,
+          "default": 0.008,
+          "step": 0.001
+        },
+        {
+          "name": "glow",
+          "type": "float",
+          "label": "Glow",
+          "min": 0,
+          "max": 3,
+          "default": 1,
+          "step": 0.01
+        },
+        {
+          "name": "color_bg",
+          "type": "color",
+          "label": "Background",
+          "default": "#04060c"
+        },
+        {
+          "name": "color_line",
+          "type": "color",
+          "label": "Line",
+          "default": "#6effc9"
+        }
+      ]
+    },
+    {
+      "slug": "radial_spectrum",
+      "name": "Radial Spectrum",
+      "category": "Generate",
+      "description": "Bars radiating from a ring that follow the audio spectrum.",
+      "frag": "radial_spectrum.glsl",
+      "params": [
+        {
+          "name": "bars",
+          "type": "int",
+          "label": "Bars",
+          "min": 4,
+          "max": 96,
+          "default": 48,
+          "step": 1
+        },
+        {
+          "name": "radius",
+          "type": "float",
+          "label": "Ring radius",
+          "min": 0.02,
+          "max": 0.6,
+          "default": 0.22,
+          "step": 0.01
+        },
+        {
+          "name": "length",
+          "type": "float",
+          "label": "Bar length",
+          "min": 0.02,
+          "max": 0.8,
+          "default": 0.28,
+          "step": 0.01
+        },
+        {
+          "name": "gap",
+          "type": "float",
+          "label": "Gap",
+          "min": 0,
+          "max": 0.9,
+          "default": 0.3,
+          "step": 0.01
+        },
+        {
+          "name": "gain",
+          "type": "float",
+          "label": "Gain",
+          "min": 0.2,
+          "max": 4,
+          "default": 1.2,
+          "step": 0.01
+        },
+        {
+          "name": "spin",
+          "type": "float",
+          "label": "Spin",
+          "min": -1,
+          "max": 1,
+          "default": 0.03,
+          "step": 0.01
+        },
+        {
+          "name": "color_bg",
+          "type": "color",
+          "label": "Background",
+          "default": "#05060d"
+        },
+        {
+          "name": "color_low",
+          "type": "color",
+          "label": "Inner colour",
+          "default": "#2d6bff"
+        },
+        {
+          "name": "color_high",
+          "type": "color",
+          "label": "Outer colour",
+          "default": "#ff3d81"
+        }
+      ]
+    },
+    {
+      "slug": "starfield",
+      "name": "Starfield",
+      "category": "Generate",
+      "description": "Stars streaming past as if flying through space.",
+      "frag": "starfield.glsl",
+      "params": [
+        {
+          "name": "layers",
+          "type": "int",
+          "label": "Layers",
+          "min": 1,
+          "max": 6,
+          "default": 4,
+          "step": 1
+        },
+        {
+          "name": "speed",
+          "type": "float",
+          "label": "Speed",
+          "min": 0,
+          "max": 1,
+          "default": 0.08,
+          "step": 0.01
+        },
+        {
+          "name": "twinkle",
+          "type": "float",
+          "label": "Twinkle",
+          "min": 0,
+          "max": 1,
+          "default": 0.5,
+          "step": 0.01
+        },
+        {
+          "name": "brightness",
+          "type": "float",
+          "label": "Brightness",
+          "min": 0.1,
+          "max": 3,
+          "default": 1,
+          "step": 0.01
+        },
+        {
+          "name": "color_bg",
+          "type": "color",
+          "label": "Background",
+          "default": "#02030a"
+        },
+        {
+          "name": "color_star",
+          "type": "color",
+          "label": "Stars",
+          "default": "#cfe3ff"
+        }
+      ]
+    }
+  ]
+}

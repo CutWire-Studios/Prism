@@ -511,6 +511,8 @@ QString liveThumbKey(const ClipGraph &g, const ClipGraph::ResolvedLayer &l, bool
         k += QLatin1Char(')');
     } else {
         k += sourceKey(g.sourceDescriptor(l.inputNodeId));
+        if (withParams)
+            k += QString::fromUtf8(QJsonDocument(g.sourceParams(l.inputNodeId)).toJson(QJsonDocument::Compact));
     }
     for (const SourceEffectRef &e : l.sourceEffects) {
         k += QStringLiteral("|%1").arg(e.effectId);

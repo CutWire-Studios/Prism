@@ -222,6 +222,8 @@ public:
     QString sourceName(NodeId inputNodeId) const;
     /// Input-node payload accessors (defaults for non-Input / unknown ids).
     SourceDescriptor sourceDescriptor(NodeId inputNodeId) const;
+    /// Generator parameter values of a Shader input with a preset (defaults filled in); empty otherwise.
+    QJsonObject sourceParams(NodeId inputNodeId) const;
     ClipSettings clipSettings(NodeId inputNodeId) const;
     bool clipRepeat(NodeId inputNodeId) const;
     bool setSourceDescriptor(NodeId inputNodeId, const SourceDescriptor &desc);

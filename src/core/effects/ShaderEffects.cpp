@@ -111,22 +111,7 @@ const char *glslType(ShaderParam::Type t) {
 } // namespace
 
 QJsonObject ShaderEffectSpec::defaultParams() const {
-    QJsonObject o;
-    for (const ShaderParam &p : params) {
-        switch (p.type) {
-        case ShaderParam::Bool:   o[p.name] = p.def != 0.0; break;
-        case ShaderParam::Int:
-        case ShaderParam::Choice: o[p.name] = int(p.def); break;
-        case ShaderParam::Color:
-            o[p.name] = QJsonArray{p.defColor.redF(), p.defColor.greenF(),
-                                   p.defColor.blueF(), p.defColor.alphaF()};
-            break;
-        case ShaderParam::Point:  o[p.name] = QJsonArray{p.defPoint.x(), p.defPoint.y()}; break;
-        case ShaderParam::File:   o[p.name] = QString(); break;
-        default:                  o[p.name] = p.def; break;
-        }
-    }
-    return o;
+    return ShaderEffects::defaultParamValues(params);
 }
 
 QString ShaderEffectSpec::inputName(int i) const {
@@ -152,6 +137,38 @@ const ShaderEffectSpec *byId(int id) {
     for (const ShaderEffectSpec &s : all())
         if (s.id == id) return &s;
     return nullptr;
+}
+
+QJsonObject defaultParamValues(const QList<ShaderParam> &params) {
+    QJsonObject o;
+    for (const ShaderParam &p : params) {
+        switch (p.type) {
+        case ShaderParam::Bool:   o[p.name] = p.def != 0.0; break;
+        case ShaderParam::Int:
+        case ShaderParam::Choice: o[p.name] = int(p.def); break;
+        case ShaderParam::Color:
+            o[p.name] = QJsonArray{p.defColor.redF(), p.defColor.greenF(),
+                                   p.defColor.blueF(), p.defColor.alphaF()};
+            break;
+        case ShaderParam::Point:  o[p.name] = QJsonArray{p.defPoint.x(), p.defPoint.y()}; break;
+        case ShaderParam::File:   o[p.name] = QString(); break;
+        default:                  o[p.name] = p.def; break;
+        }
+    }
+    return o;
+}
+
+ShaderParam parseParam(const QJsonObject &o) {
+    return ::parseParam(o);
+}
+
+const char *glslTypeName(ShaderParam::Type t) {
+    return ::glslType(t);
+}
+
+QByteArray preludeSource() {
+    initShaderEffectResources();
+    return readResource(QStringLiteral("prelude.glsl"));
 }
 
 QByteArray uniformName(const ShaderParam &p) {
