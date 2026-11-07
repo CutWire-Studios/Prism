@@ -2052,7 +2052,7 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Press a scene&apos;s edit button to work on its graph</source>
+        <source>Pick a scene tab to work on its graph</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3020,6 +3020,64 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
     </message>
 </context>
 <context>
+    <name>SceneTab</name>
+    <message>
+        <source>LIVE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>STAGING</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>SceneTabBar</name>
+    <message>
+        <source>Rename</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Colour</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stage</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Go Live</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Go</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Send the edited scene live (Ctrl+Return)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ScenesPanel</name>
     <message>
         <source>Back to show</source>
@@ -3063,10 +3121,6 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit scene graph</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

@@ -4,8 +4,8 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Prism
 
-// The show's scene list. Click selects and stages a scene, double-click takes it, the pencil enters
-// the scene to edit its graph, the grip drags it to a new position. The selected scene's properties
+// The show's playlist. Click selects and stages a scene, double-click takes it, the grip drags it
+// to a new position; the scene tabs above the node graph choose what is edited. The selected scene's properties
 // live in the inspector. While the list has focus: Up/Down select, Enter stages, Space takes,
 // Ctrl+D duplicates, Delete removes, Ctrl+Z undoes the last list edit.
 PanelFrame {
@@ -364,11 +364,6 @@ PanelFrame {
                                 tone: "default"
                                 text: qsTr("LIVE")
                             }
-                        }
-                        IconButton {
-                            glyph: "pencil"
-                            tooltip: qsTr("Edit scene graph")
-                            onClicked: AppController.enterScene(row.sceneId)
                         }
                         IconButton {
                             glyph: "copy-plus"

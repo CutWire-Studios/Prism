@@ -120,6 +120,21 @@ ApplicationWindow {
         onActivated: window.inSceneList ? AppController.redoShow() : AppController.graph.redo()
     }
     Shortcut {
+        sequence: "Ctrl+Tab"
+        enabled: window.modalDepth === 0
+        onActivated: AppController.enterSceneRelative(1)
+    }
+    Shortcut {
+        sequences: ["Ctrl+Shift+Tab", "Ctrl+Backtab"]
+        enabled: window.modalDepth === 0
+        onActivated: AppController.enterSceneRelative(-1)
+    }
+    Shortcut {
+        sequences: ["Ctrl+Return", "Ctrl+Enter"]
+        enabled: window.shortcutsLive && AppController.inScene
+        onActivated: AppController.stageAndTake(AppController.editedSceneId)
+    }
+    Shortcut {
         sequence: "B"
         enabled: window.shortcutsLive
         onActivated: AppController.togglePanic("blackout")

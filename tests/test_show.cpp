@@ -67,6 +67,27 @@ private slots:
         QVERIFY(g->audioOutputNodeId() != 0);
     }
 
+    void enteringTabsLeavesLiveAndStagingAlone() {
+        AppController app(nullptr);
+        const QString live = app.liveSceneId();
+        const QString b = app.addScene(QStringLiteral("B"));
+        const QString c = app.addScene(QStringLiteral("C"));
+        QVERIFY(app.stageScene(c));
+
+        app.enterScene(b);
+        QCOMPARE(app.editedSceneId(), b);
+        QCOMPARE(app.liveSceneId(), live);
+        QCOMPARE(app.stagingSceneId(), c);
+
+        app.enterScene(live);
+        app.enterSceneRelative(-1);
+        QCOMPARE(app.editedSceneId(), app.showManager()->scenes().last()->id());
+        app.enterSceneRelative(1);
+        QCOMPARE(app.editedSceneId(), live);
+        QCOMPARE(app.liveSceneId(), live);
+        QCOMPARE(app.stagingSceneId(), c);
+    }
+
     void logicalAudioPortsMapThroughVenue() {
         AppController app(nullptr);
         const QString logical = QStringLiteral("Output 2");

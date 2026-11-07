@@ -878,6 +878,13 @@ bool AppController::removeScene(const QString &id)
 }
 
 void AppController::enterScene(const QString &id) { m_show->enterScene(id); }
+
+void AppController::enterSceneRelative(int delta)
+{
+    const int n = int(m_show->scenes().size());
+    const int i = ((m_show->indexOf(m_show->editedSceneId()) + delta) % n + n) % n;
+    m_show->enterScene(m_show->scenes().at(i)->id());
+}
 void AppController::exitScene() { m_show->exitScene(); }
 
 QVariantMap AppController::sceneInfo(const QString &id) const

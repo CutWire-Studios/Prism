@@ -6,17 +6,39 @@ PanelFrame {
 
     signal inspectorRequested()
 
+    readonly property bool showTabs: {
+        Workspaces.workspaces
+        return Workspaces.workspace(Workspaces.activeId).sceneTabs !== false
+    }
+
+    SceneTabBar {
+        id: tabBar
+        visible: root.showTabs
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: visible ? implicitHeight : 0
+    }
+
+    Item {
+        id: body
+        anchors.top: tabBar.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+    }
+
     EmptyState {
-        anchors.centerIn: parent
+        anchors.centerIn: body
         visible: !AppController.inScene
         glyph: "pencil"
         title: qsTr("No scene open")
-        hint: qsTr("Press a scene's edit button to work on its graph")
+        hint: qsTr("Pick a scene tab to work on its graph")
     }
 
     NodeEditorPanel {
         id: editor
-        anchors.fill: parent
+        anchors.fill: body
         visible: AppController.inScene
         controller: AppController.graph
 
@@ -28,8 +50,8 @@ PanelFrame {
 
     Rectangle {
         visible: AppController.editingLive
-        anchors.top: parent.top
-        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: body.top
+        anchors.horizontalCenter: body.horizontalCenter
         anchors.topMargin: Theme.spacingSm
         implicitWidth: onAirRow.implicitWidth + 2 * Theme.spacingMd
         implicitHeight: onAirRow.implicitHeight + Theme.spacingSm

@@ -268,6 +268,8 @@ public:
     Q_INVOKABLE QString duplicateScene(const QString &id);
     Q_INVOKABLE bool removeScene(const QString &id);
     Q_INVOKABLE void enterScene(const QString &id);
+    /// Enters the scene @p delta places after (or before) the edited one, wrapping around.
+    Q_INVOKABLE void enterSceneRelative(int delta);
     Q_INVOKABLE void exitScene();
     /// {id, name, color, notes, transition:{mode,durationMs}|null, endAction, autoAdvanceMs, advanceOnMediaEnd}.
     Q_INVOKABLE QVariantMap sceneInfo(const QString &id) const;
