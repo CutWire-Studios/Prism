@@ -16,27 +16,11 @@ InspectorForm {
     readonly property bool synced: !!params.sync
     readonly property var beatValues: [0.25, 0.5, 1, 2, 4, 8, 16, 32]
     readonly property var beatLabels: ["1/16", "1/8", "1/4", "1/2", qsTr("1 bar"), qsTr("2 bars"), qsTr("4 bars"), qsTr("8 bars")]
-    readonly property var inputOptions: {
-        void AppController.graph.revision
-        const opts = [{ text: qsTr("None"), value: "" },
-                      { text: qsTr("Audio low"), value: "low" },
-                      { text: qsTr("Audio mid"), value: "mid" },
-                      { text: qsTr("Audio high"), value: "high" },
-                      { text: qsTr("Audio level"), value: "level" },
-                      { text: qsTr("Audio beat"), value: "beat" }]
-        for (const m of AppController.graph.modulators()) {
-            if (m.id !== root.nodeId)
-                opts.push({ text: qsTr("Modulator: %1").arg(m.label), value: "mod:" + m.id })
-        }
-        for (const c of ["0", "0.5", "1", "2"])
-            opts.push({ text: qsTr("Constant %1").arg(c), value: c })
-        for (const k of ["in", "b"]) {
-            const cur = String(params[k] === undefined ? "" : params[k])
-            if (cur.startsWith("osc:") && !opts.some(o => o.value === cur))
-                opts.push({ text: qsTr("OSC %1").arg(cur.substring(4)), value: cur })
-        }
-        return opts
-    }
+    readonly property var audioFields: [
+        { text: qsTr("Level"), value: "level" }, { text: qsTr("Low"), value: "low" },
+        { text: qsTr("Mid"), value: "mid" }, { text: qsTr("High"), value: "high" },
+        { text: qsTr("Beat"), value: "beat" }]
+    readonly property var nt: NodePalette.nodeType
 
     function num(key, def) {
         const v = params[key]
@@ -47,11 +31,6 @@ InspectorForm {
         const p = {}
         p[key] = value
         return p
-    }
-
-    function optionIndex(key) {
-        const cur = String(params[key] === undefined ? "" : params[key])
-        return inputOptions.findIndex(o => o.value === cur)
     }
 
     Connections {
@@ -88,29 +67,103 @@ InspectorForm {
         onExpressionEdited: text => form.setExpr(key, text)
     }
 
-    component InputRow: StyleFieldRow {
+    component InputRow: ColumnLayout {
+        id: row
+
         required property var form
         required property string key
+        property string label: ""
+
+        readonly property var source: {
+            void form.graph.revision
+            return form.graph.paramSource(form.nodeId, key)
+        }
+        readonly property string spec: String(form.params[key] === undefined ? "" : form.params[key])
+        readonly property int mode: spec.startsWith("osc:") ? 2 : (spec.length > 0 ? 1 : 0)
+        readonly property string fieldKey: key + "Field"
+        readonly property string field: String(form.params[fieldKey] === undefined ? "" : form.params[fieldKey])
+        readonly property int sourceType: source.connected ? source.type : -1
 
         Layout.fillWidth: true
-        ThemedComboBox {
+        spacing: Theme.spacingXs
+
+        StyleFieldRow {
             Layout.fillWidth: true
-            model: form.inputOptions.map(o => o.text)
-            currentIndex: form.optionIndex(key)
-            onActivated: index => form.set(form.patch(key, form.inputOptions[index].value))
-        }
-        ThemedButton {
-            text: form.learningKey === key ? qsTr("Waiting for OSC\u2026") : qsTr("Learn")
-            tooltip: qsTr("Use the next incoming OSC message as the input")
-            onClicked: {
-                if (form.learningKey === key) {
-                    AppController.cancelOscLearn()
-                    form.learningKey = ""
-                } else {
-                    form.learningKey = key
-                    AppController.startOscLearn()
+            label: row.label
+
+            ThemedLabel {
+                visible: row.source.connected
+                Layout.fillWidth: true
+                tone: "default"
+                text: qsTr("From %1").arg(row.source.label)
+                elide: Text.ElideRight
+                wrapMode: Text.NoWrap
+            }
+            IconButton {
+                visible: row.source.connected
+                glyph: "x"
+                tooltip: qsTr("Disconnect")
+                onClicked: row.form.graph.disconnectParam(row.form.nodeId, row.key)
+            }
+
+            ThemedComboBox {
+                visible: !row.source.connected
+                Layout.fillWidth: true
+                model: [qsTr("None"), qsTr("Constant"), qsTr("OSC")]
+                currentIndex: row.mode
+                onActivated: index => row.form.set(row.form.patch(row.key, index === 0 ? "" : (index === 1 ? "0" : "osc:")))
+            }
+            ThemedTextField {
+                visible: !row.source.connected && row.mode === 1
+                Layout.preferredWidth: 70
+                text: row.spec
+                validator: DoubleValidator { notation: DoubleValidator.StandardNotation }
+                onEditingFinished: if (text !== row.spec) row.form.set(row.form.patch(row.key, text.length > 0 ? text : "0"))
+            }
+            ThemedButton {
+                visible: !row.source.connected && row.mode === 2
+                text: row.form.learningKey === row.key ? qsTr("Waiting for OSC\u2026") : qsTr("Learn")
+                tooltip: row.spec.length > 4 ? row.spec.substring(4) : qsTr("Use the next incoming OSC message as the input")
+                onClicked: {
+                    if (row.form.learningKey === row.key) {
+                        AppController.cancelOscLearn()
+                        row.form.learningKey = ""
+                    } else {
+                        row.form.learningKey = row.key
+                        AppController.startOscLearn()
+                    }
                 }
             }
+        }
+
+        StyleFieldRow {
+            Layout.fillWidth: true
+            visible: row.sourceType === row.form.nt.AudioAnalyzer
+            label: qsTr("Field")
+            ThemedComboBox {
+                Layout.fillWidth: true
+                model: row.form.audioFields.map(o => o.text)
+                currentIndex: Math.max(0, row.form.audioFields.findIndex(o => o.value === row.field))
+                onActivated: index => row.form.set(row.form.patch(row.fieldKey, row.form.audioFields[index].value))
+            }
+        }
+
+        StyleFieldRow {
+            Layout.fillWidth: true
+            visible: row.sourceType === row.form.nt.Script
+            label: qsTr("Field")
+            ThemedTextField {
+                Layout.fillWidth: true
+                text: row.field
+                placeholderText: qsTr("Field name")
+                onEditingFinished: if (text !== row.field) row.form.set(row.form.patch(row.fieldKey, text))
+            }
+        }
+
+        ThemedLabel {
+            Layout.fillWidth: true
+            visible: !row.source.connected && row.form.kind !== 9
+            text: qsTr("or wire a node into the \"%1\" socket").arg(row.key)
         }
     }
 

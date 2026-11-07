@@ -211,11 +211,9 @@ private slots:
         ClipGraph g;
         GraphRuntime rt(&g);
         const NodeId fx = addOpacity(g, 0.5);
-        const NodeId probe = addOpacity(g, 0.75);
 
         g.setParams(fx, {{"expressions", QVariantMap{{"params.opacity",
-                                                      QString("param(%1, 'params.opacity') / 3 + audio.low")
-                                                          .arg(probe)}}}});
+                                                      "0.75 / 3"}}}});
         QTRY_VERIFY(std::abs(opacityOf(g, fx) - 0.25) < 1e-9);
         QVERIFY(rt.expressionError(fx, "params.opacity").isEmpty());
 
@@ -243,6 +241,25 @@ private slots:
         QVERIFY(std::abs(opacityOf(g, fx) - 0.1) < 1e-9);
         rt.setActive(true);
         QTRY_VERIFY(std::abs(opacityOf(g, fx) - 0.9) < 1e-9);
+    }
+
+    void expressionReadsWiredSocketAsInput()
+    {
+        ClipGraph g;
+        GraphRuntime rt(&g);
+        const NodeId fx = addOpacity(g, 0.5);
+        const NodeId script = addScript(g, "return { v = 4 }");
+        g.setParams(fx, {{"expressions", QVariantMap{{"params.opacity", "input.v / 8"}}}});
+
+        QTRY_VERIFY(rt.expressionError(fx, "params.opacity").contains("opacity"));
+        QVERIFY(!rt.expressionInput(fx, "params.opacity").isValid());
+
+        const QVector<ClipGraph::Port> ins = g.inputPorts(fx);
+        QCOMPARE(ins.last().kind, ClipGraph::PortKind::ParamIn);
+        QVERIFY(g.connectPorts(script, g.outputPorts(script).first().index, fx, ins.last().index));
+        QVERIFY(rt.runScript(script));
+        QTRY_VERIFY(std::abs(opacityOf(g, fx) - 0.5) < 1e-9 && rt.expressionError(fx, "params.opacity").isEmpty()
+                    && rt.expressionInput(fx, "params.opacity").toMap().value("v").toInt() == 4);
     }
 
     void audioAnalyzerAndScriptSettingsPersist()

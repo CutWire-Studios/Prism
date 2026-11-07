@@ -279,6 +279,7 @@ QVariantList ClipGraphNodesModel::portList(const QVector<ClipGraph::Port> &ports
             {"index", p.index},
             {"label", p.label},
             {"slotted", p.slotted},
+            {"param", p.param},
             {"x", p.pos.x()},
             {"y", p.pos.y()},
             {"connected", m_graph->isPortConnected(id, p.direction, p.index)},
@@ -577,6 +578,7 @@ QVariant ClipGraphGroupsModel::data(const QModelIndex &idx, int role) const {
                 {"index", gp.port.index},
                 {"label", gp.port.label},
                 {"slotted", false},
+                {"param", gp.port.param},
                 {"x", gp.port.pos.x()},
                 {"y", gp.port.pos.y()},
                 {"connected", true},
@@ -715,10 +717,28 @@ quint64 ClipGraphController::bindParam(quint64 node, const QString &param, quint
         if (!modulator) return 0;
     }
     QVariantMap exprs = m_graph->node(node)->params.value("expressions").toMap();
-    exprs.insert(param, QStringLiteral("mod(%1)").arg(modulator));
+    if (exprs.value(param).toString().trimmed().isEmpty())
+        exprs.insert(param, QStringLiteral("input"));
     m_graph->setParams(node, {{"expressions", exprs}}, true);
+    const QVector<ClipGraph::Port> outs = m_graph->outputPorts(modulator);
+    int fromPort = -1, toPort = -1;
+    for (const ClipGraph::Port &p : outs)
+        if (p.kind == ClipGraph::PortKind::ScriptOut) { fromPort = p.index; break; }
+    for (const ClipGraph::Port &p : m_graph->inputPorts(node))
+        if (p.kind == ClipGraph::PortKind::ParamIn && p.param == param) { toPort = p.index; break; }
+    if (fromPort >= 0 && toPort >= 0) m_graph->connectPorts(modulator, fromPort, node, toPort);
     pushSnapshot(QStringLiteral("Link parameter"), before);
     return modulator;
+}
+
+QVariantMap ClipGraphController::paramSource(quint64 node, const QString &param) const {
+    const NodeId producer = m_graph->paramProducer(node, param);
+    const ClipGraph::Node *n = producer ? m_graph->node(producer) : nullptr;
+    if (!n) return {{"connected", false}};
+    return {{"connected", true},
+            {"nodeId", QVariant::fromValue<quint64>(producer)},
+            {"type", int(n->type)},
+            {"label", QStringLiteral("%1 #%2").arg(n->title).arg(producer & 0xFFFFFFFFFFull)}};
 }
 
 void ClipGraphController::moveNode(quint64 id, qreal x, qreal y) {
@@ -903,6 +923,17 @@ bool ClipGraphController::disconnectEdge(quint64 edgeId) {
     const bool ok = m_graph->disconnectEdge(edgeId);
     if (ok) pushSnapshot(QStringLiteral("Disconnect"), before);
     return ok;
+}
+
+bool ClipGraphController::disconnectParam(quint64 node, const QString &param) {
+    int port = -1;
+    for (const ClipGraph::Port &p : m_graph->inputPorts(node))
+        if (p.kind == ClipGraph::PortKind::ParamIn && p.param == param) { port = p.index; break; }
+    if (port < 0) return false;
+    for (const ClipGraph::Edge &e : m_graph->edges())
+        if (e.to == node && e.toPort == port && e.kind == ClipGraph::EdgeKind::ScriptToParam)
+            return disconnectEdge(e.id);
+    return false;
 }
 
 bool ClipGraphController::insertIntoEdge(quint64 node, quint64 edgeId) {

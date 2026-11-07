@@ -378,8 +378,9 @@ const QList<Op> &ops()
          "Place a Modulator node whose float output can drive any numeric parameter (see bind_param). "
          "kind is lfo (default), envelope, map_range, smooth, random, trigger, counter, toggle, "
          "math or control_in (in scaled to min..max). params merge over the defaults: shape (0 sine, 1 triangle, 2 saw, 3 square, 4 pulse, "
-         "5 random), sync, rateHz, rateBeats, phase, width, seed, min, max; in / b (input: \"low\", "
-         "\"mid\", \"high\", \"level\", \"beat\", \"mod:<id>\", \"osc:<address>\" or a number), attackMs, releaseMs, "
+         "5 random), sync, rateHz, rateBeats, phase, width, seed, min, max; in / b (fallback when the \"in\" / \"b\" "
+         "socket is not wired: a number or \"osc:<address>\"; wire a modulator, audio analyzer or script into the socket with "
+         "connect instead, and pick the analyzer band or script field with inField / bField, default \"level\"), attackMs, releaseMs, "
          "inMin, inMax, outMin, outMax, clamp, curve, timeMs, smooth, threshold, durationMs, steps, op. "
          "Returns {id, type, kind}; list_nodes shows each modulator's live value.",
          objectSchema({{QStringLiteral("kind"),
@@ -397,8 +398,10 @@ const QList<Op> &ops()
                         objectProp(QStringLiteral("Keys to merge, e.g. {\"sync\":true,\"rateBeats\":0.5}"))}},
                       {QStringLiteral("node")})},
         {"bind_param", "graph", "Drive a parameter with a modulator",
-         "Bind a numeric parameter of node to a Modulator's output (it is written about 30 times a "
-         "second). param is the expression key: for a process node the effect parameter name "
+         "Drive a numeric parameter of node from a Modulator: the parameter gets its own input socket, "
+         "the modulator is wired into it, and the expression (default \"input\") is evaluated about 30 "
+         "times a second. Expressions can use input (the value wired into the socket), t, bpm, beat and "
+         "globals.<name>. param is the expression key: for a process node the effect parameter name "
          "(\"opacity\" or \"params.opacity\"), otherwise the node parameter (e.g. \"volume\"). Omit "
          "modulator to remove the binding. Not undoable.",
          objectSchema({{QStringLiteral("node"), stringProp(QStringLiteral("Node whose parameter is driven"))},

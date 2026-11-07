@@ -2102,6 +2102,7 @@ void AppController::cancelOscLearn() { m_oscServer->cancelLearn(); }
 QVariantList AppController::oscControls() const { return m_oscServer->recentControls(); }
 
 double AppController::modulatorValue(quint64 nodeId) const { return graphRuntime()->modulatorValue(nodeId); }
+QVariant AppController::expressionInput(quint64 nodeId, const QString &name) const { return graphRuntime()->expressionInput(nodeId, name); }
 
 bool AppController::runScript(quint64 nodeId) { return graphRuntime()->runScript(nodeId); }
 

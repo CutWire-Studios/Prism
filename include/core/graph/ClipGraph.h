@@ -72,6 +72,8 @@ public:
         /// Reroute ports before they are wired to anything: they take whatever is offered first.
         RerouteIn,
         RerouteOut,
+        /// One per driven parameter (key in params.expressions); the expression reads it as `input`.
+        ParamIn,
     };
     Q_ENUM(PortKind)
 
@@ -93,6 +95,7 @@ public:
         MixerToOutput = 10,
         AudioEffectChain = 11,
         ClipToAudioAnalyzer = 12,
+        ScriptToParam = 13,
     };
     Q_ENUM(EdgeKind)
 
@@ -102,6 +105,7 @@ public:
         int index = 0;          // position in the node's input or output list
         QString label;
         bool slotted = false;   // persisted as toPortIndex; false ports serialise as -1
+        QString param;          // ParamIn only: the params.expressions key this port feeds
         QPointF pos;            // offset from the node origin
     };
 
@@ -325,6 +329,8 @@ public:
     // ── Video evaluation / layers ────────────────────────────────────────────
     ResolvedStream evaluateVideoInput(NodeId producerNode) const;
     NodeId producerForInput(NodeId nodeId, int inPort) const;
+    /// The real producer wired (through reroutes) into @p param's socket on @p nodeId; 0 when unwired.
+    NodeId paramProducer(NodeId nodeId, const QString &param) const;
     NodeId outputSingleProducer() const;
     QVector<LayerSlotView> layerSlotViews(NodeId layerId) const;
     bool setLayerSlotRect(NodeId layerId, int index, float x, float y, float w, float h);
@@ -402,10 +408,15 @@ private:
 
     void buildPorts(const Node &n, QVector<Port> &in, QVector<Port> &out) const;
     QSizeF nodeSize(const Node &n) const;
+    QSizeF baseNodeSize(const Node &n) const;
+    static QStringList modulatorSocketKeys(const Node &n);
+    int findParamPort(NodeId id, const QString &param) const;
+    QHash<EdgeId, QString> paramEdgeKeys(NodeId id) const;
+    void remapParamEdges(NodeId id, const QHash<EdgeId, QString> &keys);
     void refreshNode(Node &n);
     int findPortIndex(NodeId id, PortKind kind, int slot) const;
     bool lookupConnectionPorts(NodeId from, NodeId to, int kind, int slot,
-                               int *fromPort, int *toPort) const;
+                               int *fromPort, int *toPort, const QString &param = {}) const;
     int slotCount(const Node &n) const;
 
     EdgeId appendEdge(NodeId from, int fromPort, NodeId to, int toPort, EdgeKind kind);

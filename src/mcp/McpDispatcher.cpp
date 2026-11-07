@@ -1542,9 +1542,19 @@ QJsonObject McpDispatcher::opBindParam(const QJsonObject &args)
             return err("not_found", QStringLiteral("No node %1").arg(modId));
         if (mod->type != ClipGraph::NodeType::Modulator)
             return err("type_mismatch", QStringLiteral("modulator must be a modulator node"));
-        exprs.insert(param, QStringLiteral("mod(%1)").arg(modId));
+        if (exprs.value(param).toString().trimmed().isEmpty())
+            exprs.insert(param, QStringLiteral("input"));
     }
     editor->setParams(id, {{QStringLiteral("expressions"), exprs}}, true);
+    if (modId) {
+        int fromPort = -1, toPort = -1;
+        for (const ClipGraph::Port &p : editor->outputPorts(modId))
+            if (p.kind == ClipGraph::PortKind::ScriptOut) { fromPort = p.index; break; }
+        for (const ClipGraph::Port &p : editor->inputPorts(id))
+            if (p.kind == ClipGraph::PortKind::ParamIn && p.param == param) { toPort = p.index; break; }
+        if (fromPort < 0 || toPort < 0 || !editor->connectPorts(modId, fromPort, id, toPort))
+            return err("connect_failed", QStringLiteral("Could not wire the modulator to %1").arg(param));
+    }
     m_window->mcpBumpRevision();
     return ok({{QStringLiteral("node"), QString::number(id)},
                {QStringLiteral("param"), param},

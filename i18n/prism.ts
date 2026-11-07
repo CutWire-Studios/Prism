@@ -1072,6 +1072,61 @@ low/mid/high · beat</source>
     </message>
 </context>
 <context>
+    <name>ExpressionEditorPopup</name>
+    <message>
+        <source>Drive %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Input: %1 = %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Nothing connected. Wire a modulator, analyzer or script into the %1 socket on the node, or</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Link…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>e.g. input * 100</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Variables</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The connected table</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Value: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Seconds</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Result range: %1 – %2%3. Example: %4</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>FrameItem</name>
     <message>
         <source>Double-click to add a comment</source>
@@ -1491,39 +1546,43 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Level</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Low</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mid</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>High</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Beat</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>From %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Disconnect</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>None</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Audio low</source>
+        <source>Constant</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Audio mid</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Audio high</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Audio level</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Audio beat</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Modulator: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Constant %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>OSC %1</source>
+        <source>OSC</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1536,6 +1595,18 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Use the next incoming OSC message as the input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Field</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Field name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>or wire a node into the &quot;%1&quot; socket</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3150,6 +3221,10 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Parameter</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Any</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4411,6 +4486,10 @@ Technical detail: %1</source>
     </message>
     <message>
         <source>Expression must return a number</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Nothing is connected to the &quot;%1&quot; socket</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -5784,15 +5863,7 @@ Continue anyway? Your phone may not be able to connect.</source>
 <context>
     <name>StyleSliderRow</name>
     <message>
-        <source>e.g. 0.5 + audio.low * 0.5</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Waiting for OSC…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Unlink from modulator</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -5800,11 +5871,19 @@ Continue anyway? Your phone may not be able to connect.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Not connected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit expression</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Link to a modulator</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Drive this value with a Lua expression</source>
+        <source>Drive with an expression — adds a socket on the node</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

@@ -355,6 +355,7 @@ public:
     QVariantList oscControls() const;
     /// Live output of a Modulator node of the edited scene.
     Q_INVOKABLE double modulatorValue(quint64 nodeId) const;
+    Q_INVOKABLE QVariant expressionInput(quint64 nodeId, const QString &name) const;
     /// "Run now" on a Script node; false when the node is not a running Script node.
     Q_INVOKABLE bool runScript(quint64 nodeId);
     /// Error of the Script node's last run (empty when it succeeded) and its print/prism.log output.

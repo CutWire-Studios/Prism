@@ -39,6 +39,7 @@ constexpr qreal kProcW = 116.0;
 constexpr qreal kProcH = 66.0;
 constexpr qreal kProcVideoH = 104.0;   // room for the live thumbnail (ProcessBody.qml)
 constexpr qreal kProcExtraRow = 22.0;
+constexpr qreal kParamRow = 22.0;
 constexpr qreal kLayerW = 158.0, kLayerHdr = 20.0, kLayerRow = 22.0, kLayerFoot = 26.0;
 constexpr qreal kOutW = 116.0, kOutH = 78.0, kOutBodyH = 52.0;
 constexpr qreal kMixW = 158.0, kMixHdr = 20.0, kMixRow = 22.0, kMixFoot = 26.0;
@@ -250,6 +251,7 @@ ClipGraph::Family ClipGraph::familyOfKind(PortKind kind) {
         return Family::Video;
     case PK::ScriptOut:
     case PK::DataIn:
+    case PK::ParamIn:
         return Family::Data;
     case PK::AudioControllerOut:
     case PK::MasterAudioInputOut:
@@ -313,6 +315,7 @@ bool ClipGraph::portsCompatible(PortKind a, PortKind b) {
     if (((a == PK::AudioControllerOut || isAudioStreamOutKind(a)) && b == PK::AudioIn) ||
         (a == PK::AudioIn && (b == PK::AudioControllerOut || isAudioStreamOutKind(b)))) return true;
     if ((a == PK::ScriptOut && b == PK::DataIn) || (a == PK::DataIn && b == PK::ScriptOut)) return true;
+    if ((a == PK::ScriptOut && b == PK::ParamIn) || (a == PK::ParamIn && b == PK::ScriptOut)) return true;
     return false;
 }
 
@@ -334,6 +337,7 @@ ClipGraph::PortDirection ClipGraph::directionOf(PortKind kind) {
     case PK::AudioIn:
     case PK::MasterAudioIn:
     case PK::DataIn:
+    case PK::ParamIn:
     case PK::AudioMixerIn:
     case PK::AudioEffectIn:
     case PK::RerouteIn:
@@ -347,6 +351,7 @@ QString ClipGraph::edgeKindName(int kind) {
     switch (EK(kind)) {
     case EK::Chain:              return QStringLiteral("chain");
     case EK::ScriptToData:       return QStringLiteral("script_to_data");
+    case EK::ScriptToParam:      return QStringLiteral("script_to_param");
     case EK::ClipToShaderAudio:  return QStringLiteral("clip_to_shader_audio");
     case EK::ClipToAudioAnalyzer:  return QStringLiteral("clip_to_audio_analyzer");
     case EK::InputToMaster:      return QStringLiteral("input_to_master");
@@ -448,6 +453,12 @@ int ClipGraph::slotCount(const Node &n) const {
 }
 
 QSizeF ClipGraph::nodeSize(const Node &n) const {
+    QSizeF sz = baseNodeSize(n);
+    sz.rheight() += (n.params.value("expressions").toMap().size() + modulatorSocketKeys(n).size()) * kParamRow;
+    return sz;
+}
+
+QSizeF ClipGraph::baseNodeSize(const Node &n) const {
     switch (n.type) {
     case NT::Input: {
         const bool hasAudio = n.params.value("hasAudio").toBool();
@@ -475,7 +486,7 @@ QSizeF ClipGraph::nodeSize(const Node &n) const {
 }
 
 void ClipGraph::buildPorts(const Node &n, QVector<Port> &in, QVector<Port> &out) const {
-    const QSizeF sz = nodeSize(n);
+    const QSizeF sz = baseNodeSize(n);
     auto add = [](QVector<Port> &v, PortKind k, PortDirection d, const QString &label,
                   bool slotted, const QPointF &pos) {
         Port p;
@@ -579,6 +590,59 @@ void ClipGraph::buildPorts(const Node &n, QVector<Port> &in, QVector<Port> &out)
         break;
     }
     }
+
+    QStringList paramKeys = modulatorSocketKeys(n);
+    const int fixedKeys = int(paramKeys.size());
+    paramKeys += n.params.value("expressions").toMap().keys();
+    for (int row = 0; row < paramKeys.size(); ++row) {
+        Port p;
+        p.kind = PK::ParamIn;
+        p.direction = PD::In;
+        p.index = int(in.size());
+        p.param = paramKeys[row];
+        p.label = row < fixedKeys ? p.param : p.param.mid(p.param.lastIndexOf('.') + 1);
+        p.pos = {0.0, sz.height() + row * kParamRow + kParamRow / 2};
+        in.append(p);
+    }
+}
+
+QStringList ClipGraph::modulatorSocketKeys(const Node &n) {
+    if (n.type != NT::Modulator) return {};
+    switch (n.params.value("kind").toInt()) {
+    case 1: case 2: case 3: case 5: case 6: case 7: return {QStringLiteral("in")};
+    case 8: return {QStringLiteral("in"), QStringLiteral("b")};
+    default: return {};
+    }
+}
+
+int ClipGraph::findParamPort(NodeId id, const QString &param) const {
+    for (const Port &p : inputPorts(id))
+        if (p.kind == PK::ParamIn && p.param == param) return p.index;
+    return -1;
+}
+
+QHash<EdgeId, QString> ClipGraph::paramEdgeKeys(NodeId id) const {
+    QHash<EdgeId, QString> keys;
+    const QVector<Port> ins = inputPorts(id);
+    for (const Edge &e : m_edges)
+        if (e.to == id && e.kind == EK::ScriptToParam && e.toPort >= 0 && e.toPort < ins.size())
+            keys.insert(e.id, ins[e.toPort].param);
+    return keys;
+}
+
+void ClipGraph::remapParamEdges(NodeId id, const QHash<EdgeId, QString> &keys) {
+    if (keys.isEmpty()) return;
+    for (int i = int(m_edges.size()) - 1; i >= 0; --i) {
+        Edge &e = m_edges[i];
+        if (e.to != id || !keys.contains(e.id)) continue;
+        const int port = findParamPort(id, keys.value(e.id));
+        if (port < 0) {
+            removeEdgeAt(i);
+        } else if (port != e.toPort) {
+            e.toPort = port;
+            if (!m_restoring) emit edgeChanged(e.id);
+        }
+    }
 }
 
 QVector<ClipGraph::Port> ClipGraph::inputPorts(NodeId id) const {
@@ -644,7 +708,7 @@ int ClipGraph::findPortIndex(NodeId id, PortKind kind, int slot) const {
 }
 
 bool ClipGraph::lookupConnectionPorts(NodeId from, NodeId to, int kind, int slot,
-                                      int *fromPort, int *toPort) const {
+                                      int *fromPort, int *toPort, const QString &param) const {
     *fromPort = -1;
     *toPort = -1;
     auto fromFirst = [&](std::initializer_list<PK> kinds) {
@@ -687,6 +751,10 @@ bool ClipGraph::lookupConnectionPorts(NodeId from, NodeId to, int kind, int slot
     case EK::ScriptToData:
         *fromPort = findPortIndex(from, PK::ScriptOut, -1);
         *toPort = findPortIndex(to, PK::DataIn, -1);
+        break;
+    case EK::ScriptToParam:
+        *fromPort = findPortIndex(from, PK::ScriptOut, -1);
+        *toPort = findParamPort(to, param);
         break;
     default:
         break;
@@ -873,6 +941,7 @@ bool ClipGraph::setParams(NodeId id, const QVariantMap &params, bool merge) {
     Node *n = mutableNode(id);
     if (!n) return false;
     const QVariantList oldDevices = n->params.value("devicePorts").toList();
+    const QHash<EdgeId, QString> paramKeys = paramEdgeKeys(id);
     const bool shaderFx = isShaderNode(*n) && params.contains("code");
     if (merge) {
         for (auto it = params.begin(); it != params.end(); ++it)
@@ -897,7 +966,9 @@ bool ClipGraph::setParams(NodeId id, const QVariantMap &params, bool merge) {
         for (int i = int(m_edges.size()) - 1; i >= 0; --i) {
             Edge &e = m_edges[i];
             if (e.to != id) continue;
-            if (e.kind == EK::ScriptToData) {
+            if (e.kind == EK::ScriptToParam) {
+                continue;
+            } else if (e.kind == EK::ScriptToData) {
                 if (e.toPort != extra + 1) {
                     e.toPort = extra + 1;
                     if (!m_restoring) emit edgeChanged(e.id);
@@ -907,6 +978,7 @@ bool ClipGraph::setParams(NodeId id, const QVariantMap &params, bool merge) {
             }
         }
     }
+    remapParamEdges(id, paramKeys);
     refreshNode(*n);
     notifyNode(id);
     notifyChanged();
@@ -1377,6 +1449,7 @@ std::optional<ClipGraph::ConnectPlan> ClipGraph::planConnection(NodeId from, int
     else if (isMixedAudioOutKind(a) && isMixedAudioInKind(b)) plan.kind = EK::MixerToOutput;
     else if (isAudioStreamOutKind(a) && isAudioEffectInKind(b)) plan.kind = EK::AudioEffectChain;
     else if (a == PK::ScriptOut && b == PK::DataIn) plan.kind = EK::ScriptToData;
+    else if (a == PK::ScriptOut && b == PK::ParamIn) plan.kind = EK::ScriptToParam;
     else return std::nullopt;
 
     if (plan.insertMixer) return plan;
@@ -1445,7 +1518,7 @@ std::optional<ClipGraph::InsertPlan> ClipGraph::planInsert(NodeId nodeId, const 
     const QVector<Port> ins = inputPorts(nodeId);
     const QVector<Port> outs = outputPorts(nodeId);
     for (const Port &in : ins) {
-        if (isPortConnected(nodeId, PD::In, in.index)) continue;
+        if (in.kind == PK::ParamIn || isPortConnected(nodeId, PD::In, in.index)) continue;
         const auto first = planConnection(e.from, e.fromPort, nodeId, in.index);
         if (!first || first->insertMixer) continue;
         for (const Port &out : outs) {
@@ -1528,8 +1601,13 @@ QJsonObject ClipGraph::copyNodes(const QList<NodeId> &ids) const {
         const qsizetype from = picked.indexOf(e.from);
         const qsizetype to = picked.indexOf(e.to);
         if (from < 0 || to < 0) continue;
-        edges.append(QJsonObject{{"from", int(from)}, {"fromPort", e.fromPort}, {"to", int(to)},
-                                 {"toPort", e.toPort}, {"kind", int(e.kind)}});
+        QJsonObject eo{{"from", int(from)}, {"fromPort", e.fromPort}, {"to", int(to)},
+                       {"toPort", e.toPort}, {"kind", int(e.kind)}};
+        if (e.kind == EK::ScriptToParam) {
+            const QVector<Port> ins = inputPorts(e.to);
+            if (e.toPort >= 0 && e.toPort < ins.size()) eo["toParam"] = ins[e.toPort].param;
+        }
+        edges.append(eo);
     }
 
     // A group travels only when all of its members were asked for.
@@ -1571,8 +1649,10 @@ QList<NodeId> ClipGraph::pasteNodes(const QJsonObject &clip, const QPointF &delt
         const int from = o["from"].toInt(-1);
         const int to = o["to"].toInt(-1);
         if (from < 0 || to < 0 || from >= created.size() || to >= created.size()) continue;
-        connectPortsRaw(created[from], o["fromPort"].toInt(-1), created[to], o["toPort"].toInt(-1),
-                        EdgeKind(o["kind"].toInt()));
+        const EdgeKind kind = EdgeKind(o["kind"].toInt());
+        const int toPort = kind == EK::ScriptToParam ? findParamPort(created[to], o["toParam"].toString())
+                                                     : o["toPort"].toInt(-1);
+        connectPortsRaw(created[from], o["fromPort"].toInt(-1), created[to], toPort, kind);
     }
     for (const QJsonValue &v : clip["groups"].toArray()) {
         const QJsonObject o = v.toObject();
@@ -1893,6 +1973,11 @@ NodeId ClipGraph::edgeProducer(NodeId nodeId, int inPort, EdgeKind kind) const {
 
 NodeId ClipGraph::producerForInput(NodeId nodeId, int inPort) const {
     return edgeProducer(nodeId, inPort, EK::Chain);
+}
+
+NodeId ClipGraph::paramProducer(NodeId nodeId, const QString &param) const {
+    const int port = findParamPort(nodeId, param);
+    return port < 0 ? 0 : edgeProducer(nodeId, port, EK::ScriptToParam);
 }
 
 ClipGraph::ResolvedStream ClipGraph::evaluateVideoInput(NodeId producerNode) const {
@@ -2391,6 +2476,8 @@ QJsonObject ClipGraph::toJson() const {
         obj["to"] = (qint64)e.to;
         obj["kind"] = (int)e.kind;
         obj["toPortIndex"] = slotted ? e.toPort : -1;
+        if (e.kind == EK::ScriptToParam && e.toPort >= 0 && e.toPort < ins.size())
+            obj["toParam"] = ins[e.toPort].param;
         connections.append(obj);
     }
     root["connections"] = connections;
@@ -2657,7 +2744,8 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         const NodeId to = (NodeId)obj["to"].toInteger();
         const int kind = obj["kind"].toInt();
         int fp = -1, tp = -1;
-        if (lookupConnectionPorts(from, to, kind, obj["toPortIndex"].toInt(-1), &fp, &tp))
+        if (lookupConnectionPorts(from, to, kind, obj["toPortIndex"].toInt(-1), &fp, &tp,
+                                  obj["toParam"].toString()))
             appendEdge(from, fp, to, tp, EK(kind));
     }
     migrateLegacyAudioConnections();
@@ -2745,13 +2833,16 @@ QJsonObject ClipGraph::snapshot(const std::function<double(NodeId)> &modulatorVa
     for (const Edge &e : m_edges) {
         const QVector<Port> ins = inputPorts(e.to);
         const bool slotted = e.toPort >= 0 && e.toPort < ins.size() && ins[e.toPort].slotted;
-        connections.append(QJsonObject{
+        QJsonObject conn{
             {QStringLiteral("from"), QString::number(e.from)},
             {QStringLiteral("to"), QString::number(e.to)},
             {QStringLiteral("kind"), int(e.kind)},
             {QStringLiteral("kindName"), edgeKindName(int(e.kind))},
             {QStringLiteral("toPort"), slotted ? e.toPort : -1},
-        });
+        };
+        if (e.kind == EK::ScriptToParam && e.toPort >= 0 && e.toPort < ins.size())
+            conn.insert(QStringLiteral("toParam"), ins[e.toPort].param);
+        connections.append(conn);
     }
 
     QJsonObject result{

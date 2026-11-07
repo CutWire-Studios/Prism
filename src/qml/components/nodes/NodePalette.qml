@@ -16,7 +16,8 @@ QtObject {
     readonly property var portKind: ({
         ChainIn: 0, ChainOut: 1, AudioOut: 2, ShaderAudioIn: 3, AudioIn: 4,
         AudioControllerOut: 5, MasterAudioIn: 6, MasterAudioInputOut: 7, ScriptOut: 8, DataIn: 9,
-        AudioMixerIn: 10, AudioMixerOut: 11, AudioEffectIn: 12, AudioEffectOut: 13, RerouteIn: 14, RerouteOut: 15
+        AudioMixerIn: 10, AudioMixerOut: 11, AudioEffectIn: 12, AudioEffectOut: 13, RerouteIn: 14, RerouteOut: 15,
+        ParamIn: 16
     })
 
     // The same list the scene tabs use; "" is no colour.
@@ -61,6 +62,7 @@ QtObject {
             return desat(streamHue, 0.8)
         case k.ScriptOut:
         case k.DataIn:
+        case k.ParamIn:
             return desat(scriptHue, 0.8)
         }
         return Theme.mutedForeground
@@ -77,6 +79,7 @@ QtObject {
         case k.MasterAudioIn: return qsTr("Audio output")
         case k.AudioIn: case k.ShaderAudioIn: case k.AudioOut: return qsTr("Audio")
         case k.ScriptOut: case k.DataIn: return qsTr("Script data")
+        case k.ParamIn: return qsTr("Parameter")
         case k.RerouteIn: case k.RerouteOut: return qsTr("Any")
         }
         return ""

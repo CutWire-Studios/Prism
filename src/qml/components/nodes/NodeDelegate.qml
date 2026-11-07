@@ -349,6 +349,20 @@ Item {
     }
 
     Repeater {
+        model: root.inputPorts
+        delegate: NodeLabel {
+            required property var modelData
+            visible: modelData.kind === NodePalette.portKind.ParamIn
+            x: modelData.x + 10
+            y: modelData.y - height / 2
+            width: root.width - x - 6
+            height: 14
+            muted: true
+            text: modelData.label
+        }
+    }
+
+    Repeater {
         model: root.outputPorts
         delegate: PortItem {
             required property var modelData

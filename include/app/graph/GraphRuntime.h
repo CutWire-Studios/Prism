@@ -107,6 +107,7 @@ public:
     void setControlSource(std::function<double(const QString &address)> source);
     /// Last value of a Modulator node (0 when unknown); refreshed by pollDataConsumers.
     double modulatorValue(NodeId id) const;
+    QVariant expressionInput(NodeId id, const QString &param) const;
 
     // ── Audio analyzers ─────────────────────────────────────────────────────────
     void feedLiveAudioForProducer(NodeId producerId, const QByteArray &pcm);

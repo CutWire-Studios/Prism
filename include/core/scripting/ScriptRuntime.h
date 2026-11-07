@@ -30,8 +30,6 @@ struct ScriptHost {
     std::function<QVariantMap(quint64 node)> audioBands;
     /// {bpm, beat}: tempo and beat position (beat count plus phase) of the global BPM clock.
     std::function<QVariantMap()> clockInfo;
-    /// Last output of a Modulator node, 0 when it does not exist.
-    std::function<double(quint64 node)> modulatorValue;
     /// Project globals (name -> number), exposed to expressions as the `globals` table.
     std::function<QVariantMap()> globals;
 };

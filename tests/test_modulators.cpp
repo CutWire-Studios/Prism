@@ -146,11 +146,44 @@ private slots:
         QVERIFY(near(tickAt(e, 0.03), 1.0));
     }
 
-    void envelopeReadsAudioBandThroughResolver() {
+    void connectedSocketOverridesSpec() {
         ModulatorEngine e;
-        e.setNode(kId, {{"kind", int(Kind::Envelope)}, {"in", "low"}, {"attackMs", 0.0}});
-        const auto resolver = [](const QString &spec) { return spec == QLatin1String("low") ? 0.8 : 0.0; };
-        tickAt(e, 0.0, 0.0, resolver);
+        e.setNode(kId, {{"kind", int(Kind::Envelope)}, {"in", "0.1"}, {"attackMs", 0.0}, {"releaseMs", 0.0}});
+        QString askedKey;
+        const auto socket = [&](NodeId id, const QString &key) -> std::optional<double> {
+            askedKey = key;
+            return id == kId ? std::optional<double>(0.8) : std::nullopt;
+        };
+        e.tick({0.0, 0.0}, {}, socket);
+        e.tick({0.1, 0.0}, {}, socket);
+        QVERIFY(near(e.value(kId), 0.8));
+        QCOMPARE(askedKey, QStringLiteral("in"));
+        e.tick({0.2, 0.0}, {}, [](NodeId, const QString &) { return std::optional<double>(); });
+        QVERIFY(near(e.value(kId), 0.1));
+    }
+
+    void mathSocketsAreIndependent() {
+        ModulatorEngine e;
+        e.setNode(kId, {{"kind", int(Kind::Math)}, {"op", 2}, {"in", "3"}, {"b", "5"}});
+        e.tick({0.0, 0.0}, {}, [](NodeId, const QString &key) {
+            return key == QLatin1String("b") ? std::optional<double>(2.0) : std::nullopt;
+        });
+        QVERIFY(near(e.value(kId), 6.0));
+    }
+
+    void controlInIgnoresSocketResolver() {
+        ModulatorEngine e;
+        e.setNode(kId, {{"kind", int(Kind::ControlIn)}, {"in", "0.5"}});
+        e.tick({0.0, 0.0}, {}, [](NodeId, const QString &) { return std::optional<double>(1.0); });
+        QVERIFY(near(e.value(kId), 0.5));
+    }
+
+    void unconnectedSpecOnlyAcceptsLiteralOrOsc() {
+        ModulatorEngine e;
+        e.setNode(kId, {{"kind", int(Kind::Smooth)}, {"in", "low"}, {"timeMs", 0.0}});
+        const auto resolver = [](const QString &) { return 0.8; };
+        QVERIFY(near(tickAt(e, 0.0, 0.0, resolver), 0.0));
+        e.setNode(kId, {{"kind", int(Kind::Smooth)}, {"in", "osc:/x"}, {"timeMs", 0.0}});
         QVERIFY(near(tickAt(e, 0.1, 0.0, resolver), 0.8));
     }
 
@@ -197,8 +230,8 @@ private slots:
         double level = 0.0;
         const auto resolver = [&level](const QString &) { return level; };
         ModulatorEngine e;
-        e.setNode(kId, {{"kind", int(Kind::Counter)}, {"in", "src"}, {"steps", 3}});
-        e.setNode(2, {{"kind", int(Kind::Toggle)}, {"in", "src"}});
+        e.setNode(kId, {{"kind", int(Kind::Counter)}, {"in", "osc:src"}, {"steps", 3}});
+        e.setNode(2, {{"kind", int(Kind::Toggle)}, {"in", "osc:src"}});
 
         QList<double> counts, toggles;
         double t = 0.0;
@@ -239,10 +272,12 @@ private slots:
         e.setNode(1, {{"kind", int(Kind::MapRange)}, {"in", "5"}, {"inMax", 10.0}, {"outMax", 1.0}});
         e.setNode(2, {{"kind", int(Kind::Math)}, {"op", 2}, {"in", "mod:1"}, {"b", "4"}});
         e.tick({0.0, 0.0});
-        QVERIFY(near(e.value(2), 2.0));
-        e.removeNode(1);
-        e.tick({0.1, 0.0});
         QCOMPARE(e.value(2), 0.0);
+        const auto socket = [&](NodeId id, const QString &key) {
+            return id == 2 && key == QLatin1String("in") ? std::optional<double>(e.value(1)) : std::nullopt;
+        };
+        e.tick({0.1, 0.0}, {}, socket);
+        QVERIFY(near(e.value(2), 2.0));
     }
 
     void bpmClockTapTempo() {

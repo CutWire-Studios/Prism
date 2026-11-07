@@ -157,6 +157,13 @@ sol::object variantToLua(sol::state_view lua, const QVariant &v) {
             t[it.key().toUtf8().constData()] = variantToLua(lua, it.value());
         return t;
     }
+    case QMetaType::QVariantList: {
+        sol::table t = lua.create_table();
+        const QVariantList l = v.toList();
+        for (qsizetype i = 0; i < l.size(); ++i)
+            t[i + 1] = variantToLua(lua, l.at(i));
+        return t;
+    }
     default:
         return sol::make_object(lua, sol::nil);
     }
@@ -431,16 +438,6 @@ void ScriptRuntime::setupEngine() {
     lua_sethook(lua.lua_state(), instructionHook, LUA_MASKCOUNT, kHookStep);
 
     sol::environment env(lua, sol::create, lua.globals());
-    env["param"] = [this](lua_Integer id, const std::string &name, sol::this_state ts) -> sol::object {
-        QVariant out;
-        if (!m_host || !m_host->getParam
-            || !m_host->getParam(quint64(id), QString::fromUtf8(name.c_str()), &out))
-            throw std::runtime_error("node " + std::to_string(id) + " is not in this scene");
-        return variantToLua(sol::state_view(ts.L), out);
-    };
-    env["mod"] = [this](lua_Integer id) -> double {
-        return m_host && m_host->modulatorValue ? m_host->modulatorValue(quint64(id)) : 0.0;
-    };
     m_lua->exprEnv = env;
 }
 
@@ -459,7 +456,6 @@ void ScriptRuntime::evaluateExpressions(const QVariantList &jobs, double t) {
         env["bpm"] = clockInfo.value(QStringLiteral("bpm"), 120.0).toDouble();
         env["beat"] = clockInfo.value(QStringLiteral("beat"), 0.0).toDouble();
     }
-    env["audio"] = bandsToLua(lua, m_host && m_host->audioBands ? m_host->audioBands(0) : QVariantMap{});
     {
         sol::table globals = lua.create_table();
         if (m_host && m_host->globals) {
@@ -475,6 +471,7 @@ void ScriptRuntime::evaluateExpressions(const QVariantList &jobs, double t) {
         const QVariantMap job = jv.toMap();
         QVariantMap res{{"node", job.value("node")}, {"name", job.value("name")}, {"ok", false}};
         const std::string expr = job.value("expr").toString().toStdString();
+        env["input"] = variantToLua(lua, job.value("input"));
 
         auto it = m_lua->exprCache.find(expr);
         QString error;
@@ -511,6 +508,9 @@ void ScriptRuntime::evaluateExpressions(const QVariantList &jobs, double t) {
                 error = tr("Expression must return a number");
             }
         }
+        if (!error.isEmpty() && !job.value("input").isValid() && job.value("expr").toString().contains("input")
+            && !job.value("label").toString().isEmpty())
+            error = tr("Nothing is connected to the \"%1\" socket").arg(job.value("label").toString());
         res["error"] = error;
         results.append(res);
     }

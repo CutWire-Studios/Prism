@@ -3,8 +3,9 @@ import QtQuick.Layouts
 import Prism
 
 // Label, slider and editable number on one row: the widget editors' SliderSpinRow.
-// Setting expressionName adds a small "f" toggle that swaps the slider for a Lua expression
-// field (Blender-driver style); the owner stores the text from expressionEdited.
+// Setting expressionName adds a small "f" toggle that swaps the slider for a chip showing the
+// expression's source and result; clicking it opens the expression editor popup. The owner
+// stores the text from expressionEdited ("" removes the expression and its node socket).
 RowLayout {
     id: root
 
@@ -18,21 +19,23 @@ RowLayout {
     property string expressionName: ""
     property string expression: ""
     property string expressionError: ""
-    property bool expressionOpen: false
     // Raw parameter units per displayed unit; a new modulator is scaled to from*exprScale..to*exprScale.
     property real exprScale: 1
     property var linkForm: null
-    readonly property string linkedId: {
-        const m = /^mod\((\d+)\)$/.exec(expression)
-        return m ? m[1] : ""
-    }
     // Id of the Control In modulator waiting for an OSC message to learn; 0 when idle.
     property var learnId: 0
     readonly property bool learning: learnId !== 0
-    readonly property bool exprMode: expressionName.length > 0 && (expressionOpen || expression.length > 0)
+    readonly property bool exprMode: expressionName.length > 0 && expression.length > 0
 
     signal edited(real value)
     signal expressionEdited(string expression)
+
+    readonly property var paramSource: {
+        if (!linkForm || expressionName.length === 0 || expression.length === 0)
+            return ({ connected: false })
+        void linkForm.graph.revision
+        return linkForm.graph.paramSource(linkForm.nodeId, expressionName)
+    }
 
     function roundTo(v) {
         const f = Math.pow(10, root.decimals)
@@ -68,25 +71,6 @@ RowLayout {
         onMoved: root.edited(root.roundTo(slider.value))
     }
 
-    ThemedTextField {
-        id: exprField
-        visible: root.exprMode && root.linkedId.length === 0
-        Layout.fillWidth: true
-        placeholderText: qsTr("e.g. 0.5 + audio.low * 0.5")
-        errorText: root.expressionError
-        onEditingFinished: {
-            if (text.trim() !== root.expression)
-                root.expressionEdited(text.trim())
-        }
-    }
-
-    Binding {
-        target: exprField
-        property: "text"
-        when: !exprField.activeFocus
-        value: root.expression
-    }
-
     ThemedNumberField {
         id: field
         visible: !root.exprMode
@@ -105,7 +89,7 @@ RowLayout {
     }
 
     Rectangle {
-        visible: root.linkedId.length > 0
+        visible: root.learning
         Layout.fillWidth: true
         Layout.preferredHeight: Theme.controlHeightSm
         radius: height / 2
@@ -115,50 +99,121 @@ RowLayout {
         ThemedLabel {
             anchors.left: parent.left
             anchors.leftMargin: Theme.spacingLg
-            anchors.right: unlinkButton.left
+            anchors.right: cancelLearnButton.left
             anchors.verticalCenter: parent.verticalCenter
             elide: Text.ElideRight
             wrapMode: Text.NoWrap
-            text: root.learning ? qsTr("Waiting for OSC\u2026")
-                                : (root.linkForm && root.linkedId.length > 0 ? root.linkForm.modulatorLabel(root.linkedId) : "")
+            text: qsTr("Waiting for OSC\u2026")
         }
 
         IconButton {
-            id: unlinkButton
+            id: cancelLearnButton
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             glyph: "unlink-2"
-            tooltip: root.learning ? qsTr("Cancel OSC learn") : qsTr("Unlink from modulator")
+            tooltip: qsTr("Cancel OSC learn")
             buttonSize: Theme.controlHeightSm
             onClicked: {
-                if (root.learning) {
-                    AppController.cancelOscLearn()
-                    root.learnId = 0
-                }
+                AppController.cancelOscLearn()
+                root.learnId = 0
                 root.expressionEdited("")
             }
         }
     }
 
+    Rectangle {
+        id: chip
+        visible: root.exprMode && !root.learning
+        Layout.fillWidth: true
+        Layout.preferredHeight: Theme.controlHeightSm
+        radius: Theme.radiusSm
+        color: chipMouse.containsMouse ? Theme.panelAccent : Theme.panelSecondaryBg
+        border.width: 1
+        border.color: root.expressionError.length > 0 ? Theme.destructive : Theme.panelBorder
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Theme.spacingMd
+            anchors.rightMargin: Theme.spacingMd
+            spacing: Theme.spacingSm
+
+            ThemedLabel {
+                Layout.maximumWidth: chip.width * 0.35
+                wrapMode: Text.NoWrap
+                elide: Text.ElideRight
+                color: root.paramSource.connected ? Theme.foreground : Theme.warning
+                text: root.paramSource.connected ? root.paramSource.label : qsTr("Not connected")
+            }
+
+            ThemedLabel {
+                Layout.fillWidth: true
+                wrapMode: Text.NoWrap
+                elide: Text.ElideRight
+                color: root.expressionError.length > 0 ? Theme.destructive : Theme.mutedForeground
+                font.family: Theme.monoFontFamily
+                text: root.expression
+            }
+
+            ThemedLabel {
+                wrapMode: Text.NoWrap
+                text: root.value.toFixed(root.decimals) + (root.unit.length > 0 ? " " + root.unit : "")
+            }
+        }
+
+        MouseArea {
+            id: chipMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: editorPopup.open()
+        }
+
+        ThemedToolTip {
+            text: root.expressionError.length > 0 ? root.expressionError : qsTr("Edit expression")
+            visible: chipMouse.containsMouse
+        }
+    }
+
     IconButton {
-        visible: root.linkForm !== null && root.expressionName.length > 0 && root.linkedId.length === 0
+        visible: root.linkForm !== null && root.expressionName.length > 0
+                 && !root.paramSource.connected && !root.learning
         glyph: "link-2"
         tooltip: qsTr("Link to a modulator")
         buttonSize: Theme.controlHeightSm
         onClicked: linkMenu.popup()
+    }
 
-        ModulatorLinkMenu {
-            id: linkMenu
-            onPicked: id => root.linkForm.bindModulator(root.expressionName, id,
-                                                        root.from * root.exprScale, root.to * root.exprScale)
-            onLearnRequested: {
-                const id = root.linkForm.bindModulator(root.expressionName, 0,
-                                                       root.from * root.exprScale, root.to * root.exprScale, 9)
-                if (id) {
-                    root.learnId = id
-                    AppController.startOscLearn()
-                }
+    ModulatorLinkMenu {
+        id: linkMenu
+        onPicked: id => root.linkForm.bindModulator(root.expressionName, id,
+                                                    root.from * root.exprScale, root.to * root.exprScale)
+        onLearnRequested: {
+            const id = root.linkForm.bindModulator(root.expressionName, 0,
+                                                   root.from * root.exprScale, root.to * root.exprScale, 9)
+            if (id) {
+                root.learnId = id
+                AppController.startOscLearn()
             }
+        }
+    }
+
+    ExpressionEditorPopup {
+        id: editorPopup
+        label: root.label
+        nodeId: root.linkForm ? root.linkForm.nodeId : 0
+        paramName: root.expressionName
+        expression: root.expression
+        expressionError: root.expressionError
+        sourceLabel: root.paramSource.label || ""
+        connected: root.paramSource.connected === true
+        from: root.from
+        to: root.to
+        unit: root.unit
+        linkForm: root.linkForm
+        onApplied: text => root.expressionEdited(text)
+        onLinkRequested: {
+            close()
+            linkMenu.popup()
         }
     }
 
@@ -184,16 +239,16 @@ RowLayout {
     ThemedToggleButton {
         visible: root.expressionName.length > 0
         text: "\u0192"
-        tooltip: qsTr("Drive this value with a Lua expression")
+        tooltip: qsTr("Drive with an expression \u2014 adds a socket on the node")
         toggleHeight: Theme.controlHeightSm
         checkable: false
         checked: root.exprMode
         onClicked: {
-            root.expressionOpen = !root.exprMode
-            if (root.expressionOpen) {
-                exprField.forceActiveFocus()
-            } else if (root.expression.length > 0) {
+            if (root.exprMode) {
                 root.expressionEdited("")
+            } else {
+                root.expressionEdited("input")
+                editorPopup.open()
             }
         }
     }

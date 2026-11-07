@@ -44,7 +44,7 @@ Item {
 
         NodeLabel {
             anchors.fill: parent
-            visible: root.node.params.bypass
+            visible: !!root.node.params.bypass
             muted: true
             text: qsTr("BYPASSED")
             horizontalAlignment: Text.AlignHCenter
@@ -69,7 +69,7 @@ Item {
         delegate: NodeLabel {
             required property var modelData
 
-            visible: modelData.index > 0
+            visible: modelData.index > 0 && modelData.kind !== NodePalette.portKind.ParamIn
             x: 10
             y: modelData.y - 7
             width: parent.width - 20

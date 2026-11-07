@@ -194,6 +194,7 @@ public:
     Q_INVOKABLE void removeNodes(const QVariantList &ids);
     /// The Modulator nodes of this graph as [{id, name, label, kind}].
     Q_INVOKABLE QVariantList modulators() const;
+    Q_INVOKABLE QVariantMap paramSource(quint64 node, const QString &param) const;
     /// Drives param @p param (a name in the node's params.expressions, e.g. "params.opacity") with
     /// the output of Modulator @p modulator as one undo step. A modulator of 0 first creates an LFO
     /// next to the node, scaled to [min, max]; newKind picks that modulator's kind (default LFO,
@@ -218,6 +219,7 @@ public:
     Q_INVOKABLE bool finishConnection(quint64 node, bool isOutput, int port);
     Q_INVOKABLE void cancelConnection();
     Q_INVOKABLE bool disconnectEdge(quint64 edgeId);
+    Q_INVOKABLE bool disconnectParam(quint64 node, const QString &param);
     Q_INVOKABLE bool insertIntoEdge(quint64 node, quint64 edgeId);
     Q_INVOKABLE bool canInsertIntoEdge(quint64 node, quint64 edgeId) const;
     /// Adds a node and splices it into edgeId (0 = plain add) as one undo step.

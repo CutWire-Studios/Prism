@@ -1167,6 +1167,96 @@ private slots:
         QVERIFY(found);
     }
 
+    void modulatorInputSockets() {
+        ClipGraph g;
+        const NodeId m = g.addNode(NT::Modulator, {}, {{"kind", 0}});
+        const NodeId src = g.addNode(NT::Modulator, {}, {{"kind", 0}});
+        const auto keys = [&](NodeId id) {
+            QStringList k;
+            for (const ClipGraph::Port &p : g.inputPorts(id))
+                if (p.kind == ClipGraph::PortKind::ParamIn) k << p.param;
+            return k;
+        };
+        const qreal h0 = g.node(m)->size.height();
+        QVERIFY(keys(m).isEmpty());
+        for (int kind : {1, 2, 3, 5, 6, 7}) {
+            g.setParams(m, {{"kind", kind}}, true);
+            QCOMPARE(keys(m), QStringList{"in"});
+        }
+        QCOMPARE(g.node(m)->size.height(), h0 + 22.0);
+        g.setParams(m, {{"kind", 4}}, true);
+        QVERIFY(keys(m).isEmpty());
+        g.setParams(m, {{"kind", 9}}, true);
+        QVERIFY(keys(m).isEmpty());
+
+        g.setParams(m, {{"kind", 8}, {"expressions", QVariantMap{{"min", "input"}}}}, true);
+        QCOMPARE(keys(m), (QStringList{"in", "b", "min"}));
+        QCOMPARE(g.node(m)->size.height(), h0 + 66.0);
+        const int out = g.outputPorts(src).first().index;
+        QVERIFY(g.connectPorts(src, out, m, g.inputPorts(m)[1].index));
+        QVERIFY(g.connectPorts(src, out, m, g.inputPorts(m)[0].index));
+        QCOMPARE(g.paramProducer(m, "in"), src);
+        QCOMPARE(g.paramProducer(m, "b"), src);
+
+        ClipGraph again;
+        QVERIFY(again.fromJson(g.toJson()));
+        QCOMPARE(again.paramProducer(m, "in"), src);
+        QCOMPARE(again.paramProducer(m, "b"), src);
+
+        g.setParams(m, {{"expressions", QVariantMap{}}}, true);
+        QCOMPARE(g.paramProducer(m, "b"), src);
+        g.setParams(m, {{"kind", 2}}, true);
+        QCOMPARE(g.paramProducer(m, "in"), src);
+        QCOMPARE(g.paramProducer(m, "b"), NodeId(0));
+    }
+
+    void insertIntoEdgeSkipsParamPorts() {
+        ClipGraph g;
+        const NodeId a = g.addNode(NT::Modulator, {}, {{"kind", 0}});
+        const NodeId t = g.addNode(NT::Modulator, {}, {{"kind", 2}});
+        const NodeId mid = g.addNode(NT::Modulator, {}, {{"kind", 2}});
+        QVERIFY(g.connectPorts(a, g.outputPorts(a).first().index, t, g.inputPorts(t).first().index));
+        QVERIFY(!g.canInsertIntoEdge(mid, g.edges().first().id));
+    }
+
+    void paramPortFollowsExpressionKeys() {
+        ClipGraph g;
+        const NodeId p = g.addNode(NT::Process, {}, {{"effect", 6}});
+        const NodeId mod = g.addNode(NT::Modulator, {}, {});
+        const int base = int(g.inputPorts(p).size());
+        const qreal h0 = g.node(p)->size.height();
+
+        g.setParams(p, {{"expressions", QVariantMap{{"params.opacity", "input"}}}}, true);
+        QCOMPARE(int(g.inputPorts(p).size()), base + 1);
+        const ClipGraph::Port port = g.inputPorts(p).last();
+        QCOMPARE(port.kind, ClipGraph::PortKind::ParamIn);
+        QCOMPARE(port.param, QStringLiteral("params.opacity"));
+        QCOMPARE(port.label, QStringLiteral("opacity"));
+        QCOMPARE(g.node(p)->size.height(), h0 + 22.0);
+
+        QVERIFY(g.connectPorts(mod, g.outputPorts(mod).first().index, p, port.index));
+        QCOMPARE(g.edges().last().kind, ClipGraph::EdgeKind::ScriptToParam);
+
+        g.setParams(p, {{"expressions", QVariantMap{{"params.opacity", "input"}, {"params.a", "input"}}}}, true);
+        QCOMPARE(g.paramProducer(p, QStringLiteral("params.opacity")), mod);
+        QCOMPARE(g.inputPorts(p).first().kind, ClipGraph::PortKind::ChainIn);
+
+        ClipGraph again;
+        QVERIFY(again.fromJson(g.toJson()));
+        QCOMPARE(again.paramProducer(p, QStringLiteral("params.opacity")), mod);
+        QCOMPARE(again.paramProducer(p, QStringLiteral("params.a")), NodeId(0));
+
+        const QJsonObject clip = g.copyNodes({p, mod});
+        const QList<NodeId> pasted = again.pasteNodes(clip, {10, 10});
+        QCOMPARE(pasted.size(), 2);
+        QCOMPARE(again.paramProducer(pasted[0], QStringLiteral("params.opacity")), pasted[1]);
+
+        g.setParams(p, {{"expressions", QVariantMap{}}}, true);
+        QCOMPARE(int(g.inputPorts(p).size()), base);
+        QVERIFY(g.edges().isEmpty());
+        QCOMPARE(g.node(p)->size.height(), h0);
+    }
+
     void bindParamRoundTripsAndIsOneUndoStep() {
         ClipGraphController c;
         const quint64 p = c.addNode(int(NT::Process), 0, 0, {{"effect", 6}});
@@ -1178,15 +1268,19 @@ private slots:
         QCOMPARE(c.graph()->node(mod)->type, NT::Modulator);
         QCOMPARE(c.graph()->node(mod)->params.value("max").toDouble(), 1.0);
         QCOMPARE(c.graph()->node(p)->params.value("expressions").toMap().value("params.opacity").toString(),
-                 QStringLiteral("mod(%1)").arg(mod));
+                 QStringLiteral("input"));
         QCOMPARE(c.modulators().size(), 1);
+        QVERIFY(c.paramSource(p, QStringLiteral("params.opacity")).value("connected").toBool());
+        QCOMPARE(c.paramSource(p, QStringLiteral("params.opacity")).value("nodeId").toULongLong(), mod);
+        QCOMPARE(c.graph()->paramProducer(p, QStringLiteral("params.opacity")), mod);
 
         const QJsonObject json = c.graph()->toJson();
         ClipGraph again;
         QVERIFY(again.fromJson(json));
         QCOMPARE(again.node(p)->params.value("expressions").toMap().value("params.opacity").toString(),
-                 QStringLiteral("mod(%1)").arg(mod));
+                 QStringLiteral("input"));
         QVERIFY(again.hasNode(mod));
+        QCOMPARE(again.paramProducer(p, QStringLiteral("params.opacity")), mod);
 
         c.undo();
         QVERIFY(!c.graph()->hasNode(mod));

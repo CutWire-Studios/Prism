@@ -78,32 +78,36 @@ QList<NodeId> ModulatorEngine::ids() const {
     return out;
 }
 
-void ModulatorEngine::tick(const ModulatorClock &clk, const InputResolver &resolve) {
+void ModulatorEngine::tick(const ModulatorClock &clk, const InputResolver &resolve, const SocketResolver &socket) {
     const double dt = m_hasTime ? std::max(0.0, clk.time - m_lastTime) : 0.0;
     m_hasTime = true;
     m_lastTime = clk.time;
 
-    const std::function<double(const QString &)> input = [&](const QString &specIn) -> double {
+    const InputFn input = [&](NodeId id, const char *key, const QString &specIn) -> double {
+        if (key && socket) {
+            if (const std::optional<double> v = socket(id, QLatin1String(key)))
+                return finiteOr0(*v);
+        }
         const QString spec = specIn.trimmed();
         if (spec.isEmpty())
             return 0.0;
-        if (spec.startsWith(QLatin1String("mod:")))
-            return value(spec.mid(4).toULongLong());
         bool isNumber = false;
         const double literal = spec.toDouble(&isNumber);
         if (isNumber)
             return literal;
-        return resolve ? finiteOr0(resolve(spec)) : 0.0;
+        if (spec.startsWith(QLatin1String("osc:")) && resolve)
+            return finiteOr0(resolve(spec));
+        return 0.0;
     };
 
     for (auto &[id, n] : m_nodes)
-        n.value = finiteOr0(evaluate(n, clk, dt, input));
+        n.value = finiteOr0(evaluate(id, n, clk, dt, input));
 }
 
-double ModulatorEngine::evaluate(Node &n, const ModulatorClock &clk, double dt,
-                                 const std::function<double(const QString &)> &input) const {
+double ModulatorEngine::evaluate(NodeId id, Node &n, const ModulatorClock &clk, double dt, const InputFn &input) const {
     const QVariantMap &p = n.p;
-    const auto in = [&] { return input(p.value(QStringLiteral("in")).toString()); };
+    const bool hasSocket = Kind(n.kind) != Kind::ControlIn;
+    const auto in = [&] { return input(id, hasSocket ? "in" : nullptr, p.value(QStringLiteral("in")).toString()); };
 
     switch (Kind(n.kind)) {
     case Kind::Lfo: {
@@ -180,7 +184,7 @@ double ModulatorEngine::evaluate(Node &n, const ModulatorClock &clk, double dt,
     }
     case Kind::Math: {
         const double a = in();
-        const double b = input(p.value(QStringLiteral("b")).toString());
+        const double b = input(id, "b", p.value(QStringLiteral("b")).toString());
         switch (MathOp(p.value(QStringLiteral("op")).toInt())) {
         case MathOp::Add: return a + b;
         case MathOp::Sub: return a - b;

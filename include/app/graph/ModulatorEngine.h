@@ -5,6 +5,7 @@
 #include <QVariantMap>
 #include <functional>
 #include <map>
+#include <optional>
 
 #include "core/graph/ClipGraph.h"
 
@@ -14,12 +15,13 @@ struct ModulatorClock {
     double beat = 0.0;   // absolute beats (beat count plus phase) from the BpmClock
 };
 
-/// Evaluates Modulator nodes. Each node owns a float output ("value") that parameters read through
-/// the `mod(<nodeId>)` expression function. Input specs (params "in" and "b") are, in order: empty
-/// (0), a number literal, "mod:<nodeId>" (another modulator, one tick of lag when it is evaluated
-/// later), or anything else, which is passed to the InputResolver (audio band names such as "low",
-/// "mid", "high", "level", "beat", or "<analyzerId>:<band>"). The resolver also handles
-/// "osc:<address>", the latest value received on that OSC address.
+/// Evaluates Modulator nodes. Each node owns a float output ("value"); parameters read it through
+/// the `input` of a wired socket. Kinds with inputs (all but Lfo, Random and ControlIn) have a
+/// socket "in" (Math also "b"). A connected socket is answered by the SocketResolver. An
+/// unconnected one falls back to the param spec: empty (0), a number literal, or "osc:<address>"
+/// (the latest value received on that OSC address, via the InputResolver). Anything else is 0.
+/// ControlIn has no socket and always reads its "in" spec. Modulator-to-modulator wiring has one
+/// tick of lag when the source is evaluated later.
 ///
 /// Params by kind (Kind enum order is persisted):
 ///   Lfo       shape, sync, rateHz, rateBeats, phase, width, seed, min, max
@@ -39,13 +41,14 @@ public:
     enum class MathOp { Add, Sub, Mul, Div, Min, Max, Pow, Abs };
 
     using InputResolver = std::function<double(const QString &spec)>;
+    using SocketResolver = std::function<std::optional<double>(NodeId, const QString &key)>;
 
     /// Creates or updates a node. Runtime state survives parameter edits of the same kind.
     void setNode(NodeId id, const QVariantMap &params);
     void removeNode(NodeId id);
     void clear();
 
-    void tick(const ModulatorClock &clock, const InputResolver &resolve = {});
+    void tick(const ModulatorClock &clock, const InputResolver &resolve = {}, const SocketResolver &socket = {});
 
     bool contains(NodeId id) const { return m_nodes.count(id) > 0; }
     double value(NodeId id) const;
@@ -62,8 +65,8 @@ private:
         bool toggled = false;
     };
 
-    double evaluate(Node &n, const ModulatorClock &clk, double dt,
-                    const std::function<double(const QString &)> &input) const;
+    using InputFn = std::function<double(NodeId, const char *key, const QString &spec)>;
+    double evaluate(NodeId id, Node &n, const ModulatorClock &clk, double dt, const InputFn &input) const;
 
     std::map<NodeId, Node> m_nodes;
     double m_lastTime = 0.0;

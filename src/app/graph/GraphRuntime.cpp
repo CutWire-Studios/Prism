@@ -539,6 +539,7 @@ struct GraphRuntime::Impl {
     GraphRuntime *owner = nullptr;
     std::map<NodeId, std::unique_ptr<ScriptNode>> scripts;
     QHash<NodeId, uint> lastMergedVersion;
+    QHash<NodeId, std::shared_ptr<ScriptOutput>> modulatorOutputs;
     QHash<NodeId, uint> lastScriptInput;
     mutable QHash<NodeId, std::shared_ptr<ScriptOutput>> dataInputs;
     std::shared_ptr<NodeThumbStore> thumbs;
@@ -677,19 +678,81 @@ struct GraphRuntime::Impl {
     void tickModulators() {
         const ModulatorClock mc{clock.elapsed() / 1000.0, bpmClock ? bpmClock->beats() : 0.0};
         modulators.tick(mc, [this](const QString &spec) {
-            if (spec.startsWith(QLatin1String("osc:")))
-                return controlSource ? controlSource(spec.mid(4)) : 0.0;
-            QMutexLocker lock(&shared->mutex);
-            const int colon = spec.indexOf(QLatin1Char(':'));
-            const NodeId analyzer = colon > 0 ? spec.left(colon).toULongLong() : shared->latestBands;
-            return shared->bands.value(analyzer).value(colon > 0 ? spec.mid(colon + 1) : spec).toDouble();
-        });
+            return controlSource ? controlSource(spec.mid(4)) : 0.0;
+        }, [this](NodeId id, const QString &key) { return socketValue(id, key); });
+        for (auto it = modulatorOutputs.begin(); it != modulatorOutputs.end(); ++it)
+            publishModulatorOutput(it.key(), *it.value());
         QMutexLocker lock(&shared->mutex);
         shared->bpm = bpmClock ? bpmClock->bpm() : 120.0;
         shared->beat = mc.beat;
         shared->modulators.clear();
         for (NodeId id : modulators.ids())
             shared->modulators.insert(id, modulators.value(id));
+    }
+
+    std::optional<double> socketValue(NodeId id, const QString &key) const {
+        const ClipGraph *g = owner->m_graph;
+        const NodeId producer = g->paramProducer(id, key);
+        const ClipGraph::Node *p = producer ? g->node(producer) : nullptr;
+        if (!p)
+            return std::nullopt;
+        if (p->type == NT::Modulator)
+            return modulators.value(producer);
+        const ClipGraph::Node *self = g->node(id);
+        QString field = self ? self->params.value(key + QLatin1String("Field")).toString().trimmed() : QString();
+        if (p->type == NT::AudioAnalyzer) {
+            if (field.isEmpty())
+                field = QStringLiteral("level");
+            QMutexLocker lock(&shared->mutex);
+            return shared->bands.value(producer).value(field).toDouble();
+        }
+        const ScriptNode *sn = script(producer);
+        if (!sn || !sn->output)
+            return 0.0;
+        QString j;
+        {
+            QMutexLocker lock(&sn->output->mutex);
+            j = sn->output->json;
+        }
+        const QJsonValue v = QJsonDocument::fromJson(j.toUtf8()).object().value(field);
+        if (!field.isEmpty())
+            return v.isDouble() ? v.toDouble() : 0.0;
+        bool ok = false;
+        const double bare = j.trimmed().toDouble(&ok);
+        return ok ? bare : 0.0;
+    }
+
+    static QString modulatorKey(const QString &title) {
+        QString k = title.toLower();
+        for (QChar &c : k)
+            if (!((c >= QLatin1Char('a') && c <= QLatin1Char('z')) || (c >= QLatin1Char('0') && c <= QLatin1Char('9'))
+                  || c == QLatin1Char('_')))
+                c = QLatin1Char('_');
+        if (k.isEmpty() || (k[0] >= QLatin1Char('0') && k[0] <= QLatin1Char('9')))
+            k.prepend(QLatin1Char('_'));
+        return k;
+    }
+
+    void publishModulatorOutput(NodeId id, ScriptOutput &out) {
+        const ClipGraph::Node *n = owner->m_graph->node(id);
+        const QJsonObject o{{modulatorKey(n ? n->title : QString()), modulators.value(id)}};
+        const QString j = QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
+        {
+            QMutexLocker lock(&out.mutex);
+            if (out.json == j)
+                return;
+            out.json = j;
+        }
+        out.version.fetch_add(1, std::memory_order_release);
+    }
+
+    std::shared_ptr<ScriptOutput> modulatorOutput(NodeId id) {
+        auto &slot = modulatorOutputs[id];
+        if (!slot) {
+            slot = std::make_shared<ScriptOutput>();
+            publishModulatorOutput(id, *slot);
+        }
+        return slot;
     }
 
     ScriptNode *script(NodeId id) const {
@@ -743,6 +806,35 @@ struct GraphRuntime::Impl {
         emit owner->scriptStatusChanged(id);
     }
 
+    QVariant paramInput(NodeId id, const QString &param) const {
+        const NodeId producer = owner->m_graph->paramProducer(id, param);
+        const ClipGraph::Node *p = producer ? owner->m_graph->node(producer) : nullptr;
+        if (!p)
+            return {};
+        if (p->type == NT::Modulator) {
+            QMutexLocker lock(&shared->mutex);
+            return shared->modulators.value(producer);
+        }
+        if (p->type == NT::AudioAnalyzer) {
+            QMutexLocker lock(&shared->mutex);
+            return shared->bands.value(producer);
+        }
+        const ScriptNode *sn = script(producer);
+        if (!sn || !sn->output)
+            return {};
+        QString j;
+        {
+            QMutexLocker lock(&sn->output->mutex);
+            j = sn->output->json;
+        }
+        const QJsonDocument doc = QJsonDocument::fromJson(j.toUtf8());
+        if (doc.isObject())
+            return doc.object().toVariantMap();
+        if (doc.isArray())
+            return doc.array().toVariantList();
+        return {};
+    }
+
     void runExpressions() {
         if (exprBusy || expressions.isEmpty())
             return;
@@ -750,7 +842,9 @@ struct GraphRuntime::Impl {
         for (auto it = expressions.begin(); it != expressions.end(); ++it)
             for (auto e = it->begin(); e != it->end(); ++e)
                 jobs.append(QVariantMap{{"node", QVariant::fromValue<qulonglong>(it.key())},
-                                        {"name", e.key()}, {"expr", e.value()}});
+                                        {"name", e.key()}, {"expr", e.value()},
+                                        {"input", paramInput(it.key(), e.key())},
+                                        {"label", e.key().mid(e.key().lastIndexOf(QLatin1Char('.')) + 1)}});
         ensureExpressionRuntime();
         exprBusy = true;
         QMetaObject::invokeMethod(exprRuntime, "evaluateExpressions", Qt::QueuedConnection,
@@ -876,6 +970,7 @@ struct GraphRuntime::Impl {
         lastMergedVersion.clear();
         lastScriptInput.clear();
         dataInputs.clear();
+        modulatorOutputs.clear();
         expressions.clear();
         expressionErrors.clear();
         modulators.clear();
@@ -896,6 +991,7 @@ struct GraphRuntime::Impl {
         expressions.remove(id);
         expressionErrors.remove(id);
         modulators.removeNode(id);
+        modulatorOutputs.remove(id);
         {
             QMutexLocker lock(&shared->mutex);
             shared->modulators.remove(id);
@@ -963,10 +1059,6 @@ GraphRuntime::GraphRuntime(ClipGraph *graph, QObject *parent, std::shared_ptr<No
         d->host->globals = [sh] {
             QMutexLocker lock(&sh->mutex);
             return sh->globals;
-        };
-        d->host->modulatorValue = [sh](quint64 id) {
-            QMutexLocker lock(&sh->mutex);
-            return sh->modulators.value(id);
         };
         d->host->audioBands = [sh](quint64 id) {
             QMutexLocker lock(&sh->mutex);
@@ -1236,6 +1328,10 @@ void GraphRuntime::setControlSource(std::function<double(const QString &address)
     d->controlSource = std::move(source);
 }
 
+QVariant GraphRuntime::expressionInput(NodeId id, const QString &param) const {
+    return d->paramInput(id, param);
+}
+
 double GraphRuntime::modulatorValue(NodeId id) const {
     return d->modulators.value(id);
 }
@@ -1305,7 +1401,19 @@ QString GraphRuntime::mergeScriptInputs(const QVector<NodeId> &producers, uint &
     QVector<NodeId> ordered = producers;
     if (base)
         ordered.prepend(base);
+    QHash<QString, int> modulatorKeys;
     for (NodeId pid : std::as_const(ordered)) {
+        const ClipGraph::Node *gn = m_graph->node(pid);
+        if (gn && gn->type == NT::Modulator) {
+            const auto out = d->modulatorOutput(pid);
+            verSum += out->version.load(std::memory_order_acquire);
+            QString key = GraphRuntime::Impl::modulatorKey(gn->title);
+            const int n = ++modulatorKeys[key];
+            if (n > 1)
+                key += QStringLiteral("_%1").arg(n);
+            combined.insert(key, d->modulators.value(pid));
+            continue;
+        }
         const ScriptNode *sn = d->script(pid);
         if (!sn)
             continue;
@@ -1337,6 +1445,9 @@ std::shared_ptr<ScriptOutput> GraphRuntime::scriptOutputForDataNode(NodeId dataN
     }
     if (producers.size() == 1 && !hasInline) {
         d->dataInputs.remove(dataNodeId);
+        const ClipGraph::Node *gn = m_graph->node(producers.first());
+        if (gn && gn->type == NT::Modulator)
+            return d->modulatorOutput(producers.first());
         const ScriptNode *sn = d->script(producers.first());
         return sn ? sn->output : nullptr;
     }
