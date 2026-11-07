@@ -87,7 +87,6 @@ QString kindName(SourceDescriptor::Kind kind)
     case K::Shape:      return QStringLiteral("shape");
     case K::AudioFile:  return QStringLiteral("audio");
     case K::SvgTemplate: return QStringLiteral("svg_template");
-    case K::RemovedHtml: break;
     }
     return QStringLiteral("unknown");
 }
@@ -403,8 +402,6 @@ int parseConnectionKind(const QJsonValue &v)
         return 5;
     if (s == QLatin1String("clip_to_audio_script") || s == QLatin1String("12"))
         return 12;
-    if (s == QLatin1String("controller_to_master") || s == QLatin1String("3"))
-        return 3;
     if (s == QLatin1String("input_to_master") || s == QLatin1String("7"))
         return 7;
     if (s == QLatin1String("stream_to_mixer") || s == QLatin1String("9"))

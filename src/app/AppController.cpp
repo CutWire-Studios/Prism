@@ -145,6 +145,7 @@ AppController::AppController(QObject *parent)
 
     m_obsIntegration = new ObsIntegration(this);
     m_deckController = new DeckController(m_compositor.get(), m_outputHub, this);
+    m_deckController->setMeterBank(&m_meterBank);
     m_deckController->setDeviceResolver([this](const QString &logical) { return m_venue->resolveDevice(logical); });
     SharedSourcePool::instance().setDeviceResolver([this](const QString &logical) { return m_venue->resolveDevice(logical); });
     m_hotkeyManager = new HotkeyManager(m_show, this);
@@ -166,6 +167,10 @@ AppController::AppController(QObject *parent)
 
     m_updateTimer = new QTimer(this);
     connect(m_updateTimer, &QTimer::timeout, this, &AppController::onTimerTick);
+
+    m_meterTimer = new QTimer(this);
+    m_meterTimer->setTimerType(Qt::PreciseTimer);
+    connect(m_meterTimer, &QTimer::timeout, this, &AppController::pollAudioLevels);
 
     m_autosaveTimer = new QTimer(this);
     connect(m_autosaveTimer, &QTimer::timeout, this, &AppController::performAutosave);
@@ -352,6 +357,8 @@ void AppController::start()
     });
 
     m_updateTimer->start(100);
+    m_meterClock.start();
+    m_meterTimer->start(40);
     for (const QString &id : m_venue->outputs)
         setOutputEnabled(id, true);
 
@@ -375,6 +382,7 @@ void AppController::shutdown(bool saveAndMarkClean)
     m_shuttingDown = true;
 
     m_updateTimer->stop();
+    m_meterTimer->stop();
     m_autosaveTimer->stop();
     m_pushTimer->stop();
 
@@ -412,6 +420,61 @@ ClipGraph *AppController::clipGraph() const { return m_show->editedCue()->graph(
 ClipGraphController *AppController::graphController() const { return m_show->editedCue()->controller(); }
 GraphRuntime *AppController::graphRuntime() const { return m_show->editedCue()->runtime(); }
 QAbstractItemModel *AppController::cueModel() const { return m_show->model(); }
+QString AppController::audioDeviceFor(const QString &logical) const
+{
+    return m_venue->deviceMap.value(logical);
+}
+
+void AppController::setAudioDevice(const QString &logical, const QString &physical)
+{
+    if (m_venue->deviceMap.contains(logical) && m_venue->deviceMap.value(logical) == physical)
+        return;
+    m_venue->deviceMap.insert(logical, physical);
+    m_venue->saveToSettings();
+    refreshDeckAudio();
+    emit audioDevicesChanged();
+}
+
+void AppController::clearAudioDevice(const QString &logical)
+{
+    if (m_venue->deviceMap.remove(logical) == 0)
+        return;
+    m_venue->saveToSettings();
+    refreshDeckAudio();
+    emit audioDevicesChanged();
+}
+
+void AppController::refreshDeckAudio()
+{
+    for (const Deck deck : {Deck::Live, Deck::Staging}) {
+        if (m_deckController->activeNode(deck))
+            m_deckController->applyAudioControllerToDeck(deck, m_deckController->activeNode(deck), false);
+    }
+    m_deckController->syncMasterAudioInputs();
+    m_deckController->refreshAudioEffects();
+}
+
+void AppController::pollAudioLevels()
+{
+    const float dt = std::min(m_meterClock.restart() / 1000.0f, 0.25f);
+    QList<const ClipGraph *> graphs;
+    for (const Cue *cue : {m_show->liveCue(), m_show->stagingCue(), m_show->editedCue()}) {
+        if (cue && !graphs.contains(cue->graph()))
+            graphs.append(cue->graph());
+    }
+    const QHash<quint64, float> levels = m_meterBank.poll(dt, graphs);
+    QVariantMap next;
+    for (auto it = levels.cbegin(); it != levels.cend(); ++it) {
+        const float display = AudioMeterBank::toDisplay(it.value());
+        if (display > 0.0f)
+            next.insert(QString::number(it.key()), display);
+    }
+    if (next.isEmpty() && m_audioLevels.isEmpty())
+        return;
+    m_audioLevels = next;
+    emit audioLevelsChanged();
+}
+
 QString AppController::liveCueId() const { return m_show->liveCueId(); }
 QString AppController::stagingCueId() const { return m_show->stagingCueId(); }
 QString AppController::editedCueId() const { return m_show->editedCueId(); }

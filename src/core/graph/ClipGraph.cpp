@@ -79,7 +79,7 @@ QVariantMap canonSlot(NT type, const QJsonObject &so) {
 }
 
 QVariantMap defaultDevicePort() {
-    return {{"deviceId", QString()}, {"deviceLabel", QStringLiteral("Default")}};
+    return {{"deviceId", QStringLiteral("Main")}, {"deviceLabel", QStringLiteral("Main")}};
 }
 
 QVariantMap defaultParams(NT type) {
@@ -91,7 +91,7 @@ QVariantMap defaultParams(NT type) {
         return {{"slots", QVariantList{defaultSlot(NT::AudioMixer)}}};
     case NT::MasterAudioOutput:
         return {{"devicePorts", QVariantList{defaultDevicePort()}},
-                {"deviceId", QString()}, {"deviceLabel", QStringLiteral("Default")}};
+                {"deviceId", QStringLiteral("Main")}, {"deviceLabel", QStringLiteral("Main")}};
     case NT::MasterAudioInput:
     case NT::MasterAudioCapture:
         return {{"deviceId", QString()}, {"deviceLabel", QString()},
@@ -270,7 +270,6 @@ QString ClipGraph::edgeKindName(int kind) {
     case EK::ScriptToData:       return QStringLiteral("script_to_data");
     case EK::ClipToShaderAudio:  return QStringLiteral("clip_to_shader_audio");
     case EK::ClipToAudioScript:  return QStringLiteral("clip_to_audio_script");
-    case EK::ControllerToMaster: return QStringLiteral("controller_to_master");
     case EK::InputToMaster:      return QStringLiteral("input_to_master");
     case EK::StreamToMixer:      return QStringLiteral("stream_to_mixer");
     case EK::MixerToOutput:      return QStringLiteral("mixer_to_output");
@@ -542,10 +541,6 @@ bool ClipGraph::lookupConnectionPorts(NodeId from, NodeId to, int kind, int slot
         *fromPort = fromFirst({PK::AudioControllerOut, PK::MasterAudioInputOut});
         *toPort = findPortIndex(to, PK::AudioIn, -1);
         break;
-    case EK::ControllerToMaster:
-        *fromPort = fromFirst({PK::AudioControllerOut, PK::AudioEffectOut});
-        *toPort = findPortIndex(to, PK::MasterAudioIn, slot >= 0 ? slot : 0);
-        break;
     case EK::InputToMaster:
         *fromPort = fromFirst({PK::MasterAudioInputOut, PK::AudioEffectOut});
         *toPort = findPortIndex(to, PK::MasterAudioIn, slot >= 0 ? slot : 0);
@@ -650,7 +645,6 @@ NodeId ClipGraph::addInputNode(const SourceDescriptor &descIn, const QPointF &po
     using K = SourceDescriptor::Kind;
     if (desc.captureId.isEmpty() && (desc.kind == K::Screen || desc.kind == K::Window))
         desc.captureId = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    if (desc.kind == K::RemovedHtml) return 0;
     if (desc.kind == K::AudioFile) audioOnly = true;
     hasAudio = hasAudio || audioOnly;
 
@@ -873,7 +867,7 @@ bool ClipGraph::connectNodes(NodeId from, NodeId to, int kind, int toPortIndex) 
 
     static const EK kTryOrder[] = {
         EK::Chain, EK::ScriptToData, EK::ClipToShaderAudio, EK::AudioEffectChain,
-        EK::StreamToMixer, EK::MixerToOutput, EK::ControllerToMaster, EK::InputToMaster,
+        EK::StreamToMixer, EK::MixerToOutput, EK::InputToMaster,
         EK::ClipToAudioScript,
     };
     QVector<int> kinds;
@@ -894,7 +888,7 @@ bool ClipGraph::canConnectNodes(NodeId from, NodeId to, int kind, int toPortInde
     if (from == 0 || to == 0 || from == to || !hasNode(from) || !hasNode(to)) return false;
     static const EK kTryOrder[] = {
         EK::Chain, EK::ScriptToData, EK::ClipToShaderAudio, EK::AudioEffectChain,
-        EK::StreamToMixer, EK::MixerToOutput, EK::ControllerToMaster, EK::InputToMaster,
+        EK::StreamToMixer, EK::MixerToOutput, EK::InputToMaster,
         EK::ClipToAudioScript,
     };
     QVector<int> kinds;
@@ -1182,7 +1176,7 @@ void ClipGraph::migrateLegacyAudioConnections() {
     QVector<Legacy> pending;
     for (int i = int(m_edges.size()) - 1; i >= 0; --i) {
         const Edge &e = m_edges[i];
-        if (e.kind != EK::ControllerToMaster && e.kind != EK::InputToMaster) continue;
+        if (e.kind != EK::InputToMaster) continue;
         pending.prepend({e.from, e.fromPort, e.to, e.toPort});
         removeEdgeAt(i);
     }
@@ -1484,7 +1478,7 @@ void ClipGraph::setOutputCanvasSize(int w, int h) {
 
 bool ClipGraph::edgeFromAudioStreamOut(NodeId from, const Edge **out) const {
     static const EK kinds[] = {EK::AudioEffectChain, EK::StreamToMixer,
-                               EK::ControllerToMaster, EK::InputToMaster};
+                               EK::InputToMaster};
     for (EK wanted : kinds) {
         for (const Edge &e : m_edges) {
             if (e.from == from && e.kind == wanted) {
@@ -1518,7 +1512,8 @@ bool ClipGraph::resolveAudioStreamRoute(NodeId sourceNodeId, ResolvedAudioRoute 
             if (ae && ae->type == NT::AudioEffect) {
                 if (!ae->params.value("bypass").toBool())
                     route.effects.append({int(toId), prism::audiofx::fromJson(
-                        toJsonObject(ae->params.value("params").toMap()))});
+                        toJsonObject(ae->params.value("params").toMap())),
+                        std::clamp(ae->params.value("wet", 1.0).toFloat(), 0.0f, 1.0f)});
                 current = toId;
                 continue;
             }
@@ -1549,7 +1544,7 @@ bool ClipGraph::resolveAudioStreamRoute(NodeId sourceNodeId, ResolvedAudioRoute 
             return route.isValid();
         }
 
-        if (e->kind == EK::ControllerToMaster || e->kind == EK::InputToMaster) {
+        if (e->kind == EK::InputToMaster) {
             route.outputNodeId = toId;
             route.outputPortIndex = e->toPort;
             if (route.outputPortIndex < 0) route.outputPortIndex = 0;
@@ -1568,8 +1563,8 @@ bool ClipGraph::audioSettingsForClip(NodeId clipId, int &volume, bool &muted, bo
     const Node *clip = node(clipId);
     if (!clip || clip->type != NT::Input || !clip->params.value("hasAudio").toBool()) return false;
 
-    volume = 100;
-    muted = false;
+    volume = std::clamp(clip->params.value("audioVolume", 100).toInt(), 0, 100);
+    muted = clip->params.value("audioMuted").toBool();
     playbackMode = clip->params.value("audioPlaybackMode").toInt();
     delayMs = clip->params.value("audioDelayMs").toInt();
     outputDeviceId.clear();
@@ -1579,8 +1574,8 @@ bool ClipGraph::audioSettingsForClip(NodeId clipId, int &volume, bool &muted, bo
     if (routedToMaster) {
         outputDeviceId = route.outputDeviceId;
         if (route.mixerSlotIndex >= 0) {
-            volume = route.mixerSlotVolume;
-            muted = route.mixerSlotMuted;
+            volume = volume * route.mixerSlotVolume / 100;
+            muted = muted || route.mixerSlotMuted;
         }
     }
     return true;
@@ -1592,13 +1587,15 @@ bool ClipGraph::masterSettings(NodeId id, NodeType type, MasterAudioSettings &se
     settings = {};
     settings.deviceId = n->params.value("deviceId").toString();
     settings.deviceLabel = n->params.value("deviceLabel").toString();
+    settings.volume = std::clamp(n->params.value("volume", 100).toInt(), 0, 100);
+    settings.muted = n->params.value("muted").toBool();
     ResolvedAudioRoute route;
     if (resolveAudioStreamRoute(id, route)) {
         settings.routedMasterOutputId = route.outputNodeId;
         settings.routedOutputPortIndex = route.outputPortIndex;
         if (route.mixerSlotIndex >= 0) {
-            settings.volume = route.mixerSlotVolume;
-            settings.muted = route.mixerSlotMuted;
+            settings.volume = settings.volume * route.mixerSlotVolume / 100;
+            settings.muted = settings.muted || route.mixerSlotMuted;
         }
     }
     return true;
@@ -1797,7 +1794,6 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         const QJsonObject obj = val.toObject();
         SourceDescriptor desc = descriptorFromJson(obj["source"].toObject());
         using K = SourceDescriptor::Kind;
-        if (desc.kind == K::RemovedHtml) continue;
         if (desc.kind == K::VideoFile || desc.kind == K::Image || desc.kind == K::AudioFile)
             desc.displayName = QFileInfo(desc.path).baseName();
 
@@ -1847,6 +1843,7 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         const QJsonObject params = obj.contains("params") ? obj["params"].toObject() : desc->defaultParams;
         QVariantMap nodeParams{{"effect", desc->id}, {"params", params.toVariantMap()}};
         if (obj.contains("bypass")) nodeParams["bypass"] = obj["bypass"].toBool();
+        if (obj.contains("wet")) nodeParams["wet"] = obj["wet"].toDouble(1.0);
         restore(obj, NT::AudioEffect, nodeParams);
     }
 

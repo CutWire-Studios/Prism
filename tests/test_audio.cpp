@@ -1,6 +1,8 @@
 #include "TestSupport.h"
 #include "core/media/AudioDecoder.h"
 #include "core/media/AudioAnalyzer.h"
+#include "core/media/AudioLevelMeter.h"
+#include "core/graph/ClipGraph.h"
 
 #include <QtTest>
 #include <QTemporaryDir>
@@ -89,6 +91,44 @@ private slots:
         }
         QVERIFY(expectedBin >= 0);
         QVERIFY(std::abs(peakBin - expectedBin) <= 2);
+    }
+
+    void levelMeter_peakAndDecay() {
+        AudioLevelMeter m;
+        const float pcm[] = {0.1f, -0.8f, 0.3f, 0.2f};
+        m.feed(pcm, 4);
+        m.feed(pcm, 2, 0.5f);
+        QCOMPARE(m.poll(0.0f), 0.8f);
+        // Without new audio the reading falls linearly and bottoms out at zero.
+        QVERIFY(qFuzzyCompare(m.poll(0.1f), 0.8f - AudioLevelMeter::kDecayPerSecond * 0.1f));
+        QCOMPARE(m.poll(10.0f), 0.0f);
+        // A louder block wins over the decayed value, a quieter one does not.
+        m.feed(pcm, 4);
+        m.poll(0.0f);
+        const float quiet[] = {0.05f};
+        m.feed(quiet, 1);
+        QVERIFY(m.poll(0.1f) < 0.8f);
+        QCOMPARE(AudioMeterBank::toDisplay(0.0f), 0.0f);
+        QCOMPARE(AudioMeterBank::toDisplay(1.0f), 1.0f);
+        QVERIFY(qAbs(AudioMeterBank::toDisplay(0.1f) - 2.0f / 3.0f) < 1e-4f);
+    }
+
+    void meterBank_derivesDownstreamNodes() {
+        using NT = ClipGraph::NodeType;
+        ClipGraph g;
+        const quint64 mic = g.addNode(NT::MasterAudioInput);
+        const quint64 mixer = g.addNode(NT::AudioMixer);
+        const quint64 out = g.addNode(NT::MasterAudioOutput);
+        QVERIFY(g.connectPorts(mic, 0, out, 0));
+
+        AudioMeterBank bank;
+        const float pcm[] = {0.5f, -0.25f};
+        bank.meter(mic)->feed(pcm, 2);
+        const auto levels = bank.poll(0.0f, {&g});
+        QCOMPARE(levels.value(mic), 0.5f);
+        QCOMPARE(levels.value(out), 0.5f);
+        QCOMPARE(levels.value(mixer), 0.0f);
+        QVERIFY(bank.poll(10.0f, {&g}).isEmpty());
     }
 };
 

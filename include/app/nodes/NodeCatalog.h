@@ -25,6 +25,8 @@ public:
     /// Button text for a Process / AudioEffect node (dynamic label of its current params).
     /// nodeType is a ClipGraph::NodeType; params is the node's params map.
     Q_INVOKABLE QString effectLabel(int nodeType, const QVariantMap &params) const;
+    /// Names of the top-level pedals of an Audio FX node's chain, a split counting as one entry.
+    Q_INVOKABLE QStringList pedalChain(const QVariantMap &params) const;
     Q_INVOKABLE bool effectHasEditor(int nodeType, int effect) const;
 
     /// ClipGraph::PortKind values.

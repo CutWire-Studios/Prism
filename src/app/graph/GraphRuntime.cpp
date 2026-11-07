@@ -120,7 +120,6 @@ QImage generateThumbnail(const SourceDescriptor &desc) {
     case K::SvgTemplate:
         return ThumbHelper::makeSvgTemplateThumb(desc);
     case K::AudioFile:
-    case K::RemovedHtml:
         break;
     }
     return {};

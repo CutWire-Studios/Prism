@@ -146,6 +146,24 @@ PanelFrame {
                                 params: del.params
                             }
 
+                            InspectorVolumeRow {
+                                visible: del.type === body.nt.MasterAudioInput || del.type === body.nt.MasterAudioCapture
+                                nodeId: del.nodeId
+                                params: del.params
+                            }
+
+                            InspectorOutputForm {
+                                visible: del.type === body.nt.MasterAudioOutput
+                                nodeId: del.nodeId
+                                params: del.params
+                            }
+
+                            InspectorPedalboardForm {
+                                visible: del.type === body.nt.AudioEffect
+                                nodeId: del.nodeId
+                                params: del.params
+                            }
+
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 visible: del.type === body.nt.Layer
@@ -205,46 +223,6 @@ PanelFrame {
                                 onClicked: {
                                     if (root.editors)
                                         root.editors.open(del.nodeId, body.editKind)
-                                }
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                visible: del.type === body.nt.MasterAudioInput || del.type === body.nt.MasterAudioCapture
-                                spacing: Theme.spacingSm
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: Theme.spacingSm
-
-                                    ThemedSlider {
-                                        id: masterVolume
-                                        Layout.fillWidth: true
-                                        label: qsTr("Volume")
-                                        from: 0
-                                        to: 100
-                                        stepSize: 1
-                                        valueFormatter: v => Math.round(v) + "%"
-                                        onMoved: {
-                                            if (!pressed)
-                                                root.graph.setParams(del.nodeId, { volume: Math.round(value) })
-                                        }
-                                        onPressedChanged: {
-                                            if (!pressed)
-                                                root.graph.setParams(del.nodeId, { volume: Math.round(value) })
-                                        }
-                                        Binding {
-                                            target: masterVolume
-                                            property: "value"
-                                            value: del.params.volume
-                                            when: !masterVolume.pressed
-                                        }
-                                    }
-                                    ThemedSwitch {
-                                        text: qsTr("Mute")
-                                        checked: !!del.params.muted
-                                        onToggled: root.graph.setParams(del.nodeId, { muted: checked })
-                                    }
                                 }
                             }
 

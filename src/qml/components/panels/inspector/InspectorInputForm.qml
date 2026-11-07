@@ -386,6 +386,14 @@ InspectorForm {
         text: qsTr("Phone camera session. Add another Phone Camera to pair a different phone.")
     }
 
+    InspectorVolumeRow {
+        visible: !!root.params.hasAudio
+        volumeKey: "audioVolume"
+        muteKey: "audioMuted"
+        nodeId: root.nodeId
+        params: root.params
+    }
+
     StyleFieldRow {
         Layout.fillWidth: true
         visible: !!root.params.hasAudio

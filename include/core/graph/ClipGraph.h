@@ -77,8 +77,6 @@ public:
         Chain = 0,
         TransformToContext = 1,
         AudioToController = 2,
-        ControllerToMaster = 3,
-        LegacyClipToTransform = 4,
         ClipToShaderAudio = 5,
         ScriptToData = 6,
         InputToMaster = 7,

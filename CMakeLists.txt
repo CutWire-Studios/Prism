@@ -307,6 +307,7 @@ set(SOURCES
     src/core/media/AudioEffectChain.cpp
     src/core/audio/AudioRack.cpp
     src/core/media/AudioAnalyzer.cpp
+    src/core/media/AudioLevelMeter.cpp
     src/core/media/AudioPlayer.cpp
     src/core/media/AudioInputCapture.cpp
     src/core/media/SharedAudioCapture.cpp
@@ -458,6 +459,7 @@ set(HEADERS
     include/core/media/AudioEffectChain.h
     include/core/audio/AudioRack.h
     include/core/media/AudioAnalyzer.h
+    include/core/media/AudioLevelMeter.h
     include/core/media/AudioPlayer.h
     include/core/media/AudioInputCapture.h
     include/core/media/SharedAudioCapture.h

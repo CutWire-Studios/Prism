@@ -322,14 +322,14 @@ private slots:
         QVERIFY(!g.canConnectNodes(mixer, master, int(EK::MixerToOutput), 9));
         QVERIFY(g.canConnectNodes(clip, fx, int(EK::AudioEffectChain)));
         QVERIFY(g.canConnectNodes(mic, fx, int(EK::AudioEffectChain)));
-        QVERIFY(g.canConnectNodes(clip, master, int(EK::ControllerToMaster), 0));
         QVERIFY(g.canConnectNodes(mic, master, int(EK::InputToMaster), 0));
         QVERIFY(!g.canConnectNodes(clip, master, int(EK::InputToMaster), 0));
 
         // Kinds with no port mapping are never connectable
         QVERIFY(!g.canConnectNodes(clip, layer, int(EK::TransformToContext), 0));
         QVERIFY(!g.canConnectNodes(clip, layer, int(EK::AudioToController), 0));
-        QVERIFY(!g.canConnectNodes(clip, layer, int(EK::LegacyClipToTransform), 0));
+        QVERIFY(!g.canConnectNodes(clip, layer, 3, 0));
+        QVERIFY(!g.canConnectNodes(clip, layer, 4, 0));
 
         // Inference prefers the video chain; self and unknown nodes are refused
         QVERIFY(g.canConnectNodes(clip, layer, -1, 0));
@@ -511,6 +511,97 @@ private slots:
         QVERIFY(g.setParams(master, {{"devicePorts", QVariantList{
             QVariantMap{{"deviceId", ""}, {"deviceLabel", "Default"}}}}}));
         QVERIFY(!g.resolveAudioStreamRoute(clip, route));
+    }
+
+    void inputVolumeAndMuteReachDeckGain() {
+        ClipGraph g;
+        const NodeId clip = g.addNode(NT::Input, {}, canvas("song", true));
+        const NodeId mixer = g.addNode(NT::AudioMixer);
+        const NodeId master = g.addNode(NT::MasterAudioOutput);
+        QVERIFY(g.connectNodes(clip, mixer, int(EK::StreamToMixer), 0));
+        QVERIFY(g.connectNodes(mixer, master, int(EK::MixerToOutput), 0));
+
+        int volume = 0, mode = 0, delay = 0;
+        bool muted = true, routed = false;
+        QString device;
+        QVERIFY(g.audioSettingsForClip(clip, volume, muted, routed, mode, delay, device));
+        QVERIFY(routed);
+        QCOMPARE(volume, 100);
+        QVERIFY(!muted);
+
+        QVERIFY(g.setParams(clip, {{"audioVolume", 50}}));
+        QVERIFY(g.audioSettingsForClip(clip, volume, muted, routed, mode, delay, device));
+        QCOMPARE(volume, 50);
+
+        QVERIFY(g.setParams(clip, {{"audioMuted", true}}));
+        QVERIFY(g.audioSettingsForClip(clip, volume, muted, routed, mode, delay, device));
+        QVERIFY(muted);
+
+        QVariantList mixSlots = g.node(mixer)->params.value("slots").toList();
+        QVariantMap entry = mixSlots[0].toMap();
+        entry["volume"] = 50;
+        mixSlots[0] = entry;
+        QVERIFY(g.setParams(mixer, {{"slots", mixSlots}}));
+        QVERIFY(g.setParams(clip, {{"audioMuted", false}}));
+        QVERIFY(g.audioSettingsForClip(clip, volume, muted, routed, mode, delay, device));
+        QCOMPARE(volume, 25);
+
+        const NodeId mic = g.addNode(NT::MasterAudioInput);
+        QVERIFY(g.setParams(mic, {{"volume", 40}, {"muted", true}}));
+        ClipGraph::MasterAudioSettings s;
+        QVERIFY(g.masterAudioInputSettings(mic, s));
+        QCOMPARE(s.volume, 40);
+        QVERIFY(s.muted);
+    }
+
+    void outputRowsAddAndRemove() {
+        ClipGraph g;
+        const NodeId clip = g.addNode(NT::Input, {}, canvas("song", true));
+        const NodeId master = g.addNode(NT::MasterAudioOutput);
+        QCOMPARE(g.node(master)->params.value("devicePorts").toList().size(), 1);
+        QCOMPARE(g.node(master)->params.value("devicePorts").toList()[0].toMap().value("deviceId").toString(),
+                 QStringLiteral("Main"));
+
+        const QVariantMap second{{"deviceId", "Output 2"}, {"deviceLabel", "Output 2"}};
+        const QVariantList first = g.node(master)->params.value("devicePorts").toList();
+        QVERIFY(g.setParams(master, {{"devicePorts", first + QVariantList{second}}}));
+        QCOMPARE(g.node(master)->params.value("devicePorts").toList().size(), 2);
+        QCOMPARE(g.inputPorts(master).size(), 2);
+
+        const NodeId mixer = g.addNode(NT::AudioMixer);
+        QVERIFY(g.connectNodes(clip, mixer, int(EK::StreamToMixer), 0));
+        QVERIFY(g.connectNodes(mixer, master, int(EK::MixerToOutput), 1));
+        ClipGraph::ResolvedAudioRoute route;
+        QVERIFY(g.resolveAudioStreamRoute(clip, route));
+        QCOMPARE(route.outputPortIndex, 1);
+        QString device;
+        QVERIFY(g.masterAudioOutputDeviceForPort(master, 1, device));
+        QCOMPARE(device, QStringLiteral("Output 2"));
+
+        // Removing the first row shifts the connected one up
+        QVERIFY(g.setParams(master, {{"devicePorts", QVariantList{second}}}));
+        QCOMPARE(g.inputPorts(master).size(), 1);
+        QVERIFY(g.resolveAudioStreamRoute(clip, route));
+        QCOMPARE(route.outputPortIndex, 0);
+
+        // The last row cannot be removed
+        QVERIFY(g.setParams(master, {{"devicePorts", QVariantList{}}}));
+        QCOMPARE(g.node(master)->params.value("devicePorts").toList().size(), 1);
+    }
+
+    void pedalboardWetDry() {
+        ClipGraph g;
+        const NodeId clip = g.addNode(NT::Input, {}, canvas("song", true));
+        const NodeId fx = g.addNode(NT::AudioEffect, {}, {{"effect", AudioEffects::kAudioFxEffectId}});
+        const NodeId master = g.addNode(NT::MasterAudioOutput);
+        QVERIFY(g.connectNodes(clip, fx, int(EK::AudioEffectChain)));
+        QVERIFY(g.connectNodes(fx, master, int(EK::InputToMaster), 0));
+        ClipGraph::ResolvedAudioRoute route;
+        QVERIFY(g.resolveAudioStreamRoute(clip, route));
+        QCOMPARE(route.effects[0].wet, 1.0f);
+        QVERIFY(g.setParams(fx, {{"wet", 0.25}}));
+        QVERIFY(g.resolveAudioStreamRoute(clip, route));
+        QCOMPARE(route.effects[0].wet, 0.25f);
     }
 
     void dragConnectInsertsMixer() {

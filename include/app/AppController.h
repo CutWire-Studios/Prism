@@ -6,6 +6,7 @@
 #include <QImage>
 #include <QJsonObject>
 #include <QList>
+#include <QElapsedTimer>
 #include <QObject>
 #include <QPointer>
 #include <QString>
@@ -19,6 +20,7 @@
 #include "app/show/Preflight.h"
 #include "core/graph/ClipGraph.h"
 #include "core/graph/ClipGraphModels.h"
+#include "core/media/AudioLevelMeter.h"
 #include "core/project/ClipManager.h"
 #include "core/render/Compositor.h"
 #include "core/scripting/ScriptOutput.h"
@@ -129,6 +131,9 @@ class AppController : public QObject {
     /// Rows {id, label, available, enabled, detail}; id is "window", "ndi" or
     /// "virtualCamera". Toggle with setOutputEnabled(id, on).
     Q_PROPERTY(QVariantList outputs READ outputs NOTIFY outputsChanged)
+    /// Peak level (0..1) per audio node id (as a string), refreshed about 25 times a second;
+    /// absent ids are silent.
+    Q_PROPERTY(QVariantMap audioLevels READ audioLevels NOTIFY audioLevelsChanged)
     Q_PROPERTY(int programWidth READ programWidth NOTIFY programResolutionChanged)
     Q_PROPERTY(int programHeight READ programHeight NOTIFY programResolutionChanged)
     /// 0 Stretch, 1 Fit, 2 Crop (Compositor::OutputScaleMode).
@@ -300,6 +305,10 @@ public:
     Q_INVOKABLE quint64 addSourceFromMap(const QVariantMap &descriptor, const QPointF &pos = QPointF(qQNaN(), qQNaN()));
     Q_INVOKABLE void removeNode(quint64 nodeId);
     Q_INVOKABLE void renameNode(quint64 nodeId, const QString &name);
+    /// The physical output device this venue plays the logical audio port on ("" = system default).
+    Q_INVOKABLE QString audioDeviceFor(const QString &logical) const;
+    Q_INVOKABLE void setAudioDevice(const QString &logical, const QString &physical);
+    Q_INVOKABLE void clearAudioDevice(const QString &logical);
     Q_INVOKABLE void linkNodeObsScene(quint64 nodeId, const QString &sceneName);
     /// "Run now" on a Script node; false when the node is not a running Script node.
     Q_INVOKABLE bool runScript(quint64 nodeId);
@@ -396,6 +405,7 @@ public:
     /// Applies resolution, scaling and outputs; @p persist stores it as this machine's default.
     void applyVenue(const VenueProfile &venue, bool persist);
     const VenueProfile &venue() const;
+    QVariantMap audioLevels() const { return m_audioLevels; }
     QJsonObject currentSessionJson(const QString &sessionFilePath = {}) const;
 
 signals:
@@ -422,6 +432,8 @@ signals:
     void outputDirChanged();
     void outputsChanged();
     void programResolutionChanged();
+    void audioLevelsChanged();
+    void audioDevicesChanged();
     void outputScaleModeChanged();
     void obsChanged();
     void mcpEnabledChanged();
@@ -457,6 +469,8 @@ private:
 
     void connectSignals();
     void onTimerTick();
+    void pollAudioLevels();
+    void refreshDeckAudio();
     void applyPanic(const QString &mode);
     void onSessionLoaded();
     bool loadSessionFile(const QString &path);
@@ -500,6 +514,10 @@ private:
     ClipManager m_clipManager;
 
     QTimer *m_updateTimer = nullptr;
+    QTimer *m_meterTimer = nullptr;
+    AudioMeterBank m_meterBank;
+    QVariantMap m_audioLevels;
+    QElapsedTimer m_meterClock;
     QTimer *m_autosaveTimer = nullptr;
     QTimer *m_pushTimer = nullptr;   // coalesces graph changes into one pushDecks()
     QTimer *m_warnTimer = nullptr;   // debounces the per-cue missing media/device scan

@@ -170,10 +170,15 @@ void DeckController::syncMasterAudioInputs() {
                                    : SharedAudioCapture::input(program);
             }
             QVector<SharedAudioCapture::PcmFn> consumers;
-            for (const CaptureSource &src : it.value())
-                consumers.append([runtime = src.runtime, id = src.id](const QByteArray &pcm) {
+            for (const CaptureSource &src : it.value()) {
+                const float gain = src.live && !src.settings.muted ? src.settings.volume / 100.0f : 0.0f;
+                const auto meter = m_meters ? m_meters->meter(src.id) : nullptr;
+                consumers.append([runtime = src.runtime, id = src.id, meter, gain](const QByteArray &pcm) {
+                    if (meter)
+                        meter->feed(pcm, gain);
                     runtime->feedLiveAudioForProducer(id, pcm);
                 });
+            }
             capture->setConsumers(std::move(consumers));
 
             SharedAudioCapture::Settings settings;
@@ -248,6 +253,7 @@ void DeckController::updateDeckAudio(Deck deck, NodeId clipId,
     auto &player = isLive(deck) ? m_audioPlayerLive : m_audioPlayerStaging;
     if (!player) player = std::make_unique<AudioPlayer>(this);
     wireAudioPlayerTap(deck, clipId);
+    player->setMeter(m_meters ? m_meters->meter(clipId) : nullptr);
 
     outputDeviceId = physicalDevice(outputDeviceId);
     const bool deviceChanged = (player->outputDeviceId() != outputDeviceId);

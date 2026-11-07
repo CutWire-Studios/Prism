@@ -37,4 +37,6 @@ private:
     std::vector<std::unique_ptr<Stage>> m_stages;
     std::vector<float> m_left = std::vector<float>(kFrameSamples);
     std::vector<float> m_right = std::vector<float>(kFrameSamples);
+    std::vector<float> m_dryLeft = std::vector<float>(kFrameSamples);
+    std::vector<float> m_dryRight = std::vector<float>(kFrameSamples);
 };

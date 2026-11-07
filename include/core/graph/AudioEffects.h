@@ -11,6 +11,7 @@
 struct AudioEffectRef {
     int nodeId = -1;
     prism::audiofx::AudioRack rack;
+    float wet = 1.0f;   // 0 = dry signal only, 1 = fully processed
 };
 
 struct AudioEffectDescriptor {

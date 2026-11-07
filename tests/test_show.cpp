@@ -6,6 +6,7 @@
 #include "app/remote/RemoteProtocol.h"
 #include "app/show/CueThumbnails.h"
 #include "app/show/Preflight.h"
+#include "app/show/VenueProfile.h"
 #include "app/show/ShowManager.h"
 #include "core/graph/ClipGraph.h"
 #include "core/sources/SourceDescriptor.h"
@@ -64,6 +65,25 @@ private slots:
         const ClipGraph *g = show.liveCue()->graph();
         QVERIFY(g->outputNodeId() != 0);
         QVERIFY(g->audioOutputNodeId() != 0);
+    }
+
+    void logicalAudioPortsMapThroughVenue() {
+        AppController app(nullptr);
+        const QString logical = QStringLiteral("Output 2");
+        QVERIFY(app.audioDeviceFor(logical).isEmpty());
+        QCOMPARE(app.venue().resolveDevice(logical), logical);
+
+        QSignalSpy spy(&app, &AppController::audioDevicesChanged);
+        app.setAudioDevice(logical, QStringLiteral("hw:2"));
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(app.audioDeviceFor(logical), QStringLiteral("hw:2"));
+        QCOMPARE(app.venue().resolveDevice(logical), QStringLiteral("hw:2"));
+
+        app.setAudioDevice(logical, QString());
+        QCOMPARE(app.venue().resolveDevice(logical), QString());
+        app.clearAudioDevice(logical);
+        QCOMPARE(app.venue().resolveDevice(logical), logical);
+        QSettings().remove(QStringLiteral("venue/profile"));
     }
 
     void transitionResolutionPrefersIncoming() {

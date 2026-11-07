@@ -8,6 +8,7 @@
 #include <QVector>
 #include "core/media/AudioDecoder.h"
 #include "core/media/AudioEffectChain.h"
+#include "core/media/AudioLevelMeter.h"
 #include "core/media/PcmResampler.h"
 #include "core/graph/AudioEffects.h"
 #include <QAudioFormat>
@@ -50,6 +51,8 @@ public:
     QString outputDeviceId() const { return m_deviceId; }
 
     void setEffectChain(const QVector<AudioEffectRef> &effects);
+    /// Receives the peak of everything written to the sink.
+    void setMeter(std::shared_ptr<AudioLevelMeter> meter) { m_meter = std::move(meter); }
 
     using PcmTapFn = std::function<void(const QByteArray &)>;
     /// Post-crossfade PCM (for program audio mix recording).
@@ -81,4 +84,5 @@ private:
     qint64 m_silenceBytesPending = 0;
     PcmTapFn m_pcmTap;
     PcmTapFn m_isoPcmTap;
+    std::shared_ptr<AudioLevelMeter> m_meter;
 };

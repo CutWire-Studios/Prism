@@ -11,6 +11,7 @@ using prism::audiofx::LiveValue;
 
 struct AudioEffectChain::Stage {
     int nodeId = -1;
+    float wet = 1.0f;
     QString signature;
     std::unique_ptr<GraphProcessor> processor;
     QVector<LiveValue> lastValues;
@@ -86,6 +87,7 @@ void AudioEffectChain::setEffects(const QVector<AudioEffectRef> &effects) {
             }
             auto stage = std::make_unique<Stage>();
             stage->nodeId = ref.nodeId;
+            stage->wet = ref.wet;
             stage->signature = prism::audiofx::shapeSignature(ref.rack);
             stage->processor = std::make_unique<GraphProcessor>(std::move(graph));
             stage->processor->prepare(spec);
@@ -102,6 +104,7 @@ void AudioEffectChain::setEffects(const QVector<AudioEffectRef> &effects) {
         if (ref.rack.empty())
             continue;
         Stage &stage = *m_stages[s++];
+        stage.wet = ref.wet;
         const QVector<LiveValue> values = prism::audiofx::liveValues(ref.rack);
         for (int i = 0; i < values.size(); ++i) {
             const bool known = i < stage.lastValues.size() && sameSlot(values[i], stage.lastValues[i]);
@@ -146,8 +149,21 @@ bool AudioEffectChain::process(const QByteArray &in, QByteArray &out) {
         }
 
         juce::dsp::AudioBlock<float> block(channels, kChannels, 0, static_cast<size_t>(count));
-        for (auto &stage : m_stages)
+        for (auto &stage : m_stages) {
+            const bool mixed = stage->wet < 1.0f;
+            if (mixed) {
+                std::copy(left, left + count, m_dryLeft.begin());
+                std::copy(right, right + count, m_dryRight.begin());
+            }
             stage->processor->process(block);
+            if (mixed) {
+                const float wet = std::max(stage->wet, 0.0f);
+                for (int i = 0; i < count; ++i) {
+                    left[i] = m_dryLeft[i] + (left[i] - m_dryLeft[i]) * wet;
+                    right[i] = m_dryRight[i] + (right[i] - m_dryRight[i]) * wet;
+                }
+            }
+        }
 
         for (int i = 0; i < count; ++i) {
             dst[(offset + i) * 2] = left[i];

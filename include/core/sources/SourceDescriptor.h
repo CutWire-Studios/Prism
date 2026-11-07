@@ -24,8 +24,7 @@ struct SourceDescriptor {
         Canvas,      // customizable canvas — canvas fields
         Window,      // window/tab capture — windowIndex into capturableWindows()
         Shader, // GLSL fragment shader — shaderCode field
-        RemovedHtml, // retired HTML overlay; kept so saved kind values stay stable, never created
-        Ndi,    // network NDI source   — path = NDI source name
+        Ndi = 9, // network NDI source — path = NDI source name; 8 was retired, saved values must not shift
         WebRtc, // phone camera (WebRTC) — path = session token; webrtcRelayUrl when using public relay
         Text,   // CPU-rendered text overlay — textTemplate field
         AudioFile, // audio-only media file — path = file path

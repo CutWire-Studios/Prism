@@ -169,9 +169,6 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
     case Kind::AudioFile:
         // Audio-only: the deck's AudioPlayer plays it, there is no video source.
         return nullptr;
-    case Kind::RemovedHtml:
-        qWarning("Skipping source: HTML overlays are no longer supported");
-        return nullptr;
     case Kind::Text:
         return std::make_unique<TextSource>(desc);
     case Kind::Shape:

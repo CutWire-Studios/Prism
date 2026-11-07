@@ -15,6 +15,8 @@
 #include "core/media/SharedAudioCapture.h"
 
 /// Owns Live-deck and Staging-deck state: source assignment and audio players.
+class AudioMeterBank;
+
 class DeckController : public QObject {
     Q_OBJECT
 public:
@@ -29,6 +31,7 @@ public:
     ClipGraph *graphOf(Deck deck) const { return m_deckGraph[int(deck)]; }
     GraphRuntime *runtimeOf(Deck deck) const { return m_deckRuntime[int(deck)]; }
     /// Maps a logical device name used in a cue (audio ports, capture devices) to this venue's hardware.
+    void setMeterBank(AudioMeterBank *bank) { m_meters = bank; }
     void setDeviceResolver(std::function<QString(const QString &)> resolver) { m_deviceResolver = std::move(resolver); }
 
     // ── Deck assignment ──────────────────────────────────────────────────────
@@ -103,6 +106,7 @@ private:
     ClipGraph    *m_deckGraph[2] = {nullptr, nullptr};
     GraphRuntime *m_deckRuntime[2] = {nullptr, nullptr};
     std::function<QString(const QString &)> m_deviceResolver;
+    AudioMeterBank *m_meters = nullptr;
 
     NodeId m_liveNodeId = 0;
     NodeId m_stagingNodeId = 0;

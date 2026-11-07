@@ -706,6 +706,10 @@ Another application may already be using the virtual camera, or softcam.dll may 
         <source>BYPASSED</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Empty</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>AudioEffectEditor</name>
@@ -1352,6 +1356,21 @@ low/mid/high · beat</source>
     </message>
 </context>
 <context>
+    <name>InspectorOutputForm</name>
+    <message>
+        <source>Output %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove output</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add output</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>InspectorPanel</name>
     <message>
         <source>%1 nodes selected</source>
@@ -1411,6 +1430,17 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Slot %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>InspectorPedalboardForm</name>
+    <message>
+        <source>No pedals</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wet / dry</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1489,6 +1519,17 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Pulse now</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>InspectorVolumeRow</name>
+    <message>
+        <source>Volume</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mute</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1970,7 +2011,11 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Add a Mic Input, Audio Capture or Audio Mixer node</source>
+        <source>Add a clip with audio, a Mic Input, Audio Capture or Audio Mixer node</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clip</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2006,6 +2051,13 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Depth</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>NodeCatalog</name>
+    <message>
+        <source>Split</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

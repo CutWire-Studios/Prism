@@ -20,8 +20,8 @@ QtObject {
     })
 
     readonly property var edgeKind: ({
-        Chain: 0, TransformToContext: 1, AudioToController: 2, ControllerToMaster: 3,
-        LegacyClipToTransform: 4, ClipToShaderAudio: 5, ScriptToData: 6, InputToMaster: 7,
+        Chain: 0, TransformToContext: 1, AudioToController: 2,
+        ClipToShaderAudio: 5, ScriptToData: 6, InputToMaster: 7,
         StreamToMixer: 9, MixerToOutput: 10, AudioEffectChain: 11,
         ClipToAudioScript: 12
     })
@@ -90,7 +90,6 @@ QtObject {
             return desat(streamHue, 0.8)
         case e.MixerToOutput:
         case e.InputToMaster:
-        case e.ControllerToMaster:
             return desat(mixedHue, 0.8)
         case e.ScriptToData: return desat("#70c8a0", 0.8)
         }

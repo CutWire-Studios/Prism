@@ -11,8 +11,13 @@ PanelFrame {
     readonly property var nt: NodePalette.nodeType
     property int channelCount: 0
 
-    function isAudioNode(type) {
+    function isAudioNode(type, params) {
         return type === nt.AudioMixer || type === nt.MasterAudioInput || type === nt.MasterAudioCapture
+               || type === nt.MasterAudioOutput || (type === nt.Input && !!params.hasAudio)
+    }
+
+    function hasStrip(type) {
+        return type === nt.MasterAudioInput || type === nt.MasterAudioCapture || type === nt.Input
     }
 
     EmptyState {
@@ -21,7 +26,7 @@ PanelFrame {
         compact: true
         glyph: "sliders-vertical"
         title: qsTr("No audio channels")
-        hint: qsTr("Add a Mic Input, Audio Capture or Audio Mixer node")
+        hint: qsTr("Add a clip with audio, a Mic Input, Audio Capture or Audio Mixer node")
     }
 
     Flickable {
@@ -49,7 +54,9 @@ PanelFrame {
                     required property string title
                     required property var params
 
-                    readonly property bool relevant: root.isAudioNode(type)
+                    readonly property bool relevant: root.isAudioNode(type, params)
+                    readonly property string volumeKey: type === root.nt.Input ? "audioVolume" : "volume"
+                    readonly property string muteKey: type === root.nt.Input ? "audioMuted" : "muted"
                     readonly property var slots: type === root.nt.AudioMixer && params.slots ? params.slots : []
 
                     Layout.fillWidth: true
@@ -59,20 +66,31 @@ PanelFrame {
                     Component.onCompleted: if (relevant) root.channelCount++
                     Component.onDestruction: if (relevant) root.channelCount--
 
-                    ThemedLabel {
-                        tone: "default"
-                        text: del.title
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spacingSm
+
+                        ThemedLabel {
+                            tone: "default"
+                            text: del.title
+                        }
+                        LevelMeter {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 4
+                            level: AppController.audioLevels[String(del.nodeId)] || 0
+                        }
                     }
 
                     ChannelStrip {
                         Layout.fillWidth: true
-                        visible: del.type !== root.nt.AudioMixer
-                        name: del.params.deviceId && del.params.deviceId.length > 0
-                              ? del.params.deviceLabel : qsTr("Default device")
-                        volume: del.params.volume !== undefined ? del.params.volume : 100
-                        muted: !!del.params.muted
-                        onVolumeCommitted: v => root.graph.setParams(del.nodeId, { volume: v })
-                        onMuteToggled: m => root.graph.setParams(del.nodeId, { muted: m })
+                        visible: root.hasStrip(del.type)
+                        name: del.type === root.nt.Input ? qsTr("Clip")
+                              : del.params.deviceId && del.params.deviceId.length > 0
+                                ? del.params.deviceLabel : qsTr("Default device")
+                        volume: del.params[del.volumeKey] !== undefined ? del.params[del.volumeKey] : 100
+                        muted: !!del.params[del.muteKey]
+                        onVolumeCommitted: v => root.graph.setParams(del.nodeId, { [del.volumeKey]: v })
+                        onMuteToggled: m => root.graph.setParams(del.nodeId, { [del.muteKey]: m })
                     }
 
                     Repeater {

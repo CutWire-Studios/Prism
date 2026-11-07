@@ -261,6 +261,19 @@ Item {
         }
     }
 
+    LevelMeter {
+        readonly property var nt: NodePalette.nodeType
+        visible: root.type === nt.AudioMixer || root.type === nt.AudioEffect
+                 || root.type === nt.MasterAudioOutput || root.type === nt.MasterAudioInput
+                 || root.type === nt.MasterAudioCapture
+                 || (root.type === nt.Input && !!root.params.hasAudio)
+        x: 6
+        y: root.height - 5
+        width: root.width - 12
+        height: 3
+        level: AppController.audioLevels[String(root.nodeId)] || 0
+    }
+
     Rectangle {
         anchors.fill: parent
         radius: card.radius

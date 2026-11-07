@@ -209,6 +209,8 @@ void AudioPlayer::pushAudio() {
             m_isoPcmTap(chunk);
 
         applyGain(chunk, m_crossfadeFactor);
+        if (m_meter)
+            m_meter->feed(chunk);
         if (m_pcmTap)
             m_pcmTap(chunk);
 

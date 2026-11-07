@@ -2,6 +2,9 @@
 
 #include "core/graph/ClipGraph.h"
 
+#include "core/audio/AudioRack.h"
+#include "core/audio/dsp/PedalCatalog.h"
+
 #include <QJsonObject>
 #include <QSettings>
 
@@ -61,6 +64,23 @@ QString NodeCatalog::effectLabel(int nodeType, const QVariantMap &params) const
         return d->dynamicLabel ? d->dynamicLabel(nested) : d->editLabel;
     }
     return {};
+}
+
+QStringList NodeCatalog::pedalChain(const QVariantMap &params) const
+{
+    const auto rack = prism::audiofx::fromJson(
+        QJsonObject::fromVariantMap(params.value(QStringLiteral("params")).toMap()));
+    QStringList names;
+    for (const prism::audiofx::RackItem &item : rack.items) {
+        if (item.isSplit()) {
+            names << tr("Split");
+            continue;
+        }
+        const QString &type = item.pedal()->type;
+        const auto *spec = prism::audiofx::pedalSpec(type.toStdString());
+        names << (spec ? QString::fromUtf8(spec->label) : type);
+    }
+    return names;
 }
 
 bool NodeCatalog::effectHasEditor(int nodeType, int effect) const
