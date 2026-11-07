@@ -27,18 +27,34 @@ public:
 };
 } // namespace
 
-static QColor parseColor(const QString &s) {
-    // "#rrggbbaa" (CSS order, unlike QColor's #aarrggbb)
-    const QColor rgb(s.left(7));
-    QColor c = rgb;
-    if (s.size() == 9) c.setAlpha(s.mid(7, 2).toInt(nullptr, 16));
-    return c;
-}
-
 class TestShaderEffects : public QObject {
     Q_OBJECT
 
 private slots:
+    void hexColor_data() {
+        QTest::addColumn<QString>("in");
+        QTest::addColumn<int>("r");
+        QTest::addColumn<int>("g");
+        QTest::addColumn<int>("b");
+        QTest::addColumn<int>("a");
+        QTest::newRow("rrggbbaa") << "#11223344" << 0x11 << 0x22 << 0x33 << 0x44;
+        QTest::newRow("rrggbb") << "#112233" << 0x11 << 0x22 << 0x33 << 0xff;
+        QTest::newRow("named") << "red" << 0xff << 0x00 << 0x00 << 0xff;
+    }
+
+    void hexColor() {
+        QFETCH(QString, in);
+        QFETCH(int, r);
+        QFETCH(int, g);
+        QFETCH(int, b);
+        QFETCH(int, a);
+        const QColor c = ShaderEffects::parseHexColor(in);
+        QCOMPARE(c.red(), r);
+        QCOMPARE(c.green(), g);
+        QCOMPARE(c.blue(), b);
+        QCOMPARE(c.alpha(), a);
+    }
+
     void paramChange_updatesDecoratorInPlace() {
         const ShaderEffectSpec *spec = nullptr;
         const ShaderParam *param = nullptr;
@@ -185,10 +201,10 @@ private slots:
         const QString type = in.value("type").toString();
         QImage img(w, h, QImage::Format_RGBA8888);
         if (type == "solid") {
-            img.fill(parseColor(in.value("color").toString()));
+            img.fill(ShaderEffects::parseHexColor(in.value("color").toString()));
         } else if (type == "hgradient") {
-            const QColor a = parseColor(in.value("from").toString());
-            const QColor b = parseColor(in.value("to").toString());
+            const QColor a = ShaderEffects::parseHexColor(in.value("from").toString());
+            const QColor b = ShaderEffects::parseHexColor(in.value("to").toString());
             for (int x = 0; x < w; ++x) {
                 const double t = w > 1 ? double(x) / (w - 1) : 0.0;
                 const QColor px = QColor::fromRgbF(a.redF() + (b.redF() - a.redF()) * t,

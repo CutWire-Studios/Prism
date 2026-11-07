@@ -47,4 +47,7 @@ QByteArray fragmentSource(const ShaderEffectSpec &spec);
 /// Name of the uniform that carries @p p.
 QByteArray uniformName(const ShaderParam &p);
 
+/// Parses "#rrggbb" or "#rrggbbaa" (CSS order, alpha last); anything else goes to QColor(string).
+QColor parseHexColor(const QString &s);
+
 } // namespace ShaderEffects

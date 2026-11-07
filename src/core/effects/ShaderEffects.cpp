@@ -40,7 +40,7 @@ ShaderParam parseParam(const QJsonObject &o) {
     }
     const QJsonValue d = o.value("default");
     if (p.type == ShaderParam::Color) {
-        p.defColor = QColor(d.toString(QStringLiteral("#ffffffff")));
+        p.defColor = ShaderEffects::parseHexColor(d.toString(QStringLiteral("#ffffffff")));
     } else if (p.type == ShaderParam::Point) {
         const QJsonArray a = d.toArray();
         if (a.size() == 2)
@@ -179,6 +179,14 @@ QByteArray fragmentSource(const ShaderEffectSpec &spec) {
     src += body;
     src += "\nvoid main() {\n    gl_FragColor = effect(v_uv);\n}\n";
     return src;
+}
+
+QColor parseHexColor(const QString &s) {
+    if (s.size() != 9 || !s.startsWith(u'#')) return QColor(s);
+    bool ok = false;
+    const quint32 v = s.mid(1).toUInt(&ok, 16);
+    if (!ok) return QColor(s);
+    return QColor(int(v >> 24), int((v >> 16) & 0xff), int((v >> 8) & 0xff), int(v & 0xff));
 }
 
 } // namespace ShaderEffects
