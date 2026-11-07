@@ -137,32 +137,38 @@ ColumnLayout {
         spacing: Theme.spacingSm
 
         ThemedButton {
+            Layout.fillWidth: true
             text: qsTr("Cut")
             tooltip: qsTr("Instant cut from Staging to Live (Space)")
             onClicked: AppController.cut()
         }
         ThemedButton {
+            Layout.fillWidth: true
             text: qsTr("Take")
             variant: "primary"
             tooltip: qsTr("Transition Staging to Live using the selected mode (Enter)")
             enabled: !AppController.transitionRunning
             onClicked: AppController.take()
         }
-        ThemedLabel { text: qsTr("Default") }
+    }
+
+    GridLayout {
+        Layout.fillWidth: true
+        columns: 3
+        columnSpacing: Theme.spacingSm
+        rowSpacing: Theme.spacingSm
+
+        ThemedLabel { text: qsTr("Transition") }
         ThemedComboBox {
             Layout.fillWidth: true
+            Layout.columnSpan: 2
             Accessible.name: qsTr("Default transition")
             model: AppController.transitionModeNames
             currentIndex: AppController.transitionMode
             onActivated: index => AppController.transitionMode = index
         }
-    }
 
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: Theme.spacingSm
-
-        ThemedLabel { text: qsTr("Default time") }
+        ThemedLabel { text: qsTr("Duration") }
         ThemedSlider {
             id: durSlider
             Layout.fillWidth: true
@@ -191,6 +197,7 @@ ColumnLayout {
         spacing: Theme.spacingSm
 
         ThemedToggleButton {
+            Layout.fillWidth: true
             text: qsTr("Blackout")
             tooltip: qsTr("Cut program output to black (B)")
             checkable: false
@@ -198,6 +205,7 @@ ColumnLayout {
             onClicked: AppController.togglePanic("blackout")
         }
         ThemedToggleButton {
+            Layout.fillWidth: true
             text: qsTr("Freeze")
             tooltip: qsTr("Freeze the program output on the current frame (P)")
             checkable: false
@@ -205,6 +213,7 @@ ColumnLayout {
             onClicked: AppController.togglePanic("freeze")
         }
         ThemedToggleButton {
+            Layout.fillWidth: true
             text: qsTr("Stay Tuned")
             tooltip: qsTr("Show a \"Stay Tuned\" holding screen on program output (F9)")
             checkable: false
@@ -239,6 +248,4 @@ ColumnLayout {
         }
         Item { Layout.fillWidth: true }
     }
-
-    Item { Layout.fillHeight: true }
 }

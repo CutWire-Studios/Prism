@@ -21,7 +21,7 @@ PanelFrame {
 
         SwitcherView {
             Layout.fillWidth: true
-            Layout.fillHeight: true
+            Layout.alignment: Qt.AlignVCenter
             Layout.preferredWidth: 2
             Layout.minimumWidth: 260
             Layout.maximumWidth: 460

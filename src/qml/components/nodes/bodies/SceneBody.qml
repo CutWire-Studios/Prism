@@ -41,15 +41,20 @@ Item {
             glyph: NodePalette.sourceIcon(root.source)
             iconSize: Theme.iconSizeXl
             iconColor: Theme.mutedForeground
-            visible: !root.info.thumbnail || image.status !== Image.Ready
+            visible: !image.shown
         }
 
         Image {
             id: image
+
+            property bool shown: false
+
             anchors.fill: parent
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             cache: false
+            retainWhileLoading: true
+            onStatusChanged: if (status !== Image.Loading) shown = status === Image.Ready
             source: root.info.thumbnail || ""
         }
     }

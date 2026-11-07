@@ -37,6 +37,7 @@ Item {
             fillMode: Image.PreserveAspectFit
             asynchronous: true
             cache: false
+            retainWhileLoading: true
             source: root.thumbRevision > 0
                     ? "image://nodethumb/" + root.node.nodeId + "?v=" + root.thumbRevision : ""
         }

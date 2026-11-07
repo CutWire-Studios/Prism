@@ -6,7 +6,8 @@ import Prism
 
 // One scene in the tab bar. Click opens it for editing (never changes Live or Staging),
 // double-click renames, middle-click closes, right-click opens the menu, drag reorders.
-Rectangle {
+// An Item root: the `color` model role would otherwise shadow Rectangle.color.
+Item {
     id: root
 
     required property int index
@@ -48,10 +49,14 @@ Rectangle {
 
     implicitWidth: Math.min(220, row.implicitWidth + 2 * Theme.spacingSm)
     implicitHeight: 30
-    color: current ? Theme.panelBackground : hover.hovered ? Theme.popoverHover : Theme.panelSecondaryBg
-    border.color: Theme.panelBorder
-    border.width: current ? 0 : 1
     opacity: dragging ? 0.5 : 1
+
+    Rectangle {
+        anchors.fill: parent
+        color: root.current ? Theme.panelBackground : hover.hovered ? Theme.popoverHover : Theme.panelSecondaryBg
+        border.color: Theme.panelBorder
+        border.width: root.current ? 0 : 1
+    }
 
     Rectangle {
         visible: root.color.length > 0
@@ -148,6 +153,7 @@ Rectangle {
             ThemedLabel {
                 id: postText
                 anchors.centerIn: parent
+                color: Theme.primaryForeground
                 text: qsTr("POST")
             }
         }
@@ -160,11 +166,11 @@ Rectangle {
             implicitWidth: badgeText.implicitWidth + Theme.spacingSm
             implicitHeight: badgeText.implicitHeight + 2
             radius: Theme.radiusSm
-            color: root.isLive ? Theme.destructive : Theme.warning
+            color: root.isLive ? Theme.destructive : Theme.primary
             ThemedLabel {
                 id: badgeText
                 anchors.centerIn: parent
-                tone: "default"
+                color: root.isLive ? "white" : Theme.primaryForeground
                 text: root.isLive ? qsTr("LIVE") : qsTr("STAGING")
             }
         }

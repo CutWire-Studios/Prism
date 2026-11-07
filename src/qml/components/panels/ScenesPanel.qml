@@ -115,12 +115,6 @@ PanelFrame {
             Layout.fillWidth: true
             spacing: Theme.spacingSm
 
-            IconButton {
-                glyph: "chevron-left"
-                tooltip: qsTr("Back to show")
-                visible: AppController.inScene
-                onClicked: AppController.exitScene()
-            }
             ThemedLabel {
                 Layout.fillWidth: true
                 tone: "default"
@@ -369,6 +363,7 @@ PanelFrame {
                             ThemedLabel {
                                 id: postText
                                 anchors.centerIn: parent
+                                color: Theme.primaryForeground
                                 text: qsTr("POST")
                             }
                         }
@@ -402,7 +397,7 @@ PanelFrame {
                             ThemedLabel {
                                 id: stagingText
                                 anchors.centerIn: parent
-                                tone: "default"
+                                color: Theme.primaryForeground
                                 text: qsTr("STAGING")
                             }
                         }
@@ -415,9 +410,15 @@ PanelFrame {
                             ThemedLabel {
                                 id: liveText
                                 anchors.centerIn: parent
-                                tone: "default"
+                                color: "white"
                                 text: qsTr("LIVE")
                             }
+                        }
+                        IconButton {
+                            glyph: "arrow-right-to-line"
+                            tooltip: qsTr("Stage scene")
+                            enabled: !row.isLive && !row.isStaging && !AppController.transitionRunning
+                            onClicked: AppController.stageScene(row.sceneId)
                         }
                         IconButton {
                             glyph: "copy-plus"

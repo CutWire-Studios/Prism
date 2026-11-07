@@ -317,6 +317,7 @@ void AppController::connectSignals()
             m_lastEditedId = m_show->editedSceneId();
             clearNodePreview();
             emit editedGraphChanged();
+            setSelectedSceneId(m_lastEditedId);
         }
     });
     connect(m_show, &ShowManager::sceneAboutToBeRemoved, this, [this](Scene *scene) {
