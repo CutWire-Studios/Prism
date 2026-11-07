@@ -303,6 +303,13 @@
         <file>shaders/effects/old_film.frag</file>
         <file>shaders/effects/oil_paint.frag</file>
         <file>shaders/effects/star_streaks.frag</file>
+        <file>shaders/effects/blend.frag</file>
+        <file>shaders/effects/mask.frag</file>
+        <file>shaders/effects/luma_key.frag</file>
+        <file>shaders/effects/mix.frag</file>
+        <file>shaders/effects/displace_image.frag</file>
+        <file>shaders/effects/switch.frag</file>
+        <file>shaders/effects/lut.frag</file>
         <file>shaders/slideshow/cube.glsl</file>
         <file>shaders/slideshow/flip.glsl</file>
         <file>shaders/slideshow/pagecurl.glsl</file>

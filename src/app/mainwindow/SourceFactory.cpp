@@ -232,12 +232,28 @@ void SourceFactory::setSceneParamUpdater(SceneParamUpdater updater)
     g_sceneParamUpdater = std::move(updater);
 }
 
+AuxBuilder SourceFactory::auxBuilder(ClipGraph *graph, GraphRuntime *runtime)
+{
+    return [graph, runtime](const SourceEffectAux &aux) -> std::unique_ptr<MediaSource> {
+        if (aux.stream.layers.isEmpty()) return nullptr;
+        return buildLayerSource(aux.stream.layers.first(), graph, runtime);
+    };
+}
+
+AuxUpdater SourceFactory::auxUpdater(ClipGraph *graph)
+{
+    return [graph](MediaSource *src, const SourceEffectAux &aux) {
+        if (aux.stream.layers.isEmpty()) return true;
+        return updateLayerParams(src, aux.stream.layers.first(), graph);
+    };
+}
+
 bool SourceFactory::updateLayerParams(MediaSource *top, const ClipGraph::ResolvedLayer &layer,
                                       ClipGraph *graph)
 {
     // Sub-layer sources of a flattened composite are not addressable one-to-one.
     if (layer.composite) return false;
-    MediaSource *base = ProcessEffects::updateSourceEffects(top, layer.sourceEffects);
+    MediaSource *base = ProcessEffects::updateSourceEffects(top, layer.sourceEffects, auxUpdater(graph));
     if (!base || !graph->hasNode(layer.inputNodeId)) return false;
     const SourceDescriptor desc = graph->sourceDescriptor(layer.inputNodeId);
     if (desc.kind != SourceDescriptor::Kind::Scene) return true;
@@ -272,7 +288,8 @@ std::unique_ptr<MediaSource> SourceFactory::buildLayerSource(const ClipGraph::Re
         if (subs.empty() || canvas.isEmpty()) return nullptr;
         std::unique_ptr<MediaSource> comp =
             std::make_unique<LayerCompositorSource>(std::move(subs), canvas);
-        return ProcessEffects::applySourceEffects(std::move(comp), layer.sourceEffects);
+        return ProcessEffects::applySourceEffects(std::move(comp), layer.sourceEffects,
+                                                  auxBuilder(graph, runtime));
     }
 
     if (!graph->hasNode(layer.inputNodeId)) return nullptr;
@@ -305,7 +322,8 @@ std::unique_ptr<MediaSource> SourceFactory::buildLayerSource(const ClipGraph::Re
         }
     }
 
-    return ProcessEffects::applySourceEffects(std::move(src), layer.sourceEffects);
+    return ProcessEffects::applySourceEffects(std::move(src), layer.sourceEffects,
+                                              auxBuilder(graph, runtime));
 }
 
 Compositor::NodeChainSource SourceFactory::makeLayerEntry(const ClipGraph::ResolvedLayer &layer,

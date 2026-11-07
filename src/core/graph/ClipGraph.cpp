@@ -1,6 +1,7 @@
 #include "core/graph/ClipGraph.h"
 
 #include "core/audio/AudioRack.h"
+#include "core/effects/ShaderEffects.h"
 #include "core/media/AudioAnalyzer.h"
 #include "core/project/ClipSettings.h"
 
@@ -34,10 +35,16 @@ constexpr qreal kSmallW = 100.0;
 constexpr qreal kSmallH = 110.0;
 constexpr qreal kProcW = 116.0;
 constexpr qreal kProcH = 66.0;
+constexpr qreal kProcExtraRow = 22.0;
 constexpr qreal kLayerW = 158.0, kLayerHdr = 20.0, kLayerRow = 22.0, kLayerFoot = 26.0;
 constexpr qreal kOutW = 116.0, kOutH = 78.0, kOutBodyH = 52.0;
 constexpr qreal kMixW = 158.0, kMixHdr = 20.0, kMixRow = 22.0, kMixFoot = 26.0;
 constexpr qreal kAoW = 168.0, kAoHdr = 22.0, kAoRow = 20.0;
+
+int processExtraInputs(const ClipGraph::Node &n) {
+    const ShaderEffectSpec *spec = ShaderEffects::byId(n.params.value("effect").toInt());
+    return spec ? spec->extraInputs : 0;
+}
 
 bool isAudioStreamOutKind(PK kind) {
     return kind == PK::AudioControllerOut || kind == PK::MasterAudioInputOut
@@ -360,6 +367,7 @@ QSizeF ClipGraph::nodeSize(const Node &n) const {
         return {kCardW, kProxyY + kCardBodyH + (hasAudio ? kAudioStripH : 0.0) + kPortR + kPortR};
     }
     case NT::Process:
+        return {kProcW, kProcH + processExtraInputs(n) * kProcExtraRow};
     case NT::AudioEffect:
         return {kProcW, kProcH};
     case NT::Layer:
@@ -408,10 +416,16 @@ void ClipGraph::buildPorts(const Node &n, QVector<Port> &in, QVector<Port> &out)
             add(in, PK::DataIn, PD::In, QStringLiteral("data"), false, {0.0, cardMidY});
         break;
     }
-    case NT::Process:
+    case NT::Process: {
         add(in, PK::ChainIn, PD::In, QStringLiteral("in"), true, {0.0, kProcH / 2});
+        if (const ShaderEffectSpec *spec = ShaderEffects::byId(n.params.value("effect").toInt())) {
+            for (int i = 0; i < spec->extraInputs; ++i)
+                add(in, PK::ChainIn, PD::In, spec->inputName(i), true,
+                    {0.0, kProcH + i * kProcExtraRow + kProcExtraRow / 2});
+        }
         add(out, PK::ChainOut, PD::Out, QStringLiteral("out"), false, {kProcW, kProcH / 2});
         break;
+    }
     case NT::AudioEffect:
         add(in, PK::AudioEffectIn, PD::In, QStringLiteral("in"), true, {0.0, kProcH / 2});
         add(out, PK::AudioEffectOut, PD::Out, QStringLiteral("out"), false, {kProcW, kProcH / 2});
@@ -505,6 +519,10 @@ int ClipGraph::findPortIndex(NodeId id, PortKind kind, int slot) const {
         || (n->type == NT::AudioMixer && kind == PK::AudioMixerIn);
     if (slotKind)
         return (slot >= 0 && slot < matches.size()) ? matches[slot] : -1;
+    if (n->type == NT::Process && kind == PK::ChainIn) {
+        const int s = slot >= 0 ? slot : 0;
+        return s < matches.size() ? matches[s] : -1;
+    }
     if (n->type == NT::MasterAudioOutput && kind == PK::MasterAudioIn) {
         const int s = slot >= 0 ? slot : 0;
         return s < matches.size() ? matches[s] : -1;
@@ -925,7 +943,8 @@ std::optional<ClipGraph::ConnectPlan> ClipGraph::planConnection(NodeId from, int
     if (plan.insertMixer) return plan;
 
     if (plan.kind == EK::Chain && tn->type == NT::Process
-        && fn->type != NT::Input && fn->type != NT::Process)
+        && fn->type != NT::Input && fn->type != NT::Process
+        && !(fn->type == NT::Layer && toPort > 0))
         return std::nullopt;
     return plan;
 }
@@ -1313,9 +1332,18 @@ ClipGraph::ResolvedStream ClipGraph::evaluateGuarded(NodeId producerNode, QSet<N
         if (!desc) return out;
         out = evaluateGuarded(producerForInput(producerNode, 0), visited);
         if (desc->isDecorator && !n->params.value("bypass").toBool()) {
-            const QJsonObject params = toJsonObject(n->params.value("params").toMap());
+            SourceEffectRef ref{desc->id, toJsonObject(n->params.value("params").toMap()), {}};
+            for (int i = 1; i <= processExtraInputs(*n); ++i) {
+                const NodeId up = producerForInput(producerNode, i);
+                std::shared_ptr<SourceEffectAux> aux;
+                if (up != 0) {
+                    aux = std::make_shared<SourceEffectAux>();
+                    aux->stream = evaluateGuarded(up, visited);
+                }
+                ref.aux.append(aux);
+            }
             for (ResolvedLayer &l : out.layers)
-                l.sourceEffects.append({desc->id, params});
+                l.sourceEffects.append(ref);
         }
         return out;
     }
@@ -1971,10 +1999,15 @@ QJsonObject ClipGraph::snapshot() const {
                 break;
             case NT::Process: {
                 const ProcessEffectDescriptor *d = ProcessEffects::byId(n.params.value("effect").toInt());
-                append(n, QStringLiteral("process"),
-                       {{QStringLiteral("effect"), n.params.value("effect").toInt()},
-                        {QStringLiteral("name"), d ? d->name : QString()},
-                        {QStringLiteral("params"), toJsonObject(n.params.value("params").toMap())}});
+                QJsonObject extra{{QStringLiteral("effect"), n.params.value("effect").toInt()},
+                                  {QStringLiteral("name"), d ? d->name : QString()},
+                                  {QStringLiteral("params"), toJsonObject(n.params.value("params").toMap())}};
+                if (processExtraInputs(n) > 0) {
+                    QJsonArray inputs;
+                    for (const Port &p : inputPorts(id)) inputs.append(p.label);
+                    extra.insert(QStringLiteral("inputs"), inputs);
+                }
+                append(n, QStringLiteral("process"), extra);
                 break;
             }
             case NT::Layer:

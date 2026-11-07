@@ -1,5 +1,7 @@
 #include "core/effects/ShaderEffectSource.h"
 
+#include "core/effects/LutLoader.h"
+
 #include <QJsonArray>
 #include <QOpenGLShaderProgram>
 #include <QVector2D>
@@ -11,6 +13,15 @@ ShaderEffectSource::ShaderEffectSource(std::unique_ptr<MediaSource> inner,
     : m_inner(std::move(inner)), m_spec(&spec),
       m_fragment(ShaderEffects::fragmentSource(spec)), m_params(params) {
     m_clock.start();
+    m_aux.resize(size_t(qMax(0, spec.extraInputs)));
+    m_auxTex.assign(m_aux.size(), 0);
+}
+
+void ShaderEffectSource::setAux(int i, std::unique_ptr<MediaSource> src) {
+    if (i < 0 || i >= int(m_aux.size())) return;
+    m_aux[size_t(i)] = std::move(src);
+    m_auxTex[size_t(i)] = 0;
+    m_dirty = true;
 }
 
 void ShaderEffectSource::applyUniforms(QOpenGLShaderProgram *p, QSize size) const {
@@ -56,6 +67,8 @@ void ShaderEffectSource::applyUniforms(QOpenGLShaderProgram *p, QSize size) cons
                               : QVector2D(sp.defPoint.x(), sp.defPoint.y()));
             break;
         }
+        case ShaderParam::File:
+            break;
         }
     }
 }
@@ -63,11 +76,16 @@ void ShaderEffectSource::applyUniforms(QOpenGLShaderProgram *p, QSize size) cons
 bool ShaderEffectSource::nextFrame() {
     if (!m_inner) return false;
 
+    std::vector<char> auxNew(m_aux.size(), 0);
+    bool anyAuxNew = false;
+    for (size_t i = 0; i < m_aux.size(); ++i)
+        if (m_aux[i] && m_aux[i]->nextFrame()) { auxNew[i] = 1; anyAuxNew = true; }
+
     const bool reprocess = m_dirty && m_outTex != 0;
     const bool innerNew = reprocess ? false
                         : m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
                                              : m_inner->nextFrame();
-    if (!innerNew && !reprocess && m_outTex != 0) return false;
+    if (!innerNew && !anyAuxNew && !reprocess && m_outTex != 0) return false;
     if (!m_inner->isReady()) return false;
     m_dirty = false;
 
@@ -89,9 +107,46 @@ bool ShaderEffectSource::nextFrame() {
     QOpenGLShaderProgram *prog = m_runner.program(m_spec->id, m_fragment.constData());
     if (!prog) { m_runner.end(); return false; }
 
+    std::vector<EffectPassRunner::TexBinding> extras;
+    for (size_t i = 0; i < m_aux.size(); ++i) {
+        MediaSource *a = m_aux[i].get();
+        unsigned int tex = 0;
+        if (a && a->isReady()) {
+            tex = a->glTexture();
+            if (tex == 0) {
+                const QSize asz = a->frameSize();
+                const uint8_t *d = a->frameData();
+                if (m_auxTex[i] != 0 && !auxNew[i]) {
+                    tex = m_auxTex[i];
+                } else if (d && !asz.isEmpty()) {
+                    const QImage wrapped(d, asz.width(), asz.height(), a->frameBytesPerLine(),
+                                         a->hasAlpha() ? QImage::Format_RGBA8888
+                                                       : QImage::Format_RGB888);
+                    tex = m_auxTex[i] = m_runner.uploadSlot(int(i), wrapped);
+                }
+            }
+        }
+        if (tex == 0) tex = m_runner.transparentTexture();
+        extras.push_back({"u_input" + QByteArray::number(int(i) + 1), tex});
+    }
+    for (int i = 0; i < m_spec->params.size(); ++i) {
+        const ShaderParam &sp = m_spec->params.at(i);
+        if (sp.type != ShaderParam::File) continue;
+        const QString path = m_params.value(sp.name).toString();
+        FileTex &ft = m_files[sp.name];
+        if (!ft.loaded || ft.path != path) {
+            ft.loaded = true;
+            ft.path = path;
+            const QImage lut = Lut::load(path);
+            ft.tex = lut.isNull() ? 0 : m_runner.uploadSlot(100 + i, lut);
+        }
+        extras.push_back({ShaderEffects::uniformName(sp),
+                          ft.tex != 0 ? ft.tex : m_runner.transparentTexture()});
+    }
+
     m_outTex = m_runner.runPass(prog, inTex, [this, sz](QOpenGLShaderProgram *p) {
         applyUniforms(p, sz);
-    });
+    }, extras);
     m_runner.end();
     m_cpuValid = false;
     return true;

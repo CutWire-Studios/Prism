@@ -1250,6 +1250,18 @@ void AppController::pushDecks()
     std::function<QString(const ClipGraph *, const Layer &, QString &)> layerKey =
         [&](const ClipGraph *g, const Layer &l, QString &pk) -> QString {
         pk += ProcessEffects::sourceEffectsParamsKey(l.sourceEffects) + QLatin1Char('|');
+        auto effectsKey = [&]() {
+            QString k = ProcessEffects::sourceEffectsKey(l.sourceEffects);
+            for (const SourceEffectRef &ref : l.sourceEffects) {
+                for (const auto &aux : ref.aux) {
+                    k += QLatin1Char('<');
+                    if (aux && !aux->stream.layers.isEmpty())
+                        k += layerKey(g, aux->stream.layers.first(), pk);
+                    k += QLatin1Char('>');
+                }
+            }
+            return k;
+        };
         if (l.composite) {
             QString k = QStringLiteral("L%1:%2x%3{")
                 .arg(l.layerNodeId).arg(l.composite->canvasWidth).arg(l.composite->canvasHeight);
@@ -1259,7 +1271,7 @@ void AppController::pushDecks()
                        .arg(sl.baseX).arg(sl.baseY).arg(sl.baseW).arg(sl.baseH)
                        .arg(sl.visible ? 1 : 0);
             }
-            return k + QStringLiteral("}") + ProcessEffects::sourceEffectsKey(l.sourceEffects);
+            return k + QStringLiteral("}") + effectsKey();
         }
         if (!g->hasNode(l.inputNodeId))
             return QStringLiteral("%1:?").arg(l.inputNodeId);
@@ -1282,7 +1294,7 @@ void AppController::pushDecks()
         return QStringLiteral("%1:%2:%3:%4:%5:%6:%7:%8")
             .arg(l.inputNodeId).arg(int(d.kind)).arg(d.path)
             .arg(cs.startTime).arg(cs.endTime).arg(d.captureId)
-            .arg(ProcessEffects::sourceEffectsKey(l.sourceEffects))
+            .arg(effectsKey())
             .arg(qHash(d.contentKey()))
             + (nested.isEmpty() ? QString() : QStringLiteral("<") + nested + QStringLiteral(">"));
     };

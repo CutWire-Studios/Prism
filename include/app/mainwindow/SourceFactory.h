@@ -46,6 +46,10 @@ public:
     static bool updateLayerParams(MediaSource *top, const ClipGraph::ResolvedLayer &layer,
                                   ClipGraph *graph);
 
+    /// Callbacks that build / update the aux streams wired to a shader effect's extra input ports.
+    static AuxBuilder auxBuilder(ClipGraph *graph, GraphRuntime *runtime);
+    static AuxUpdater auxUpdater(ClipGraph *graph);
+
     /// Build the full deck stream (index 0 = bottom/deck-primary, 1..N = overlays).
     static std::vector<Compositor::NodeChainSource>
     buildStream(const ClipGraph::ResolvedStream &stream, ClipGraph *graph, GraphRuntime *runtime);

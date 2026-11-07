@@ -3787,6 +3787,21 @@ Technical detail: %1</source>
     </message>
 </context>
 <context>
+    <name>ShaderParamForm</name>
+    <message>
+        <source>Choose file…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ShaderPreview</name>
     <message>
         <source>Could not initialize OpenGL offscreen context.</source>

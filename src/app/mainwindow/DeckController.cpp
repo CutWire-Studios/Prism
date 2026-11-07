@@ -427,7 +427,8 @@ void DeckController::assignNodeToDeck(NodeId nodeId, Deck deck,
             } else if (desc.kind == Kind::VideoFile && clip.startTime > 0) {
                 src->seek(clip.startTime);
             }
-            src = ProcessEffects::applySourceEffects(std::move(src), sourceEffects);
+            src = ProcessEffects::applySourceEffects(std::move(src), sourceEffects,
+                                                  SourceFactory::auxBuilder(g, rt));
         }
         if (isLive(deck)) {
             out->setRepeatLive(repeat);

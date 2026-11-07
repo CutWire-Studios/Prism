@@ -284,7 +284,7 @@ public:
     QJsonObject toJson() const;
     /// Replaces the graph. Returns false (leaving it empty) for graphVersion < kGraphVersion.
     bool fromJson(const QJsonObject &state);
-    static constexpr int kGraphVersion = 5;
+    static constexpr int kGraphVersion = 6;
     /// The summary ClipNodeEditor::graphSnapshot() returns (MCP / remote control).
     QJsonObject snapshot() const;
 
@@ -357,4 +357,9 @@ private:
     bool m_restoring = false;
     int m_outputCanvasW = 1280;
     int m_outputCanvasH = 720;
+};
+
+/// A stream feeding one extra input port of a shader effect (see SourceEffectRef::aux).
+struct SourceEffectAux {
+    ClipGraph::ResolvedStream stream;
 };

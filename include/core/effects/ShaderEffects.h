@@ -9,7 +9,7 @@
 #include <QStringList>
 
 struct ShaderParam {
-    enum Type { Float, Int, Bool, Choice, Color, Point };
+    enum Type { Float, Int, Bool, Choice, Color, Point, File };
 
     QString name;
     Type    type = Float;
@@ -18,6 +18,7 @@ struct ShaderParam {
     QString label;
     QColor  defColor = Qt::white;
     QPointF defPoint = QPointF(0.5, 0.5);
+    QString fileFilter;   // File: dialog filter, e.g. "*.cube *.png"
 };
 
 struct ShaderEffectSpec {
@@ -28,8 +29,12 @@ struct ShaderEffectSpec {
     bool    multiPass = false;
     bool    needsPrevFrame = false;
     int     extraInputs = 0;
+    QStringList inputNames;   // names of the extra input ports; defaults to in1..inN
 
-    /// Default node params keyed by param name (Color -> [r,g,b,a] 0..1, Point -> [x,y]).
+    /// Name of extra input @p i (0-based).
+    QString inputName(int i) const;
+
+    /// Default node params keyed by param name (Color -> [r,g,b,a] 0..1, Point -> [x,y], File -> path string).
     QJsonObject defaultParams() const;
 };
 

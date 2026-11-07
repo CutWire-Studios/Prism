@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import Prism
 
@@ -82,6 +83,32 @@ InspectorForm {
                     readonly property var c: row.kind === "color" ? root.val(row.spec) : [1, 1, 1, 1]
                     swatch: Qt.rgba(c[0], c[1], c[2], c[3])
                     onPicked: col => root.setValues(root.patchOf(row.spec.name, [col.r, col.g, col.b, col.a]))
+                }
+            }
+
+            StyleFieldRow {
+                Layout.fillWidth: true
+                visible: row.kind === "file"
+                label: row.spec.label
+
+                ThemedButton {
+                    Layout.fillWidth: true
+                    readonly property string path: row.kind === "file" ? String(root.val(row.spec) || "") : ""
+                    text: path.length > 0 ? path.split("/").pop() : qsTr("Choose file…")
+                    onClicked: fileDialog.open()
+                }
+                ThemedButton {
+                    visible: row.kind === "file" && String(root.val(row.spec) || "").length > 0
+                    text: qsTr("Clear")
+                    onClicked: root.setValues(root.patchOf(row.spec.name, ""))
+                }
+
+                FileDialog {
+                    id: fileDialog
+                    title: row.spec.label
+                    nameFilters: [row.spec.filter.length > 0 ? row.spec.label + " (" + row.spec.filter + ")" : qsTr("All files (*)"),
+                                  qsTr("All files (*)")]
+                    onAccepted: root.setValues(root.patchOf(row.spec.name, AppController.localPath(selectedFile)))
                 }
             }
 

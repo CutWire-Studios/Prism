@@ -6,12 +6,16 @@
 
 #include <QElapsedTimer>
 #include <QImage>
+#include <QHash>
 #include <QJsonObject>
 #include <memory>
+#include <vector>
 
 /// Generic decorator that runs a data-driven ShaderEffectSpec as one GPU pass. The program is
 /// compiled once per source (cached in the runner) and params only touch uniforms.
-/// needsPrevFrame / extraInputs are not honoured yet: the shader only sees u_input.
+/// Extra input ports (spec.extraInputs) are bound as u_input1..N from the aux sources handed in
+/// through setAux(); an unset or not-yet-ready one reads as transparent. `file` params are
+/// loaded as textures and bound as p_<name>. needsPrevFrame is not honoured yet.
 class ShaderEffectSource : public MediaSource {
 public:
     ShaderEffectSource(std::unique_ptr<MediaSource> inner, const ShaderEffectSpec &spec,
@@ -22,6 +26,12 @@ public:
     const QJsonObject &params() const { return m_params; }
     bool updateParams(const QJsonObject &params) override { setParams(params); return true; }
     MediaSource *inner() const override { return m_inner.get(); }
+
+    /// Source feeding extra input @p i (u_input<i+1>); this decorator advances and owns it.
+    void setAux(int i, std::unique_ptr<MediaSource> src);
+    MediaSource *auxSource(int i) const {
+        return i >= 0 && i < int(m_aux.size()) ? m_aux[size_t(i)].get() : nullptr;
+    }
 
     Type    type()        const override { return m_inner ? m_inner->type() : Type::Canvas; }
     bool    isReady()     const override { return m_inner && m_inner->isReady() && m_outTex != 0; }
@@ -51,6 +61,10 @@ private:
     QElapsedTimer m_clock;
     double       m_presentAt = -1.0;
     bool         m_dirty = false;
+    struct FileTex { QString path; unsigned int tex = 0; bool loaded = false; };
+    std::vector<std::unique_ptr<MediaSource>> m_aux;
+    std::vector<unsigned int> m_auxTex;   // slot texture last uploaded for a CPU-only aux frame
+    QHash<QString, FileTex> m_files;
     mutable EffectPassRunner m_runner;
     unsigned int m_outTex = 0;
     mutable QImage m_cpu;

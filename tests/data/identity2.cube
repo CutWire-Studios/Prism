@@ -1,0 +1,11 @@
+# 2x2x2 identity LUT: red varies fastest, then green, then blue.
+TITLE "identity2"
+LUT_3D_SIZE 2
+0 0 0
+1 0 0
+0 1 0
+1 1 0
+0 0 1
+1 0 1
+0 1 1
+1 1 1

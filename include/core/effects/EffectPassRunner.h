@@ -2,8 +2,10 @@
 
 #include <QHash>
 #include <QImage>
+#include <QByteArray>
 #include <QSize>
 #include <functional>
+#include <vector>
 
 class QOffscreenSurface;
 class QOpenGLContext;
@@ -27,6 +29,12 @@ class QOpenGLShaderProgram;
 ///   // runner.lastOutput() is now valid in any context sharing with the global one.
 class EffectPassRunner {
 public:
+    /// An extra sampler bound alongside u_input for one pass (texture units 1..N).
+    struct TexBinding {
+        QByteArray   uniform;   // sampler2D uniform name, e.g. "u_input1" or "p_lut"
+        unsigned int tex = 0;
+    };
+
     ~EffectPassRunner();
 
     /// Make the offscreen context current and ensure both ping-pong FBOs match
@@ -40,6 +48,13 @@ public:
     /// the built-in vertex shader.
     unsigned int uploadInput(const QImage &frame);
 
+    /// Upload @p frame into the persistent texture owned by @p slot (created on first use) and
+    /// return its id. Slots are independent of uploadInput()'s scratch texture.
+    unsigned int uploadSlot(int slot, const QImage &frame);
+
+    /// A 1x1 fully transparent texture, for extra inputs that have nothing connected.
+    unsigned int transparentTexture();
+
     /// Compile + cache a full-screen-quad program for @p fragmentSrc, keyed by
     /// @p key (stable per shader). Returns null on compile/link failure.
     QOpenGLShaderProgram *program(int key, const char *fragmentSrc);
@@ -49,7 +64,8 @@ public:
     /// automatically; @p setUniforms sets the rest. Returns the output texture id,
     /// which can be fed as the input of a subsequent pass.
     unsigned int runPass(QOpenGLShaderProgram *prog, unsigned int inputTex,
-                         const std::function<void(QOpenGLShaderProgram *)> &setUniforms);
+                         const std::function<void(QOpenGLShaderProgram *)> &setUniforms,
+                         const std::vector<TexBinding> &extras = {});
 
     // ── Compositing (Layer node flatten) ────────────────────────────────────
     // Draws several layers into one shared-context FBO at their normalised canvas
@@ -94,6 +110,8 @@ private:
     int                       m_ping     = 0;
     unsigned int              m_lastTex  = 0;
     bool                      m_glInit   = false;
+    QHash<int, unsigned int> m_slotTex;
+    unsigned int             m_transparentTex = 0;
     QHash<int, QOpenGLShaderProgram *> m_programs;
     QOpenGLShaderProgram     *m_compositeProg = nullptr;
 };

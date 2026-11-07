@@ -3,10 +3,14 @@
 #include "core/graph/AudioEffects.h"
 #include "core/audio/AudioRack.h"
 #include "core/sources/SourceDescriptor.h"
+#include "core/sources/ImageSource.h"
+#include "core/effects/ShaderEffectSource.h"
 
 #include <QtTest>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QOffscreenSurface>
+#include <QOpenGLContext>
 
 class TestProcessNodes : public QObject {
     Q_OBJECT
@@ -295,6 +299,54 @@ private slots:
         QCOMPARE(savedInput["source"].toObject()["kind"].toInt(),
                  (int)SourceDescriptor::Kind::AudioFile);
         QVERIFY(savedInput["audioOnly"].toBool());
+    }
+
+    void blendNodeResolvesAuxAndRendersPixels() {
+        auto canvasInput = [this](const QString &name) {
+            return m_graph->addNode(ClipGraph::NodeType::Input, {},
+                {{"source", QVariantMap{{"kind", int(SourceDescriptor::Kind::Canvas)},
+                                        {"displayName", name}}}});
+        };
+        const NodeId a = canvasInput("a");
+        const NodeId b = canvasInput("b");
+        const NodeId blend = m_graph->addNode(ClipGraph::NodeType::Process, {},
+            {{"effect", 55}, {"params", QVariantMap{{"mode", 2}}}});
+        QVERIFY(m_graph->connectPorts(a, 0, blend, 0));
+        QVERIFY(m_graph->connectPorts(b, 0, blend, 1));
+
+        const ClipGraph::ResolvedStream stream = m_graph->evaluateVideoInput(blend);
+        QCOMPARE(stream.layers.size(), 1);
+        QCOMPARE(stream.layers.first().inputNodeId, a);
+        const QVector<SourceEffectRef> effects = stream.layers.first().sourceEffects;
+        QCOMPARE(effects.size(), 1);
+        QCOMPARE(effects.first().aux.size(), 1);
+        QCOMPARE(effects.first().aux.first()->stream.layers.first().inputNodeId, b);
+
+        QOffscreenSurface surface;
+        surface.create();
+        QOpenGLContext ctx;
+        if (!surface.isValid() || !ctx.create() || !ctx.makeCurrent(&surface))
+            QSKIP("No OpenGL context available in this environment");
+        ctx.doneCurrent();
+
+        auto solid = [](const QColor &c) {
+            QImage img(16, 16, QImage::Format_RGBA8888);
+            img.fill(c);
+            auto src = std::make_unique<ImageSource>();
+            src->setImage(img);
+            return src;
+        };
+        auto render = [&](const QColor &top) {
+            std::unique_ptr<MediaSource> chain = ProcessEffects::applySourceEffects(
+                solid(Qt::red), effects,
+                [&](const SourceEffectAux &) -> std::unique_ptr<MediaSource> { return solid(top); });
+            if (!chain->nextFrame() || !chain->frameData())
+                return QColor();
+            const uint8_t *px = chain->frameData();
+            return QColor(px[0], px[1], px[2], px[3]);
+        };
+        QCOMPARE(render(Qt::white), QColor(255, 0, 0, 255));
+        QCOMPARE(render(Qt::black), QColor(0, 0, 0, 255));
     }
 };
 

@@ -53,7 +53,7 @@ vec3 blendSoftLight(vec3 b, vec3 l) {
     return mix(2.0 * b * l + b * b * (1.0 - 2.0 * l), sqrt(b) * (2.0 * l - 1.0) + 2.0 * b * (1.0 - l), step(0.5, l));
 }
 
-// mode: 0 normal, 1 multiply, 2 screen, 3 overlay, 4 soft light, 5 add, 6 difference
+// mode: 0 normal, 1 multiply, 2 screen, 3 overlay, 4 soft light, 5 add, 6 difference, 7 lighten, 8 darken
 vec3 blend(vec3 b, vec3 l, int mode) {
     if (mode == 1) return b * l;
     if (mode == 2) return 1.0 - (1.0 - b) * (1.0 - l);
@@ -61,6 +61,8 @@ vec3 blend(vec3 b, vec3 l, int mode) {
     if (mode == 4) return blendSoftLight(b, l);
     if (mode == 5) return min(b + l, vec3(1.0));
     if (mode == 6) return abs(b - l);
+    if (mode == 7) return max(b, l);
+    if (mode == 8) return min(b, l);
     return l;
 }
 

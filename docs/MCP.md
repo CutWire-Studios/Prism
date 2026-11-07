@@ -45,6 +45,7 @@ Pinned endpoints (`/mcp/sources`, `/mcp/decks`, `/mcp/transition`, `/mcp/panic`,
 | Clip reference | `clip` id from `inspect({clips:true})` (the edited scene). Required — clip ops never fall back to the current deck assignment |
 | Adding sources | `add_clip` / `add_source` only put a node on the edited scene's graph. Wire it to Output with `connect`, then `stage_scene` the scene |
 | Process / graph | `add_process_node` / `add_layer_node` only place nodes. Call `connect` to wire. `list_nodes` or `inspect({graph:true})` for ids |
+| Multi-input effects | Composite effects (`blend`, `mask`, `mix`, `displace_image`, `switch`) have extra input ports after the main `in`. `connect` takes `to_port` as a slot number (`0` = main, `1`.. = extras) or the port name (`"b"`, `"mask"`, `"map"`, `"in1"`..`"in3"`); `list_nodes` shows a process node's `inputs` names. An unconnected extra input reads as transparent. `lut` takes a `file` param: set `params.lut` to an absolute `.cube` or LUT PNG path |
 | Take | `stage_scene`, `capture()` to check, then `take` (animated) or `cut` (instant) |
 | Per-deck ops | `play`, `pause`, and `seek` take `deck: "live"` or `"staging"` |
 | Atomicity | `apply` is **not** atomic: on failure the ops before it stay applied. Check `stopped` / `failed` / `done` |

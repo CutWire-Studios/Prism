@@ -21,6 +21,7 @@ ShaderParam::Type typeFromString(const QString &s) {
     if (s == QLatin1String("choice")) return ShaderParam::Choice;
     if (s == QLatin1String("color"))  return ShaderParam::Color;
     if (s == QLatin1String("point"))  return ShaderParam::Point;
+    if (s == QLatin1String("file"))   return ShaderParam::File;
     return ShaderParam::Float;
 }
 
@@ -31,6 +32,7 @@ ShaderParam parseParam(const QJsonObject &o) {
     p.label = o.value("label").toString(p.name);
     p.min = o.value("min").toDouble(0.0);
     p.max = o.value("max").toDouble(1.0);
+    p.fileFilter = o.value("filter").toString();
     p.step = o.value("step").toDouble(p.type == ShaderParam::Float ? 0.01 : 1.0);
     for (const QJsonValue &v : o.value("choices").toArray())
         p.choices << v.toString();
@@ -78,7 +80,9 @@ QList<ShaderEffectSpec> load() {
         s.fragFile = o.value("frag").toString(s.slug + QStringLiteral(".frag"));
         s.multiPass = o.value("multiPass").toBool(false);
         s.needsPrevFrame = o.value("needsPrevFrame").toBool(false);
-        s.extraInputs = o.value("extraInputs").toInt(0);
+        for (const QJsonValue &nv : o.value("inputs").toArray())
+            s.inputNames << nv.toString();
+        s.extraInputs = o.value("extraInputs").toInt(s.inputNames.size());
         for (const QJsonValue &pv : o.value("params").toArray())
             s.params << parseParam(pv.toObject());
         out << s;
@@ -98,6 +102,7 @@ const char *glslType(ShaderParam::Type t) {
     case ShaderParam::Bool:   return "bool";
     case ShaderParam::Color:  return "vec4";
     case ShaderParam::Point:  return "vec2";
+    case ShaderParam::File:   return "sampler2D";
     default:                  return "float";
     }
 }
@@ -116,10 +121,17 @@ QJsonObject ShaderEffectSpec::defaultParams() const {
                                    p.defColor.blueF(), p.defColor.alphaF()};
             break;
         case ShaderParam::Point:  o[p.name] = QJsonArray{p.defPoint.x(), p.defPoint.y()}; break;
+        case ShaderParam::File:   o[p.name] = QString(); break;
         default:                  o[p.name] = p.def; break;
         }
     }
     return o;
+}
+
+QString ShaderEffectSpec::inputName(int i) const {
+    if (i >= 0 && i < inputNames.size() && !inputNames.at(i).isEmpty())
+        return inputNames.at(i);
+    return QStringLiteral("in%1").arg(i + 1);
 }
 
 namespace ShaderEffects {
@@ -172,6 +184,8 @@ QByteArray fragmentSource(const ShaderEffectSpec &spec) {
         "uniform float u_audioLevel;\n"
         "uniform float u_beat;\n"
         "uniform bool u_hasAudio;\n";
+    for (int i = 1; i <= spec.extraInputs; ++i)
+        src += "uniform sampler2D u_input" + QByteArray::number(i) + ";\n";
     for (const ShaderParam &p : spec.params)
         src += QByteArray("uniform ") + glslType(p.type) + " " + uniformName(p) + ";\n";
     src += readResource(QStringLiteral("prelude.glsl"));

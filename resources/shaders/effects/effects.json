@@ -545,6 +545,94 @@
         { "name": "intensity", "type": "float", "label": "Intensity", "min": 0, "max": 3, "default": 1, "step": 0.01 },
         { "name": "spikes", "type": "choice", "label": "Spikes", "choices": ["4", "6", "8"], "default": 0 }
       ]
+    },
+    {
+      "id": 55,
+      "slug": "blend",
+      "name": "Blend",
+      "category": "Composite",
+      "description": "Combine the image with a second input using a blend mode.",
+      "frag": "blend.frag",
+      "inputs": ["b"],
+      "params": [
+        { "name": "mode", "type": "choice", "label": "Mode", "choices": ["Add", "Screen", "Multiply", "Overlay", "Difference", "Soft light", "Lighten", "Darken"], "default": 0 },
+        { "name": "opacity", "type": "float", "label": "Opacity", "min": 0, "max": 1, "default": 1, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 56,
+      "slug": "mask",
+      "name": "Mask",
+      "category": "Composite",
+      "description": "Use a second input as a mask for the image's transparency. An unconnected mask hides everything.",
+      "frag": "mask.frag",
+      "inputs": ["mask"],
+      "params": [
+        { "name": "mode", "type": "choice", "label": "Mask from", "choices": ["Luma", "Alpha"], "default": 0 },
+        { "name": "invert", "type": "bool", "label": "Invert", "default": false }
+      ]
+    },
+    {
+      "id": 57,
+      "slug": "luma_key",
+      "name": "Luma key",
+      "category": "Composite",
+      "description": "Make the image transparent by brightness.",
+      "frag": "luma_key.frag",
+      "params": [
+        { "name": "threshold", "type": "float", "label": "Threshold", "min": 0, "max": 1, "default": 0.5, "step": 0.01 },
+        { "name": "softness", "type": "float", "label": "Softness", "min": 0, "max": 0.5, "default": 0.05, "step": 0.01 },
+        { "name": "invert", "type": "bool", "label": "Invert", "default": false }
+      ]
+    },
+    {
+      "id": 58,
+      "slug": "mix",
+      "name": "Mix",
+      "category": "Composite",
+      "description": "Crossfade between the image and a second input.",
+      "frag": "mix.frag",
+      "inputs": ["b"],
+      "params": [
+        { "name": "amount", "type": "float", "label": "Amount", "min": 0, "max": 1, "default": 0.5, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 59,
+      "slug": "displace_image",
+      "name": "Displace by image",
+      "category": "Composite",
+      "description": "Push the image around using the colours of a second input as a displacement map.",
+      "frag": "displace_image.frag",
+      "inputs": ["map"],
+      "params": [
+        { "name": "amount", "type": "float", "label": "Amount", "min": -0.5, "max": 0.5, "default": 0.05, "step": 0.005 },
+        { "name": "channels", "type": "choice", "label": "Map channels", "choices": ["Red / Green as X / Y", "Luma"], "default": 0 }
+      ]
+    },
+    {
+      "id": 60,
+      "slug": "switch",
+      "name": "Switch",
+      "category": "Composite",
+      "description": "Pick one of four inputs. Index 0 is the main input.",
+      "frag": "switch.frag",
+      "inputs": ["in1", "in2", "in3"],
+      "params": [
+        { "name": "index", "type": "int", "label": "Input", "min": 0, "max": 3, "default": 0, "step": 1 }
+      ]
+    },
+    {
+      "id": 61,
+      "slug": "lut",
+      "name": "LUT",
+      "category": "Color",
+      "description": "Apply a colour lookup table (.cube, a 512x512 8x8-tile PNG or an N^2 x N strip PNG). No file leaves the image unchanged.",
+      "frag": "lut.frag",
+      "params": [
+        { "name": "lut", "type": "file", "label": "LUT file", "filter": "*.cube *.png" },
+        { "name": "amount", "type": "float", "label": "Amount", "min": 0, "max": 1, "default": 1, "step": 0.01 }
+      ]
     }
   ]
 }

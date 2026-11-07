@@ -146,5 +146,135 @@
       {"uv": [0.5, 0.5], "rgba": [0, 0, 0, 255], "tol": 3},
       {"uv": [0.1, 0.9], "rgba": [0, 0, 0, 255], "tol": 3}
     ]
+  },
+  {
+    "_comment": "blend multiply (mode 2): red x white = red, red x black = black. Extra inputs are named under \"inputs\".",
+    "slug": "blend",
+    "input": {"type": "solid", "color": "#ff0000ff"},
+    "inputs": {"b": {"type": "solid", "color": "#ffffffff"}},
+    "params": {"mode": 2},
+    "samples": [{"uv": [0.5, 0.5], "rgba": [255, 0, 0, 255], "tol": 3}]
+  },
+  {
+    "slug": "blend",
+    "input": {"type": "solid", "color": "#ff0000ff"},
+    "inputs": {"b": {"type": "solid", "color": "#000000ff"}},
+    "params": {"mode": 2},
+    "samples": [{"uv": [0.5, 0.5], "rgba": [0, 0, 0, 255], "tol": 3}]
+  },
+  {
+    "_comment": "blend add (mode 0) clamps: #804000 + #804000 = #ff8000. Opacity 0.5 halves the added layer.",
+    "slug": "blend",
+    "input": {"type": "solid", "color": "#804000ff"},
+    "inputs": {"b": {"type": "solid", "color": "#804000ff"}},
+    "params": {"mode": 0, "opacity": 0.5},
+    "samples": [{"uv": [0.5, 0.5], "rgba": [192, 96, 0, 255], "tol": 3}]
+  },
+  {
+    "_comment": "An unconnected extra input is transparent, so blend passes the main image through.",
+    "slug": "blend",
+    "input": {"type": "solid", "color": "#ff0000ff"},
+    "params": {"mode": 2},
+    "samples": [{"uv": [0.5, 0.5], "rgba": [255, 0, 0, 255], "tol": 3}]
+  },
+  {
+    "_comment": "mix 0.5 of red and blue.",
+    "slug": "mix",
+    "input": {"type": "solid", "color": "#ff0000ff"},
+    "inputs": {"b": {"type": "solid", "color": "#0000ffff"}},
+    "params": {"amount": 0.5},
+    "samples": [{"uv": [0.5, 0.5], "rgba": [128, 0, 128, 255], "tol": 3}]
+  },
+  {
+    "_comment": "mask from luma: a black-to-white mask makes the left edge transparent and the right edge opaque.",
+    "slug": "mask",
+    "input": {"type": "solid", "color": "#ff0000ff"},
+    "inputs": {"mask": {"type": "hgradient", "from": "#000000ff", "to": "#ffffffff"}},
+    "params": {"mode": 0},
+    "samples": [
+      {"uv": [0.0, 0.5], "rgba": [255, 0, 0, 0], "tol": 3},
+      {"uv": [1.0, 0.5], "rgba": [255, 0, 0, 255], "tol": 3}
+    ]
+  },
+  {
+    "slug": "mask",
+    "input": {"type": "solid", "color": "#ff0000ff"},
+    "inputs": {"mask": {"type": "hgradient", "from": "#000000ff", "to": "#ffffffff"}},
+    "params": {"mode": 0, "invert": true},
+    "samples": [
+      {"uv": [0.0, 0.5], "rgba": [255, 0, 0, 255], "tol": 3},
+      {"uv": [1.0, 0.5], "rgba": [255, 0, 0, 0], "tol": 3}
+    ]
+  },
+  {
+    "_comment": "luma_key, defaults: black goes transparent, white stays.",
+    "slug": "luma_key",
+    "input": {"type": "hgradient", "from": "#000000ff", "to": "#ffffffff"},
+    "samples": [
+      {"uv": [0.0, 0.5], "rgba": [0, 0, 0, 0], "tol": 3},
+      {"uv": [1.0, 0.5], "rgba": [255, 255, 255, 255], "tol": 3}
+    ]
+  },
+  {
+    "_comment": "switch: index picks the main input (0) or in1..in3; an unconnected input is transparent.",
+    "slug": "switch",
+    "input": {"type": "solid", "color": "#ff0000ff"},
+    "inputs": {"in1": {"type": "solid", "color": "#0000ffff"}, "in2": {"type": "solid", "color": "#00ff00ff"}},
+    "params": {"index": 1},
+    "samples": [{"uv": [0.5, 0.5], "rgba": [0, 0, 255, 255], "tol": 3}]
+  },
+  {
+    "slug": "switch",
+    "input": {"type": "solid", "color": "#ff0000ff"},
+    "inputs": {"in1": {"type": "solid", "color": "#0000ffff"}, "in2": {"type": "solid", "color": "#00ff00ff"}},
+    "params": {"index": 2},
+    "samples": [{"uv": [0.5, 0.5], "rgba": [0, 255, 0, 255], "tol": 3}]
+  },
+  {
+    "slug": "switch",
+    "input": {"type": "solid", "color": "#ff0000ff"},
+    "inputs": {"in1": {"type": "solid", "color": "#0000ffff"}},
+    "params": {"index": 0},
+    "samples": [{"uv": [0.5, 0.5], "rgba": [255, 0, 0, 255], "tol": 3}]
+  },
+  {
+    "slug": "switch",
+    "input": {"type": "solid", "color": "#ff0000ff"},
+    "params": {"index": 3},
+    "samples": [{"uv": [0.5, 0.5], "rgba": [0, 0, 0, 0], "tol": 3}]
+  },
+  {
+    "_comment": "displace_image with an unconnected map moves nothing.",
+    "slug": "displace_image",
+    "input": {"type": "hgradient", "from": "#000000ff", "to": "#ffffffff"},
+    "samples": [
+      {"uv": [0.0, 0.5], "rgba": [0, 0, 0, 255], "tol": 3},
+      {"uv": [1.0, 0.5], "rgba": [255, 255, 255, 255], "tol": 3}
+    ]
+  },
+  {
+    "_comment": "lut: file params may use $DATA for tests/data. Identity cube leaves the colour alone.",
+    "slug": "lut",
+    "input": {"type": "solid", "color": "#804020ff"},
+    "params": {"lut": "$DATA/identity2.cube"},
+    "samples": [{"uv": [0.5, 0.5], "rgba": [128, 64, 32, 255], "tol": 3}]
+  },
+  {
+    "slug": "lut",
+    "input": {"type": "solid", "color": "#804020ff"},
+    "params": {"lut": "$DATA/invert2.cube"},
+    "samples": [{"uv": [0.5, 0.5], "rgba": [127, 191, 223, 255], "tol": 4}]
+  },
+  {
+    "_comment": "A missing LUT file is a pass-through.",
+    "slug": "lut",
+    "input": {"type": "solid", "color": "#804020ff"},
+    "params": {"lut": "/nonexistent/missing.cube"},
+    "samples": [{"uv": [0.5, 0.5], "rgba": [128, 64, 32, 255], "tol": 3}]
+  },
+  {
+    "slug": "lut",
+    "input": {"type": "solid", "color": "#804020ff"},
+    "samples": [{"uv": [0.5, 0.5], "rgba": [128, 64, 32, 255], "tol": 3}]
   }
 ]

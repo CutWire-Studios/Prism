@@ -147,7 +147,7 @@ class TestClipGraph : public QObject {
 private slots:
     void jsonMatchesStoredFixture() {
         const QJsonObject input = QJsonDocument::fromJson(QByteArray(R"json({
-            "graphVersion": 5,
+            "graphVersion": 6,
             "inputNodes": [
                 {"id": 1, "posX": 20, "posY": 20, "hasAudio": false,
                  "source": {"kind": 5, "displayName": "Cam 1"}}
@@ -162,7 +162,7 @@ private slots:
             ]
         })json")).object();
         const QJsonObject expectedGraph = QJsonDocument::fromJson(QByteArray(R"json({
-            "graphVersion": 5,
+            "graphVersion": 6,
             "nextId": 4,
             "inputNodes": [
                 {"id": 1, "posX": 20, "posY": 20, "hasAudio": false, "audioOnly": false,
@@ -259,6 +259,70 @@ private slots:
         old["graphVersion"] = ClipGraph::kGraphVersion - 1;
         QVERIFY(!graph.fromJson(old));
         QVERIFY(graph.isEmptyGraph());
+    }
+
+    void rejectsVersion5Literal() {
+        ClipGraph graph;
+        QVERIFY(!graph.fromJson(QJsonObject{{"graphVersion", 5}}));
+        QVERIFY(graph.isEmptyGraph());
+    }
+
+    void blendHasExtraInputPort() {
+        ClipGraph graph;
+        const NodeId blend = graph.addNode(NT::Process, {}, {{"effect", 55}});
+        QVERIFY(blend != 0);
+        const auto ins = graph.inputPorts(blend);
+        QCOMPARE(ins.size(), 2);
+        QCOMPARE(ins[0].label, QStringLiteral("in"));
+        QCOMPARE(ins[1].label, QStringLiteral("b"));
+        QVERIFY(ins[1].kind == ClipGraph::PortKind::ChainIn);
+        QVERIFY(ins[1].slotted);
+
+        const NodeId sw = graph.addNode(NT::Process, {}, {{"effect", 60}});
+        QCOMPARE(graph.inputPorts(sw).size(), 4);
+        QCOMPARE(graph.inputPorts(sw)[3].label, QStringLiteral("in3"));
+
+        const NodeId flip = graph.addNode(NT::Process, {}, {{"effect", 4}});
+        QCOMPARE(graph.inputPorts(flip).size(), 1);
+    }
+
+    void extraInputEdgesValidateAndRoundTrip() {
+        ClipGraph graph;
+        const NodeId a = graph.addNode(NT::Input, {}, canvas("a"));
+        const NodeId b = graph.addNode(NT::Input, {}, canvas("b"));
+        const NodeId blend = graph.addNode(NT::Process, {}, {{"effect", 55}});
+        QVERIFY(graph.canConnectPorts(a, 0, blend, 0));
+        QVERIFY(graph.canConnectPorts(b, 0, blend, 1));
+        QVERIFY(!graph.canConnectPorts(b, 0, blend, 2));
+        QVERIFY(graph.connectPorts(a, 0, blend, 0));
+        QVERIFY(graph.connectPorts(b, 0, blend, 1));
+        QCOMPARE(graph.producerForInput(blend, 0), a);
+        QCOMPARE(graph.producerForInput(blend, 1), b);
+        QVERIFY(graph.canConnectNodes(b, blend, int(EK::Chain), 1));
+
+        const ClipGraph::ResolvedStream rs = graph.evaluateVideoInput(blend);
+        QCOMPARE(rs.layers.size(), 1);
+        QCOMPARE(rs.layers.first().sourceEffects.size(), 1);
+        const SourceEffectRef &ref = rs.layers.first().sourceEffects.first();
+        QCOMPARE(ref.aux.size(), 1);
+        QVERIFY(ref.aux.first());
+        QCOMPARE(ref.aux.first()->stream.layers.first().inputNodeId, b);
+
+        const QJsonObject saved = graph.toJson();
+        int slots1 = 0;
+        for (const QJsonValue &v : saved["connections"].toArray())
+            if (v.toObject()["to"].toInteger() == qint64(blend) && v.toObject()["toPortIndex"].toInt() == 1)
+                ++slots1;
+        QCOMPARE(slots1, 1);
+
+        ClipGraph second;
+        QVERIFY(second.fromJson(saved));
+        QCOMPARE(second.producerForInput(blend, 0), a);
+        QCOMPARE(second.producerForInput(blend, 1), b);
+
+        QVERIFY(graph.disconnectNodes(b, blend, 1));
+        QCOMPARE(graph.producerForInput(blend, 1), NodeId(0));
+        QCOMPARE(graph.producerForInput(blend, 0), a);
     }
 
     void trailingSlotsAndDefaultNames() {

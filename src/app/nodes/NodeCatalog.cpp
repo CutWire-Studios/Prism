@@ -37,7 +37,7 @@ QVariantList NodeCatalog::processEffectParams(int id) const
     const ShaderEffectSpec *spec = ShaderEffects::byId(id);
     if (!spec)
         return out;
-    static const char *const kTypes[] = {"float", "int", "bool", "choice", "color", "point"};
+    static const char *const kTypes[] = {"float", "int", "bool", "choice", "color", "point", "file"};
     for (const ShaderParam &p : spec->params) {
         QVariant def = p.def;
         if (p.type == ShaderParam::Bool)
@@ -46,6 +46,8 @@ QVariantList NodeCatalog::processEffectParams(int id) const
             def = QVariantList{p.defColor.redF(), p.defColor.greenF(), p.defColor.blueF(), p.defColor.alphaF()};
         else if (p.type == ShaderParam::Point)
             def = QVariantList{p.defPoint.x(), p.defPoint.y()};
+        else if (p.type == ShaderParam::File)
+            def = QString();
         out.append(QVariantMap{
             {"name", p.name},
             {"label", p.label},
@@ -55,6 +57,7 @@ QVariantList NodeCatalog::processEffectParams(int id) const
             {"step", p.step},
             {"def", def},
             {"choices", p.choices},
+            {"filter", p.fileFilter},
         });
     }
     return out;

@@ -1,4 +1,5 @@
 #include "core/graph/ProcessEffects.h"
+#include "core/graph/ClipGraph.h"
 #include "core/sources/MediaSource.h"
 #include "core/sources/EffectSources.h"
 #include "core/effects/ShaderEffects.h"
@@ -315,11 +316,18 @@ const ProcessEffectDescriptor *byName(const QString &name) {
 }
 
 std::unique_ptr<MediaSource> applySourceEffects(std::unique_ptr<MediaSource> source,
-                                                const QVector<SourceEffectRef> &effects) {
+                                                const QVector<SourceEffectRef> &effects,
+                                                const AuxBuilder &auxBuilder) {
     for (const SourceEffectRef &ref : effects) {
         const ProcessEffectDescriptor *d = byId(ref.effectId);
         if (source && d && d->wrapSource)
             source = d->wrapSource(std::move(source), ref.params);
+        if (auxBuilder && !ref.aux.isEmpty()) {
+            if (auto *ses = dynamic_cast<ShaderEffectSource *>(source.get())) {
+                for (int i = 0; i < ref.aux.size(); ++i)
+                    if (ref.aux[i]) ses->setAux(i, auxBuilder(*ref.aux[i]));
+            }
+        }
     }
     return source;
 }
@@ -339,12 +347,20 @@ QString sourceEffectsParamsKey(const QVector<SourceEffectRef> &effects) {
     return key;
 }
 
-MediaSource *updateSourceEffects(MediaSource *top, const QVector<SourceEffectRef> &effects) {
+MediaSource *updateSourceEffects(MediaSource *top, const QVector<SourceEffectRef> &effects,
+                                 const AuxUpdater &auxUpdater) {
     MediaSource *s = top;
     for (int i = effects.size() - 1; i >= 0; --i) {
         const ProcessEffectDescriptor *d = byId(effects[i].effectId);
         if (!d || !d->wrapSource) continue;
         if (!s || !s->updateParams(effects[i].params)) return nullptr;
+        if (auxUpdater) {
+            auto *ses = dynamic_cast<ShaderEffectSource *>(s);
+            for (int j = 0; ses && j < effects[i].aux.size(); ++j) {
+                MediaSource *a = ses->auxSource(j);
+                if (a && effects[i].aux[j] && !auxUpdater(a, *effects[i].aux[j])) return nullptr;
+            }
+        }
         s = s->inner();
     }
     return s;

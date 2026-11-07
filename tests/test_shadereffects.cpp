@@ -1,6 +1,7 @@
 #include "core/effects/ShaderEffects.h"
 #include "core/graph/ProcessEffects.h"
 #include "core/effects/ShaderEffectSource.h"
+#include "core/effects/LutLoader.h"
 #include "core/sources/ImageSource.h"
 #include "core/sources/MediaSource.h"
 
@@ -14,6 +15,7 @@
 #include <QOpenGLContext>
 #include <QOpenGLShaderProgram>
 #include <QSet>
+#include <QTemporaryDir>
 #include <QtTest>
 
 namespace {
@@ -170,6 +172,63 @@ private slots:
         ctx.doneCurrent();
     }
 
+    void cube_parsesIdentity() {
+        QFile f(QStringLiteral(PRISM_TEST_DATA_DIR "/identity2.cube"));
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        int size = 0;
+        std::vector<float> rgb;
+        QVERIFY(Lut::parseCube(f.readAll(), size, rgb));
+        QCOMPARE(size, 2);
+        QCOMPARE(int(rgb.size()), 24);
+        QCOMPARE(rgb[3], 1.f);   // second entry: red = 1
+        QCOMPARE(rgb[4], 0.f);
+        QCOMPARE(rgb[3 * 7 + 2], 1.f);   // last entry: blue = 1
+
+        const QImage atlas = Lut::atlasFromLattice(size, rgb);
+        QCOMPARE(atlas.size(), QSize(Lut::kAtlas, Lut::kAtlas));
+        auto px = [&](int tile, int r, int g) {
+            return atlas.pixelColor((tile % 8) * 64 + r, (tile / 8) * 64 + g);
+        };
+        QCOMPARE(px(0, 0, 0), QColor(0, 0, 0));
+        QCOMPARE(px(0, 63, 0), QColor(255, 0, 0));
+        QCOMPARE(px(0, 0, 63), QColor(0, 255, 0));
+        QCOMPARE(px(63, 0, 0), QColor(0, 0, 255));
+        QCOMPARE(px(63, 63, 63), QColor(255, 255, 255));
+        QVERIFY(qAbs(px(0, 32, 0).red() - 130) <= 1);
+        QVERIFY(qAbs(px(32, 0, 0).blue() - 130) <= 1);
+        QCOMPARE(px(5, 10, 20).alpha(), 255);
+    }
+
+    void cube_rejectsMalformed() {
+        int size = 0;
+        std::vector<float> rgb;
+        QVERIFY(!Lut::parseCube("LUT_1D_SIZE 4\n0 0 0\n1 1 1\n", size, rgb));
+        QVERIFY(!Lut::parseCube("LUT_3D_SIZE 2\n0 0 0\n1 0 0\n", size, rgb));
+        QVERIFY(!Lut::parseCube("0 0 0\n", size, rgb));
+        QVERIFY(Lut::load(QStringLiteral("/nonexistent/none.cube")).isNull());
+    }
+
+    void lut_loadsStripPngAndCube() {
+        const QImage cube = Lut::load(QStringLiteral(PRISM_TEST_DATA_DIR "/identity2.cube"));
+        QCOMPARE(cube.size(), QSize(Lut::kAtlas, Lut::kAtlas));
+
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const int n = 4;
+        QImage strip(n * n, n, QImage::Format_RGBA8888);
+        for (int b = 0; b < n; ++b)
+            for (int g = 0; g < n; ++g)
+                for (int r = 0; r < n; ++r)
+                    strip.setPixelColor(b * n + r, g, QColor(r * 85, g * 85, b * 85));
+        const QString path = dir.filePath(QStringLiteral("strip.png"));
+        QVERIFY(strip.save(path));
+        const QImage atlas = Lut::load(path);
+        QCOMPARE(atlas.size(), QSize(Lut::kAtlas, Lut::kAtlas));
+        QCOMPARE(atlas.pixelColor(63, 0), QColor(255, 0, 0));
+        QCOMPARE(atlas.pixelColor(0, 63), QColor(0, 255, 0));
+        QCOMPARE(atlas.pixelColor(448, 448), QColor(0, 0, 255));
+    }
+
     void goldenPixels_data() {
         QTest::addColumn<QJsonObject>("c");
         QFile f(QStringLiteral(PRISM_TEST_DATA_DIR "/effects_golden.json"));
@@ -197,37 +256,59 @@ private slots:
         const QJsonArray sz = c.value("size").toArray();
         const int w = sz.size() == 2 ? sz.at(0).toInt() : 64;
         const int h = sz.size() == 2 ? sz.at(1).toInt() : 64;
-        const QJsonObject in = c.value("input").toObject();
-        const QString type = in.value("type").toString();
-        QImage img(w, h, QImage::Format_RGBA8888);
-        if (type == "solid") {
-            img.fill(ShaderEffects::parseHexColor(in.value("color").toString()));
-        } else if (type == "hgradient") {
-            const QColor a = ShaderEffects::parseHexColor(in.value("from").toString());
-            const QColor b = ShaderEffects::parseHexColor(in.value("to").toString());
-            for (int x = 0; x < w; ++x) {
-                const double t = w > 1 ? double(x) / (w - 1) : 0.0;
-                const QColor px = QColor::fromRgbF(a.redF() + (b.redF() - a.redF()) * t,
-                                                   a.greenF() + (b.greenF() - a.greenF()) * t,
-                                                   a.blueF() + (b.blueF() - a.blueF()) * t,
-                                                   a.alphaF() + (b.alphaF() - a.alphaF()) * t);
-                for (int y = 0; y < h; ++y) {
-                    uchar *p = img.scanLine(y) + x * 4;
-                    p[0] = uchar(px.red()); p[1] = uchar(px.green());
-                    p[2] = uchar(px.blue()); p[3] = uchar(px.alpha());
-                }
-            }
-        } else {
-            QFAIL(qPrintable("unknown input type " + type));
-        }
 
-        auto image = std::make_unique<ImageSource>();
-        QVERIFY(image->setImage(img));
+        auto makeInput = [&](const QJsonObject &in) -> std::unique_ptr<ImageSource> {
+            const QString type = in.value("type").toString();
+            QImage img(w, h, QImage::Format_RGBA8888);
+            if (type == "solid") {
+                img.fill(ShaderEffects::parseHexColor(in.value("color").toString()));
+            } else if (type == "hgradient") {
+                const QColor a = ShaderEffects::parseHexColor(in.value("from").toString());
+                const QColor b = ShaderEffects::parseHexColor(in.value("to").toString());
+                for (int x = 0; x < w; ++x) {
+                    const double t = w > 1 ? double(x) / (w - 1) : 0.0;
+                    const QColor px = QColor::fromRgbF(a.redF() + (b.redF() - a.redF()) * t,
+                                                       a.greenF() + (b.greenF() - a.greenF()) * t,
+                                                       a.blueF() + (b.blueF() - a.blueF()) * t,
+                                                       a.alphaF() + (b.alphaF() - a.alphaF()) * t);
+                    for (int y = 0; y < h; ++y) {
+                        uchar *p = img.scanLine(y) + x * 4;
+                        p[0] = uchar(px.red()); p[1] = uchar(px.green());
+                        p[2] = uchar(px.blue()); p[3] = uchar(px.alpha());
+                    }
+                }
+            } else {
+                QTest::qFail(qPrintable("unknown input type " + type), __FILE__, __LINE__);
+                return std::unique_ptr<ImageSource>();
+            }
+            auto image = std::make_unique<ImageSource>();
+            if (!image->setImage(img)) {
+                QTest::qFail("setImage failed", __FILE__, __LINE__);
+                return std::unique_ptr<ImageSource>();
+            }
+            return image;
+        };
+
+        auto image = makeInput(c.value("input").toObject());
+        QVERIFY(image);
         QJsonObject params = spec->defaultParams();
         const QJsonObject over = c.value("params").toObject();
-        for (auto it = over.begin(); it != over.end(); ++it) params[it.key()] = it.value();
+        for (auto it = over.begin(); it != over.end(); ++it) {
+            QJsonValue v = it.value();
+            if (v.isString())
+                v = v.toString().replace(QStringLiteral("$DATA"), QStringLiteral(PRISM_TEST_DATA_DIR));
+            params[it.key()] = v;
+        }
 
         ShaderEffectSource src(std::move(image), *spec, params);
+        const QJsonObject extra = c.value("inputs").toObject();
+        for (auto it = extra.begin(); it != extra.end(); ++it) {
+            const int slot = spec->inputNames.indexOf(it.key());
+            QVERIFY2(slot >= 0, qPrintable("unknown extra input " + it.key()));
+            auto aux = makeInput(it.value().toObject());
+            QVERIFY(aux);
+            src.setAux(slot, std::move(aux));
+        }
         QVERIFY(src.nextFrame());
         const uint8_t *data = src.frameData();
         QVERIFY(data);

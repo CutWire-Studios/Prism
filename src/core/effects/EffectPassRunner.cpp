@@ -76,6 +76,9 @@ void EffectPassRunner::destroyGL() {
     auto *f = m_context->functions();
     if (m_vbo)      { f->glDeleteBuffers(1, &m_vbo); m_vbo = 0; }
     if (m_inputTex) { f->glDeleteTextures(1, &m_inputTex); m_inputTex = 0; }
+    for (unsigned int t : std::as_const(m_slotTex)) f->glDeleteTextures(1, &t);
+    m_slotTex.clear();
+    if (m_transparentTex) { f->glDeleteTextures(1, &m_transparentTex); m_transparentTex = 0; }
     qDeleteAll(m_programs);
     m_programs.clear();
     delete m_compositeProg; m_compositeProg = nullptr;
@@ -149,6 +152,36 @@ unsigned int EffectPassRunner::uploadInput(const QImage &frame) {
     return m_inputTex;
 }
 
+unsigned int EffectPassRunner::uploadSlot(int slot, const QImage &frame) {
+    if (!m_glInit || frame.isNull()) return 0;
+    QImage rgba = frame.format() == QImage::Format_RGBA8888
+                      ? frame : frame.convertToFormat(QImage::Format_RGBA8888);
+    auto *f = m_context->functions();
+    unsigned int &tex = m_slotTex[slot];
+    if (tex == 0) f->glGenTextures(1, &tex);
+    f->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    f->glBindTexture(GL_TEXTURE_2D, tex);
+    f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    f->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rgba.width(), rgba.height(), 0,
+                    GL_RGBA, GL_UNSIGNED_BYTE, rgba.constBits());
+    f->glBindTexture(GL_TEXTURE_2D, 0);
+    return tex;
+}
+
+unsigned int EffectPassRunner::transparentTexture() {
+    if (!m_glInit) return 0;
+    if (m_transparentTex == 0) {
+        QImage px(1, 1, QImage::Format_RGBA8888);
+        px.fill(Qt::transparent);
+        m_transparentTex = uploadSlot(-1, px);
+        m_slotTex.remove(-1);
+    }
+    return m_transparentTex;
+}
+
 QOpenGLShaderProgram *EffectPassRunner::program(int key, const char *fragmentSrc) {
     if (auto it = m_programs.constFind(key); it != m_programs.constEnd())
         return it.value();
@@ -169,7 +202,8 @@ QOpenGLShaderProgram *EffectPassRunner::program(int key, const char *fragmentSrc
 
 unsigned int EffectPassRunner::runPass(
     QOpenGLShaderProgram *prog, unsigned int inputTex,
-    const std::function<void(QOpenGLShaderProgram *)> &setUniforms) {
+    const std::function<void(QOpenGLShaderProgram *)> &setUniforms,
+    const std::vector<TexBinding> &extras) {
     if (!prog || !m_fbo[0] || !m_fbo[1]) return inputTex;
 
     QOpenGLFramebufferObject *target = m_fbo[m_ping];
@@ -186,6 +220,12 @@ unsigned int EffectPassRunner::runPass(
     f->glActiveTexture(GL_TEXTURE0);
     f->glBindTexture(GL_TEXTURE_2D, inputTex);
     prog->setUniformValue("u_input", 0);
+    for (size_t i = 0; i < extras.size(); ++i) {
+        f->glActiveTexture(GL_TEXTURE1 + static_cast<unsigned int>(i));
+        f->glBindTexture(GL_TEXTURE_2D, extras[i].tex);
+        prog->setUniformValue(extras[i].uniform.constData(), static_cast<int>(i) + 1);
+    }
+    f->glActiveTexture(GL_TEXTURE0);
     if (setUniforms) setUniforms(prog);
 
     f->glBindBuffer(GL_ARRAY_BUFFER, m_vbo);

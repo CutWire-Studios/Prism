@@ -41,6 +41,23 @@ int jsonInt(const QJsonValue &v, int fallback = -1)
     return fallback;
 }
 
+/// to_port as a slot number or the name of an input port ("b", "mask", ...). -2 = unknown name.
+int resolveToPort(const ClipGraph *graph, NodeId to, const QJsonValue &v)
+{
+    if (v.isString()) {
+        bool numeric = false;
+        v.toString().toInt(&numeric);
+        if (!numeric) {
+            const QString name = v.toString().trimmed();
+            for (const ClipGraph::Port &p : graph->inputPorts(to))
+                if (p.slotted && p.label.compare(name, Qt::CaseInsensitive) == 0)
+                    return p.index;
+            return -2;
+        }
+    }
+    return jsonInt(v, -1);
+}
+
 double jsonNumber(const QJsonValue &v, double fallback)
 {
     if (v.isDouble())
@@ -1300,7 +1317,10 @@ QJsonObject McpDispatcher::opConnect(const QJsonObject &args)
     const int kind = parseConnectionKind(args.value(QStringLiteral("kind")));
     if (kind == -2)
         return err("bad_args", QStringLiteral("Unknown connection kind"));
-    const int toPort = jsonInt(args.value(QStringLiteral("to_port")), -1);
+    const int toPort = resolveToPort(editor, to, args.value(QStringLiteral("to_port")));
+    if (toPort == -2)
+        return err("bad_args", QStringLiteral("Unknown to_port name. Use a slot number or an input "
+                                              "port name (list_nodes shows them)."));
     if (!editor->connectNodes(from, to, kind, toPort))
         return err("conflict",
                    QStringLiteral("Could not connect those ports. Output cannot take a video "
@@ -1330,7 +1350,9 @@ QJsonObject McpDispatcher::opDisconnect(const QJsonObject &args)
     const NodeId to = static_cast<NodeId>(parseNodeId(args.value(QStringLiteral("to"))));
     if (!from || !to)
         return err("bad_args", QStringLiteral("from and to are required node ids"));
-    const int toPort = jsonInt(args.value(QStringLiteral("to_port")), -1);
+    const int toPort = resolveToPort(editor, to, args.value(QStringLiteral("to_port")));
+    if (toPort == -2)
+        return err("bad_args", QStringLiteral("Unknown to_port name."));
     if (!editor->disconnectNodes(from, to, toPort))
         return err("not_found", QStringLiteral("No such connection"));
     m_window->mcpBumpRevision();

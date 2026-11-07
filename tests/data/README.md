@@ -10,3 +10,5 @@ Data for `goldenPixels` in `tests/test_shadereffects.cpp`. Top level is an array
 - uv (0,0) is the top-left of the image as seen; pixel is `x = uv.x*(w-1)`, `y = uv.y*(h-1)` (rounded).
 - Output is straight alpha (shaders do not premultiply); e.g. invert of `#ff000080` is `[0,255,255,128]`.
 - Keys starting with `_` (e.g. `_comment`) are ignored.
+- `inputs` (optional): `{"<name>": {input spec}}` feeds the effect's extra input ports, named as in the spec's `inputs` array in `effects.json` (e.g. `"b"` for blend, `"in1"` for switch). Each uses the same input spec as `input`, at the case's `size`. A name left out stays unconnected, i.e. a transparent texture.
+- String values in `params` have `$DATA` replaced by this directory, so a `file` param can point at `$DATA/identity2.cube`.

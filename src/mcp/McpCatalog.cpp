@@ -323,7 +323,9 @@ const QList<Op> &ops()
                        {QStringLiteral("y"), numberProp(QStringLiteral("Scene Y"))}})},
         {"connect", "graph", "Wire two nodes",
          "Connect from → to. kind defaults to auto (tries video chain first). to_port is the "
-         "destination slot for Layer / mixer (0-based). Returns {from, to, kind, kindName}.",
+         "destination slot for Layer / mixer (0-based), or the name of an extra input port on a "
+         "multi-input effect (blend: \"b\", mask: \"mask\", switch: \"in1\"..). Returns "
+         "{from, to, kind, kindName}.",
          objectSchema({{QStringLiteral("from"),
                         stringProp(QStringLiteral("Source node id"))},
                        {QStringLiteral("to"),
@@ -333,7 +335,11 @@ const QList<Op> &ops()
                             "chain (default), script_to_data, clip_to_shader_audio, "
                             "or omit for auto"))},
                        {QStringLiteral("to_port"),
-                        integerProp(QStringLiteral("Destination input slot (Layer / mixer)"))}},
+                        QJsonObject{{QStringLiteral("type"),
+                                     QJsonArray{QStringLiteral("integer"), QStringLiteral("string")}},
+                                    {QStringLiteral("description"),
+                                     QStringLiteral("Destination input slot (Layer / mixer) or "
+                                                    "input port name (e.g. \"b\")")}}}},
                       {QStringLiteral("from"), QStringLiteral("to")})},
         {"disconnect", "graph", "Cut a wire",
          "Remove the connection from → to. Optional to_port to target one slot.",
