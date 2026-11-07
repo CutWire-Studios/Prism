@@ -199,17 +199,17 @@ QJsonObject SessionManager::buildJson(int transitionProgress, const QJsonArray &
     root["hotkeys"] = hotkeys;
     const QJsonObject showJson = m_show->toJson();
     root["show"] = showJson["show"];
-    QJsonArray cues = showJson["cues"].toArray();
+    QJsonArray scenes = showJson["scenes"].toArray();
     if (sessionDir.isAbsolute()) {
-        for (int i = 0; i < cues.size(); ++i) {
-            QJsonObject cue = cues.at(i).toObject();
-            QJsonObject graph = cue["graph"].toObject();
+        for (int i = 0; i < scenes.size(); ++i) {
+            QJsonObject scene = scenes.at(i).toObject();
+            QJsonObject graph = scene["graph"].toObject();
             relativizeGraphPaths(graph, sessionDir);
-            cue["graph"] = graph;
-            cues[i] = cue;
+            scene["graph"] = graph;
+            scenes[i] = scene;
         }
     }
-    root["cues"] = cues;
+    root["scenes"] = scenes;
 
     QJsonArray assetLibrary;
     for (const QString &path : m_clipManager->getClips()) {
@@ -323,8 +323,8 @@ bool SessionManager::loadFromFile(const QString &path) {
             m_clipManager->setDisplayName(resolved, it.value().toString());
     }
 
-    for (Cue *cue : m_show->cues()) {
-        ClipGraph *graph = cue->graph();
+    for (Scene *scene : m_show->scenes()) {
+        ClipGraph *graph = scene->graph();
         for (const NodeId id : graph->nodeIdsOfType(ClipGraph::NodeType::Input)) {
             graph->setSourceDescriptor(id, AssetPathResolver::relinkDescriptor(
                 graph->sourceDescriptor(id), relinkOpts, &relinkReport));

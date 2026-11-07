@@ -1,4 +1,4 @@
-#include "app/show/Cue.h"
+#include "app/show/Scene.h"
 
 #include "app/graph/GraphRuntime.h"
 #include "core/graph/ClipGraph.h"
@@ -17,7 +17,7 @@ TransitionSpec TransitionSpec::fromJson(const QJsonObject &o)
     return s;
 }
 
-Cue::Cue(const QString &id, int serial, std::shared_ptr<NodeThumbStore> thumbs, bool withDefaults,
+Scene::Scene(const QString &id, int serial, std::shared_ptr<NodeThumbStore> thumbs, bool withDefaults,
          QObject *parent)
     : QObject(parent), m_id(id), m_serial(serial)
 {
@@ -31,15 +31,15 @@ Cue::Cue(const QString &id, int serial, std::shared_ptr<NodeThumbStore> thumbs, 
     }
 }
 
-void Cue::clearGraph()
+void Scene::clearGraph()
 {
     m_graph->clear();
     m_graph->addNode(ClipGraph::NodeType::Output);
     m_graph->addNode(ClipGraph::NodeType::MasterAudioOutput);
 }
 
-#define PRISM_CUE_SETTER(Type, member, Name)            \
-    void Cue::set##Name(Type value)                     \
+#define PRISM_SCENE_SETTER(Type, member, Name)            \
+    void Scene::set##Name(Type value)                     \
     {                                                   \
         if (member == value)                            \
             return;                                     \
@@ -47,28 +47,28 @@ void Cue::clearGraph()
         emit metaChanged();                             \
     }
 
-PRISM_CUE_SETTER(const QString &, m_name, Name)
-PRISM_CUE_SETTER(const QString &, m_color, Color)
-PRISM_CUE_SETTER(const QString &, m_notes, Notes)
-PRISM_CUE_SETTER(EndAction, m_endAction, EndAction)
-PRISM_CUE_SETTER(int, m_autoAdvanceMs, AutoAdvanceMs)
-PRISM_CUE_SETTER(bool, m_advanceOnMediaEnd, AdvanceOnMediaEnd)
+PRISM_SCENE_SETTER(const QString &, m_name, Name)
+PRISM_SCENE_SETTER(const QString &, m_color, Color)
+PRISM_SCENE_SETTER(const QString &, m_notes, Notes)
+PRISM_SCENE_SETTER(EndAction, m_endAction, EndAction)
+PRISM_SCENE_SETTER(int, m_autoAdvanceMs, AutoAdvanceMs)
+PRISM_SCENE_SETTER(bool, m_advanceOnMediaEnd, AdvanceOnMediaEnd)
 
-#undef PRISM_CUE_SETTER
+#undef PRISM_SCENE_SETTER
 
-void Cue::setThumbnail(const QString &path)
+void Scene::setThumbnail(const QString &path)
 {
     m_thumbnail = path;
     ++m_thumbRev;
     emit thumbnailChanged();
 }
 
-CueMeta Cue::meta() const
+SceneMeta Scene::meta() const
 {
     return {m_name, m_color, m_notes, m_incoming, int(m_endAction), m_autoAdvanceMs, m_advanceOnMediaEnd};
 }
 
-void Cue::setMeta(const CueMeta &m)
+void Scene::setMeta(const SceneMeta &m)
 {
     setName(m.name);
     setColor(m.color);
@@ -79,7 +79,7 @@ void Cue::setMeta(const CueMeta &m)
     setAdvanceOnMediaEnd(m.advanceOnMediaEnd);
 }
 
-void Cue::setIncoming(const std::optional<TransitionSpec> &spec)
+void Scene::setIncoming(const std::optional<TransitionSpec> &spec)
 {
     if (m_incoming == spec)
         return;
@@ -87,7 +87,7 @@ void Cue::setIncoming(const std::optional<TransitionSpec> &spec)
     emit metaChanged();
 }
 
-QString Cue::endActionName(EndAction action)
+QString Scene::endActionName(EndAction action)
 {
     switch (action) {
     case EndAction::Hold: return QStringLiteral("hold");
@@ -98,7 +98,7 @@ QString Cue::endActionName(EndAction action)
     return QStringLiteral("hold");
 }
 
-Cue::EndAction Cue::endActionFromName(const QString &name)
+Scene::EndAction Scene::endActionFromName(const QString &name)
 {
     for (EndAction a : {EndAction::Loop, EndAction::AutoAdvance, EndAction::Black}) {
         if (endActionName(a) == name)
@@ -107,7 +107,7 @@ Cue::EndAction Cue::endActionFromName(const QString &name)
     return EndAction::Hold;
 }
 
-QJsonObject Cue::toJson() const
+QJsonObject Scene::toJson() const
 {
     QJsonObject o{
         {QStringLiteral("id"), m_id},
@@ -126,7 +126,7 @@ QJsonObject Cue::toJson() const
     return o;
 }
 
-bool Cue::loadJson(const QJsonObject &o)
+bool Scene::loadJson(const QJsonObject &o)
 {
     m_name = o.value(QStringLiteral("name")).toString();
     m_color = o.value(QStringLiteral("color")).toString();

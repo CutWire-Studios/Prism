@@ -8,16 +8,16 @@ PanelFrame {
 
     EmptyState {
         anchors.centerIn: parent
-        visible: !AppController.inCue
+        visible: !AppController.inScene
         glyph: "pencil"
-        title: qsTr("No cue open")
-        hint: qsTr("Press a cue's edit button to work on its graph")
+        title: qsTr("No scene open")
+        hint: qsTr("Press a scene's edit button to work on its graph")
     }
 
     NodeEditorPanel {
         id: editor
         anchors.fill: parent
-        visible: AppController.inCue
+        visible: AppController.inScene
         controller: AppController.graph
 
         onInspectorRequested: root.inspectorRequested()

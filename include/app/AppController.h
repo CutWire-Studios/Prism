@@ -41,13 +41,13 @@ class QTimer;
 class RemoteControlServer;
 class SessionManager;
 class TransitionController;
-class Cue;
+class Scene;
 struct VenueProfile;
 
 namespace prism::mcp { class McpServer; }
 
 /// The application's backend coordinator and the single object the QML shell drives. It owns the
-/// Compositor, the ShowManager (cues, each with its graph, QML controller and runtime), DeckController, SessionManager,
+/// Compositor, the ShowManager (scenes, each with its graph, QML controller and runtime), DeckController, SessionManager,
 /// TransitionController, OutputHub, hotkeys, OBS, and the remote/OSC/MCP servers; it ports the
 /// non-widget logic of the old MainWindow (deck routing, transitions, panic, sessions, recording
 /// hooks, output windows, MCP/remote helper API).
@@ -60,23 +60,23 @@ class AppController : public QObject {
     QML_SINGLETON
 
     // ── Graph / compositor ────────────────────────────────────────────────────
-    /// The graph controller of the cue being edited.
+    /// The graph controller of the scene being edited.
     Q_PROPERTY(ClipGraphController *graph READ graphController NOTIFY editedGraphChanged)
     Q_PROPERTY(Compositor *compositor READ compositor CONSTANT)
 
-    // ── Show / cues ───────────────────────────────────────────────────────────
-    Q_PROPERTY(QAbstractItemModel *cues READ cueModel CONSTANT)
-    Q_PROPERTY(QString liveCueId READ liveCueId NOTIFY showChanged)
-    Q_PROPERTY(QString stagingCueId READ stagingCueId NOTIFY showChanged)
-    Q_PROPERTY(QString editedCueId READ editedCueId NOTIFY showChanged)
-    /// False after exitCue(): the node editor then asks for a cue to be entered.
-    Q_PROPERTY(bool inCue READ inCue NOTIFY showChanged)
-    /// The cue the cue list has selected (what the inspector shows when no node is selected);
-    /// the edited cue until the list picks one.
-    Q_PROPERTY(QString selectedCueId READ selectedCueId WRITE setSelectedCueId NOTIFY selectedCueChanged)
+    // ── Show / scenes ───────────────────────────────────────────────────────────
+    Q_PROPERTY(QAbstractItemModel *scenes READ sceneModel CONSTANT)
+    Q_PROPERTY(QString liveSceneId READ liveSceneId NOTIFY showChanged)
+    Q_PROPERTY(QString stagingSceneId READ stagingSceneId NOTIFY showChanged)
+    Q_PROPERTY(QString editedSceneId READ editedSceneId NOTIFY showChanged)
+    /// False after exitScene(): the node editor then asks for a scene to be entered.
+    Q_PROPERTY(bool inScene READ inScene NOTIFY showChanged)
+    /// The scene the scene list has selected (what the inspector shows when no node is selected);
+    /// the edited scene until the list picks one.
+    Q_PROPERTY(QString selectedSceneId READ selectedSceneId WRITE setSelectedSceneId NOTIFY selectedSceneChanged)
     Q_PROPERTY(bool canShowUndo READ canShowUndo NOTIFY showUndoChanged)
     Q_PROPERTY(bool canShowRedo READ canShowRedo NOTIFY showUndoChanged)
-    /// True while the edited cue is the Live cue (edits go on air).
+    /// True while the edited scene is the Live scene (edits go on air).
     Q_PROPERTY(bool editingLive READ editingLive NOTIFY showChanged)
 
     // ── Decks (clock properties refresh every 100 ms via deckClockChanged) ────
@@ -163,7 +163,7 @@ public:
     // ── Owned objects ─────────────────────────────────────────────────────────
     Compositor *compositor() const { return m_compositor.get(); }
     ShowManager *showManager() const { return m_show; }
-    /// Graph, controller and runtime of the cue being edited.
+    /// Graph, controller and runtime of the scene being edited.
     ClipGraph *clipGraph() const;
     ClipGraphController *graphController() const;
     GraphRuntime *graphRuntime() const;
@@ -202,13 +202,13 @@ public:
     QStringList transitionModeNames() const;
     double transitionDuration() const;
     bool transitionRunning() const;
-    QAbstractItemModel *cueModel() const;
-    QString liveCueId() const;
-    QString stagingCueId() const;
-    QString editedCueId() const;
-    bool inCue() const;
-    QString selectedCueId() const;
-    void setSelectedCueId(const QString &id);
+    QAbstractItemModel *sceneModel() const;
+    QString liveSceneId() const;
+    QString stagingSceneId() const;
+    QString editedSceneId() const;
+    bool inScene() const;
+    QString selectedSceneId() const;
+    void setSelectedSceneId(const QString &id);
     bool canShowUndo() const;
     bool canShowRedo() const;
     bool editingLive() const;
@@ -246,33 +246,33 @@ public:
     void setMcpEnabled(bool on);
 
     // ── Decks / transitions (QML) ─────────────────────────────────────────────
-    /// Puts a cue on Staging. False for an unknown cue, the Live cue, or while a take is running.
-    Q_INVOKABLE bool stageCue(const QString &id);
+    /// Puts a scene on Staging. False for an unknown scene, the Live scene, or while a take is running.
+    Q_INVOKABLE bool stageScene(const QString &id);
     /// Stages @p id and starts the take; false when it could not be staged.
     Q_INVOKABLE bool stageAndTake(const QString &id);
-    /// Stages the cue @p delta places after (or before, when negative) the Live cue.
+    /// Stages the scene @p delta places after (or before, when negative) the Live scene.
     Q_INVOKABLE bool stageRelative(int delta);
-    Q_INVOKABLE bool moveCue(const QString &id, int toIndex);
-    /// removeCue after a confirmation when the cue is Staging; the Live cue cannot be deleted.
-    Q_INVOKABLE void deleteCue(const QString &id);
+    Q_INVOKABLE bool moveScene(const QString &id, int toIndex);
+    /// removeScene after a confirmation when the scene is Staging; the Live scene cannot be deleted.
+    Q_INVOKABLE void deleteScene(const QString &id);
     Q_INVOKABLE void undoShow();
     Q_INVOKABLE void redoShow();
-    /// Display text of the key bound to a cue ("" when unbound).
-    Q_INVOKABLE QString cueHotkey(const QString &id) const;
+    /// Display text of the key bound to a scene ("" when unbound).
+    Q_INVOKABLE QString sceneHotkey(const QString &id) const;
     /// Binds @p chord (portable text, "" clears); returns an error message or "".
-    Q_INVOKABLE QString setCueHotkey(const QString &id, const QString &chord);
-    /// Missing media and devices across all cues: [{kind, cueId, cue, source, detail}].
+    Q_INVOKABLE QString setSceneHotkey(const QString &id, const QString &chord);
+    /// Missing media and devices across all scenes: [{kind, sceneId, scene, source, detail}].
     Q_INVOKABLE QVariantList preflight() const;
-    /// Adds a cue after the edited one and returns its id.
-    Q_INVOKABLE QString addCue(const QString &name = {});
-    Q_INVOKABLE QString duplicateCue(const QString &id);
-    Q_INVOKABLE bool removeCue(const QString &id);
-    Q_INVOKABLE void enterCue(const QString &id);
-    Q_INVOKABLE void exitCue();
+    /// Adds a scene after the edited one and returns its id.
+    Q_INVOKABLE QString addScene(const QString &name = {});
+    Q_INVOKABLE QString duplicateScene(const QString &id);
+    Q_INVOKABLE bool removeScene(const QString &id);
+    Q_INVOKABLE void enterScene(const QString &id);
+    Q_INVOKABLE void exitScene();
     /// {id, name, color, notes, transition:{mode,durationMs}|null, endAction, autoAdvanceMs, advanceOnMediaEnd}.
-    Q_INVOKABLE QVariantMap cueInfo(const QString &id) const;
-    /// Applies the keys present in @p props (same names as cueInfo; transition null clears the override).
-    Q_INVOKABLE void setCueProps(const QString &id, const QVariantMap &props);
+    Q_INVOKABLE QVariantMap sceneInfo(const QString &id) const;
+    /// Applies the keys present in @p props (same names as sceneInfo; transition null clears the override).
+    Q_INVOKABLE void setSceneProps(const QString &id, const QVariantMap &props);
     /// The @p deck arguments below are int(Deck): 0 = Live, 1 = Staging.
     Q_INVOKABLE void togglePlay(int deck);
     Q_INVOKABLE void playDeck(int deck, bool play);
@@ -403,7 +403,7 @@ public:
     /// Re-reads the osc/* settings and (re)starts or stops the OSC server.
     void applyOscSettings();
 
-    /// Rebuilds the compositor decks from the Live and Staging cues.
+    /// Rebuilds the compositor decks from the Live and Staging scenes.
     void pushDecks();
     /// Applies resolution, scaling and outputs; @p persist stores it as this machine's default.
     void applyVenue(const VenueProfile &venue, bool persist);
@@ -425,9 +425,9 @@ signals:
     void editedGraphChanged();
     void showChanged();
     void showUndoChanged();
-    void selectedCueChanged();
-    /// Cue metadata, hotkeys or warnings changed (not graph contents).
-    void cuesEdited();
+    void selectedSceneChanged();
+    /// Scene metadata, hotkeys or warnings changed (not graph contents).
+    void scenesEdited();
     void panicModeChanged();
     void sessionPathChanged();
     void sessionDirtyChanged();
@@ -486,18 +486,18 @@ private:
     bool ensureOutputDir(const QString &followUpId);
     void doOpenSession(const QString &path);
     void doNewSession();
-    void onNodeChanged(Cue *cue, NodeId id);
-    void onCueGraphChanged(Cue *cue);
-    void attachCue(Cue *cue);
+    void onNodeChanged(Scene *scene, NodeId id);
+    void onSceneGraphChanged(Scene *scene);
+    void attachScene(Scene *scene);
     void applyTransition(int mode, int durationMs);
     void onLiveEnded();
     void applyLiveEndAction();
     void blackLive();
     void scheduleThumbnail(Deck deck);
-    void captureThumbnail(Deck deck, const QString &cueId);
+    void captureThumbnail(Deck deck, const QString &sceneId);
     QString thumbnailDir() const;
     QList<PreflightIssue> runPreflight(bool deep) const;
-    void refreshCueWarnings();
+    void refreshSceneWarnings();
     void refreshOutputsList();
 
     static AppController *s_instance;
@@ -525,9 +525,9 @@ private:
     QElapsedTimer m_meterClock;
     QTimer *m_autosaveTimer = nullptr;
     QTimer *m_pushTimer = nullptr;   // coalesces graph changes into one pushDecks()
-    QTimer *m_warnTimer = nullptr;   // debounces the per-cue missing media/device scan
-    QHash<QString, QString> m_cueWarnings;
-    QString m_selectedCueId;
+    QTimer *m_warnTimer = nullptr;   // debounces the per-scene missing media/device scan
+    QHash<QString, QString> m_sceneWarnings;
+    QString m_selectedSceneId;
 
     // Source identity of each deck's loaded stream (see pushDecks()).
     QString m_deckBase[2];

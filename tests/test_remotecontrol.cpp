@@ -114,17 +114,17 @@ private slots:
         RemoteProtocol::StatusData status;
         status.fader = 75;
         status.hasDeck = true;
-        status.live = QStringLiteral("cue-a");
-        status.staging = QStringLiteral("cue-b");
+        status.live = QStringLiteral("scene-a");
+        status.staging = QStringLiteral("scene-b");
         status.isPlayingLive = true;
         status.isPlayingStaging = false;
 
-        RemoteProtocol::CueInfo clip;
-        clip.id = QStringLiteral("cue-a");
+        RemoteProtocol::SceneInfo clip;
+        clip.id = QStringLiteral("scene-a");
         clip.name = QStringLiteral("Intro");
         clip.onLive = true;
         clip.onStaging = false;
-        status.cues.append(clip);
+        status.scenes.append(clip);
 
         status.hasTransition = true;
         status.transitionMode = 2;
@@ -136,17 +136,17 @@ private slots:
         const QJsonObject obj = doc.object();
 
         QCOMPARE(obj.value(QStringLiteral("fader")).toInt(), 75);
-        QCOMPARE(obj.value(QStringLiteral("live")).toString(), QStringLiteral("cue-a"));
-        QCOMPARE(obj.value(QStringLiteral("staging")).toString(), QStringLiteral("cue-b"));
+        QCOMPARE(obj.value(QStringLiteral("live")).toString(), QStringLiteral("scene-a"));
+        QCOMPARE(obj.value(QStringLiteral("staging")).toString(), QStringLiteral("scene-b"));
         QVERIFY(obj.value(QStringLiteral("isPlayingLive")).toBool());
         QVERIFY(!obj.value(QStringLiteral("isPlayingStaging")).toBool());
         QCOMPARE(obj.value(QStringLiteral("transitionMode")).toInt(), 2);
         QCOMPARE(obj.value(QStringLiteral("transitionDuration")).toDouble(), 1.5);
 
-        const QJsonArray clips = obj.value(QStringLiteral("cues")).toArray();
+        const QJsonArray clips = obj.value(QStringLiteral("scenes")).toArray();
         QCOMPARE(clips.size(), 1);
         const QJsonObject clipObj = clips.first().toObject();
-        QCOMPARE(clipObj.value(QStringLiteral("id")).toString(), QStringLiteral("cue-a"));
+        QCOMPARE(clipObj.value(QStringLiteral("id")).toString(), QStringLiteral("scene-a"));
         QCOMPARE(clipObj.value(QStringLiteral("name")).toString(), QStringLiteral("Intro"));
         QVERIFY(clipObj.value(QStringLiteral("onLive")).toBool());
         QVERIFY(!clipObj.value(QStringLiteral("onStaging")).toBool());

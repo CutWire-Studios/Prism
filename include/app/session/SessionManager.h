@@ -49,7 +49,7 @@ public:
     static QStringList listBackupFiles();
     static void pruneBackups(int keepCount = kDefaultBackupRetention);
 
-    static constexpr int kFormatVersion = 3;
+    static constexpr int kFormatVersion = 4;
 
     QJsonObject buildJson(int transitionProgress, const QJsonArray &hotkeys,
                           const QString &sessionFilePath = {}) const;

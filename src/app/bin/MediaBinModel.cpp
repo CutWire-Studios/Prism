@@ -743,8 +743,8 @@ bool MediaBinModel::applyRelink(const QString &oldPath, const QString &newPath)
     if (!cm || !cm->relinkClip(oldPath, newPath))
         return false;
     if (auto *app = AppController::instance()) {
-        for (const Cue *cue : app->showManager()->cues()) {
-            ClipGraph *graph = cue->graph();
+        for (const Scene *scene : app->showManager()->scenes()) {
+            ClipGraph *graph = scene->graph();
             for (const NodeId id : graph->nodeIdsOfType(ClipGraph::NodeType::Input)) {
                 SourceDescriptor desc = graph->sourceDescriptor(id);
                 const bool fileKind = desc.kind == SourceDescriptor::Kind::VideoFile

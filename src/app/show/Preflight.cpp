@@ -14,8 +14,8 @@ QJsonObject PreflightIssue::toJson() const
 {
     return {{QStringLiteral("kind"), kind == Kind::MissingFile ? QStringLiteral("missing_file")
                                                                 : QStringLiteral("missing_device")},
-            {QStringLiteral("cueId"), cueId},
-            {QStringLiteral("cue"), cueName},
+            {QStringLiteral("sceneId"), sceneId},
+            {QStringLiteral("scene"), sceneName},
             {QStringLiteral("source"), source},
             {QStringLiteral("detail"), detail}};
 }
@@ -41,13 +41,13 @@ QList<PreflightIssue> Preflight::run(const ShowManager &show, const QDir &sessio
     using Kind = SourceDescriptor::Kind;
     const AssetPathResolver::Options opts{sessionDir};
     QList<PreflightIssue> issues;
-    for (const Cue *cue : show.cues()) {
-        const ClipGraph *g = cue->graph();
+    for (const Scene *scene : show.scenes()) {
+        const ClipGraph *g = scene->graph();
         for (const NodeId id : g->nodeIdsOfType(ClipGraph::NodeType::Input)) {
             const SourceDescriptor desc = g->sourceDescriptor(id);
             PreflightIssue issue;
-            issue.cueId = cue->id();
-            issue.cueName = cue->name();
+            issue.sceneId = scene->id();
+            issue.sceneName = scene->name();
             issue.source = g->sourceName(id);
             if (desc.isFileSource() && !desc.path.isEmpty()) {
                 const QString resolved = AssetPathResolver::resolvePath(desc.path, opts, desc.kind == Kind::Slideshow);

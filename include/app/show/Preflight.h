@@ -15,15 +15,15 @@ struct PreflightIssue {
     enum class Kind { MissingFile, MissingDevice };
 
     Kind kind = Kind::MissingFile;
-    QString cueId;
-    QString cueName;
+    QString sceneId;
+    QString sceneName;
     QString source;
     QString detail;
 
     QJsonObject toJson() const;
 };
 
-/// Walks every cue's input nodes and reports media files that cannot be found and capture
+/// Walks every scene's input nodes and reports media files that cannot be found and capture
 /// devices that are not present.
 namespace Preflight {
 

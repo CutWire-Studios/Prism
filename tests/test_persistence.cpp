@@ -255,31 +255,52 @@ private slots:
         QVERIFY(failed.first().first().toString().contains(QStringLiteral("older version")));
     }
 
+    void v3SessionWithOldKeysIsRefused() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("v3.psm"));
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        const QJsonObject root{{QStringLiteral("version"), 3},
+                               {QStringLiteral("cues"), QJsonArray{}},
+                               {QStringLiteral("liveCueId"), QStringLiteral("a")}};
+        file.write(QJsonDocument(root).toJson());
+        file.close();
+
+        ShowManager show;
+        ClipManager clips;
+        SessionManager session(&show, nullptr, &clips);
+        QSignalSpy failed(&session, &SessionManager::loadFailed);
+        QVERIFY(!session.loadFromFile(path));
+        QCOMPARE(failed.size(), 1);
+        QVERIFY(failed.first().first().toString().contains(QStringLiteral("older version")));
+    }
+
     void sessionJsonIsShowShaped() {
         QTemporaryDir dir;
         QVERIFY(dir.isValid());
         ShowManager show;
-        Cue *second = show.addCue(QStringLiteral("Second"));
+        Scene *second = show.addScene(QStringLiteral("Second"));
         SourceDescriptor desc;
         desc.kind = SourceDescriptor::Kind::Image;
         desc.path = dir.filePath(QStringLiteral("media/pic.png"));
         QVERIFY(second->graph()->addInputNode(desc) != 0);
-        show.stageCue(second->id());
+        show.stageScene(second->id());
 
         ClipManager clips;
         SessionManager session(&show, nullptr, &clips);
         const QString sessionFile = dir.filePath(QStringLiteral("show.psm"));
         const QJsonObject root = session.buildJson(0, {}, sessionFile);
 
-        QCOMPARE(root["version"].toInt(), 3);
+        QCOMPARE(root["version"].toInt(), 4);
         QVERIFY(!root.contains(QStringLiteral("graph")));
         QVERIFY(!root.contains(QStringLiteral("activeNodeLive")));
         QVERIFY(!root.contains(QStringLiteral("outputResolution")));
         QVERIFY(!root.contains(QStringLiteral("outputScaleMode")));
-        QCOMPARE(root["show"].toObject()["state"].toObject()["stagingCueId"].toString(), second->id());
-        const QJsonArray cues = root["cues"].toArray();
-        QCOMPARE(cues.size(), 2);
-        const QJsonObject nodeSource = cues.at(1).toObject()["graph"].toObject()["inputNodes"].toArray()
+        QCOMPARE(root["show"].toObject()["state"].toObject()["stagingSceneId"].toString(), second->id());
+        const QJsonArray scenes = root["scenes"].toArray();
+        QCOMPARE(scenes.size(), 2);
+        const QJsonObject nodeSource = scenes.at(1).toObject()["graph"].toObject()["inputNodes"].toArray()
                                            .first().toObject()["source"].toObject();
         QCOMPARE(nodeSource["path"].toString(), QStringLiteral("media/pic.png"));
     }

@@ -23,10 +23,10 @@ QJsonObject clipRefProps()
                  "Required; ops never fall back to the current deck assignment."))}};
 }
 
-QJsonObject cueRefProps()
+QJsonObject sceneRefProps()
 {
-    return {{QStringLiteral("cue"),
-             stringProp(QStringLiteral("Cue id from list_cues, or its 1-based position in the list."))}};
+    return {{QStringLiteral("scene"),
+             stringProp(QStringLiteral("Scene id from list_scenes, or its 1-based position in the list."))}};
 }
 
 QJsonObject mergeProps(QJsonObject a, const QJsonObject &b)
@@ -67,8 +67,8 @@ const QList<Op> &ops()
          objectSchema({}), true, false, true},
         {"add_clip", "sources", "Bring a media file onto the graph",
          "Add a local video, image, or audio file as an input clip. Auto-detects kind from "
-         "the path. Returns {id, name, kind}. Added to the edited cue; put the cue on a "
-         "deck with stage_cue.",
+         "the path. Returns {id, name, kind}. Added to the edited scene; put the scene on a "
+         "deck with stage_scene.",
          objectSchema({{QStringLiteral("path"),
                         stringProp(QStringLiteral("Absolute file path"))},
                        {QStringLiteral("name"),
@@ -138,50 +138,50 @@ const QList<Op> &ops()
                                    stringProp(QStringLiteral("GLSL fragment shader"))}}),
                       {QStringLiteral("clip"), QStringLiteral("code")})},
 
-        {"list_cues", "decks", "See the cue list",
-         "List the show's cues. Returns {cues:[{id, index, name, live, staging, edited, endAction, "
+        {"list_scenes", "decks", "See the scene list",
+         "List the show's scenes. Returns {scenes:[{id, index, name, live, staging, edited, endAction, "
          "transition:{mode,durationMs}|null, autoAdvanceMs, advanceOnMediaEnd, hotkey, warning}]}.",
          objectSchema({}), true, false, true},
-        {"stage_cue", "decks", "Put a cue on Staging (next up)",
-         "Load a cue onto the Staging deck (the next-up deck, shown on the left). It does not go on "
-         "air until take or cut. cue is a cue id or its 1-based position in list_cues.",
-         objectSchema(cueRefProps(), {QStringLiteral("cue")})},
-        {"add_cue", "decks", "Add a cue",
-         "Add a cue with Output and Audio Output nodes after the edited cue. Optional name. "
-         "Returns the new cue.",
-         objectSchema({{QStringLiteral("name"), stringProp(QStringLiteral("Cue name"))}})},
-        {"enter_cue", "decks", "Edit a cue's graph",
-         "Make a cue the one the graph and source tools (list_nodes, add_*_node, connect, add_source, …) "
+        {"stage_scene", "decks", "Put a scene on Staging (next up)",
+         "Load a scene onto the Staging deck (the next-up deck, shown on the left). It does not go on "
+         "air until take or cut. scene is a scene id or its 1-based position in list_scenes.",
+         objectSchema(sceneRefProps(), {QStringLiteral("scene")})},
+        {"add_scene", "decks", "Add a scene",
+         "Add a scene with Output and Audio Output nodes after the edited scene. Optional name. "
+         "Returns the new scene.",
+         objectSchema({{QStringLiteral("name"), stringProp(QStringLiteral("Scene name"))}})},
+        {"enter_scene", "decks", "Edit a scene's graph",
+         "Make a scene the one the graph and source tools (list_nodes, add_*_node, connect, add_source, …) "
          "operate on.",
-         objectSchema(cueRefProps(), {QStringLiteral("cue")})},
-        {"take_cue", "decks", "Stage a cue and take it",
-         "Stage the cue and start the take in one step, using the cue's own transition or the show "
-         "default. Fails with conflict if the cue is already Live or a take is running.",
-         objectSchema(cueRefProps(), {QStringLiteral("cue")})},
-        {"remove_cue", "decks", "Delete a cue",
-         "Remove a cue from the show. Fails with conflict for the Live cue, the last cue, or during a take.",
-         objectSchema(cueRefProps(), {QStringLiteral("cue")}), false, true},
-        {"reorder_cue", "decks", "Move a cue in the list",
-         "Move a cue to a 1-based position in list_cues.",
-         objectSchema(mergeProps(cueRefProps(),
+         objectSchema(sceneRefProps(), {QStringLiteral("scene")})},
+        {"take_scene", "decks", "Stage a scene and take it",
+         "Stage the scene and start the take in one step, using the scene's own transition or the show "
+         "default. Fails with conflict if the scene is already Live or a take is running.",
+         objectSchema(sceneRefProps(), {QStringLiteral("scene")})},
+        {"remove_scene", "decks", "Delete a scene",
+         "Remove a scene from the show. Fails with conflict for the Live scene, the last scene, or during a take.",
+         objectSchema(sceneRefProps(), {QStringLiteral("scene")}), false, true},
+        {"reorder_scene", "decks", "Move a scene in the list",
+         "Move a scene to a 1-based position in list_scenes.",
+         objectSchema(mergeProps(sceneRefProps(),
                                  {{QStringLiteral("to"),
                                    integerProp(QStringLiteral("New 1-based position"))}}),
-                      {QStringLiteral("cue"), QStringLiteral("to")})},
-        {"duplicate_cue", "decks", "Copy a cue",
-         "Duplicate a cue with its graph. Returns the new cue.",
-         objectSchema(cueRefProps(), {QStringLiteral("cue")})},
-        {"exit_cue", "decks", "Stop editing a cue",
-         "Leave the edited cue so no cue is the target of graph and source tools.", objectSchema({})},
-        {"set_cue_props", "decks", "Edit cue settings",
-         "Set any of a cue's properties. transition overrides the show default for the take into this "
-         "cue ({mode: name or index from list_transitions, durationMs}); null clears the override. "
+                      {QStringLiteral("scene"), QStringLiteral("to")})},
+        {"duplicate_scene", "decks", "Copy a scene",
+         "Duplicate a scene with its graph. Returns the new scene.",
+         objectSchema(sceneRefProps(), {QStringLiteral("scene")})},
+        {"exit_scene", "decks", "Stop editing a scene",
+         "Leave the edited scene so no scene is the target of graph and source tools.", objectSchema({})},
+        {"set_scene_props", "decks", "Edit scene settings",
+         "Set any of a scene's properties. transition overrides the show default for the take into this "
+         "scene ({mode: name or index from list_transitions, durationMs}); null clears the override. "
          "endAction is hold, loop, autoAdvance or black. hotkey is a portable key chord, \"\" clears it.",
-         objectSchema(mergeProps(cueRefProps(),
-                                 {{QStringLiteral("name"), stringProp(QStringLiteral("Cue name"))},
-                                  {QStringLiteral("color"), stringProp(QStringLiteral("Cue color, e.g. #ff0000"))},
+         objectSchema(mergeProps(sceneRefProps(),
+                                 {{QStringLiteral("name"), stringProp(QStringLiteral("Scene name"))},
+                                  {QStringLiteral("color"), stringProp(QStringLiteral("Scene color, e.g. #ff0000"))},
                                   {QStringLiteral("notes"), stringProp(QStringLiteral("Operator notes"))},
                                   {QStringLiteral("endAction"),
-                                   enumProp(QStringLiteral("What happens when the cue's media ends"),
+                                   enumProp(QStringLiteral("What happens when the scene's media ends"),
                                             {QStringLiteral("hold"), QStringLiteral("loop"),
                                              QStringLiteral("autoAdvance"), QStringLiteral("black")})},
                                   {QStringLiteral("autoAdvanceMs"),
@@ -191,16 +191,16 @@ const QList<Op> &ops()
                                   {QStringLiteral("transition"),
                                    objectProp(QStringLiteral("{mode, durationMs} or null to clear"))},
                                   {QStringLiteral("hotkey"), stringProp(QStringLiteral("Key chord"))}}),
-                      {QStringLiteral("cue")})},
+                      {QStringLiteral("scene")})},
         {"set_default_transition", "decks", "Show-wide default transition",
-         "Set the transition used for cues without their own override.",
+         "Set the transition used for scenes without their own override.",
          objectSchema({{QStringLiteral("mode"),
                         stringProp(QStringLiteral("Transition name from list_transitions, or 0-based index"))},
                        {QStringLiteral("durationMs"), integerProp(QStringLiteral("Duration in milliseconds"))}},
                       {QStringLiteral("mode"), QStringLiteral("durationMs")})},
         {"preflight", "decks", "Check the show for missing media",
-         "Scan every cue for missing files and devices. Returns {issues:[{kind: missing_file|missing_device, "
-         "cueId, cue, source, detail}]}.",
+         "Scan every scene for missing files and devices. Returns {issues:[{kind: missing_file|missing_device, "
+         "sceneId, scene, source, detail}]}.",
          objectSchema({}), true, false, true},
         {"play", "decks", "Play a deck", "Start playback on the Live or Staging deck.",
          objectSchema({{QStringLiteral("deck"), enumProp(QStringLiteral("Which deck"), kDecks)}},
@@ -291,7 +291,7 @@ const QList<Op> &ops()
          "params. Pass name, slug, or id to add_process_node.",
          objectSchema({}), true, false, true},
         {"list_nodes", "graph", "See the whole node graph",
-         "List every node of the edited cue (input, process, layer, output, …) and connections. "
+         "List every node of the edited scene (input, process, layer, output, …) and connections. "
          "Same payload as inspect({graph:true}).graph. Returns {output, nodes, connections}.",
          objectSchema({}), true, false, true},
         {"add_process_node", "graph", "Add a video effect on the blue chain",
@@ -395,10 +395,10 @@ QString agentGuideText()
         "- Times are seconds. Two fixed decks: Staging (next up, shown left) and Live (on air, shown\n"
         "  right). Transition progress 0 = Live, 100 = Staging; a take animates it to 100, then Staging\n"
         "  content becomes Live and progress resets to 0.\n"
-        "- The show is a list of cues, each with its own graph. Staging and Live hold cues; stage_cue\n"
+        "- The show is a list of scenes, each with its own graph. Staging and Live hold scenes; stage_scene\n"
         "  puts one on Staging, take or cut (or set_transition_progress) brings it on air. Graph and\n"
-        "  source ops act on the edited cue (enter_cue).\n"
-        "- Identify clips by id from inspect({clips:true}) (edited cue). Clip ops never fall back to\n"
+        "  source ops act on the edited scene (enter_scene).\n"
+        "- Identify clips by id from inspect({clips:true}) (edited scene). Clip ops never fall back to\n"
         "  the current deck assignment — pass clip every time.\n"
         "- Process nodes sit on the blue video chain: Input → Process → Output (or Layer).\n"
         "  add_process_node does not wire; call connect({from, to}). list_nodes for ids.\n"
@@ -410,8 +410,8 @@ QString agentGuideText()
         "- There is no MCP undo. Live takes are immediate.\n"
         "\n"
         "Live take pattern:\n"
-        "1. add_cue, then add_clip or add_source (they land in the edited cue); connect the clip to Output.\n"
-        "2. stage_cue with the cue — the off-air Staging deck.\n"
+        "1. add_scene, then add_clip or add_source (they land in the edited scene); connect the clip to Output.\n"
+        "2. stage_scene with the scene — the off-air Staging deck.\n"
         "3. capture() to confirm the frame.\n"
         "4. take or cut to bring it on air.\n"
         "\n"
@@ -476,7 +476,7 @@ QJsonObject catalogPayload()
              QStringLiteral("apply is not atomic — on failure the ops before it stay applied; check stopped/failed."),
              QStringLiteral("apply cannot run catalog, toolbox, inspect, capture, or apply; call those directly on /mcp."),
              QStringLiteral("Clip ops need clip — they never fall back to the current deck assignment."),
-             QStringLiteral("add_clip / add_source add to the edited cue and do not wire; connect to Output, then stage_cue."),
+             QStringLiteral("add_clip / add_source add to the edited scene and do not wire; connect to Output, then stage_scene."),
              QStringLiteral("add_process_node / add_layer_node do not wire; call connect."),
              QStringLiteral("There is no MCP undo. Live takes are immediate."),
              QStringLiteral("Screen and window capture still need an interactive OS picker — they are not MCP-addable."),

@@ -1,7 +1,7 @@
 import QtQuick
 import Prism
 
-// Cue hotkeys: the key stages a cue, Shift plus the key stages it and takes it to Live.
+// Scene hotkeys: the key stages a scene, Shift plus the key stages it and takes it to Live.
 // Edits apply and are saved immediately.
 SettingsPage {
     id: page
@@ -35,7 +35,7 @@ SettingsPage {
         width: parent.width
         visible: HotkeyEditor.rows.length === 0 && page.query.length === 0
         wrapMode: Text.WordWrap
-        text: qsTr("No cues yet. Add a cue to assign keys.")
+        text: qsTr("No scenes yet. Add a scene to assign keys.")
         color: Theme.c.settingsRow.foregroundMuted
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSizeXs

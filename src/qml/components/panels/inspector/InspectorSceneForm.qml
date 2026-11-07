@@ -3,22 +3,22 @@ import QtQuick
 import QtQuick.Layouts
 import Prism
 
-// Properties of the cue selected in the cue list. Edits are one show-level undo step each.
+// Properties of the scene selected in the scene list. Edits are one show-level undo step each.
 ColumnLayout {
     id: root
 
     readonly property var endActions: ["hold", "loop", "autoAdvance", "black"]
     readonly property var colors: ["", "#e5484d", "#f76b15", "#ffc53d", "#30a46c", "#0090ff", "#8e4ec6"]
-    property string cueId: AppController.selectedCueId
+    property string sceneId: AppController.selectedSceneId
     property var info: ({})
     property string hotkeyNote: ""
 
     function reload() {
-        info = cueId.length > 0 ? AppController.cueInfo(cueId) : ({})
+        info = sceneId.length > 0 ? AppController.sceneInfo(sceneId) : ({})
     }
 
     function setProps(props) {
-        AppController.setCueProps(cueId, props)
+        AppController.setSceneProps(sceneId, props)
     }
 
     function transitionWith(patch) {
@@ -26,12 +26,12 @@ ColumnLayout {
         return Object.assign({}, t, patch)
     }
 
-    onCueIdChanged: reload()
+    onSceneIdChanged: reload()
     Component.onCompleted: reload()
 
     Connections {
         target: AppController
-        function onCuesEdited() { root.reload() }
+        function onScenesEdited() { root.reload() }
         function onShowChanged() { root.reload() }
     }
 
@@ -42,7 +42,7 @@ ColumnLayout {
         Layout.fillWidth: true
         tone: "default"
         size: "base"
-        text: qsTr("Cue")
+        text: qsTr("Scene")
     }
 
     ThemedLabel { text: qsTr("Name") }
@@ -154,8 +154,8 @@ ColumnLayout {
         ShortcutCaptureField {
             actionId: root.info.name || ""
             shortcut: root.info.hotkey || ""
-            onCaptured: chord => root.hotkeyNote = AppController.setCueHotkey(root.cueId, chord)
-            onCleared: root.hotkeyNote = AppController.setCueHotkey(root.cueId, "")
+            onCaptured: chord => root.hotkeyNote = AppController.setSceneHotkey(root.sceneId, chord)
+            onCleared: root.hotkeyNote = AppController.setSceneHotkey(root.sceneId, "")
         }
     }
     ThemedLabel {

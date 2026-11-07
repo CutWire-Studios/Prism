@@ -24,13 +24,13 @@ public:
                             OutputHub  *outputHub,
                             QObject    *parent = nullptr);
 
-    // ── Cue binding ──────────────────────────────────────────────────────────
-    /// The graph and runtime of the cue a deck plays; node ids passed to the deck calls
+    // ── Scene binding ──────────────────────────────────────────────────────────
+    /// The graph and runtime of the scene a deck plays; node ids passed to the deck calls
     /// below belong to that graph. Swapped together with the audio in swapDeckAudio().
     void setDeckGraph(Deck deck, ClipGraph *graph, GraphRuntime *runtime);
     ClipGraph *graphOf(Deck deck) const { return m_deckGraph[int(deck)]; }
     GraphRuntime *runtimeOf(Deck deck) const { return m_deckRuntime[int(deck)]; }
-    /// Maps a logical device name used in a cue (audio ports, capture devices) to this venue's hardware.
+    /// Maps a logical device name used in a scene (audio ports, capture devices) to this venue's hardware.
     void setMeterBank(AudioMeterBank *bank) { m_meters = bank; }
     void setDeviceResolver(std::function<QString(const QString &)> resolver) { m_deviceResolver = std::move(resolver); }
 
@@ -70,7 +70,7 @@ public:
     void applyAudioControllerToDeck(Deck deck, NodeId clipId, bool forceSeek = true);
     void refreshShaderAudioForActiveDecks();
     void refreshTextDataForActiveDecks();
-    /// Opens one capture per physical mic / loopback device used by the Live and Staging cues.
+    /// Opens one capture per physical mic / loopback device used by the Live and Staging scenes.
     void syncMasterAudioInputs();
     /// Re-resolve effect chains for the playing decks and master inputs without seeking or restarting.
     void refreshAudioEffects();

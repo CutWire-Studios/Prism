@@ -7,7 +7,7 @@
 #include <memory>
 #include "core/graph/AudioEffects.h"
 
-/// One open mic or loopback device shared by every cue that uses it. Level, mute and effects are
+/// One open mic or loopback device shared by every scene that uses it. Level, mute and effects are
 /// a single set applied for all consumers; PCM is fanned out to each consumer's tap.
 class SharedAudioCapture {
 public:

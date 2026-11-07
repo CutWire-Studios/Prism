@@ -10,7 +10,7 @@
 #include <QDebug>
 
 namespace {
-constexpr int kProfileVersion = 3;   // v3 binds cues
+constexpr int kProfileVersion = 3;   // v3 binds scenes
 
 // Shift turns the digit row into symbols (US layout), and QKeyEvent::key() reports the symbol.
 Qt::Key unshiftedDigit(int key) {
@@ -67,7 +67,7 @@ bool HotkeyManager::eventFilter(QObject *watched, QEvent *event) {
         if (plain != Qt::Key_unknown)
             key = plain;
     }
-    const QString ref = m_keyToCue.value(static_cast<Qt::Key>(key));
+    const QString ref = m_keyToScene.value(static_cast<Qt::Key>(key));
     if (ref.isEmpty() || focusIsTextInput())
         return false;
 
@@ -75,7 +75,7 @@ bool HotkeyManager::eventFilter(QObject *watched, QEvent *event) {
         event->accept();
         return false;
     }
-    emit cueTriggered(ref, takeNow);
+    emit sceneTriggered(ref, takeNow);
     return true;
 }
 
@@ -112,49 +112,49 @@ bool HotkeyManager::isBindableKey(Qt::Key key) {
     return true;
 }
 
-void HotkeyManager::bindKey(const QString &cueId, Qt::Key key) {
-    if (m_cueHotkeys.contains(cueId)) {
-        const Qt::Key oldKey = m_cueHotkeys.value(cueId);
+void HotkeyManager::bindKey(const QString &sceneId, Qt::Key key) {
+    if (m_sceneHotkeys.contains(sceneId)) {
+        const Qt::Key oldKey = m_sceneHotkeys.value(sceneId);
         if (oldKey != key)
-            m_keyToCue.remove(oldKey);
+            m_keyToScene.remove(oldKey);
     }
 
-    m_cueHotkeys[cueId] = key;
-    m_keyToCue[key]     = cueId;
+    m_sceneHotkeys[sceneId] = key;
+    m_keyToScene[key]     = sceneId;
 }
 
-void HotkeyManager::releaseCue(const QString &cueId) {
-    auto hit = m_cueHotkeys.find(cueId);
-    if (hit == m_cueHotkeys.end())
+void HotkeyManager::releaseScene(const QString &sceneId) {
+    auto hit = m_sceneHotkeys.find(sceneId);
+    if (hit == m_sceneHotkeys.end())
         return;
 
-    m_keyToCue.remove(hit.value());
-    m_cueHotkeys.erase(hit);
+    m_keyToScene.remove(hit.value());
+    m_sceneHotkeys.erase(hit);
 }
 
 void HotkeyManager::syncWithShow() {
     QStringList alive;
-    for (const Cue *cue : m_show->cues())
-        alive.append(cue->id());
+    for (const Scene *scene : m_show->scenes())
+        alive.append(scene->id());
 
     bool changed = false;
-    const QStringList bound = m_cueHotkeys.keys();
+    const QStringList bound = m_sceneHotkeys.keys();
     for (const QString &ref : bound) {
         if (!alive.contains(ref)) {
-            releaseCue(ref);
+            releaseScene(ref);
             changed = true;
         }
     }
 
     for (const QString &id : alive) {
-        if (m_cueHotkeys.contains(id))
+        if (m_sceneHotkeys.contains(id))
             continue;
 
         Qt::Key chosen = m_settingsProfile.value(id, Qt::Key_unknown);
-        if (chosen == Qt::Key_unknown || m_keyToCue.contains(chosen)) {
+        if (chosen == Qt::Key_unknown || m_keyToScene.contains(chosen)) {
             chosen = Qt::Key_unknown;
             for (Qt::Key k : hotkeySequence()) {
-                if (!m_keyToCue.contains(k)) {
+                if (!m_keyToScene.contains(k)) {
                     chosen = k;
                     break;
                 }
@@ -171,52 +171,52 @@ void HotkeyManager::syncWithShow() {
         emit bindingsChanged();
 }
 
-bool HotkeyManager::setBinding(const QString &cueId, Qt::Key key) {
+bool HotkeyManager::setBinding(const QString &sceneId, Qt::Key key) {
     if (key == Qt::Key_unknown) {
-        clearBinding(cueId);
+        clearBinding(sceneId);
         return true;
     }
     if (!isBindableKey(key))
         return false;
 
-    if (m_keyToCue.contains(key) && m_keyToCue.value(key) != cueId)
+    if (m_keyToScene.contains(key) && m_keyToScene.value(key) != sceneId)
         return false;
 
-    if (m_cueHotkeys.value(cueId, Qt::Key_unknown) == key)
+    if (m_sceneHotkeys.value(sceneId, Qt::Key_unknown) == key)
         return true;
 
-    bindKey(cueId, key);
+    bindKey(sceneId, key);
     emit bindingsChanged();
     return true;
 }
 
-void HotkeyManager::clearBinding(const QString &cueId) {
-    releaseCue(cueId);
+void HotkeyManager::clearBinding(const QString &sceneId) {
+    releaseScene(sceneId);
     emit bindingsChanged();
 }
 
-Qt::Key HotkeyManager::bindingForCue(const QString &cueId) const {
-    return m_cueHotkeys.value(cueId, Qt::Key_unknown);
+Qt::Key HotkeyManager::bindingForScene(const QString &sceneId) const {
+    return m_sceneHotkeys.value(sceneId, Qt::Key_unknown);
 }
 
-QString HotkeyManager::cueForKey(Qt::Key key) const {
-    return m_keyToCue.value(key);
+QString HotkeyManager::sceneForKey(Qt::Key key) const {
+    return m_keyToScene.value(key);
 }
 
 void HotkeyManager::applyBindings(const QMap<QString, Qt::Key> &bindings) {
-    const QStringList existing = m_cueHotkeys.keys();
+    const QStringList existing = m_sceneHotkeys.keys();
     for (const QString &ref : existing)
-        releaseCue(ref);
+        releaseScene(ref);
 
     QStringList alive;
-    for (const Cue *cue : m_show->cues())
-        alive.append(cue->id());
+    for (const Scene *scene : m_show->scenes())
+        alive.append(scene->id());
 
     for (auto it = bindings.cbegin(); it != bindings.cend(); ++it) {
         const Qt::Key key = it.value();
         if (key == Qt::Key_unknown || !isBindableKey(key))
             continue;
-        if (m_keyToCue.contains(key))
+        if (m_keyToScene.contains(key))
             continue;
         if (!alive.contains(it.key()))
             continue;
@@ -230,9 +230,9 @@ void HotkeyManager::applyBindings(const QMap<QString, Qt::Key> &bindings) {
 
 QJsonArray HotkeyManager::hotkeysJson() const {
     QJsonArray arr;
-    for (auto it = m_cueHotkeys.cbegin(); it != m_cueHotkeys.cend(); ++it) {
+    for (auto it = m_sceneHotkeys.cbegin(); it != m_sceneHotkeys.cend(); ++it) {
         QJsonObject hk;
-        hk["cue"] = it.key();
+        hk["scene"] = it.key();
         hk["key"] = (int)it.value();
         arr.append(hk);
     }
@@ -240,13 +240,13 @@ QJsonArray HotkeyManager::hotkeysJson() const {
 }
 
 void HotkeyManager::restoreHotkeys(const QJsonArray &hotkeys) {
-    const QStringList existing = m_cueHotkeys.keys();
+    const QStringList existing = m_sceneHotkeys.keys();
     for (const QString &ref : existing)
-        releaseCue(ref);
+        releaseScene(ref);
 
     QStringList alive;
-    for (const Cue *cue : m_show->cues())
-        alive.append(cue->id());
+    for (const Scene *scene : m_show->scenes())
+        alive.append(scene->id());
 
     QStringList skipped;
     for (const auto &val : hotkeys) {
@@ -254,12 +254,12 @@ void HotkeyManager::restoreHotkeys(const QJsonArray &hotkeys) {
         const Qt::Key key = static_cast<Qt::Key>(obj["key"].toInt());
         if (!isBindableKey(key))
             continue;
-        if (m_keyToCue.contains(key)) {
+        if (m_keyToScene.contains(key)) {
             skipped << QKeySequence(key).toString();
             continue;
         }
 
-        const QString ref = obj["cue"].toString();
+        const QString ref = obj["scene"].toString();
         if (!alive.contains(ref))
             continue;
 
@@ -279,7 +279,7 @@ QJsonObject HotkeyManager::exportProfile() const {
     root.insert(QStringLiteral("version"), kProfileVersion);
 
     QJsonArray bindings;
-    for (auto it = m_cueHotkeys.cbegin(); it != m_cueHotkeys.cend(); ++it) {
+    for (auto it = m_sceneHotkeys.cbegin(); it != m_sceneHotkeys.cend(); ++it) {
         QJsonObject entry;
         entry.insert(QStringLiteral("slotKey"), it.key());
         entry.insert(QStringLiteral("key"), static_cast<int>(it.value()));
@@ -297,8 +297,8 @@ bool HotkeyManager::importProfile(const QJsonObject &profile, QStringList *warni
     }
 
     QStringList alive;
-    for (const Cue *cue : m_show->cues())
-        alive.append(cue->id());
+    for (const Scene *scene : m_show->scenes())
+        alive.append(scene->id());
 
     QMap<QString, Qt::Key> desired;
     const QJsonArray bindings = profile.value(QStringLiteral("bindings")).toArray();
@@ -311,7 +311,7 @@ bool HotkeyManager::importProfile(const QJsonObject &profile, QStringList *warni
 
         if (!alive.contains(slotKey)) {
             if (warnings)
-                warnings->append(QObject::tr("No cue matched: %1").arg(slotKey));
+                warnings->append(QObject::tr("No scene matched: %1").arg(slotKey));
             continue;
         }
         desired.insert(slotKey, key);

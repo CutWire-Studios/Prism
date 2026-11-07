@@ -13,11 +13,11 @@ PanelFrame {
     readonly property var selection: graph ? graph.selection : []
     readonly property var selectedId: selection.length === 1 ? Number(selection[0]) : 0
 
-    readonly property bool showCue: root.selection.length === 0 && AppController.selectedCueId.length > 0
+    readonly property bool showScene: root.selection.length === 0 && AppController.selectedSceneId.length > 0
 
     EmptyState {
         anchors.centerIn: parent
-        visible: root.selectedId === 0 && !root.showCue
+        visible: root.selectedId === 0 && !root.showScene
         compact: true
         glyph: "sliders-horizontal"
         title: root.selection.length > 1 ? qsTr("%1 nodes selected").arg(root.selection.length)
@@ -39,9 +39,9 @@ PanelFrame {
             width: parent.width
             spacing: 0
 
-            InspectorCueForm {
+            InspectorSceneForm {
                 Layout.fillWidth: true
-                visible: root.showCue
+                visible: root.showScene
             }
 
             Repeater {

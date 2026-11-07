@@ -34,7 +34,7 @@ private:
     std::function<QString(const QString &)> m_resolver;
 };
 
-/// Black stand-in for a device that is absent or failed to open, so a cue still loads.
+/// Black stand-in for a device that is absent or failed to open, so a scene still loads.
 class MissingSource : public MediaSource {
 public:
     MissingSource(Type type, QString name);

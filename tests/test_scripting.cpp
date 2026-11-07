@@ -167,7 +167,7 @@ private slots:
         QTRY_COMPARE(rt.scriptLog(id), QStringList{"hello"});
     }
 
-    void paramGetAndSetStayInOwnCue()
+    void paramGetAndSetStayInOwnScene()
     {
         ClipGraph g1;
         ClipGraph g2;
@@ -190,13 +190,13 @@ private slots:
 
         g1.setParams(script, {{"luaCode", QString("prism.param(%1, 'params.opacity', 0.9)").arg(other)}});
         QVERIFY(rt1.runScript(script));
-        QTRY_VERIFY(rt1.scriptError(script).contains("not in this cue"));
+        QTRY_VERIFY(rt1.scriptError(script).contains("not in this scene"));
         QTest::qWait(100);
         QCOMPARE(opacityOf(g2, other), 0.5);
 
         g1.setParams(script, {{"luaCode", QString("return { v = prism.param(%1, 'params.opacity') }").arg(other)}});
         QVERIFY(rt1.runScript(script));
-        QTRY_VERIFY(rt1.scriptError(script).contains("not in this cue"));
+        QTRY_VERIFY(rt1.scriptError(script).contains("not in this scene"));
 
         g1.setParams(script, {{"luaCode", "local b = prism.audio.bands(); "
                                           "assert(type(b) == 'table' and b.low == 0)"}});

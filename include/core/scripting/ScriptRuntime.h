@@ -20,7 +20,7 @@ enum class ScriptTriggerMode {
 };
 
 /// What a script may reach beyond its own sandbox. The callbacks run on the script's thread and
-/// must be thread-safe; the owner is responsible for restricting them to one cue's graph.
+/// must be thread-safe; the owner is responsible for restricting them to one scene's graph.
 struct ScriptHost {
     /// False when the node is not reachable. A missing parameter yields an invalid QVariant.
     std::function<bool(quint64 node, const QString &name, QVariant *out)> getParam;

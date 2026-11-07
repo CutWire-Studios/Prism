@@ -4,7 +4,7 @@
 #include "app/remote/OscServer.h"
 #include "app/remote/RemoteControlServer.h"
 #include "app/remote/RemoteProtocol.h"
-#include "app/show/CueThumbnails.h"
+#include "app/show/SceneThumbnails.h"
 #include "app/show/Preflight.h"
 #include "app/show/VenueProfile.h"
 #include "app/show/ShowManager.h"
@@ -31,20 +31,20 @@ QVariantMap canvas(const QString &name)
     return {{"source", QVariantMap{{"kind", int(SourceDescriptor::Kind::Canvas)}, {"displayName", name}}}};
 }
 
-// A new cue holding one still clip wired to its Output node; leaves it as the edited cue.
-QString addClipCue(AppController &app, const QString &path, const QColor &color)
+// A new scene holding one still clip wired to its Output node; leaves it as the edited scene.
+QString addClipScene(AppController &app, const QString &path, const QColor &color)
 {
     QImage img(32, 32, QImage::Format_RGB888);
     img.fill(color);
     if (!img.save(path))
         return {};
-    const QString cue = app.addCue();
-    app.enterCue(cue);
+    const QString scene = app.addScene();
+    app.enterScene(scene);
     const quint64 clip = app.addSourceFromMap({{QStringLiteral("kind"), int(SourceDescriptor::Kind::VideoFile)},
                                                {QStringLiteral("path"), path}});
     if (!clip || !app.clipGraph()->connectNodes(clip, app.clipGraph()->outputNodeId()))
         return {};
-    return cue;
+    return scene;
 }
 
 }  // namespace
@@ -56,13 +56,13 @@ private slots:
     void initTestCase() { QStandardPaths::setTestModeEnabled(true); }
     void init() { QFile::remove(SessionManager::lockFilePath()); }
 
-    void newShowStartsWithOneLiveCue() {
+    void newShowStartsWithOneLiveScene() {
         ShowManager show;
-        QCOMPARE(show.cues().size(), 1);
-        QCOMPARE(show.liveCueId(), show.cues().first()->id());
-        QVERIFY(show.stagingCueId().isEmpty());
-        QCOMPARE(show.editedCueId(), show.liveCueId());
-        const ClipGraph *g = show.liveCue()->graph();
+        QCOMPARE(show.scenes().size(), 1);
+        QCOMPARE(show.liveSceneId(), show.scenes().first()->id());
+        QVERIFY(show.stagingSceneId().isEmpty());
+        QCOMPARE(show.editedSceneId(), show.liveSceneId());
+        const ClipGraph *g = show.liveScene()->graph();
         QVERIFY(g->outputNodeId() != 0);
         QVERIFY(g->audioOutputNodeId() != 0);
     }
@@ -88,7 +88,7 @@ private slots:
 
     void transitionResolutionPrefersIncoming() {
         ShowManager show;
-        Cue *a = show.addCue(QStringLiteral("A"));
+        Scene *a = show.addScene(QStringLiteral("A"));
         show.setDefaultTransition({3, 800});
         QCOMPARE(show.resolveTransition(a), (TransitionSpec{3, 800}));
         QCOMPARE(show.resolveTransition(nullptr), (TransitionSpec{3, 800}));
@@ -99,56 +99,56 @@ private slots:
         QCOMPARE(show.resolveTransition(a), (TransitionSpec{3, 800}));
     }
 
-    void stageAndSwapExchangeCues() {
+    void stageAndSwapExchangeScenes() {
         ShowManager show;
-        Cue *a = show.addCue(QStringLiteral("A"));
-        const QString first = show.liveCueId();
-        QVERIFY(show.stageCue(a->id()));
-        QCOMPARE(show.stagingCueId(), a->id());
+        Scene *a = show.addScene(QStringLiteral("A"));
+        const QString first = show.liveSceneId();
+        QVERIFY(show.stageScene(a->id()));
+        QCOMPARE(show.stagingSceneId(), a->id());
 
-        QSignalSpy live(&show, &ShowManager::liveCueChanged);
-        QSignalSpy staging(&show, &ShowManager::stagingCueChanged);
+        QSignalSpy live(&show, &ShowManager::liveSceneChanged);
+        QSignalSpy staging(&show, &ShowManager::stagingSceneChanged);
         show.swapLiveStaging();
-        QCOMPARE(show.liveCueId(), a->id());
-        QCOMPARE(show.stagingCueId(), first);
+        QCOMPARE(show.liveSceneId(), a->id());
+        QCOMPARE(show.stagingSceneId(), first);
         QCOMPARE(live.size(), 1);
         QCOMPARE(staging.size(), 1);
 
-        QVERIFY(!show.stageCue(QStringLiteral("missing")));
-        QVERIFY(!show.removeCue(show.liveCueId()));
-        QVERIFY(show.removeCue(first));
-        QVERIFY(show.stagingCueId().isEmpty());
+        QVERIFY(!show.stageScene(QStringLiteral("missing")));
+        QVERIFY(!show.removeScene(show.liveSceneId()));
+        QVERIFY(show.removeScene(first));
+        QVERIFY(show.stagingSceneId().isEmpty());
     }
 
-    void nodeIdsAreUniqueAcrossCues() {
+    void nodeIdsAreUniqueAcrossScenes() {
         ShowManager show;
-        Cue *a = show.addCue();
-        Cue *b = show.addCue();
+        Scene *a = show.addScene();
+        Scene *b = show.addScene();
         a->graph()->addNode(NT::Input, {}, canvas(QStringLiteral("x")));
         b->graph()->addNode(NT::Input, {}, canvas(QStringLiteral("y")));
         QSet<NodeId> seen;
-        for (const Cue *cue : show.cues()) {
-            for (NodeId id : cue->graph()->nodeIds()) {
-                QVERIFY2(!seen.contains(id), "node id reused across cues");
-                QVERIFY(id > (quint64(cue->serial()) << 40));
+        for (const Scene *scene : show.scenes()) {
+            for (NodeId id : scene->graph()->nodeIds()) {
+                QVERIFY2(!seen.contains(id), "node id reused across scenes");
+                QVERIFY(id > (quint64(scene->serial()) << 40));
                 seen.insert(id);
             }
         }
-        for (const Cue *cue : show.cues())
-            QCOMPARE(show.cueForNode(cue->graph()->outputNodeId()), cue);
+        for (const Scene *scene : show.scenes())
+            QCOMPARE(show.sceneForNode(scene->graph()->outputNodeId()), scene);
     }
 
     void duplicateGetsFreshIdsAndKeepsWiring() {
         ShowManager show;
-        Cue *a = show.addCue(QStringLiteral("A"));
+        Scene *a = show.addScene(QStringLiteral("A"));
         const NodeId in = a->graph()->addNode(NT::Input, {}, canvas(QStringLiteral("x")));
         QVERIFY(a->graph()->connectNodes(in, a->graph()->outputNodeId()));
-        a->setEndAction(Cue::EndAction::Loop);
+        a->setEndAction(Scene::EndAction::Loop);
 
-        Cue *copy = show.duplicateCue(a->id());
+        Scene *copy = show.duplicateScene(a->id());
         QVERIFY(copy);
         QCOMPARE(show.indexOf(copy->id()), show.indexOf(a->id()) + 1);
-        QCOMPARE(copy->endAction(), Cue::EndAction::Loop);
+        QCOMPARE(copy->endAction(), Scene::EndAction::Loop);
         QCOMPARE(copy->graph()->nodeIds().size(), a->graph()->nodeIds().size());
         for (NodeId id : copy->graph()->nodeIds())
             QVERIFY(!a->graph()->hasNode(id));
@@ -158,77 +158,77 @@ private slots:
 
     void jsonRoundTrip() {
         ShowManager show;
-        Cue *a = show.addCue(QStringLiteral("A"));
-        Cue *b = show.addCue(QStringLiteral("B"));
+        Scene *a = show.addScene(QStringLiteral("A"));
+        Scene *b = show.addScene(QStringLiteral("B"));
         const NodeId in = a->graph()->addNode(NT::Input, {}, canvas(QStringLiteral("x")));
         QVERIFY(a->graph()->connectNodes(in, a->graph()->outputNodeId()));
         a->setIncoming(TransitionSpec{2, 400});
-        a->setEndAction(Cue::EndAction::AutoAdvance);
+        a->setEndAction(Scene::EndAction::AutoAdvance);
         a->setAutoAdvanceMs(1500);
         a->setAdvanceOnMediaEnd(true);
         b->setColor(QStringLiteral("#ff0000"));
         b->setNotes(QStringLiteral("hello"));
         show.setDefaultTransition({4, 900});
-        QVERIFY(show.stageCue(a->id()));
-        QVERIFY(show.enterCue(b->id()));
+        QVERIFY(show.stageScene(a->id()));
+        QVERIFY(show.enterScene(b->id()));
 
         const QJsonObject json = show.toJson();
         ShowManager loaded;
         QVERIFY(loaded.fromJson(json));
-        QCOMPARE(loaded.cues().size(), 3);
-        QCOMPARE(loaded.liveCueId(), show.liveCueId());
-        QCOMPARE(loaded.stagingCueId(), a->id());
-        QCOMPARE(loaded.editedCueId(), b->id());
+        QCOMPARE(loaded.scenes().size(), 3);
+        QCOMPARE(loaded.liveSceneId(), show.liveSceneId());
+        QCOMPARE(loaded.stagingSceneId(), a->id());
+        QCOMPARE(loaded.editedSceneId(), b->id());
         QCOMPARE(loaded.defaultTransition(), (TransitionSpec{4, 900}));
 
-        const Cue *la = loaded.cue(a->id());
+        const Scene *la = loaded.scene(a->id());
         QVERIFY(la);
         QCOMPARE(la->name(), QStringLiteral("A"));
         QVERIFY(la->incoming().has_value());
         QCOMPARE(*la->incoming(), (TransitionSpec{2, 400}));
-        QCOMPARE(la->endAction(), Cue::EndAction::AutoAdvance);
+        QCOMPARE(la->endAction(), Scene::EndAction::AutoAdvance);
         QCOMPARE(la->autoAdvanceMs(), 1500);
         QVERIFY(la->advanceOnMediaEnd());
         QVERIFY(la->graph()->hasNode(in));
         QCOMPARE(la->graph()->outputSingleProducer(), in);
-        QCOMPARE(loaded.cue(b->id())->color(), QStringLiteral("#ff0000"));
-        QCOMPARE(loaded.cue(b->id())->notes(), QStringLiteral("hello"));
-        QVERIFY(!loaded.cue(b->id())->incoming().has_value());
+        QCOMPARE(loaded.scene(b->id())->color(), QStringLiteral("#ff0000"));
+        QCOMPARE(loaded.scene(b->id())->notes(), QStringLiteral("hello"));
+        QVERIFY(!loaded.scene(b->id())->incoming().has_value());
 
         QCOMPARE(loaded.toJson(), json);
 
-        // New nodes in a loaded cue continue above the stored ids.
-        QVERIFY(loaded.cue(a->id())->graph()->addNode(NT::Layer) > a->graph()->nodeIds().last());
+        // New nodes in a loaded scene continue above the stored ids.
+        QVERIFY(loaded.scene(a->id())->graph()->addNode(NT::Layer) > a->graph()->nodeIds().last());
     }
 
-    void oldCueGraphVersionIsRejected() {
+    void oldSceneGraphVersionIsRejected() {
         ShowManager show;
-        show.addCue(QStringLiteral("A"));
+        show.addScene(QStringLiteral("A"));
         QJsonObject json = show.toJson();
-        QJsonArray cues = json["cues"].toArray();
-        QJsonObject cue = cues.at(1).toObject();
-        QJsonObject graph = cue["graph"].toObject();
+        QJsonArray scenes = json["scenes"].toArray();
+        QJsonObject scene = scenes.at(1).toObject();
+        QJsonObject graph = scene["graph"].toObject();
         graph["graphVersion"] = ClipGraph::kGraphVersion - 1;
-        cue["graph"] = graph;
-        cues[1] = cue;
-        json["cues"] = cues;
+        scene["graph"] = graph;
+        scenes[1] = scene;
+        json["scenes"] = scenes;
 
         ShowManager loaded;
         QVERIFY(!loaded.fromJson(json));
-        QCOMPARE(loaded.cues().size(), 1);
+        QCOMPARE(loaded.scenes().size(), 1);
 
         QVERIFY(!loaded.fromJson(QJsonObject{}));
-        QCOMPARE(loaded.cues().size(), 1);
+        QCOMPARE(loaded.scenes().size(), 1);
     }
 
-    void mediaEndOnlyEndsCuesThatOptedIn() {
+    void mediaEndOnlyEndsScenesThatOptedIn() {
         ShowManager show;
         QSignalSpy ended(&show, &ShowManager::liveEnded);
         show.notifyLiveMediaEnded();
         QCOMPARE(ended.size(), 0);
 
-        Cue *live = show.liveCue();
-        live->setEndAction(Cue::EndAction::AutoAdvance);
+        Scene *live = show.liveScene();
+        live->setEndAction(Scene::EndAction::AutoAdvance);
         show.notifyLiveMediaEnded();
         QCOMPARE(ended.size(), 0);
 
@@ -236,42 +236,42 @@ private slots:
         show.notifyLiveMediaEnded();
         QCOMPARE(ended.size(), 1);
 
-        live->setEndAction(Cue::EndAction::Hold);
+        live->setEndAction(Scene::EndAction::Hold);
         show.notifyLiveMediaEnded();
         QCOMPARE(ended.size(), 1);
     }
 
-    void takeSwapsLiveAndStagingCues() {
+    void takeSwapsLiveAndStagingScenes() {
         QTemporaryDir dir;
         AppController app(nullptr);
-        const QString first = app.liveCueId();
-        const QString cue = addClipCue(app, dir.filePath(QStringLiteral("a.png")), Qt::red);
-        QVERIFY(!cue.isEmpty());
+        const QString first = app.liveSceneId();
+        const QString scene = addClipScene(app, dir.filePath(QStringLiteral("a.png")), Qt::red);
+        QVERIFY(!scene.isEmpty());
 
-        QVERIFY(!app.stageCue(first));   // the Live cue cannot be staged
-        QVERIFY(app.stageCue(cue));
+        QVERIFY(!app.stageScene(first));   // the Live scene cannot be staged
+        QVERIFY(app.stageScene(scene));
         QTRY_VERIFY(app.compositor()->sourceStaging());
 
         app.setTransitionDuration(0.05);
         app.take();
-        QTRY_COMPARE(app.liveCueId(), cue);
-        QCOMPARE(app.stagingCueId(), first);
-        QVERIFY(!app.removeCue(cue));
+        QTRY_COMPARE(app.liveSceneId(), scene);
+        QCOMPARE(app.stagingSceneId(), first);
+        QVERIFY(!app.removeScene(scene));
     }
 
-    void cueTransitionAppliesToTakeThenDefaultReturns() {
+    void sceneTransitionAppliesToTakeThenDefaultReturns() {
         QTemporaryDir dir;
         AppController app(nullptr);
-        const QString cue = addClipCue(app, dir.filePath(QStringLiteral("t.png")), Qt::red);
-        QVERIFY(!cue.isEmpty());
+        const QString scene = addClipScene(app, dir.filePath(QStringLiteral("t.png")), Qt::red);
+        QVERIFY(!scene.isEmpty());
         app.setTransitionMode(0);
         app.setTransitionDuration(2.0);
-        app.setCueProps(cue, {{"transition", QVariantMap{{"mode", 1}, {"durationMs", 50}}}});
+        app.setSceneProps(scene, {{"transition", QVariantMap{{"mode", 1}, {"durationMs", 50}}}});
 
-        QVERIFY(app.stageCue(cue));
+        QVERIFY(app.stageScene(scene));
         QTRY_VERIFY(app.compositor()->sourceStaging());
         app.take();   // mode 1 is Cut: commits immediately
-        QTRY_COMPARE(app.liveCueId(), cue);
+        QTRY_COMPARE(app.liveSceneId(), scene);
         QCOMPARE(app.transitionMode(), 0);
         QCOMPARE(app.transitionDuration(), 2.0);
         QCOMPARE(app.showManager()->defaultTransition(), (TransitionSpec{0, 2000}));
@@ -279,23 +279,23 @@ private slots:
 
     void showUndoCoversAddRemoveReorderAndProps() {
         ShowManager show;
-        const QString first = show.liveCueId();
+        const QString first = show.liveSceneId();
         QUndoStack *undo = show.undoStack();
 
-        Cue *a = show.addCue(QStringLiteral("A"));
+        Scene *a = show.addScene(QStringLiteral("A"));
         const QString aId = a->id();
         const NodeId in = a->graph()->addNode(NT::Input, {}, canvas(QStringLiteral("x")));
-        QCOMPARE(show.cues().size(), 2);
+        QCOMPARE(show.scenes().size(), 2);
         undo->undo();
-        QCOMPARE(show.cues().size(), 1);
+        QCOMPARE(show.scenes().size(), 1);
         undo->redo();
-        QCOMPARE(show.cues().size(), 2);
-        QVERIFY(show.cue(aId)->graph()->hasNode(in));
+        QCOMPARE(show.scenes().size(), 2);
+        QVERIFY(show.scene(aId)->graph()->hasNode(in));
 
-        Cue *b = show.addCue(QStringLiteral("B"));
+        Scene *b = show.addScene(QStringLiteral("B"));
         const QString bId = b->id();
         QCOMPARE(show.indexOf(bId), 2);
-        QVERIFY(show.moveCue(2, 0));
+        QVERIFY(show.moveScene(2, 0));
         QCOMPARE(show.indexOf(bId), 0);
         undo->undo();
         QCOMPARE(show.indexOf(bId), 2);
@@ -303,32 +303,32 @@ private slots:
         QCOMPARE(show.indexOf(bId), 0);
         undo->undo();
 
-        CueMeta meta = show.cue(aId)->meta();
+        SceneMeta meta = show.scene(aId)->meta();
         meta.name = QStringLiteral("Renamed");
         meta.incoming = TransitionSpec{2, 300};
-        show.setCueMeta(aId, meta);
-        QCOMPARE(show.cue(aId)->name(), QStringLiteral("Renamed"));
+        show.setSceneMeta(aId, meta);
+        QCOMPARE(show.scene(aId)->name(), QStringLiteral("Renamed"));
         undo->undo();
-        QCOMPARE(show.cue(aId)->name(), QStringLiteral("A"));
-        QVERIFY(!show.cue(aId)->incoming());
+        QCOMPARE(show.scene(aId)->name(), QStringLiteral("A"));
+        QVERIFY(!show.scene(aId)->incoming());
         undo->redo();
-        QCOMPARE(show.cue(aId)->incoming()->durationMs, 300);
+        QCOMPARE(show.scene(aId)->incoming()->durationMs, 300);
 
-        QVERIFY(show.removeCue(aId));
-        QVERIFY(!show.cue(aId));
+        QVERIFY(show.removeScene(aId));
+        QVERIFY(!show.scene(aId));
         undo->undo();
-        QVERIFY(show.cue(aId));
-        QCOMPARE(show.cue(aId)->name(), QStringLiteral("Renamed"));
+        QVERIFY(show.scene(aId));
+        QCOMPARE(show.scene(aId)->name(), QStringLiteral("Renamed"));
         undo->redo();
-        QVERIFY(!show.cue(aId));
+        QVERIFY(!show.scene(aId));
 
-        Cue *dup = show.duplicateCue(first);
+        Scene *dup = show.duplicateScene(first);
         QVERIFY(dup);
         const QString dupId = dup->id();
         undo->undo();
-        QVERIFY(!show.cue(dupId));
+        QVERIFY(!show.scene(dupId));
         undo->redo();
-        QVERIFY(show.cue(dupId));
+        QVERIFY(show.scene(dupId));
     }
 
     void thumbnailPathPersists() {
@@ -336,22 +336,22 @@ private slots:
         QImage img(320, 180, QImage::Format_RGB888);
         img.fill(Qt::red);
         ShowManager show;
-        Cue *a = show.addCue(QStringLiteral("A"));
-        const QString path = CueThumbnails::save(img, dir.filePath(QStringLiteral("cuethumbs")), a->id());
+        Scene *a = show.addScene(QStringLiteral("A"));
+        const QString path = SceneThumbnails::save(img, dir.filePath(QStringLiteral("scenethumbs")), a->id());
         QVERIFY(!path.isEmpty());
         const QImage saved(path);
-        QCOMPARE(saved.size(), QSize(CueThumbnails::kWidth, CueThumbnails::kHeight));
+        QCOMPARE(saved.size(), QSize(SceneThumbnails::kWidth, SceneThumbnails::kHeight));
         a->setThumbnail(path);
 
         ShowManager other;
         QVERIFY(other.fromJson(show.toJson()));
-        QCOMPARE(other.cue(a->id())->thumbnail(), path);
+        QCOMPARE(other.scene(a->id())->thumbnail(), path);
     }
 
     void preflightReportsMissingFileAndDevice() {
         using Kind = SourceDescriptor::Kind;
         ShowManager show;
-        Cue *a = show.addCue(QStringLiteral("A"));
+        Scene *a = show.addScene(QStringLiteral("A"));
         a->graph()->addNode(NT::Input, {}, {{"source", QVariantMap{{"kind", int(Kind::VideoFile)},
                                                                    {"path", QStringLiteral("/nonexistent/clip.mp4")}}}});
         a->graph()->addNode(NT::Input, {}, {{"source", QVariantMap{{"kind", int(Kind::Camera)},
@@ -360,7 +360,7 @@ private slots:
         QCOMPARE(issues.size(), 2);
         int files = 0, devices = 0;
         for (const PreflightIssue &i : issues) {
-            QCOMPARE(i.cueId, a->id());
+            QCOMPARE(i.sceneId, a->id());
             files += i.kind == PreflightIssue::Kind::MissingFile;
             devices += i.kind == PreflightIssue::Kind::MissingDevice;
         }
@@ -368,18 +368,18 @@ private slots:
         QCOMPARE(devices, 1);
     }
 
-    void stageRelativeStepsFromLiveCue() {
+    void stageRelativeStepsFromLiveScene() {
         AppController app(nullptr);
-        const QString first = app.liveCueId();
-        const QString second = app.addCue();
+        const QString first = app.liveSceneId();
+        const QString second = app.addScene();
         QVERIFY(!app.stageRelative(-1));
         QVERIFY(app.stageRelative(1));
-        QCOMPARE(app.stagingCueId(), second);
+        QCOMPARE(app.stagingSceneId(), second);
         QVERIFY(!app.stageRelative(2));
-        QVERIFY(app.moveCue(second, 0));
+        QVERIFY(app.moveScene(second, 0));
         QCOMPARE(app.showManager()->indexOf(first), 1);
         QVERIFY(app.stageRelative(-1));
-        QCOMPARE(app.stagingCueId(), second);
+        QCOMPARE(app.stagingSceneId(), second);
     }
 
     void oscNextPrevStageRelativeToLive() {
@@ -390,32 +390,32 @@ private slots:
         AppController app(nullptr);
         OscServer osc(&app);
         QVERIFY(osc.applySettings());
-        const QString second = app.addCue();
-        const QString third = app.addCue();
-        const QString live = app.liveCueId();
+        const QString second = app.addScene();
+        const QString third = app.addScene();
+        const QString live = app.liveSceneId();
 
         QUdpSocket sock;
         auto fire = [&](const QString &address, const QVariantList &args = {}) {
             sock.writeDatagram(OscProtocol::encode({address, args}), QHostAddress::LocalHost, 39217);
         };
-        fire(QStringLiteral("/prism/cue/next"));
-        QTRY_VERIFY(!app.stagingCueId().isEmpty());
-        QCOMPARE(app.showManager()->indexOf(app.stagingCueId()), app.showManager()->indexOf(live) + 1);
-        fire(QStringLiteral("/prism/cue/stage"), {3});
-        QTRY_COMPARE(app.stagingCueId(), third);
-        fire(QStringLiteral("/prism/cue/prev"));
-        QTRY_VERIFY(app.stagingCueId() != third);
+        fire(QStringLiteral("/prism/scene/next"));
+        QTRY_VERIFY(!app.stagingSceneId().isEmpty());
+        QCOMPARE(app.showManager()->indexOf(app.stagingSceneId()), app.showManager()->indexOf(live) + 1);
+        fire(QStringLiteral("/prism/scene/stage"), {3});
+        QTRY_COMPARE(app.stagingSceneId(), third);
+        fire(QStringLiteral("/prism/scene/prev"));
+        QTRY_VERIFY(app.stagingSceneId() != third);
         Q_UNUSED(second);
         osc.stop();
         settings.setValue(QStringLiteral("osc/enabled"), false);
     }
 
-    void httpCueEndpoints() {
+    void httpSceneEndpoints() {
         AppController app(nullptr);
         RemoteControlServer server(&app);
         QVERIFY(server.startServer(QHostAddress::LocalHost, 39218));
-        const QString second = app.addCue();
-        app.addCue();
+        const QString second = app.addScene();
+        app.addScene();
 
         auto get = [&](const QString &path) {
             QTcpSocket sock;
@@ -432,32 +432,32 @@ private slots:
             return all;
         };
 
-        QVERIFY(get(QStringLiteral("/api/cue/next")).contains("ok"));
-        QCOMPARE(app.showManager()->indexOf(app.stagingCueId()), 1);
-        QVERIFY(get(QStringLiteral("/api/cue/prev")).contains("ok"));
+        QVERIFY(get(QStringLiteral("/api/scene/next")).contains("ok"));
+        QCOMPARE(app.showManager()->indexOf(app.stagingSceneId()), 1);
+        QVERIFY(get(QStringLiteral("/api/scene/prev")).contains("ok"));
         QVERIFY(get(QStringLiteral("/api/stage?id=") + second).contains("ok"));
-        QCOMPARE(app.stagingCueId(), second);
+        QCOMPARE(app.stagingSceneId(), second);
         QVERIFY(get(QStringLiteral("/api/status")).contains(second.toUtf8()));
-        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/cue/take?id=x")),
-                 RemoteProtocol::Route::CueTake);
+        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/scene/take?id=x")),
+                 RemoteProtocol::Route::SceneTake);
     }
 
-    void autoAdvanceStagesAndTakesNextCue() {
+    void autoAdvanceStagesAndTakesNextScene() {
         QTemporaryDir dir;
         AppController app(nullptr);
-        const QString a = addClipCue(app, dir.filePath(QStringLiteral("a.png")), Qt::red);
-        const QString b = addClipCue(app, dir.filePath(QStringLiteral("b.png")), Qt::green);
+        const QString a = addClipScene(app, dir.filePath(QStringLiteral("a.png")), Qt::red);
+        const QString b = addClipScene(app, dir.filePath(QStringLiteral("b.png")), Qt::green);
         QVERIFY(!a.isEmpty() && !b.isEmpty());
         app.setTransitionDuration(0.05);
-        app.setCueProps(a, {{"endAction", "autoAdvance"}, {"autoAdvanceMs", 100}});
+        app.setSceneProps(a, {{"endAction", "autoAdvance"}, {"autoAdvanceMs", 100}});
 
-        QVERIFY(app.stageCue(a));
+        QVERIFY(app.stageScene(a));
         QTRY_VERIFY(app.compositor()->sourceStaging());
         app.cut();
-        QTRY_COMPARE(app.liveCueId(), a);
+        QTRY_COMPARE(app.liveSceneId(), a);
 
-        QTRY_COMPARE_WITH_TIMEOUT(app.liveCueId(), b, 5000);
-        QCOMPARE(app.stagingCueId(), a);
+        QTRY_COMPARE_WITH_TIMEOUT(app.liveSceneId(), b, 5000);
+        QCOMPARE(app.stagingSceneId(), a);
     }
 };
 

@@ -21,9 +21,9 @@ enum class Route {
     Cut,
     Take,
     Stage,
-    CueTake,
-    CueNext,
-    CuePrev,
+    SceneTake,
+    SceneNext,
+    ScenePrev,
     LivePlay,
     LivePause,
     LiveToggle,
@@ -38,7 +38,7 @@ enum class Route {
     MethodNotAllowed,
 };
 
-struct CueInfo {
+struct SceneInfo {
     QString id;
     QString name;
     bool    onLive = false;
@@ -52,7 +52,7 @@ struct StatusData {
     QString          staging;
     bool             isPlayingLive = false;
     bool             isPlayingStaging = false;
-    QVector<CueInfo> cues;
+    QVector<SceneInfo> scenes;
     bool             hasTransition = false;
     int              transitionMode = 0;
     double           transitionDuration = 0.0;

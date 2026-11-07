@@ -10,8 +10,8 @@
 class HotkeyManager;
 class ShowManager;
 
-/// QML-facing view of HotkeyManager's cue key bindings. Edits apply and persist
-/// immediately; a key already used by another cue is refused.
+/// QML-facing view of HotkeyManager's scene key bindings. Edits apply and persist
+/// immediately; a key already used by another scene is refused.
 class HotkeyEditor : public QObject {
     Q_OBJECT
     QML_ELEMENT
@@ -40,7 +40,7 @@ private:
     HotkeyManager *manager() const;
     ShowManager *show() const;
 
-    QStringList m_cueIds;
+    QStringList m_sceneIds;
     QVariantList m_rows;
     bool m_connected = false;
 };

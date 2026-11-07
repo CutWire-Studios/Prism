@@ -96,18 +96,18 @@ void RemoteControlServer::onReadyRead() {
 
         if (m_mainWindow) {
             status.hasDeck = true;
-            status.live = m_mainWindow->showManager()->liveCueId();
-            status.staging = m_mainWindow->showManager()->stagingCueId();
+            status.live = m_mainWindow->showManager()->liveSceneId();
+            status.staging = m_mainWindow->showManager()->stagingSceneId();
             status.isPlayingLive = m_mainWindow->isPlayingLive();
             status.isPlayingStaging = m_mainWindow->isPlayingStaging();
 
-            for (const Cue *cue : m_mainWindow->showManager()->cues()) {
-                RemoteProtocol::CueInfo info;
-                info.id = cue->id();
-                info.name = cue->name();
+            for (const Scene *scene : m_mainWindow->showManager()->scenes()) {
+                RemoteProtocol::SceneInfo info;
+                info.id = scene->id();
+                info.name = scene->name();
                 info.onLive = (info.id == status.live);
                 info.onStaging = (info.id == status.staging);
-                status.cues.append(info);
+                status.scenes.append(info);
             }
         }
 
@@ -145,12 +145,12 @@ void RemoteControlServer::onReadyRead() {
     case RemoteProtocol::Route::Stage: {
         QString id;
         if (RemoteProtocol::stringParam(request.path, QStringLiteral("id"), id) && m_mainWindow)
-            m_mainWindow->stageCue(id);
+            m_mainWindow->stageScene(id);
         sendJsonResponse(socket, "{\"status\": \"ok\"}");
         break;
     }
 
-    case RemoteProtocol::Route::CueTake: {
+    case RemoteProtocol::Route::SceneTake: {
         QString id;
         if (RemoteProtocol::stringParam(request.path, QStringLiteral("id"), id) && m_mainWindow)
             m_mainWindow->stageAndTake(id);
@@ -158,13 +158,13 @@ void RemoteControlServer::onReadyRead() {
         break;
     }
 
-    case RemoteProtocol::Route::CueNext:
+    case RemoteProtocol::Route::SceneNext:
         if (m_mainWindow)
             m_mainWindow->stageRelative(1);
         sendJsonResponse(socket, "{\"status\": \"ok\"}");
         break;
 
-    case RemoteProtocol::Route::CuePrev:
+    case RemoteProtocol::Route::ScenePrev:
         if (m_mainWindow)
             m_mainWindow->stageRelative(-1);
         sendJsonResponse(socket, "{\"status\": \"ok\"}");
@@ -772,7 +772,7 @@ QString RemoteControlServer::getWebPageHtml() const {
         <section class="deck-monitors">
             <div class="deck-card deck-staging">
                 <div class="deck-label">Staging</div>
-                <div id="stagingClip" class="deck-clip-name">No Cue Staged</div>
+                <div id="stagingClip" class="deck-clip-name">No Scene Staged</div>
                 <div class="deck-controls">
                     <button id="stagingBtn" class="play-toggle" onclick="togglePlay('staging')">
                         <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -781,7 +781,7 @@ QString RemoteControlServer::getWebPageHtml() const {
             </div>
             <div class="deck-card deck-live">
                 <div class="deck-label">Live</div>
-                <div id="liveClip" class="deck-clip-name">No Cue Staged</div>
+                <div id="liveClip" class="deck-clip-name">No Scene Staged</div>
                 <div class="deck-controls">
                     <button id="liveBtn" class="play-toggle" onclick="togglePlay('live')">
                         <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -824,7 +824,7 @@ QString RemoteControlServer::getWebPageHtml() const {
         <section class="clips-panel">
             <div class="section-title">Project Clips</div>
             <div id="clipsList" class="clips-list">
-                <div class="no-clips">No cues in project.</div>
+                <div class="no-clips">No scenes in project.</div>
             </div>
         </section>
     </div>
@@ -898,12 +898,12 @@ QString RemoteControlServer::getWebPageHtml() const {
             sendCommand(`/api/setDuration?val=${val}`);
         }
 
-        function stageCue(id) {
+        function stageScene(id) {
             sendCommand(`/api/stage?id=${id}`);
         }
 
-        function takeCue(id) {
-            sendCommand(`/api/cue/take?id=${id}`);
+        function takeScene(id) {
+            sendCommand(`/api/scene/take?id=${id}`);
         }
 
         async function pollStatus() {
@@ -944,14 +944,14 @@ QString RemoteControlServer::getWebPageHtml() const {
                     }
                 }
 
-                let liveName = "No Cue Staged";
-                let stagingName = "No Cue Staged";
+                let liveName = "No Scene Staged";
+                let stagingName = "No Scene Staged";
                 
-                if (data.cues) {
-                    const liveEntry = data.cues.find(c => c.id === data.live);
+                if (data.scenes) {
+                    const liveEntry = data.scenes.find(c => c.id === data.live);
                     if (liveEntry) liveName = liveEntry.name;
                     
-                    const stagingEntry = data.cues.find(c => c.id === data.staging);
+                    const stagingEntry = data.scenes.find(c => c.id === data.staging);
                     if (stagingEntry) stagingName = stagingEntry.name;
                 }
                 
@@ -974,15 +974,15 @@ QString RemoteControlServer::getWebPageHtml() const {
                     stagingBtn.innerHTML = playIcon;
                 }
 
-                if (data.cues) {
-                    const clipsJson = JSON.stringify(data.cues);
+                if (data.scenes) {
+                    const clipsJson = JSON.stringify(data.scenes);
                     if (clipsJson !== lastClipsJson) {
                         lastClipsJson = clipsJson;
-                        if (data.cues.length === 0) {
-                            clipsList.innerHTML = '<div class="no-clips">No cues in project.</div>';
+                        if (data.scenes.length === 0) {
+                            clipsList.innerHTML = '<div class="no-clips">No scenes in project.</div>';
                         } else {
                             clipsList.innerHTML = "";
-                            data.cues.forEach(clip => {
+                            data.scenes.forEach(clip => {
                                 const div = document.createElement('div');
                                 div.className = `clip-item ${clip.onLive ? 'active-live' : ''} ${clip.onStaging ? 'active-staging' : ''}`;
                                 
@@ -997,13 +997,13 @@ QString RemoteControlServer::getWebPageHtml() const {
                                 const btnStage = document.createElement('button');
                                 btnStage.className = `clip-select-btn btn-to-staging ${clip.onStaging ? 'active' : ''}`;
                                 btnStage.textContent = "Stage";
-                                btnStage.onclick = () => stageCue(clip.id);
+                                btnStage.onclick = () => stageScene(clip.id);
                                 btnGroup.appendChild(btnStage);
 
                                 const btnTake = document.createElement('button');
                                 btnTake.className = `clip-select-btn btn-to-live ${clip.onLive ? 'active' : ''}`;
                                 btnTake.textContent = "Take";
-                                btnTake.onclick = () => takeCue(clip.id);
+                                btnTake.onclick = () => takeScene(clip.id);
                                 btnGroup.appendChild(btnTake);
 
                                 div.appendChild(btnGroup);

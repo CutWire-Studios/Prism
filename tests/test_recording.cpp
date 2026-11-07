@@ -229,7 +229,7 @@ private slots:
     void programAudioRecorder_buildMarkersJson() {
         ProgramAudioRecorder::Marker m1;
         m1.timeMs = 250;
-        m1.label = QStringLiteral("cue");
+        m1.label = QStringLiteral("scene");
 
         const QJsonDocument doc = ProgramAudioRecorder::buildMarkersJson(
             QStringLiteral("/tmp/audio.flac"),

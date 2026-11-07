@@ -359,12 +359,12 @@ void ScriptRuntime::setupEngine() {
         const QString qname = QString::fromUtf8(name.c_str());
         if (value) {
             if (!m_host->setParam(quint64(id), qname, luaToVariant(*value)))
-                throw std::runtime_error("node " + std::to_string(id) + " is not in this cue");
+                throw std::runtime_error("node " + std::to_string(id) + " is not in this scene");
             return sol::make_object(ts, sol::nil);
         }
         QVariant out;
         if (!m_host->getParam(quint64(id), qname, &out))
-            throw std::runtime_error("node " + std::to_string(id) + " is not in this cue");
+            throw std::runtime_error("node " + std::to_string(id) + " is not in this scene");
         return variantToLua(sol::state_view(ts.L), out);
     };
 
@@ -426,7 +426,7 @@ void ScriptRuntime::setupEngine() {
         QVariant out;
         if (!m_host || !m_host->getParam
             || !m_host->getParam(quint64(id), QString::fromUtf8(name.c_str()), &out))
-            throw std::runtime_error("node " + std::to_string(id) + " is not in this cue");
+            throw std::runtime_error("node " + std::to_string(id) + " is not in this scene");
         return variantToLua(sol::state_view(ts.L), out);
     };
     m_lua->exprEnv = env;

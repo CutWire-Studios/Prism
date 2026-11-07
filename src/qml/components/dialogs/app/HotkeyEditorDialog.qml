@@ -24,7 +24,7 @@ ThemedDialog {
 
         ThemedLabel {
             width: parent.width
-            text: qsTr("Assign a key to each cue. The key stages the cue; Shift plus the same key stages it and takes it. Click a field, then press the key. Esc cancels, Backspace clears.")
+            text: qsTr("Assign a key to each scene. The key stages the scene; Shift plus the same key stages it and takes it. Click a field, then press the key. Esc cancels, Backspace clears.")
         }
 
         Flickable {
@@ -93,7 +93,7 @@ ThemedDialog {
         ThemedLabel {
             width: parent.width
             visible: HotkeyEditor.rows.length === 0
-            text: qsTr("No cues yet. Add a cue to assign keys.")
+            text: qsTr("No scenes yet. Add a scene to assign keys.")
         }
 
         ThemedLabel {

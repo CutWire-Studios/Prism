@@ -28,7 +28,7 @@ struct NodeThumbStore;
 class GraphRuntime : public QObject {
     Q_OBJECT
 public:
-    /// @p thumbs is shared between the runtimes of a show so one image provider serves every cue.
+    /// @p thumbs is shared between the runtimes of a show so one image provider serves every scene.
     explicit GraphRuntime(ClipGraph *graph, QObject *parent = nullptr,
                           std::shared_ptr<NodeThumbStore> thumbs = {});
     static std::shared_ptr<NodeThumbStore> createThumbStore();

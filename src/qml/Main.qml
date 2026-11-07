@@ -51,7 +51,7 @@ ApplicationWindow {
     readonly property var focused: window.activeFocusItem
     readonly property bool typing: !!focused && focused.hasOwnProperty("cursorPosition")
     readonly property bool inCanvas: !!focused && focused.hasOwnProperty("spaceDown")
-    readonly property bool inCueList: !!focused && focused.hasOwnProperty("cueListFocus")
+    readonly property bool inSceneList: !!focused && focused.hasOwnProperty("sceneListFocus")
     readonly property bool shortcutsLive: modalDepth === 0 && !typing
 
     function pushOverlayModal() { modalDepth++ }
@@ -112,12 +112,12 @@ ApplicationWindow {
     Shortcut {
         sequences: [StandardKey.Undo]
         enabled: window.shortcutsLive && !window.inCanvas
-        onActivated: window.inCueList ? AppController.undoShow() : AppController.graph.undo()
+        onActivated: window.inSceneList ? AppController.undoShow() : AppController.graph.undo()
     }
     Shortcut {
         sequences: [StandardKey.Redo]
         enabled: window.shortcutsLive && !window.inCanvas
-        onActivated: window.inCueList ? AppController.redoShow() : AppController.graph.redo()
+        onActivated: window.inSceneList ? AppController.redoShow() : AppController.graph.redo()
     }
     Shortcut {
         sequence: "B"
@@ -136,12 +136,12 @@ ApplicationWindow {
     }
     Shortcut {
         sequence: "Space"
-        enabled: window.shortcutsLive && !window.inCanvas && !window.inCueList
+        enabled: window.shortcutsLive && !window.inCanvas && !window.inSceneList
         onActivated: AppController.cut()
     }
     Shortcut {
         sequences: ["Return", "Enter"]
-        enabled: window.shortcutsLive && !window.inCanvas && !window.inCueList
+        enabled: window.shortcutsLive && !window.inCanvas && !window.inSceneList
         onActivated: AppController.take()
     }
 

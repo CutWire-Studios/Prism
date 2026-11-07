@@ -46,8 +46,8 @@ private slots:
     void stagedDeckIsPausedUntilTake();
     void cutIsImmediateAndTakeIgnoresEmptyStaging();
     void deckToolsUseLiveStagingNames();
-    void cueToolsAddAndEnter();
-    void cueToolsEditAndReorder();
+    void sceneToolsAddAndEnter();
+    void sceneToolsEditAndReorder();
 };
 
 void TestMcp::initTestCase()
@@ -494,15 +494,15 @@ static quint64 addStillClip(AppController &window, const QString &path, const QC
                                     {QStringLiteral("path"), path}});
 }
 
-// A new cue holding one still clip wired to its Output node; leaves it as the edited cue.
-static QString addClipCue(AppController &window, const QString &path, const QColor &color, quint64 *clipOut)
+// A new scene holding one still clip wired to its Output node; leaves it as the edited scene.
+static QString addClipScene(AppController &window, const QString &path, const QColor &color, quint64 *clipOut)
 {
-    const QString cue = window.addCue();
-    window.enterCue(cue);
+    const QString scene = window.addScene();
+    window.enterScene(scene);
     *clipOut = addStillClip(window, path, color);
     if (!*clipOut || !window.clipGraph()->connectNodes(*clipOut, window.clipGraph()->outputNodeId()))
         return {};
-    return cue;
+    return scene;
 }
 
 void TestMcp::stagedDeckIsPausedUntilTake()
@@ -510,11 +510,11 @@ void TestMcp::stagedDeckIsPausedUntilTake()
     QTemporaryDir dir;
     AppController window(nullptr);
     quint64 clip = 0;
-    const QString cue = addClipCue(window, dir.filePath(QStringLiteral("a.png")), Qt::red, &clip);
-    QVERIFY(!cue.isEmpty());
+    const QString scene = addClipScene(window, dir.filePath(QStringLiteral("a.png")), Qt::red, &clip);
+    QVERIFY(!scene.isEmpty());
     QCOMPARE(window.activeNodeLive(), quint64(0));
 
-    QVERIFY(window.stageCue(cue));
+    QVERIFY(window.stageScene(scene));
     QTRY_VERIFY(window.compositor()->sourceStaging());
     QCOMPARE(window.activeNodeStaging(), clip);
     QVERIFY(!window.isPlayingStaging());
@@ -525,9 +525,9 @@ void TestMcp::stagedDeckIsPausedUntilTake()
     QTRY_VERIFY(window.isPlayingLive());
     QCOMPARE(window.faderValue(), 0);
     QVERIFY(!window.transitionRunning());
-    QCOMPARE(window.liveCueId(), cue);
-    QVERIFY(!window.stagingCueId().isEmpty());
-    QVERIFY(window.stagingCueId() != cue);
+    QCOMPARE(window.liveSceneId(), scene);
+    QVERIFY(!window.stagingSceneId().isEmpty());
+    QVERIFY(window.stagingSceneId() != scene);
 }
 
 void TestMcp::cutIsImmediateAndTakeIgnoresEmptyStaging()
@@ -540,9 +540,9 @@ void TestMcp::cutIsImmediateAndTakeIgnoresEmptyStaging()
     QVERIFY(!window.transitionRunning());
 
     quint64 clip = 0;
-    const QString cue = addClipCue(window, dir.filePath(QStringLiteral("b.png")), Qt::blue, &clip);
-    QVERIFY(!cue.isEmpty());
-    QVERIFY(window.stageCue(cue));
+    const QString scene = addClipScene(window, dir.filePath(QStringLiteral("b.png")), Qt::blue, &clip);
+    QVERIFY(!scene.isEmpty());
+    QVERIFY(window.stageScene(scene));
     window.cut();
     QCOMPARE(window.activeNodeLive(), clip);
     QCOMPARE(window.faderValue(), 0);
@@ -556,21 +556,21 @@ void TestMcp::deckToolsUseLiveStagingNames()
     AppController window(nullptr);
     prism::mcp::McpDispatcher dispatcher(&window);
     quint64 clip = 0;
-    const QString cue = addClipCue(window, dir.filePath(QStringLiteral("c.png")), Qt::green, &clip);
-    QVERIFY(!cue.isEmpty());
+    const QString scene = addClipScene(window, dir.filePath(QStringLiteral("c.png")), Qt::green, &clip);
+    QVERIFY(!scene.isEmpty());
     const QString id = QString::number(clip);
 
-    const QJsonObject cues = dispatcher.applyOne(QStringLiteral("list_cues"), {});
-    QCOMPARE(cues.value(QStringLiteral("cues")).toArray().size(), 2);
+    const QJsonObject scenes = dispatcher.applyOne(QStringLiteral("list_scenes"), {});
+    QCOMPARE(scenes.value(QStringLiteral("scenes")).toArray().size(), 2);
     QCOMPARE(dispatcher.applyOne(QStringLiteral("stage"), {{QStringLiteral("clip"), id}})
                  .value(QStringLiteral("error")).toString(),
              QStringLiteral("unknown_op"));
-    QCOMPARE(dispatcher.applyOne(QStringLiteral("stage_cue"), {{QStringLiteral("cue"), QStringLiteral("nope")}})
+    QCOMPARE(dispatcher.applyOne(QStringLiteral("stage_scene"), {{QStringLiteral("scene"), QStringLiteral("nope")}})
                  .value(QStringLiteral("error")).toString(),
              QStringLiteral("not_found"));
-    const QJsonObject staged = dispatcher.applyOne(QStringLiteral("stage_cue"), {{QStringLiteral("cue"), 2}});
+    const QJsonObject staged = dispatcher.applyOne(QStringLiteral("stage_scene"), {{QStringLiteral("scene"), 2}});
     QVERIFY(staged.value(QStringLiteral("ok")).toBool());
-    QCOMPARE(staged.value(QStringLiteral("id")).toString(), cue);
+    QCOMPARE(staged.value(QStringLiteral("id")).toString(), scene);
     QTRY_COMPARE(window.activeNodeStaging(), clip);
 
     QVERIFY(dispatcher.applyOne(QStringLiteral("play"), {{QStringLiteral("deck"), QStringLiteral("staging")}})
@@ -596,64 +596,64 @@ void TestMcp::deckToolsUseLiveStagingNames()
     QCOMPARE(window.faderValue(), 0);
 }
 
-void TestMcp::cueToolsAddAndEnter()
+void TestMcp::sceneToolsAddAndEnter()
 {
     AppController window(nullptr);
     prism::mcp::McpDispatcher dispatcher(&window);
-    const QJsonObject added = dispatcher.applyOne(QStringLiteral("add_cue"), {{QStringLiteral("name"), QStringLiteral("Intro")}});
+    const QJsonObject added = dispatcher.applyOne(QStringLiteral("add_scene"), {{QStringLiteral("name"), QStringLiteral("Intro")}});
     QVERIFY(added.value(QStringLiteral("ok")).toBool());
     QCOMPARE(added.value(QStringLiteral("name")).toString(), QStringLiteral("Intro"));
     const QString id = added.value(QStringLiteral("id")).toString();
-    QVERIFY(dispatcher.applyOne(QStringLiteral("enter_cue"), {{QStringLiteral("cue"), id}})
+    QVERIFY(dispatcher.applyOne(QStringLiteral("enter_scene"), {{QStringLiteral("scene"), id}})
                 .value(QStringLiteral("ok")).toBool());
-    QCOMPARE(window.editedCueId(), id);
+    QCOMPARE(window.editedSceneId(), id);
     QCOMPARE(dispatcher.applyOne(QStringLiteral("add_ab_select"), {}).value(QStringLiteral("error")).toString(),
              QStringLiteral("unknown_op"));
 }
 
-void TestMcp::cueToolsEditAndReorder()
+void TestMcp::sceneToolsEditAndReorder()
 {
     AppController window(nullptr);
     prism::mcp::McpDispatcher dispatcher(&window);
     auto call = [&](const char *tool, const QJsonObject &args) {
         return dispatcher.applyOne(QString::fromLatin1(tool), args);
     };
-    const QString first = window.liveCueId();
-    const QString a = call("add_cue", {{"name", "A"}}).value(QStringLiteral("id")).toString();
-    const QString b = call("add_cue", {{"name", "B"}}).value(QStringLiteral("id")).toString();
+    const QString first = window.liveSceneId();
+    const QString a = call("add_scene", {{"name", "A"}}).value(QStringLiteral("id")).toString();
+    const QString b = call("add_scene", {{"name", "B"}}).value(QStringLiteral("id")).toString();
 
     QVERIFY(window.showManager()->indexOf(b) > 0);
-    QVERIFY(call("reorder_cue", {{"cue", b}, {"to", 1}}).value(QStringLiteral("ok")).toBool());
+    QVERIFY(call("reorder_scene", {{"scene", b}, {"to", 1}}).value(QStringLiteral("ok")).toBool());
     QCOMPARE(window.showManager()->indexOf(b), 0);
-    QCOMPARE(call("reorder_cue", {{"cue", b}, {"to", 9}}).value(QStringLiteral("error")).toString(),
+    QCOMPARE(call("reorder_scene", {{"scene", b}, {"to", 9}}).value(QStringLiteral("error")).toString(),
              QStringLiteral("bad_args"));
 
-    const QJsonObject props = call("set_cue_props", {{"cue", a}, {"color", "#ff0000"}, {"notes", "n"},
+    const QJsonObject props = call("set_scene_props", {{"scene", a}, {"color", "#ff0000"}, {"notes", "n"},
                                                       {"endAction", "loop"}, {"hotkey", "Q"},
                                                       {"transition", QJsonObject{{"mode", 1}, {"durationMs", 250}}}});
     QVERIFY(props.value(QStringLiteral("ok")).toBool());
     QCOMPARE(props.value(QStringLiteral("endAction")).toString(), QStringLiteral("loop"));
     QCOMPARE(props.value(QStringLiteral("hotkey")).toString(), QStringLiteral("Q"));
     QCOMPARE(props.value(QStringLiteral("transition")).toObject().value(QStringLiteral("durationMs")).toInt(), 250);
-    QVERIFY(call("set_cue_props", {{"cue", a}, {"transition", QJsonValue::Null}})
+    QVERIFY(call("set_scene_props", {{"scene", a}, {"transition", QJsonValue::Null}})
                 .value(QStringLiteral("transition")).isNull());
-    QCOMPARE(call("set_cue_props", {{"cue", a}, {"transition", QJsonObject{{"mode", "nope"}}}})
+    QCOMPARE(call("set_scene_props", {{"scene", a}, {"transition", QJsonObject{{"mode", "nope"}}}})
                  .value(QStringLiteral("error")).toString(), QStringLiteral("bad_args"));
 
     QVERIFY(call("set_default_transition", {{"mode", 0}, {"durationMs", 700}}).value(QStringLiteral("ok")).toBool());
     QCOMPARE(window.showManager()->defaultTransition(), (TransitionSpec{0, 700}));
 
-    const QJsonObject dup = call("duplicate_cue", {{"cue", a}});
+    const QJsonObject dup = call("duplicate_scene", {{"scene", a}});
     QVERIFY(dup.value(QStringLiteral("ok")).toBool());
     const QString dupId = dup.value(QStringLiteral("id")).toString();
     QVERIFY(dupId != a);
-    QVERIFY(call("remove_cue", {{"cue", dupId}}).value(QStringLiteral("ok")).toBool());
-    QVERIFY(!window.showManager()->cue(dupId));
-    QCOMPARE(call("remove_cue", {{"cue", first}}).value(QStringLiteral("error")).toString(), QStringLiteral("conflict"));
+    QVERIFY(call("remove_scene", {{"scene", dupId}}).value(QStringLiteral("ok")).toBool());
+    QVERIFY(!window.showManager()->scene(dupId));
+    QCOMPARE(call("remove_scene", {{"scene", first}}).value(QStringLiteral("error")).toString(), QStringLiteral("conflict"));
 
-    QVERIFY(call("take_cue", {{"cue", a}}).value(QStringLiteral("ok")).toBool());
-    QVERIFY(call("exit_cue", {}).value(QStringLiteral("ok")).toBool());
-    QVERIFY(!window.inCue());
+    QVERIFY(call("take_scene", {{"scene", a}}).value(QStringLiteral("ok")).toBool());
+    QVERIFY(call("exit_scene", {}).value(QStringLiteral("ok")).toBool());
+    QVERIFY(!window.inScene());
 
     QJsonObject pre = call("preflight", {});
     QVERIFY(pre.value(QStringLiteral("ok")).toBool());

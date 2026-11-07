@@ -20,8 +20,8 @@ struct TransitionSpec {
     static TransitionSpec fromJson(const QJsonObject &o);
 };
 
-/// The editable, non-graph properties of a cue (what the inspector changes).
-struct CueMeta {
+/// The editable, non-graph properties of a scene (what the inspector changes).
+struct SceneMeta {
     QString name;
     QString color;
     QString notes;
@@ -30,7 +30,7 @@ struct CueMeta {
     int autoAdvanceMs = 0;
     bool advanceOnMediaEnd = false;
 
-    bool operator==(const CueMeta &o) const {
+    bool operator==(const SceneMeta &o) const {
         return name == o.name && color == o.color && notes == o.notes && incoming == o.incoming
             && endAction == o.endAction && autoAdvanceMs == o.autoAdvanceMs
             && advanceOnMediaEnd == o.advanceOnMediaEnd;
@@ -38,15 +38,15 @@ struct CueMeta {
 };
 
 /// One item of a show: its own node graph (with its own undo stack and runtime) plus
-/// the metadata the cue list needs. Node ids are unique across the cues of a show.
-class Cue : public QObject {
+/// the metadata the scene list needs. Node ids are unique across the scenes of a show.
+class Scene : public QObject {
     Q_OBJECT
 public:
     enum class EndAction { Hold, Loop, AutoAdvance, Black };
     Q_ENUM(EndAction)
 
-    /// @p withDefaults adds the Output and Audio Output nodes every cue carries.
-    Cue(const QString &id, int serial, std::shared_ptr<NodeThumbStore> thumbs, bool withDefaults,
+    /// @p withDefaults adds the Output and Audio Output nodes every scene carries.
+    Scene(const QString &id, int serial, std::shared_ptr<NodeThumbStore> thumbs, bool withDefaults,
         QObject *parent = nullptr);
 
     const QString &id() const { return m_id; }
@@ -66,8 +66,8 @@ public:
 
     /// Bumps on every setThumbnail so image URLs can be cache-busted.
     int thumbnailRev() const { return m_thumbRev; }
-    CueMeta meta() const;
-    void setMeta(const CueMeta &meta);
+    SceneMeta meta() const;
+    void setMeta(const SceneMeta &meta);
 
     /// Empties the graph and re-adds the Output and Audio Output nodes.
     void clearGraph();

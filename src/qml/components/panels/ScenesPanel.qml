@@ -4,8 +4,8 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Prism
 
-// The show's cue list. Click selects and stages a cue, double-click takes it, the pencil enters
-// the cue to edit its graph, the grip drags it to a new position. The selected cue's properties
+// The show's scene list. Click selects and stages a scene, double-click takes it, the pencil enters
+// the scene to edit its graph, the grip drags it to a new position. The selected scene's properties
 // live in the inspector. While the list has focus: Up/Down select, Enter stages, Space takes,
 // Ctrl+D duplicates, Delete removes, Ctrl+Z undoes the last list edit.
 PanelFrame {
@@ -16,7 +16,7 @@ PanelFrame {
     property string editedName: ""
 
     function reloadName() {
-        editedName = AppController.editedCueId.length > 0 ? AppController.cueInfo(AppController.editedCueId).name : ""
+        editedName = AppController.editedSceneId.length > 0 ? AppController.sceneInfo(AppController.editedSceneId).name : ""
     }
 
     Component.onCompleted: reloadName()
@@ -25,15 +25,15 @@ PanelFrame {
         return mode < 0 ? qsTr("default") : qsTr("%1 %2 s").arg(root.modeNames[mode] || "").arg((ms / 1000).toFixed(1))
     }
 
-    function openChip(cueId, anchor) {
-        chipPopup.cueId = cueId
+    function openChip(sceneId, anchor) {
+        chipPopup.sceneId = sceneId
         root.reloadChip()
         chipPopup.parent = anchor
         chipPopup.open()
     }
 
     function reloadChip() {
-        chipInfo = chipPopup.cueId.length > 0 ? AppController.cueInfo(chipPopup.cueId) : ({})
+        chipInfo = chipPopup.sceneId.length > 0 ? AppController.sceneInfo(chipPopup.sceneId) : ({})
     }
 
     function chipTransition(patch) {
@@ -43,7 +43,7 @@ PanelFrame {
 
     Connections {
         target: AppController
-        function onCuesEdited() {
+        function onScenesEdited() {
             root.reloadName()
             if (chipPopup.visible)
                 root.reloadChip()
@@ -54,7 +54,7 @@ PanelFrame {
     Popup {
         id: chipPopup
 
-        property string cueId: ""
+        property string sceneId: ""
 
         padding: Theme.spacingMd
         width: 240
@@ -71,13 +71,13 @@ PanelFrame {
 
             ThemedLabel {
                 tone: "default"
-                text: qsTr("Transition into this cue")
+                text: qsTr("Transition into this scene")
             }
             ThemedComboBox {
                 Layout.fillWidth: true
                 model: [qsTr("Use default")].concat(root.modeNames)
                 currentIndex: root.chipInfo.transition ? root.chipInfo.transition.mode + 1 : 0
-                onActivated: index => AppController.setCueProps(chipPopup.cueId, {
+                onActivated: index => AppController.setSceneProps(chipPopup.sceneId, {
                     transition: index === 0 ? null : root.chipTransition({ mode: index - 1 })
                 })
             }
@@ -90,7 +90,7 @@ PanelFrame {
                 decimals: 1
                 unit: "s"
                 value: root.chipInfo.transition ? root.chipInfo.transition.durationMs / 1000 : 1
-                onEdited: v => AppController.setCueProps(chipPopup.cueId, {
+                onEdited: v => AppController.setSceneProps(chipPopup.sceneId, {
                     transition: root.chipTransition({ durationMs: Math.round(v * 1000) })
                 })
             }
@@ -109,14 +109,14 @@ PanelFrame {
             IconButton {
                 glyph: "chevron-left"
                 tooltip: qsTr("Back to show")
-                visible: AppController.inCue
-                onClicked: AppController.exitCue()
+                visible: AppController.inScene
+                onClicked: AppController.exitScene()
             }
             ThemedLabel {
                 Layout.fillWidth: true
                 tone: "default"
                 elide: Text.ElideRight
-                text: AppController.inCue
+                text: AppController.inScene
                       ? qsTr("Show / %1").arg(root.editedName)
                       : qsTr("Show")
             }
@@ -127,15 +127,15 @@ PanelFrame {
             }
             IconButton {
                 glyph: "plus"
-                tooltip: qsTr("Add cue")
-                onClicked: AppController.addCue()
+                tooltip: qsTr("Add scene")
+                onClicked: AppController.addScene()
             }
         }
 
         ListView {
             id: list
 
-            readonly property bool cueListFocus: true
+            readonly property bool sceneListFocus: true
             property int dragFrom: -1
             property int dropIndex: -1
 
@@ -143,7 +143,7 @@ PanelFrame {
             Layout.fillHeight: true
             clip: true
             spacing: 0
-            model: AppController.cues
+            model: AppController.scenes
             activeFocusOnTab: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: AppScrollBar {}
@@ -157,13 +157,13 @@ PanelFrame {
 
             Keys.onUpPressed: select(currentIndex - 1)
             Keys.onDownPressed: select(currentIndex + 1)
-            Keys.onReturnPressed: AppController.stageCue(AppController.selectedCueId)
-            Keys.onEnterPressed: AppController.stageCue(AppController.selectedCueId)
+            Keys.onReturnPressed: AppController.stageScene(AppController.selectedSceneId)
+            Keys.onEnterPressed: AppController.stageScene(AppController.selectedSceneId)
             Keys.onSpacePressed: AppController.take()
-            Keys.onDeletePressed: AppController.deleteCue(AppController.selectedCueId)
+            Keys.onDeletePressed: AppController.deleteScene(AppController.selectedSceneId)
             Keys.onPressed: event => {
                 if (event.key === Qt.Key_D && (event.modifiers & Qt.ControlModifier)) {
-                    AppController.duplicateCue(AppController.selectedCueId)
+                    AppController.duplicateScene(AppController.selectedSceneId)
                     event.accepted = true
                 }
             }
@@ -172,7 +172,7 @@ PanelFrame {
                 id: row
 
                 required property int index
-                required property string cueId
+                required property string sceneId
                 required property string name
                 required property string color
                 required property bool isLive
@@ -184,13 +184,13 @@ PanelFrame {
                 required property string hotkey
                 required property string warning
 
-                readonly property bool selected: cueId === AppController.selectedCueId
+                readonly property bool selected: sceneId === AppController.selectedSceneId
 
                 width: ListView.view.width
                 height: (index > 0 ? chip.height : 0) + card.height
 
                 ListView.onIsCurrentItemChanged: if (ListView.isCurrentItem && list.activeFocus)
-                    AppController.selectedCueId = cueId
+                    AppController.selectedSceneId = sceneId
                 onSelectedChanged: if (selected) list.currentIndex = index
                 Component.onCompleted: if (selected) list.currentIndex = index
 
@@ -213,7 +213,7 @@ PanelFrame {
                     }
                     TapHandler {
                         id: chipTap
-                        onTapped: root.openChip(row.cueId, chip)
+                        onTapped: root.openChip(row.sceneId, chip)
                     }
                 }
 
@@ -235,11 +235,11 @@ PanelFrame {
                     TapHandler {
                         onTapped: {
                             list.forceActiveFocus()
-                            AppController.selectedCueId = row.cueId
+                            AppController.selectedSceneId = row.sceneId
                             if (tapCount === 2)
-                                AppController.stageAndTake(row.cueId)
+                                AppController.stageAndTake(row.sceneId)
                             else
-                                AppController.stageCue(row.cueId)
+                                AppController.stageScene(row.sceneId)
                         }
                     }
 
@@ -281,7 +281,7 @@ PanelFrame {
                                     list.dragFrom = -1
                                     list.dropIndex = -1
                                     if (to >= 0 && to !== from)
-                                        AppController.moveCue(row.cueId, to)
+                                        AppController.moveScene(row.sceneId, to)
                                 }
                             }
                         }
@@ -367,19 +367,19 @@ PanelFrame {
                         }
                         IconButton {
                             glyph: "pencil"
-                            tooltip: qsTr("Edit cue graph")
-                            onClicked: AppController.enterCue(row.cueId)
+                            tooltip: qsTr("Edit scene graph")
+                            onClicked: AppController.enterScene(row.sceneId)
                         }
                         IconButton {
                             glyph: "copy-plus"
-                            tooltip: qsTr("Duplicate cue")
-                            onClicked: AppController.duplicateCue(row.cueId)
+                            tooltip: qsTr("Duplicate scene")
+                            onClicked: AppController.duplicateScene(row.sceneId)
                         }
                         IconButton {
                             glyph: "trash-2"
-                            tooltip: qsTr("Delete cue")
+                            tooltip: qsTr("Delete scene")
                             enabled: !row.isLive && list.count > 1
-                            onClicked: AppController.deleteCue(row.cueId)
+                            onClicked: AppController.deleteScene(row.sceneId)
                         }
                     }
 

@@ -24,8 +24,8 @@ ThemedDialog {
             width: parent.width
             wrapMode: Text.WordWrap
             text: root.issues.length === 0
-                  ? qsTr("No missing media or devices in any cue.")
-                  : qsTr("%n problem(s) found across the cues.", "", root.issues.length)
+                  ? qsTr("No missing media or devices in any scene.")
+                  : qsTr("%n problem(s) found across the scenes.", "", root.issues.length)
         }
 
         Flickable {
@@ -51,7 +51,7 @@ ThemedDialog {
                         wrapMode: Text.WordWrap
                         tone: "default"
                         text: (issue.modelData.kind === "missing_file" ? qsTr("Missing file") : qsTr("Missing device"))
-                              + " - " + issue.modelData.cue + " / " + issue.modelData.source + "\n" + issue.modelData.detail
+                              + " - " + issue.modelData.scene + " / " + issue.modelData.source + "\n" + issue.modelData.detail
                     }
                 }
             }

@@ -260,26 +260,26 @@ QJsonObject McpDispatcher::applyOne(const QString &tool, const QJsonObject &args
         return opSetSvgParams(args);
     if (tool == QLatin1String("set_shader"))
         return opSetShader(args);
-    if (tool == QLatin1String("list_cues"))
-        return opListCues();
-    if (tool == QLatin1String("stage_cue"))
-        return opStageCue(args);
-    if (tool == QLatin1String("add_cue"))
-        return opAddCue(args);
-    if (tool == QLatin1String("enter_cue"))
-        return opEnterCue(args);
-    if (tool == QLatin1String("take_cue"))
-        return opTakeCue(args);
-    if (tool == QLatin1String("remove_cue"))
-        return opRemoveCue(args);
-    if (tool == QLatin1String("reorder_cue"))
-        return opReorderCue(args);
-    if (tool == QLatin1String("duplicate_cue"))
-        return opDuplicateCue(args);
-    if (tool == QLatin1String("exit_cue"))
-        return opExitCue();
-    if (tool == QLatin1String("set_cue_props"))
-        return opSetCueProps(args);
+    if (tool == QLatin1String("list_scenes"))
+        return opListScenes();
+    if (tool == QLatin1String("stage_scene"))
+        return opStageScene(args);
+    if (tool == QLatin1String("add_scene"))
+        return opAddScene(args);
+    if (tool == QLatin1String("enter_scene"))
+        return opEnterScene(args);
+    if (tool == QLatin1String("take_scene"))
+        return opTakeScene(args);
+    if (tool == QLatin1String("remove_scene"))
+        return opRemoveScene(args);
+    if (tool == QLatin1String("reorder_scene"))
+        return opReorderScene(args);
+    if (tool == QLatin1String("duplicate_scene"))
+        return opDuplicateScene(args);
+    if (tool == QLatin1String("exit_scene"))
+        return opExitScene();
+    if (tool == QLatin1String("set_scene_props"))
+        return opSetSceneProps(args);
     if (tool == QLatin1String("set_default_transition"))
         return opSetDefaultTransition(args);
     if (tool == QLatin1String("preflight"))
@@ -745,37 +745,37 @@ QString deckName(Deck deck)
 }
 
 namespace {
-// "cue" is a cue id or a 1-based position in the cue list.
-Cue *resolveCue(AppController *w, const QJsonObject &args, QJsonObject *error)
+// "scene" is a scene id or a 1-based position in the scene list.
+Scene *resolveScene(AppController *w, const QJsonObject &args, QJsonObject *error)
 {
-    const QJsonValue v = args.value(QStringLiteral("cue"));
-    Cue *cue = nullptr;
+    const QJsonValue v = args.value(QStringLiteral("scene"));
+    Scene *scene = nullptr;
     if (v.isDouble()) {
         const int index = v.toInt() - 1;
-        const QList<Cue *> &cues = w->showManager()->cues();
-        cue = index >= 0 && index < cues.size() ? cues.at(index) : nullptr;
+        const QList<Scene *> &scenes = w->showManager()->scenes();
+        scene = index >= 0 && index < scenes.size() ? scenes.at(index) : nullptr;
     } else if (v.isString()) {
-        cue = w->showManager()->cue(v.toString());
+        scene = w->showManager()->scene(v.toString());
     }
-    if (!cue && error)
-        *error = err("not_found", QStringLiteral("No such cue"));
-    return cue;
+    if (!scene && error)
+        *error = err("not_found", QStringLiteral("No such scene"));
+    return scene;
 }
 
-QJsonObject cueJson(const AppController *w, const Cue *cue)
+QJsonObject sceneJson(const AppController *w, const Scene *scene)
 {
     const ShowManager *show = w->showManager();
-    const QVariantMap info = w->cueInfo(cue->id());
-    return {{QStringLiteral("id"), cue->id()},
-            {QStringLiteral("index"), show->indexOf(cue->id()) + 1},
-            {QStringLiteral("name"), cue->name()},
-            {QStringLiteral("live"), cue->id() == show->liveCueId()},
-            {QStringLiteral("staging"), cue->id() == show->stagingCueId()},
-            {QStringLiteral("edited"), show->inCue() && cue->id() == show->editedCueId()},
-            {QStringLiteral("endAction"), Cue::endActionName(cue->endAction())},
+    const QVariantMap info = w->sceneInfo(scene->id());
+    return {{QStringLiteral("id"), scene->id()},
+            {QStringLiteral("index"), show->indexOf(scene->id()) + 1},
+            {QStringLiteral("name"), scene->name()},
+            {QStringLiteral("live"), scene->id() == show->liveSceneId()},
+            {QStringLiteral("staging"), scene->id() == show->stagingSceneId()},
+            {QStringLiteral("edited"), show->inScene() && scene->id() == show->editedSceneId()},
+            {QStringLiteral("endAction"), Scene::endActionName(scene->endAction())},
             {QStringLiteral("transition"), QJsonValue::fromVariant(info.value(QStringLiteral("transition")))},
-            {QStringLiteral("autoAdvanceMs"), cue->autoAdvanceMs()},
-            {QStringLiteral("advanceOnMediaEnd"), cue->advanceOnMediaEnd()},
+            {QStringLiteral("autoAdvanceMs"), scene->autoAdvanceMs()},
+            {QStringLiteral("advanceOnMediaEnd"), scene->advanceOnMediaEnd()},
             {QStringLiteral("hotkey"), info.value(QStringLiteral("hotkey")).toString()},
             {QStringLiteral("warning"), info.value(QStringLiteral("warning")).toString()}};
 }
@@ -795,110 +795,110 @@ int transitionModeIndex(AppController *w, const QJsonValue &v)
 }
 }
 
-QJsonObject McpDispatcher::opListCues() const
+QJsonObject McpDispatcher::opListScenes() const
 {
-    QJsonArray cues;
-    for (const Cue *cue : m_window->showManager()->cues())
-        cues.append(cueJson(m_window, cue));
-    return ok({{QStringLiteral("cues"), cues}});
+    QJsonArray scenes;
+    for (const Scene *scene : m_window->showManager()->scenes())
+        scenes.append(sceneJson(m_window, scene));
+    return ok({{QStringLiteral("scenes"), scenes}});
 }
 
-QJsonObject McpDispatcher::opStageCue(const QJsonObject &args)
+QJsonObject McpDispatcher::opStageScene(const QJsonObject &args)
 {
     QJsonObject error;
-    Cue *cue = resolveCue(m_window, args, &error);
-    if (!cue)
+    Scene *scene = resolveScene(m_window, args, &error);
+    if (!scene)
         return error;
-    if (!m_window->stageCue(cue->id()))
-        return err("conflict", QStringLiteral("Cue is Live or a take is running"));
+    if (!m_window->stageScene(scene->id()))
+        return err("conflict", QStringLiteral("Scene is Live or a take is running"));
     m_window->mcpBumpRevision();
-    return ok(cueJson(m_window, cue));
+    return ok(sceneJson(m_window, scene));
 }
 
-QJsonObject McpDispatcher::opAddCue(const QJsonObject &args)
+QJsonObject McpDispatcher::opAddScene(const QJsonObject &args)
 {
-    const QString id = m_window->addCue(args.value(QStringLiteral("name")).toString().trimmed());
+    const QString id = m_window->addScene(args.value(QStringLiteral("name")).toString().trimmed());
     m_window->mcpBumpRevision();
-    return ok(cueJson(m_window, m_window->showManager()->cue(id)));
+    return ok(sceneJson(m_window, m_window->showManager()->scene(id)));
 }
 
-QJsonObject McpDispatcher::opEnterCue(const QJsonObject &args)
-{
-    QJsonObject error;
-    Cue *cue = resolveCue(m_window, args, &error);
-    if (!cue)
-        return error;
-    m_window->enterCue(cue->id());
-    m_window->mcpBumpRevision();
-    return ok(cueJson(m_window, cue));
-}
-
-QJsonObject McpDispatcher::opTakeCue(const QJsonObject &args)
+QJsonObject McpDispatcher::opEnterScene(const QJsonObject &args)
 {
     QJsonObject error;
-    Cue *cue = resolveCue(m_window, args, &error);
-    if (!cue)
+    Scene *scene = resolveScene(m_window, args, &error);
+    if (!scene)
         return error;
-    if (!m_window->stageAndTake(cue->id()))
-        return err("conflict", QStringLiteral("Cue is Live or a take is running"));
+    m_window->enterScene(scene->id());
     m_window->mcpBumpRevision();
-    return ok(cueJson(m_window, cue));
+    return ok(sceneJson(m_window, scene));
 }
 
-QJsonObject McpDispatcher::opRemoveCue(const QJsonObject &args)
+QJsonObject McpDispatcher::opTakeScene(const QJsonObject &args)
 {
     QJsonObject error;
-    Cue *cue = resolveCue(m_window, args, &error);
-    if (!cue)
+    Scene *scene = resolveScene(m_window, args, &error);
+    if (!scene)
         return error;
-    const QString id = cue->id();
-    if (!m_window->removeCue(id))
-        return err("conflict", QStringLiteral("The Live cue and the last cue cannot be removed, nor during a take"));
+    if (!m_window->stageAndTake(scene->id()))
+        return err("conflict", QStringLiteral("Scene is Live or a take is running"));
+    m_window->mcpBumpRevision();
+    return ok(sceneJson(m_window, scene));
+}
+
+QJsonObject McpDispatcher::opRemoveScene(const QJsonObject &args)
+{
+    QJsonObject error;
+    Scene *scene = resolveScene(m_window, args, &error);
+    if (!scene)
+        return error;
+    const QString id = scene->id();
+    if (!m_window->removeScene(id))
+        return err("conflict", QStringLiteral("The Live scene and the last scene cannot be removed, nor during a take"));
     m_window->mcpBumpRevision();
     return ok({{QStringLiteral("id"), id}});
 }
 
-QJsonObject McpDispatcher::opReorderCue(const QJsonObject &args)
+QJsonObject McpDispatcher::opReorderScene(const QJsonObject &args)
 {
     QJsonObject error;
-    Cue *cue = resolveCue(m_window, args, &error);
-    if (!cue)
+    Scene *scene = resolveScene(m_window, args, &error);
+    if (!scene)
         return error;
     const int to = jsonInt(args.value(QStringLiteral("to")), 0);
-    if (to < 1 || to > m_window->showManager()->cues().size())
-        return err("bad_args", QStringLiteral("to must be a 1-based position in list_cues"));
-    if (!m_window->moveCue(cue->id(), to - 1))
-        return err("conflict", QStringLiteral("Cue could not be moved"));
+    if (to < 1 || to > m_window->showManager()->scenes().size())
+        return err("bad_args", QStringLiteral("to must be a 1-based position in list_scenes"));
+    if (!m_window->moveScene(scene->id(), to - 1))
+        return err("conflict", QStringLiteral("Scene could not be moved"));
     m_window->mcpBumpRevision();
-    return ok(cueJson(m_window, cue));
+    return ok(sceneJson(m_window, scene));
 }
 
-QJsonObject McpDispatcher::opDuplicateCue(const QJsonObject &args)
+QJsonObject McpDispatcher::opDuplicateScene(const QJsonObject &args)
 {
     QJsonObject error;
-    Cue *cue = resolveCue(m_window, args, &error);
-    if (!cue)
+    Scene *scene = resolveScene(m_window, args, &error);
+    if (!scene)
         return error;
-    const QString id = m_window->duplicateCue(cue->id());
-    const Cue *copy = m_window->showManager()->cue(id);
+    const QString id = m_window->duplicateScene(scene->id());
+    const Scene *copy = m_window->showManager()->scene(id);
     if (!copy)
-        return err("conflict", QStringLiteral("Cue could not be duplicated"));
+        return err("conflict", QStringLiteral("Scene could not be duplicated"));
     m_window->mcpBumpRevision();
-    return ok(cueJson(m_window, copy));
+    return ok(sceneJson(m_window, copy));
 }
 
-QJsonObject McpDispatcher::opExitCue()
+QJsonObject McpDispatcher::opExitScene()
 {
-    m_window->exitCue();
+    m_window->exitScene();
     m_window->mcpBumpRevision();
     return ok();
 }
 
-QJsonObject McpDispatcher::opSetCueProps(const QJsonObject &args)
+QJsonObject McpDispatcher::opSetSceneProps(const QJsonObject &args)
 {
     QJsonObject error;
-    Cue *cue = resolveCue(m_window, args, &error);
-    if (!cue)
+    Scene *scene = resolveScene(m_window, args, &error);
+    if (!scene)
         return error;
     QVariantMap props;
     for (const char *key : {"name", "color", "notes", "endAction", "autoAdvanceMs", "advanceOnMediaEnd", "hotkey"}) {
@@ -921,9 +921,9 @@ QJsonObject McpDispatcher::opSetCueProps(const QJsonObject &args)
                                                      jsonInt(o.value(QStringLiteral("durationMs")), 1000)}});
         }
     }
-    m_window->setCueProps(cue->id(), props);
+    m_window->setSceneProps(scene->id(), props);
     m_window->mcpBumpRevision();
-    return ok(cueJson(m_window, cue));
+    return ok(sceneJson(m_window, scene));
 }
 
 QJsonObject McpDispatcher::opSetDefaultTransition(const QJsonObject &args)

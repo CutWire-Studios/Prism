@@ -1,4 +1,4 @@
-#include "app/show/CueThumbnails.h"
+#include "app/show/SceneThumbnails.h"
 
 #include "app/show/ShowManager.h"
 
@@ -13,8 +13,8 @@ public:
 
     QImage requestImage(const QString &id, QSize *size, const QSize &) override
     {
-        const Cue *cue = m_show->cue(id.section(QLatin1Char('?'), 0, 0));
-        QImage img = cue ? QImage(cue->thumbnail()) : QImage();
+        const Scene *scene = m_show->scene(id.section(QLatin1Char('?'), 0, 0));
+        QImage img = scene ? QImage(scene->thumbnail()) : QImage();
         if (size)
             *size = img.size();
         return img;
@@ -26,16 +26,16 @@ private:
 
 } // namespace
 
-QString CueThumbnails::save(const QImage &frame, const QString &dir, const QString &cueId)
+QString SceneThumbnails::save(const QImage &frame, const QString &dir, const QString &sceneId)
 {
     if (frame.isNull() || !QDir().mkpath(dir))
         return {};
-    const QString path = QDir(dir).filePath(cueId + QStringLiteral(".png"));
+    const QString path = QDir(dir).filePath(sceneId + QStringLiteral(".png"));
     const QImage scaled = frame.scaled(kWidth, kHeight, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     return scaled.save(path) ? path : QString();
 }
 
-QQuickImageProvider *CueThumbnails::createProvider(const ShowManager *show)
+QQuickImageProvider *SceneThumbnails::createProvider(const ShowManager *show)
 {
     return new Provider(show);
 }

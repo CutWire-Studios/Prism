@@ -373,9 +373,9 @@ set(SOURCES
     src/core/graph/ClipGraph.cpp
     src/core/graph/ClipGraphModels.cpp
     src/app/graph/GraphRuntime.cpp
-    src/app/show/Cue.cpp
-    src/app/show/CueListModel.cpp
-    src/app/show/CueThumbnails.cpp
+    src/app/show/Scene.cpp
+    src/app/show/SceneListModel.cpp
+    src/app/show/SceneThumbnails.cpp
     src/app/show/Preflight.cpp
     src/app/show/ShowManager.cpp
     src/app/show/VenueProfile.cpp
@@ -504,9 +504,9 @@ set(HEADERS
     include/core/graph/ClipGraph.h
     include/core/graph/ClipGraphModels.h
     include/app/graph/GraphRuntime.h
-    include/app/show/Cue.h
-    include/app/show/CueListModel.h
-    include/app/show/CueThumbnails.h
+    include/app/show/Scene.h
+    include/app/show/SceneListModel.h
+    include/app/show/SceneThumbnails.h
     include/app/show/Preflight.h
     include/app/show/ShowManager.h
     include/app/show/VenueProfile.h

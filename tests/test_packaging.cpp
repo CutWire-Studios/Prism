@@ -89,20 +89,20 @@ private slots:
         QVERIFY(TestSupport::writePng(dir.path(), QStringLiteral("other.png"), Qt::green));
 
         ShowManager show;
-        Cue *second = show.addCue(QStringLiteral("Second"));
+        Scene *second = show.addScene(QStringLiteral("Second"));
         SourceDescriptor desc;
         desc.kind = SourceDescriptor::Kind::Image;
         desc.path = dir.filePath(QStringLiteral("clip.png"));
-        QVERIFY(show.cues().first()->graph()->addInputNode(desc) != 0);
+        QVERIFY(show.scenes().first()->graph()->addInputNode(desc) != 0);
         desc.path = dir.filePath(QStringLiteral("other.png"));
         QVERIFY(second->graph()->addInputNode(desc) != 0);
 
         QJsonObject session = show.toJson();
-        session.insert(QStringLiteral("version"), 3);
+        session.insert(QStringLiteral("version"), 4);
 
         QVector<const ClipGraph *> graphs;
-        for (const Cue *cue : show.cues())
-            graphs.append(cue->graph());
+        for (const Scene *scene : show.scenes())
+            graphs.append(scene->graph());
 
         VenueProfile venue;
         venue.width = 1920;
@@ -123,10 +123,10 @@ private slots:
         QFile sessionFile(importResult.sessionPath);
         QVERIFY(sessionFile.open(QIODevice::ReadOnly));
         const QJsonObject imported = QJsonDocument::fromJson(sessionFile.readAll()).object();
-        const QJsonArray cues = imported.value(QStringLiteral("cues")).toArray();
-        QCOMPARE(cues.size(), 2);
-        for (const QJsonValue &cue : cues) {
-            const QJsonArray nodes = cue.toObject().value(QStringLiteral("graph")).toObject()
+        const QJsonArray scenes = imported.value(QStringLiteral("scenes")).toArray();
+        QCOMPARE(scenes.size(), 2);
+        for (const QJsonValue &scene : scenes) {
+            const QJsonArray nodes = scene.toObject().value(QStringLiteral("graph")).toObject()
                                          .value(QStringLiteral("inputNodes")).toArray();
             QCOMPARE(nodes.size(), 1);
             const QString packagedPath =
@@ -160,7 +160,7 @@ private slots:
 
     void projectPackager_exportEmptySession() {
         QTemporaryDir dir;
-        const QJsonObject session{{QStringLiteral("version"), 3}};
+        const QJsonObject session{{QStringLiteral("version"), 4}};
         const QString packagePath = dir.filePath(QStringLiteral("empty.prism"));
         const auto report = ProjectPackager::exportPackage(session, {}, packagePath);
         QVERIFY2(report.success, qPrintable(report.error));

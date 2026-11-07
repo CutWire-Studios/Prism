@@ -9,9 +9,9 @@
 #include "app/output/FrameCaptureHelper.h"
 #include "app/output/OutputHub.h"
 #include "app/session/SessionManager.h"
-#include "app/show/Cue.h"
-#include "app/show/CueListModel.h"
-#include "app/show/CueThumbnails.h"
+#include "app/show/Scene.h"
+#include "app/show/SceneListModel.h"
+#include "app/show/SceneThumbnails.h"
 #include "app/show/ShowManager.h"
 #include "app/show/VenueProfile.h"
 #include "core/sources/SharedSourcePool.h"
@@ -163,7 +163,7 @@ AppController::AppController(QObject *parent)
     m_warnTimer = new QTimer(this);
     m_warnTimer->setSingleShot(true);
     m_warnTimer->setInterval(500);
-    connect(m_warnTimer, &QTimer::timeout, this, &AppController::refreshCueWarnings);
+    connect(m_warnTimer, &QTimer::timeout, this, &AppController::refreshSceneWarnings);
 
     m_updateTimer = new QTimer(this);
     connect(m_updateTimer, &QTimer::timeout, this, &AppController::onTimerTick);
@@ -219,50 +219,50 @@ void AppController::notifyLibraryChanged()
 
 void AppController::connectSignals()
 {
-    for (Cue *cue : m_show->cues())
-        attachCue(cue);
-    connect(m_show, &ShowManager::cueAdded, this, &AppController::attachCue);
+    for (Scene *scene : m_show->scenes())
+        attachScene(scene);
+    connect(m_show, &ShowManager::sceneAdded, this, &AppController::attachScene);
     connect(m_show, &ShowManager::changed, this, &AppController::markDirty);
     connect(m_show, &ShowManager::changed, m_warnTimer, qOverload<>(&QTimer::start));
-    connect(m_show, &ShowManager::cueMetaChanged, this, &AppController::cuesEdited);
-    connect(m_show, &ShowManager::cuesReset, this, &AppController::selectedCueChanged);
-    connect(m_hotkeyManager, &HotkeyManager::bindingsChanged, this, &AppController::cuesEdited);
-    connect(m_show, &ShowManager::cueMetaChanged, this, [this](Cue *cue) {
-        if (cue == m_show->liveCue()) {
+    connect(m_show, &ShowManager::sceneMetaChanged, this, &AppController::scenesEdited);
+    connect(m_show, &ShowManager::scenesReset, this, &AppController::selectedSceneChanged);
+    connect(m_hotkeyManager, &HotkeyManager::bindingsChanged, this, &AppController::scenesEdited);
+    connect(m_show, &ShowManager::sceneMetaChanged, this, [this](Scene *scene) {
+        if (scene == m_show->liveScene()) {
             applyLiveEndAction();
             m_show->rearmEndTimer();
         }
     });
     connect(m_show->undoStack(), &QUndoStack::canUndoChanged, this, &AppController::showUndoChanged);
     connect(m_show->undoStack(), &QUndoStack::canRedoChanged, this, &AppController::showUndoChanged);
-    m_show->model()->setHotkeyLookup([this](const QString &id) { return cueHotkey(id); });
-    m_show->model()->setWarningLookup([this](const QString &id) { return m_cueWarnings.value(id); });
-    connect(m_hotkeyManager, &HotkeyManager::bindingsChanged, m_show->model(), &CueListModel::refresh);
-    connect(m_show, &ShowManager::stagingCueChanged, this, [this]() {
-        if (!m_show->stagingCueId().isEmpty())
+    m_show->model()->setHotkeyLookup([this](const QString &id) { return sceneHotkey(id); });
+    m_show->model()->setWarningLookup([this](const QString &id) { return m_sceneWarnings.value(id); });
+    connect(m_hotkeyManager, &HotkeyManager::bindingsChanged, m_show->model(), &SceneListModel::refresh);
+    connect(m_show, &ShowManager::stagingSceneChanged, this, [this]() {
+        if (!m_show->stagingSceneId().isEmpty())
             scheduleThumbnail(Deck::Staging);
     });
-    connect(m_show, &ShowManager::liveCueChanged, this, [this]() { scheduleThumbnail(Deck::Live); });
-    connect(m_show, &ShowManager::liveCueChanged, this, [this]() {
+    connect(m_show, &ShowManager::liveSceneChanged, this, [this]() { scheduleThumbnail(Deck::Live); });
+    connect(m_show, &ShowManager::liveSceneChanged, this, [this]() {
         m_pushTimer->start();
         emit showChanged();
     });
-    connect(m_show, &ShowManager::stagingCueChanged, this, [this]() {
+    connect(m_show, &ShowManager::stagingSceneChanged, this, [this]() {
         m_pushTimer->start();
         emit showChanged();
     });
-    connect(m_show, &ShowManager::editedCueChanged, this, [this]() {
+    connect(m_show, &ShowManager::editedSceneChanged, this, [this]() {
         emit showChanged();
-        if (m_show->editedCueId() != m_lastEditedId) {
-            m_lastEditedId = m_show->editedCueId();
+        if (m_show->editedSceneId() != m_lastEditedId) {
+            m_lastEditedId = m_show->editedSceneId();
             emit editedGraphChanged();
         }
     });
-    connect(m_show, &ShowManager::cuesReset, this, [this]() {
+    connect(m_show, &ShowManager::scenesReset, this, [this]() {
         m_pushTimer->start();
         emit showChanged();
-        if (m_show->editedCueId() != m_lastEditedId) {
-            m_lastEditedId = m_show->editedCueId();
+        if (m_show->editedSceneId() != m_lastEditedId) {
+            m_lastEditedId = m_show->editedSceneId();
             emit editedGraphChanged();
         }
     });
@@ -271,13 +271,13 @@ void AppController::connectSignals()
             applyTransition(m_show->defaultTransition().mode, m_show->defaultTransition().durationMs);
     });
     connect(m_show, &ShowManager::liveEnded, this, &AppController::onLiveEnded);
-    connect(m_show, &ShowManager::cueAdded, m_hotkeyManager, &HotkeyManager::syncWithShow);
-    connect(m_show, &ShowManager::cuesReset, m_hotkeyManager, &HotkeyManager::syncWithShow);
-    connect(m_hotkeyManager, &HotkeyManager::cueTriggered, this, [this](const QString &id, bool takeNow) {
+    connect(m_show, &ShowManager::sceneAdded, m_hotkeyManager, &HotkeyManager::syncWithShow);
+    connect(m_show, &ShowManager::scenesReset, m_hotkeyManager, &HotkeyManager::syncWithShow);
+    connect(m_hotkeyManager, &HotkeyManager::sceneTriggered, this, [this](const QString &id, bool takeNow) {
         if (takeNow)
             stageAndTake(id);
         else
-            stageCue(id);
+            stageScene(id);
     });
 
     connect(m_sessionManager, &SessionManager::sessionLoaded, this, &AppController::onSessionLoaded);
@@ -415,12 +415,12 @@ void AppController::shutdown(bool saveAndMarkClean)
         SessionManager::markCleanExit();
 }
 
-// ── Edited cue / show ─────────────────────────────────────────────────────────
+// ── Edited scene / show ─────────────────────────────────────────────────────────
 
-ClipGraph *AppController::clipGraph() const { return m_show->editedCue()->graph(); }
-ClipGraphController *AppController::graphController() const { return m_show->editedCue()->controller(); }
-GraphRuntime *AppController::graphRuntime() const { return m_show->editedCue()->runtime(); }
-QAbstractItemModel *AppController::cueModel() const { return m_show->model(); }
+ClipGraph *AppController::clipGraph() const { return m_show->editedScene()->graph(); }
+ClipGraphController *AppController::graphController() const { return m_show->editedScene()->controller(); }
+GraphRuntime *AppController::graphRuntime() const { return m_show->editedScene()->runtime(); }
+QAbstractItemModel *AppController::sceneModel() const { return m_show->model(); }
 QString AppController::audioDeviceFor(const QString &logical) const
 {
     return m_venue->deviceMap.value(logical);
@@ -459,9 +459,9 @@ void AppController::pollAudioLevels()
 {
     const float dt = std::min(m_meterClock.restart() / 1000.0f, 0.25f);
     QList<const ClipGraph *> graphs;
-    for (const Cue *cue : {m_show->liveCue(), m_show->stagingCue(), m_show->editedCue()}) {
-        if (cue && !graphs.contains(cue->graph()))
-            graphs.append(cue->graph());
+    for (const Scene *scene : {m_show->liveScene(), m_show->stagingScene(), m_show->editedScene()}) {
+        if (scene && !graphs.contains(scene->graph()))
+            graphs.append(scene->graph());
     }
     const QHash<quint64, float> levels = m_meterBank.poll(dt, graphs);
     QVariantMap next;
@@ -476,28 +476,28 @@ void AppController::pollAudioLevels()
     emit audioLevelsChanged();
 }
 
-QString AppController::liveCueId() const { return m_show->liveCueId(); }
-QString AppController::stagingCueId() const { return m_show->stagingCueId(); }
-QString AppController::editedCueId() const { return m_show->editedCueId(); }
-bool AppController::inCue() const { return m_show->inCue(); }
-QString AppController::selectedCueId() const
+QString AppController::liveSceneId() const { return m_show->liveSceneId(); }
+QString AppController::stagingSceneId() const { return m_show->stagingSceneId(); }
+QString AppController::editedSceneId() const { return m_show->editedSceneId(); }
+bool AppController::inScene() const { return m_show->inScene(); }
+QString AppController::selectedSceneId() const
 {
-    return m_show->cue(m_selectedCueId) ? m_selectedCueId : m_show->editedCueId();
+    return m_show->scene(m_selectedSceneId) ? m_selectedSceneId : m_show->editedSceneId();
 }
 
-void AppController::setSelectedCueId(const QString &id)
+void AppController::setSelectedSceneId(const QString &id)
 {
-    if (m_selectedCueId == id)
+    if (m_selectedSceneId == id)
         return;
-    m_selectedCueId = id;
-    emit selectedCueChanged();
+    m_selectedSceneId = id;
+    emit selectedSceneChanged();
 }
 
 bool AppController::canShowUndo() const { return m_show->undoStack()->canUndo(); }
 bool AppController::canShowRedo() const { return m_show->undoStack()->canRedo(); }
 bool AppController::editingLive() const
 {
-    return m_show->inCue() && !m_show->editedCueId().isEmpty() && m_show->editedCueId() == m_show->liveCueId();
+    return m_show->inScene() && !m_show->editedSceneId().isEmpty() && m_show->editedSceneId() == m_show->liveSceneId();
 }
 const VenueProfile &AppController::venue() const { return *m_venue; }
 
@@ -745,16 +745,16 @@ void AppController::seekDeckFraction(int deck, double fraction)
         m_deckController->updateDeckAudio(d, id, t, true);
 }
 
-bool AppController::stageCue(const QString &id)
+bool AppController::stageScene(const QString &id)
 {
-    if (m_transitionCtrl->isRunning() || (!id.isEmpty() && id == m_show->liveCueId()))
+    if (m_transitionCtrl->isRunning() || (!id.isEmpty() && id == m_show->liveSceneId()))
         return false;
-    return m_show->stageCue(id);
+    return m_show->stageScene(id);
 }
 
 bool AppController::stageAndTake(const QString &id)
 {
-    if (!stageCue(id))
+    if (!stageScene(id))
         return false;
     take();
     return true;
@@ -762,47 +762,47 @@ bool AppController::stageAndTake(const QString &id)
 
 bool AppController::stageRelative(int delta)
 {
-    const int target = m_show->indexOf(m_show->liveCueId()) + delta;
-    if (target < 0 || target >= m_show->cues().size())
+    const int target = m_show->indexOf(m_show->liveSceneId()) + delta;
+    if (target < 0 || target >= m_show->scenes().size())
         return false;
-    return stageCue(m_show->cues().at(target)->id());
+    return stageScene(m_show->scenes().at(target)->id());
 }
 
-bool AppController::moveCue(const QString &id, int toIndex)
+bool AppController::moveScene(const QString &id, int toIndex)
 {
-    return m_show->moveCue(m_show->indexOf(id), toIndex);
+    return m_show->moveScene(m_show->indexOf(id), toIndex);
 }
 
-void AppController::deleteCue(const QString &id)
+void AppController::deleteScene(const QString &id)
 {
-    const Cue *cue = m_show->cue(id);
-    if (!cue)
+    const Scene *scene = m_show->scene(id);
+    if (!scene)
         return;
-    if (id == m_show->liveCueId()) {
-        emit errorOccurred(tr("The Live cue cannot be deleted. Take another cue first."));
-        return;
-    }
-    if (id != m_show->stagingCueId()) {
-        removeCue(id);
+    if (id == m_show->liveSceneId()) {
+        emit errorOccurred(tr("The Live scene cannot be deleted. Take another scene first."));
         return;
     }
-    requestConfirm(tr("Delete cue"), tr("\"%1\" is on Staging. Delete it?").arg(cue->name()),
+    if (id != m_show->stagingSceneId()) {
+        removeScene(id);
+        return;
+    }
+    requestConfirm(tr("Delete scene"), tr("\"%1\" is on Staging. Delete it?").arg(scene->name()),
                    [this, id](bool ok) {
                        if (ok)
-                           removeCue(id);
+                           removeScene(id);
                    });
 }
 
 void AppController::undoShow() { m_show->undoStack()->undo(); }
 void AppController::redoShow() { m_show->undoStack()->redo(); }
 
-QString AppController::cueHotkey(const QString &id) const
+QString AppController::sceneHotkey(const QString &id) const
 {
-    const Qt::Key key = m_hotkeyManager->bindingForCue(id);
+    const Qt::Key key = m_hotkeyManager->bindingForScene(id);
     return key == Qt::Key_unknown ? QString() : QKeySequence(key).toString(QKeySequence::PortableText);
 }
 
-QString AppController::setCueHotkey(const QString &id, const QString &chord)
+QString AppController::setSceneHotkey(const QString &id, const QString &chord)
 {
     if (chord.isEmpty()) {
         m_hotkeyManager->clearBinding(id);
@@ -814,7 +814,7 @@ QString AppController::setCueHotkey(const QString &id, const QString &chord)
         return tr("That key cannot be used.");
     const Qt::Key key = seq[0].key();
     if (!m_hotkeyManager->setBinding(id, key))
-        return tr("%1 is already assigned to another cue.").arg(QKeySequence(key).toString());
+        return tr("%1 is already assigned to another scene.").arg(QKeySequence(key).toString());
     return {};
 }
 
@@ -823,15 +823,15 @@ QList<PreflightIssue> AppController::runPreflight(bool deep) const
     const QDir sessionDir = deep && !m_sessionPath.isEmpty() ? QFileInfo(m_sessionPath).absoluteDir() : QDir();
     QList<PreflightIssue> issues = Preflight::run(*m_show, sessionDir, &Preflight::cameraMissing);
     for (const Deck deck : {Deck::Live, Deck::Staging}) {
-        const Cue *cue = deck == Deck::Live ? m_show->liveCue() : m_show->stagingCue();
+        const Scene *scene = deck == Deck::Live ? m_show->liveScene() : m_show->stagingScene();
         MediaSource *src = deck == Deck::Live ? m_compositor->sourceLive() : m_compositor->sourceStaging();
-        if (!cue || !src || !src->innermost()->isMissing())
+        if (!scene || !src || !src->innermost()->isMissing())
             continue;
         const bool known = std::any_of(issues.cbegin(), issues.cend(), [&](const PreflightIssue &i) {
-            return i.cueId == cue->id() && i.kind == PreflightIssue::Kind::MissingDevice;
+            return i.sceneId == scene->id() && i.kind == PreflightIssue::Kind::MissingDevice;
         });
         if (!known)
-            issues.append({PreflightIssue::Kind::MissingDevice, cue->id(), cue->name(), src->displayName(),
+            issues.append({PreflightIssue::Kind::MissingDevice, scene->id(), scene->name(), src->displayName(),
                            tr("Device unavailable")});
     }
     return issues;
@@ -845,65 +845,65 @@ QVariantList AppController::preflight() const
     return out;
 }
 
-void AppController::refreshCueWarnings()
+void AppController::refreshSceneWarnings()
 {
-    m_cueWarnings.clear();
+    m_sceneWarnings.clear();
     for (const PreflightIssue &i : runPreflight(false)) {
-        QString &w = m_cueWarnings[i.cueId];
+        QString &w = m_sceneWarnings[i.sceneId];
         w += (w.isEmpty() ? QString() : QStringLiteral("\n"))
             + (i.kind == PreflightIssue::Kind::MissingFile ? tr("Missing file: %1") : tr("Missing device: %1"))
                   .arg(i.detail.isEmpty() ? i.source : i.detail);
     }
     m_show->model()->refresh();
-    emit cuesEdited();
+    emit scenesEdited();
 }
 
-QString AppController::addCue(const QString &name)
+QString AppController::addScene(const QString &name)
 {
-    Cue *cue = m_show->addCue(name, m_show->indexOf(m_show->editedCueId()) + 1);
-    return cue->id();
+    Scene *scene = m_show->addScene(name, m_show->indexOf(m_show->editedSceneId()) + 1);
+    return scene->id();
 }
 
-QString AppController::duplicateCue(const QString &id)
+QString AppController::duplicateScene(const QString &id)
 {
-    Cue *cue = m_show->duplicateCue(id);
-    return cue ? cue->id() : QString();
+    Scene *scene = m_show->duplicateScene(id);
+    return scene ? scene->id() : QString();
 }
 
-bool AppController::removeCue(const QString &id)
+bool AppController::removeScene(const QString &id)
 {
     if (m_transitionCtrl->isRunning())
         return false;
-    return m_show->removeCue(id);
+    return m_show->removeScene(id);
 }
 
-void AppController::enterCue(const QString &id) { m_show->enterCue(id); }
-void AppController::exitCue() { m_show->exitCue(); }
+void AppController::enterScene(const QString &id) { m_show->enterScene(id); }
+void AppController::exitScene() { m_show->exitScene(); }
 
-QVariantMap AppController::cueInfo(const QString &id) const
+QVariantMap AppController::sceneInfo(const QString &id) const
 {
-    const Cue *cue = m_show->cue(id);
-    if (!cue)
+    const Scene *scene = m_show->scene(id);
+    if (!scene)
         return {};
-    QVariantMap info{{"id", cue->id()}, {"name", cue->name()}, {"color", cue->color()},
-                     {"notes", cue->notes()}, {"endAction", Cue::endActionName(cue->endAction())},
-                     {"autoAdvanceMs", cue->autoAdvanceMs()},
-                     {"advanceOnMediaEnd", cue->advanceOnMediaEnd()},
-                     {"hotkey", cueHotkey(id)}, {"warning", m_cueWarnings.value(id)},
-                     {"live", id == m_show->liveCueId()}};
-    if (cue->incoming())
-        info["transition"] = QVariantMap{{"mode", cue->incoming()->mode}, {"durationMs", cue->incoming()->durationMs}};
+    QVariantMap info{{"id", scene->id()}, {"name", scene->name()}, {"color", scene->color()},
+                     {"notes", scene->notes()}, {"endAction", Scene::endActionName(scene->endAction())},
+                     {"autoAdvanceMs", scene->autoAdvanceMs()},
+                     {"advanceOnMediaEnd", scene->advanceOnMediaEnd()},
+                     {"hotkey", sceneHotkey(id)}, {"warning", m_sceneWarnings.value(id)},
+                     {"live", id == m_show->liveSceneId()}};
+    if (scene->incoming())
+        info["transition"] = QVariantMap{{"mode", scene->incoming()->mode}, {"durationMs", scene->incoming()->durationMs}};
     else
         info["transition"] = QVariant();
     return info;
 }
 
-void AppController::setCueProps(const QString &id, const QVariantMap &props)
+void AppController::setSceneProps(const QString &id, const QVariantMap &props)
 {
-    Cue *cue = m_show->cue(id);
-    if (!cue)
+    Scene *scene = m_show->scene(id);
+    if (!scene)
         return;
-    CueMeta m = cue->meta();
+    SceneMeta m = scene->meta();
     if (props.contains("name"))
         m.name = props.value("name").toString().trimmed();
     if (props.contains("color"))
@@ -911,7 +911,7 @@ void AppController::setCueProps(const QString &id, const QVariantMap &props)
     if (props.contains("notes"))
         m.notes = props.value("notes").toString();
     if (props.contains("endAction"))
-        m.endAction = int(Cue::endActionFromName(props.value("endAction").toString()));
+        m.endAction = int(Scene::endActionFromName(props.value("endAction").toString()));
     if (props.contains("autoAdvanceMs"))
         m.autoAdvanceMs = qMax(0, props.value("autoAdvanceMs").toInt());
     if (props.contains("advanceOnMediaEnd"))
@@ -923,9 +923,9 @@ void AppController::setCueProps(const QString &id, const QVariantMap &props)
         else
             m.incoming = TransitionSpec{t.value("mode").toInt(), qMax(0, t.value("durationMs").toInt())};
     }
-    m_show->setCueMeta(id, m);
+    m_show->setSceneMeta(id, m);
     if (props.contains("hotkey"))
-        setCueHotkey(id, props.value("hotkey").toString());
+        setSceneHotkey(id, props.value("hotkey").toString());
     mcpBumpRevision();
 }
 
@@ -960,8 +960,8 @@ void AppController::applyTransition(int mode, int durationMs)
 
 void AppController::applyLiveEndAction()
 {
-    const Cue *live = m_show->liveCue();
-    if (live && live->endAction() == Cue::EndAction::Loop)
+    const Scene *live = m_show->liveScene();
+    if (live && live->endAction() == Scene::EndAction::Loop)
         m_compositor->setRepeatLive(true);
 }
 
@@ -970,23 +970,23 @@ QString AppController::thumbnailDir() const
     const QString base = m_sessionPath.isEmpty()
         ? QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
         : QFileInfo(m_sessionPath).absolutePath();
-    return QDir(base).filePath(QStringLiteral("cuethumbs"));
+    return QDir(base).filePath(QStringLiteral("scenethumbs"));
 }
 
 void AppController::scheduleThumbnail(Deck deck)
 {
-    const QString cueId = deck == Deck::Live ? m_show->liveCueId() : m_show->stagingCueId();
-    if (cueId.isEmpty() || m_shuttingDown)
+    const QString sceneId = deck == Deck::Live ? m_show->liveSceneId() : m_show->stagingSceneId();
+    if (sceneId.isEmpty() || m_shuttingDown)
         return;
-    // A staged cue grabs as soon as its source has a frame; a Live cue settles for ~500 ms first.
+    // A staged scene grabs as soon as its source has a frame; a Live scene settles for ~500 ms first.
     auto attempt = std::make_shared<std::function<void(int)>>();
-    *attempt = [this, deck, cueId, attempt](int tries) {
-        const QString current = deck == Deck::Live ? m_show->liveCueId() : m_show->stagingCueId();
-        if (current != cueId || m_shuttingDown)
+    *attempt = [this, deck, sceneId, attempt](int tries) {
+        const QString current = deck == Deck::Live ? m_show->liveSceneId() : m_show->stagingSceneId();
+        if (current != sceneId || m_shuttingDown)
             return;
         const MediaSource *src = deck == Deck::Live ? m_compositor->sourceLive() : m_compositor->sourceStaging();
         if (src && src->isReady()) {
-            captureThumbnail(deck, cueId);
+            captureThumbnail(deck, sceneId);
             return;
         }
         if (tries > 0)
@@ -995,18 +995,18 @@ void AppController::scheduleThumbnail(Deck deck)
     QTimer::singleShot(deck == Deck::Live ? 500 : 250, this, [attempt] { (*attempt)(20); });
 }
 
-void AppController::captureThumbnail(Deck deck, const QString &cueId)
+void AppController::captureThumbnail(Deck deck, const QString &sceneId)
 {
-    Cue *cue = m_show->cue(cueId);
-    if (!cue)
+    Scene *scene = m_show->scene(sceneId);
+    if (!scene)
         return;
     QImage frame = m_compositor->deckProgramFrame(deck);
     if (frame.isNull())
         frame = FrameCaptureHelper::frameFromSource(deck == Deck::Live ? m_compositor->sourceLive()
                                                                        : m_compositor->sourceStaging());
-    const QString path = CueThumbnails::save(frame, thumbnailDir(), cueId);
+    const QString path = SceneThumbnails::save(frame, thumbnailDir(), sceneId);
     if (!path.isEmpty())
-        cue->setThumbnail(path);
+        scene->setThumbnail(path);
 }
 
 void AppController::blackLive()
@@ -1023,13 +1023,13 @@ void AppController::blackLive()
 
 void AppController::onLiveEnded()
 {
-    const Cue *live = m_show->liveCue();
+    const Scene *live = m_show->liveScene();
     if (!live || m_transitionCtrl->isRunning())
         return;
-    if (live->endAction() == Cue::EndAction::Black) {
+    if (live->endAction() == Scene::EndAction::Black) {
         blackLive();
-    } else if (live->endAction() == Cue::EndAction::AutoAdvance) {
-        if (const Cue *next = m_show->nextCue(live->id()))
+    } else if (live->endAction() == Scene::EndAction::AutoAdvance) {
+        if (const Scene *next = m_show->nextScene(live->id()))
             stageAndTake(next->id());
     }
 }
@@ -1049,7 +1049,7 @@ void AppController::take()
         m_pushTimer->stop();
         pushDecks();
     }
-    const TransitionSpec spec = m_show->resolveTransition(m_show->stagingCue());
+    const TransitionSpec spec = m_show->resolveTransition(m_show->stagingScene());
     applyTransition(spec.mode, spec.durationMs);
     m_transitionCtrl->autoTransition();
 }
@@ -1057,7 +1057,7 @@ void AppController::take()
 void AppController::clearGraph()
 {
     emit confirmRequested(QStringLiteral("clearAll"), tr("Clear All"),
-                          tr("Remove all nodes from the cue being edited? This cannot be undone."));
+                          tr("Remove all nodes from the scene being edited? This cannot be undone."));
 }
 
 void AppController::onTimerTick()
@@ -1113,21 +1113,21 @@ void AppController::markDirty()
     emit sessionDirtyChanged();
 }
 
-void AppController::attachCue(Cue *cue)
+void AppController::attachScene(Scene *scene)
 {
-    ClipGraph *graph = cue->graph();
-    connect(graph, &ClipGraph::changed, this, [this, cue]() { onCueGraphChanged(cue); });
+    ClipGraph *graph = scene->graph();
+    connect(graph, &ClipGraph::changed, this, [this, scene]() { onSceneGraphChanged(scene); });
     connect(graph, &ClipGraph::graphReset, this, [this]() { m_pushTimer->start(); });
-    connect(graph, &ClipGraph::nodeChanged, this, [this, cue](NodeId id) { onNodeChanged(cue, id); });
-    connect(cue->runtime(), &GraphRuntime::thumbnailChanged, this, &AppController::nodeThumbnailChanged);
-    connect(cue->runtime(), &GraphRuntime::scriptStatusChanged, this, &AppController::scriptStatusChanged);
+    connect(graph, &ClipGraph::nodeChanged, this, [this, scene](NodeId id) { onNodeChanged(scene, id); });
+    connect(scene->runtime(), &GraphRuntime::thumbnailChanged, this, &AppController::nodeThumbnailChanged);
+    connect(scene->runtime(), &GraphRuntime::scriptStatusChanged, this, &AppController::scriptStatusChanged);
 }
 
-void AppController::onCueGraphChanged(Cue *cue)
+void AppController::onSceneGraphChanged(Scene *scene)
 {
     if (m_shuttingDown)
         return;
-    if (cue != m_show->liveCue() && cue != m_show->stagingCue())
+    if (scene != m_show->liveScene() && scene != m_show->stagingScene())
         return;
     m_pushTimer->start();
     if (m_deckController->activeNode(Deck::Live))
@@ -1140,16 +1140,16 @@ void AppController::onCueGraphChanged(Cue *cue)
     m_deckController->refreshAudioEffects();
 }
 
-void AppController::onNodeChanged(Cue *cue, NodeId id)
+void AppController::onNodeChanged(Scene *scene, NodeId id)
 {
     if (m_shuttingDown || !id)
         return;
-    const bool isLiveNode = cue == m_show->liveCue() && id == m_deckController->activeNode(Deck::Live);
-    const bool isStagingNode = cue == m_show->stagingCue() && id == m_deckController->activeNode(Deck::Staging);
+    const bool isLiveNode = scene == m_show->liveScene() && id == m_deckController->activeNode(Deck::Live);
+    const bool isStagingNode = scene == m_show->stagingScene() && id == m_deckController->activeNode(Deck::Staging);
     if (!isLiveNode && !isStagingNode)
         return;
-    const bool repeat = cue->graph()->clipRepeat(id);
-    const ClipSettings s = cue->graph()->clipSettings(id);
+    const bool repeat = scene->graph()->clipRepeat(id);
+    const ClipSettings s = scene->graph()->clipSettings(id);
     if (isLiveNode) {
         m_compositor->setRepeatLive(repeat);
         m_compositor->setTrimPointsLive(s.startTime, s.endTime);
@@ -1215,15 +1215,15 @@ void AppController::pushDecks()
         a.sort(); b.sort(); return a == b;
     };
 
-    Cue *cues[2] = {m_show->liveCue(), m_show->stagingCue()};
+    Scene *scenes[2] = {m_show->liveScene(), m_show->stagingScene()};
     ClipGraph *graphs[2] = {nullptr, nullptr};
     Stream streams[2];
     QString dBase[2];
     QStringList dOv[2];
     for (int i = 0; i < 2; ++i) {
         const Deck deck = static_cast<Deck>(i);
-        graphs[i] = cues[i] ? cues[i]->graph() : nullptr;
-        m_deckController->setDeckGraph(deck, graphs[i], cues[i] ? cues[i]->runtime() : nullptr);
+        graphs[i] = scenes[i] ? scenes[i]->graph() : nullptr;
+        m_deckController->setDeckGraph(deck, graphs[i], scenes[i] ? scenes[i]->runtime() : nullptr);
         if (!graphs[i] || (i == 0 && m_liveBlack))
             continue;
         if (const NodeId producer = graphs[i]->outputSingleProducer())
@@ -1240,7 +1240,7 @@ void AppController::pushDecks()
     auto pushDeck = [&](Deck deck, const Stream &stream, const QString &dBase, const QStringList &dOv) {
         const int di = static_cast<int>(deck);
         ClipGraph *graph = graphs[di];
-        GraphRuntime *runtime = cues[di] ? cues[di]->runtime() : nullptr;
+        GraphRuntime *runtime = scenes[di] ? scenes[di]->runtime() : nullptr;
         const bool startPlayback = isLive(deck);
         QString &curBase = m_deckBase[di];
         QStringList &curOv = m_deckOverlays[di];
@@ -1695,8 +1695,8 @@ void AppController::exportProject(const QString &packagePathIn)
 {
     const QString path = MainWindowUtils::ensureExtension(packagePathIn, QString::fromUtf8(ProjectPackager::kExtension));
     QVector<const ClipGraph *> graphs;
-    for (const Cue *cue : m_show->cues())
-        graphs.append(cue->graph());
+    for (const Scene *scene : m_show->scenes())
+        graphs.append(scene->graph());
     const ProjectPackager::Report report = ProjectPackager::exportPackage(currentSessionJson(), graphs, path, m_venue->toJson());
     if (!report.success) {
         emit errorOccurred(report.error.isEmpty() ? tr("Export failed.") : report.error);
@@ -1756,7 +1756,7 @@ void AppController::confirmAnswered(const QString &id, bool accepted)
     if (!accepted)
         return;
     if (id == QLatin1String("clearAll")) {
-        m_show->editedCue()->clearGraph();
+        m_show->editedScene()->clearGraph();
         emit decksChanged();
     } else if (id == QLatin1String("newSession")) {
         doNewSession();
@@ -2067,14 +2067,14 @@ QJsonObject AppController::mcpInspect(bool includeClips, bool detail, int sinceR
     for (const QString &name : m_transitionCtrl->transitionModeNames())
         transitionModes.append(name);
 
-    QJsonArray cuesJson;
-    for (const Cue *cue : m_show->cues()) {
-        cuesJson.append(QJsonObject{
-            {QStringLiteral("id"), cue->id()},
-            {QStringLiteral("name"), cue->name()},
-            {QStringLiteral("live"), cue->id() == m_show->liveCueId()},
-            {QStringLiteral("staging"), cue->id() == m_show->stagingCueId()},
-            {QStringLiteral("endAction"), Cue::endActionName(cue->endAction())},
+    QJsonArray scenesJson;
+    for (const Scene *scene : m_show->scenes()) {
+        scenesJson.append(QJsonObject{
+            {QStringLiteral("id"), scene->id()},
+            {QStringLiteral("name"), scene->name()},
+            {QStringLiteral("live"), scene->id() == m_show->liveSceneId()},
+            {QStringLiteral("staging"), scene->id() == m_show->stagingSceneId()},
+            {QStringLiteral("endAction"), Scene::endActionName(scene->endAction())},
         });
     }
 
@@ -2085,8 +2085,8 @@ QJsonObject AppController::mcpInspect(bool includeClips, bool detail, int sinceR
         {QStringLiteral("panic"), mcpPanicMode()},
         {QStringLiteral("decks"), QJsonObject{{QStringLiteral("live"), deckJson(Deck::Live)},
                                                {QStringLiteral("staging"), deckJson(Deck::Staging)}}},
-        {QStringLiteral("cues"), cuesJson},
-        {QStringLiteral("editedCue"), m_show->editedCueId()},
+        {QStringLiteral("scenes"), scenesJson},
+        {QStringLiteral("editedScene"), m_show->editedSceneId()},
         {QStringLiteral("transition"), QJsonObject{
             {QStringLiteral("index"), m_transitionCtrl->currentModeIndex()},
             {QStringLiteral("duration"), m_transitionCtrl->currentDurationSecs()},

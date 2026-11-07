@@ -32,7 +32,7 @@ const PanelType kPanelTypes[] = {
     {"inspector", QT_TRANSLATE_NOOP("WorkspaceStore", "Inspector")},
     {"mixer", QT_TRANSLATE_NOOP("WorkspaceStore", "Audio Mixer")},
     {"outputs", QT_TRANSLATE_NOOP("WorkspaceStore", "Outputs")},
-    {"cues", QT_TRANSLATE_NOOP("WorkspaceStore", "Cues")},
+    {"scenes", QT_TRANSLATE_NOOP("WorkspaceStore", "Scenes")},
 };
 
 bool isKnownType(const QString &type)

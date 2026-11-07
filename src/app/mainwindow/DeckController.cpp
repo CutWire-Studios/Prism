@@ -94,7 +94,7 @@ void DeckController::releaseAllMasterAudioInputs() {
 
 namespace {
 
-/// A mic or loopback node of a cue that is on a deck, with everything its capture needs.
+/// A mic or loopback node of a scene that is on a deck, with everything its capture needs.
 struct CaptureSource {
     ClipGraph *graph = nullptr;
     GraphRuntime *runtime = nullptr;
@@ -109,8 +109,8 @@ struct CaptureSource {
 }
 
 void DeckController::syncMasterAudioInputs() {
-    // One capture per physical device however many cues use it; the Live cue's gain and effects
-    // win, and a device only the Staging cue uses stays muted until the take.
+    // One capture per physical device however many scenes use it; the Live scene's gain and effects
+    // win, and a device only the Staging scene uses stays muted until the take.
     QMap<QString, QVector<CaptureSource>> inputs, captures;
     for (const Deck deck : {Deck::Live, Deck::Staging}) {
         ClipGraph *g = graphOf(deck);
@@ -318,8 +318,8 @@ void DeckController::refreshShaderAudioForActiveDecks() {
     auto *out = m_compositor;
 
     // Drive every audio-analyzer node from whichever deck owns its source clip, so
-    // audio data is produced whether it feeds a shader or a script chain. Each cue
-    // has its own runtime, so each deck syncs the runtime of the cue it plays.
+    // audio data is produced whether it feeds a shader or a script chain. Each scene
+    // has its own runtime, so each deck syncs the runtime of the scene it plays.
     for (const Deck deck : {Deck::Live, Deck::Staging}) {
         GraphRuntime *rt = runtimeOf(deck);
         ClipGraph *g = graphOf(deck);

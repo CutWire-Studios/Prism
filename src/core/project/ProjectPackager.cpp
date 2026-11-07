@@ -196,10 +196,10 @@ QJsonObject rewriteSessionPaths(const QJsonObject &session,
     QJsonObject out = session;
     out.remove(QStringLiteral("sessionDir"));
 
-    QJsonArray cues = out.value(QStringLiteral("cues")).toArray();
-    for (int c = 0; c < cues.size(); ++c) {
-        QJsonObject cue = cues.at(c).toObject();
-        QJsonObject graph = cue.value(QStringLiteral("graph")).toObject();
+    QJsonArray scenes = out.value(QStringLiteral("scenes")).toArray();
+    for (int c = 0; c < scenes.size(); ++c) {
+        QJsonObject scene = scenes.at(c).toObject();
+        QJsonObject graph = scene.value(QStringLiteral("graph")).toObject();
         QJsonArray inputNodes = graph.value(QStringLiteral("inputNodes")).toArray();
         for (int i = 0; i < inputNodes.size(); ++i) {
             QJsonObject node = inputNodes.at(i).toObject();
@@ -209,10 +209,10 @@ QJsonObject rewriteSessionPaths(const QJsonObject &session,
             inputNodes[i] = node;
         }
         graph.insert(QStringLiteral("inputNodes"), inputNodes);
-        cue.insert(QStringLiteral("graph"), graph);
-        cues[c] = cue;
+        scene.insert(QStringLiteral("graph"), graph);
+        scenes[c] = scene;
     }
-    out.insert(QStringLiteral("cues"), cues);
+    out.insert(QStringLiteral("scenes"), scenes);
     return out;
 }
 

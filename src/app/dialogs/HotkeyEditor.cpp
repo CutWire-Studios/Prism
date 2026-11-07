@@ -36,22 +36,22 @@ void HotkeyEditor::refresh()
     if (!m_connected) {
         m_connected = true;
         connect(mgr, &HotkeyManager::bindingsChanged, this, &HotkeyEditor::refresh);
-        connect(sm, &ShowManager::cuesReset, this, &HotkeyEditor::refresh);
-        connect(sm, &ShowManager::cueAdded, this, &HotkeyEditor::refresh);
+        connect(sm, &ShowManager::scenesReset, this, &HotkeyEditor::refresh);
+        connect(sm, &ShowManager::sceneAdded, this, &HotkeyEditor::refresh);
     }
 
-    m_cueIds.clear();
+    m_sceneIds.clear();
     m_rows.clear();
-    for (const Cue *cue : sm->cues()) {
-        const Qt::Key key = mgr->bindingForCue(cue->id());
+    for (const Scene *scene : sm->scenes()) {
+        const Qt::Key key = mgr->bindingForScene(scene->id());
         QString chord;
         QString cutChord;
         if (key != Qt::Key_unknown) {
             chord = QKeySequence(key).toString(QKeySequence::PortableText);
             cutChord = QKeySequence(Qt::SHIFT | key).toString(QKeySequence::PortableText);
         }
-        m_cueIds.append(cue->id());
-        m_rows.append(QVariantMap{{"label", cue->name()}, {"chord", chord}, {"cutChord", cutChord}});
+        m_sceneIds.append(scene->id());
+        m_rows.append(QVariantMap{{"label", scene->name()}, {"chord", chord}, {"cutChord", cutChord}});
     }
     emit rowsChanged();
 }
@@ -59,7 +59,7 @@ void HotkeyEditor::refresh()
 QVariantMap HotkeyEditor::setChord(int row, const QString &chord)
 {
     HotkeyManager *mgr = manager();
-    if (!mgr || row < 0 || row >= m_cueIds.size())
+    if (!mgr || row < 0 || row >= m_sceneIds.size())
         return {{"ok", false}, {"message", QString()}};
 
     const QKeySequence seq(chord, QKeySequence::PortableText);
@@ -73,12 +73,12 @@ QVariantMap HotkeyEditor::setChord(int row, const QString &chord)
     if (!HotkeyManager::isBindableKey(key))
         return {{"ok", false}, {"message", tr("That key cannot be used.")}};
 
-    const QString owner = mgr->cueForKey(key);
-    if (!owner.isEmpty() && owner != m_cueIds.at(row))
-        return {{"ok", false}, {"message", tr("%1 is already assigned to another cue.")
+    const QString owner = mgr->sceneForKey(key);
+    if (!owner.isEmpty() && owner != m_sceneIds.at(row))
+        return {{"ok", false}, {"message", tr("%1 is already assigned to another scene.")
                                                .arg(QKeySequence(key).toString())}};
 
-    if (!mgr->setBinding(m_cueIds.at(row), key))
+    if (!mgr->setBinding(m_sceneIds.at(row), key))
         return {{"ok", false}, {"message", tr("That key cannot be used.")}};
     mgr->saveSettingsProfile();
     return {{"ok", true}, {"message", QString()}};
@@ -87,9 +87,9 @@ QVariantMap HotkeyEditor::setChord(int row, const QString &chord)
 void HotkeyEditor::clearRow(int row)
 {
     HotkeyManager *mgr = manager();
-    if (!mgr || row < 0 || row >= m_cueIds.size())
+    if (!mgr || row < 0 || row >= m_sceneIds.size())
         return;
-    mgr->clearBinding(m_cueIds.at(row));
+    mgr->clearBinding(m_sceneIds.at(row));
     mgr->saveSettingsProfile();
 }
 

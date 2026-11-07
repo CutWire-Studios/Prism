@@ -55,12 +55,12 @@ Route matchRoute(const QString &method, const QString &path)
     const QString base = path.section(QLatin1Char('?'), 0, 0);
     if (base == QStringLiteral("/api/stage"))
         return Route::Stage;
-    if (base == QStringLiteral("/api/cue/take"))
-        return Route::CueTake;
-    if (base == QStringLiteral("/api/cue/next"))
-        return Route::CueNext;
-    if (base == QStringLiteral("/api/cue/prev"))
-        return Route::CuePrev;
+    if (base == QStringLiteral("/api/scene/take"))
+        return Route::SceneTake;
+    if (base == QStringLiteral("/api/scene/next"))
+        return Route::SceneNext;
+    if (base == QStringLiteral("/api/scene/prev"))
+        return Route::ScenePrev;
     if (base == QStringLiteral("/api/live/play"))
         return Route::LivePlay;
     if (base == QStringLiteral("/api/live/pause"))
@@ -136,16 +136,16 @@ QByteArray buildStatusJson(const StatusData &data)
         statusObj.insert(QStringLiteral("isPlayingLive"), data.isPlayingLive);
         statusObj.insert(QStringLiteral("isPlayingStaging"), data.isPlayingStaging);
 
-        QJsonArray cuesArray;
-        for (const CueInfo &cue : data.cues) {
-            QJsonObject cueObj;
-            cueObj.insert(QStringLiteral("id"), cue.id);
-            cueObj.insert(QStringLiteral("name"), cue.name);
-            cueObj.insert(QStringLiteral("onLive"), cue.onLive);
-            cueObj.insert(QStringLiteral("onStaging"), cue.onStaging);
-            cuesArray.append(cueObj);
+        QJsonArray scenesArray;
+        for (const SceneInfo &scene : data.scenes) {
+            QJsonObject sceneObj;
+            sceneObj.insert(QStringLiteral("id"), scene.id);
+            sceneObj.insert(QStringLiteral("name"), scene.name);
+            sceneObj.insert(QStringLiteral("onLive"), scene.onLive);
+            sceneObj.insert(QStringLiteral("onStaging"), scene.onStaging);
+            scenesArray.append(sceneObj);
         }
-        statusObj.insert(QStringLiteral("cues"), cuesArray);
+        statusObj.insert(QStringLiteral("scenes"), scenesArray);
     }
 
     if (data.hasTransition) {

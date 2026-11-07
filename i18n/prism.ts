@@ -254,11 +254,11 @@ Workflow: catalog, toolbox({name}), apply({ops}).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>The Live cue cannot be deleted. Take another cue first.</source>
+        <source>The Live scene cannot be deleted. Take another scene first.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Delete cue</source>
+        <source>Delete scene</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -270,7 +270,7 @@ Workflow: catalog, toolbox({name}), apply({ops}).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>%1 is already assigned to another cue.</source>
+        <source>%1 is already assigned to another scene.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -290,7 +290,7 @@ Workflow: catalog, toolbox({name}), apply({ops}).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Remove all nodes from the cue being edited? This cannot be undone.</source>
+        <source>Remove all nodes from the scene being edited? This cannot be undone.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -811,65 +811,6 @@ low/mid/high · beat</source>
     </message>
 </context>
 <context>
-    <name>CuesPanel</name>
-    <message>
-        <source>Back to show</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Show / %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Show</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add cue</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>default</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 %2 s</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Transition into this cue</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Use default</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Preflight check</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>STAGING</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>LIVE</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Edit cue graph</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Duplicate cue</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Delete cue</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>DeckView</name>
     <message>
         <source>ON AIR</source>
@@ -976,7 +917,7 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>%1 is already assigned to another cue.</source>
+        <source>%1 is already assigned to another scene.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1020,7 +961,7 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Assign a key to each cue. The key stages the cue; Shift plus the same key stages it and takes it. Click a field, then press the key. Esc cancels, Backspace clears.</source>
+        <source>Assign a key to each scene. The key stages the scene; Shift plus the same key stages it and takes it. Click a field, then press the key. Esc cancels, Backspace clears.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1028,7 +969,7 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No cues yet. Add a cue to assign keys.</source>
+        <source>No scenes yet. Add a scene to assign keys.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1126,69 +1067,6 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Mid / high</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>InspectorCueForm</name>
-    <message>
-        <source>Cue</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Name</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Color</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Notes</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Transition in</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Use default</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Duration</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>At end</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Hold</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Loop</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Auto-advance</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Black</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>After</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>When media ends</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Hotkey</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1480,6 +1358,69 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Amount</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>InspectorSceneForm</name>
+    <message>
+        <source>Scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Notes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transition in</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use default</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Duration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>At end</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hold</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Loop</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Auto-advance</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Black</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>After</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>When media ends</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hotkey</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2107,11 +2048,11 @@ low/mid/high · beat</source>
 <context>
     <name>NodeGraphPanel</name>
     <message>
-        <source>No cue open</source>
+        <source>No scene open</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Press a cue&apos;s edit button to work on its graph</source>
+        <source>Press a scene&apos;s edit button to work on its graph</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2627,11 +2568,11 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No missing media or devices in any cue.</source>
+        <source>No missing media or devices in any scene.</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <source>%n problem(s) found across the cues.</source>
+        <source>%n problem(s) found across the scenes.</source>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
@@ -2859,7 +2800,7 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No cue matched: %1</source>
+        <source>No scene matched: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2907,11 +2848,11 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Move cue</source>
+        <source>Move scene</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Edit cue</source>
+        <source>Edit scene</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3075,6 +3016,65 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
     </message>
     <message>
         <source>Could not start the remote control server on port %1. Check whether another application is using the port.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ScenesPanel</name>
+    <message>
+        <source>Back to show</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show / %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>default</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 %2 s</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transition into this scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use default</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Preflight check</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>STAGING</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>LIVE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit scene graph</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Duplicate scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete scene</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3454,7 +3454,7 @@ Technical detail: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No cues yet. Add a cue to assign keys.</source>
+        <source>No scenes yet. Add a scene to assign keys.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -4121,11 +4121,11 @@ Technical detail: %1</source>
 <context>
     <name>ShowManager</name>
     <message>
-        <source>Cue %1</source>
+        <source>Scene %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Add cue</source>
+        <source>Add scene</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4133,11 +4133,11 @@ Technical detail: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Duplicate cue</source>
+        <source>Duplicate scene</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Remove cue</source>
+        <source>Remove scene</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -5557,7 +5557,7 @@ Continue anyway? Your phone may not be able to connect.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cues</source>
+        <source>Scenes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

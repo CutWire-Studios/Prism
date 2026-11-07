@@ -128,19 +128,19 @@ void OscServer::dispatch(const OscProtocol::OscMessage &msg)
         handleDeck(cmd == QLatin1String("live") ? Deck::Live : Deck::Staging, parts.at(2), args);
     } else if (parts.size() == 2 && cmd == QLatin1String("cut")) {
         m_mainWindow->cut();
-    } else if (parts.size() == 3 && cmd == QLatin1String("cue") && parts.at(2) == QLatin1String("stage")) {
+    } else if (parts.size() == 3 && cmd == QLatin1String("scene") && parts.at(2) == QLatin1String("stage")) {
         handleStage(args);
-    } else if (parts.size() == 3 && cmd == QLatin1String("cue") && parts.at(2) == QLatin1String("take")) {
+    } else if (parts.size() == 3 && cmd == QLatin1String("scene") && parts.at(2) == QLatin1String("take")) {
         if (args.isEmpty()) {
             m_mainWindow->take();
         } else {
-            const QString id = cueIdFromArg(args.first());
+            const QString id = sceneIdFromArg(args.first());
             if (!id.isEmpty())
                 m_mainWindow->stageAndTake(id);
         }
-    } else if (parts.size() == 3 && cmd == QLatin1String("cue") && parts.at(2) == QLatin1String("next")) {
+    } else if (parts.size() == 3 && cmd == QLatin1String("scene") && parts.at(2) == QLatin1String("next")) {
         m_mainWindow->stageRelative(1);
-    } else if (parts.size() == 3 && cmd == QLatin1String("cue") && parts.at(2) == QLatin1String("prev")) {
+    } else if (parts.size() == 3 && cmd == QLatin1String("scene") && parts.at(2) == QLatin1String("prev")) {
         m_mainWindow->stageRelative(-1);
     } else if (parts.size() == 2 && cmd == QLatin1String("take")) {
         m_mainWindow->take();
@@ -185,22 +185,22 @@ void OscServer::handleDeck(Deck deck, const QString &cmd, const QVariantList &ar
     }
 }
 
-QString OscServer::cueIdFromArg(const QVariant &arg) const
+QString OscServer::sceneIdFromArg(const QVariant &arg) const
 {
     if (!isNumber(arg))
         return arg.toString();
     const int index = arg.toInt() - 1;
-    const QList<Cue *> &cues = m_mainWindow->showManager()->cues();
-    return index >= 0 && index < cues.size() ? cues.at(index)->id() : QString();
+    const QList<Scene *> &scenes = m_mainWindow->showManager()->scenes();
+    return index >= 0 && index < scenes.size() ? scenes.at(index)->id() : QString();
 }
 
 void OscServer::handleStage(const QVariantList &args)
 {
     if (args.isEmpty())
         return;
-    const QString id = cueIdFromArg(args.first());
+    const QString id = sceneIdFromArg(args.first());
     if (!id.isEmpty())
-        m_mainWindow->stageCue(id);
+        m_mainWindow->stageScene(id);
 }
 
 OscServer::State OscServer::captureState() const
@@ -219,14 +219,14 @@ OscServer::State OscServer::captureState() const
     }
 
     const ShowManager *show = m_mainWindow->showManager();
-    auto fill = [&](DeckState &deck, const Cue *cue) {
-        deck.input = cue ? cue->id() : QString();
-        deck.slot = cue ? show->indexOf(cue->id()) + 1 : 0;
-        deck.name = cue ? cue->name() : QString();
+    auto fill = [&](DeckState &deck, const Scene *scene) {
+        deck.input = scene ? scene->id() : QString();
+        deck.slot = scene ? show->indexOf(scene->id()) + 1 : 0;
+        deck.name = scene ? scene->name() : QString();
     };
     const bool livePlaying = s.live.playing, stagingPlaying = s.staging.playing;
-    fill(s.live, show->liveCue());
-    fill(s.staging, show->stagingCue());
+    fill(s.live, show->liveScene());
+    fill(s.staging, show->stagingScene());
     s.live.playing = livePlaying;
     s.staging.playing = stagingPlaying;
     return s;
@@ -242,10 +242,10 @@ void OscServer::pollState()
     }
     sendDeckDiff("live", now.live, before.live);
     if (now.live.slot != before.live.slot || now.live.name != before.live.name || now.live.input != before.live.input)
-        send(QStringLiteral("/prism/cue/live"), {now.live.slot, now.live.name});
+        send(QStringLiteral("/prism/scene/live"), {now.live.slot, now.live.name});
     if (now.staging.slot != before.staging.slot || now.staging.name != before.staging.name
         || now.staging.input != before.staging.input)
-        send(QStringLiteral("/prism/cue/staging"), {now.staging.slot, now.staging.name});
+        send(QStringLiteral("/prism/scene/staging"), {now.staging.slot, now.staging.name});
     sendDeckDiff("staging", now.staging, before.staging);
     if (now.mode != before.mode)
         send(QStringLiteral("/prism/transition/mode"), {now.mode});

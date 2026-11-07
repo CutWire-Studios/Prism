@@ -1,8 +1,8 @@
 # Scripting
 
 Prism runs Lua 5.4 in Script nodes and in parameter expressions. Both run off the GUI thread
-in a sandbox, one runtime per cue. A cue's scripts and expressions only run while the cue is
-the Live cue, the Staging cue or the cue being edited.
+in a sandbox, one runtime per scene. A scene's scripts and expressions only run while the scene is
+the Live scene, the Staging scene or the scene being edited.
 
 ## Script node
 
@@ -39,14 +39,14 @@ the run is aborted with an `instruction limit exceeded` error; the app keeps run
 
 | Function | Description |
 | --- | --- |
-| `prism.param(nodeId, name)` | Reads a parameter of a node in this cue. `name` may be dotted for nested values, for example `"params.opacity"`. |
+| `prism.param(nodeId, name)` | Reads a parameter of a node in this scene. `name` may be dotted for nested values, for example `"params.opacity"`. |
 | `prism.param(nodeId, name, value)` | Sets it. The write is applied on the GUI thread without an undo entry. |
 | `prism.audio.bands([analyzerId])` | `{low, mid, high, level, beat, hasAudio}` of an Audio Analyzer node (the most recently updated one without an id). Zeros when there is no audio. |
 | `prism.log(...)` | Same as `print`. |
 | `prism.time()`, `prism.clock()`, `prism.date(fmt, t)` | The `os.time`, `os.clock` and `os.date` equivalents. |
 
-Scripts can only reach nodes of their own cue's graph; other node ids raise
-`node N is not in this cue`. Node ids are shown in the inspector header.
+Scripts can only reach nodes of their own scene's graph; other node ids raise
+`node N is not in this scene`. Node ids are shown in the inspector header.
 
 ## Parameter expressions
 
@@ -55,9 +55,9 @@ a fixed value. Click "f", type an expression and the slider is replaced by the e
 field; clicking "f" again removes it. Expressions are stored per node in
 `params.expressions` (`{ "<param>": "<expr>" }`).
 
-Expressions are evaluated at about 30 Hz while the cue's runtime is active. Available names:
+Expressions are evaluated at about 30 Hz while the scene's runtime is active. Available names:
 
-- `t`: seconds since the cue's runtime was created
+- `t`: seconds since the scene's runtime was created
 - `audio`: `{low, mid, high, level, beat}` (zeros without an analyzer)
 - `param(nodeId, name)`: as `prism.param` (read only)
 - everything in `math` through the global environment, for example `math.sin(t)`
