@@ -34,7 +34,7 @@ bool RemoteControlServer::startServer(const QHostAddress &address, quint16 port)
     if (listen(address, port)) {
         m_isRunning = true;
         m_serverAddress = serverAddress();
-        m_serverPort = serverPort();
+        m_serverPort = QTcpServer::serverPort();
         return true;
     }
     return false;

@@ -78,7 +78,7 @@ ApplicationWindow {
     }
 
     PanelPool {
-        id: pool
+        id: panelPool
         editors: editorRouter
     }
 
@@ -238,7 +238,7 @@ ApplicationWindow {
         EditorWorkspace {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            pool: pool
+            pool: panelPool
         }
     }
 

@@ -56,7 +56,7 @@ PanelFrame {
                     required property var params
 
                     Layout.fillWidth: true
-                    Layout.preferredHeight: loader.item ? loader.item.implicitHeight : 0
+                    Layout.preferredHeight: loader.implicitHeight
                     visible: Number(nodeId) === root.selectedId
 
                     Loader {
