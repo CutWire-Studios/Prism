@@ -52,6 +52,7 @@ FocusScope {
     property string hoverPortKey: ""
     property bool connectClickMode: false
     property bool spaceDown: false
+    property bool spacePanned: false
 
     // A node was double-clicked: the shell should bring the inspector forward.
     signal inspectorRequested()
@@ -59,6 +60,8 @@ FocusScope {
     signal nodeMenuRequested(var item, point worldPos, point screenPos)
     signal edgeMenuRequested(var edgeId, point screenPos)
     signal addMenuRequested(point screenPos, point worldPos)
+    // Space was tapped (pressed and released without a pan drag).
+    signal quickAddRequested(point screenPos, point worldPos)
     // A connection was dropped on empty space. kind is the PortKind of the dragged port.
     signal connectionDropped(point screenPos, point worldPos, int kind, bool fromOutput)
 
@@ -287,7 +290,6 @@ FocusScope {
     // Adds a node at a world position and, for a pending connection, wires it to the first
     // compatible port of the new node.
     function addNodeAt(type, params, wx, wy, edgeId) {
-        const pendingKind = connectKind
         const pendingOut = connectIsOutput
         const pending = controller.connecting
         let x = wx
@@ -295,7 +297,7 @@ FocusScope {
         if (pending && !pendingOut)
             x = wx - NodePalette.defaultWidth[type]
         const id = edgeId ? controller.addNodeIntoEdge(type, x, y, params || {}, edgeId)
-                          : controller.addNode(type, x, y, params || {})
+                          : controller.addNodeConnected(type, x, y, params || {})
         if (!id) {
             if (pending)
                 controller.cancelConnection()
@@ -303,20 +305,6 @@ FocusScope {
         }
         userMoved = true
         controller.select([id])
-        if (pending) {
-            const item = nodeItem(id)
-            const ports = item ? (pendingOut ? item.inputPorts : item.outputPorts) : []
-            let done = false
-            for (const p of ports) {
-                if (controller.canConnect(id, !pendingOut, p.index)) {
-                    controller.finishConnection(id, !pendingOut, p.index)
-                    done = true
-                    break
-                }
-            }
-            if (!done)
-                controller.cancelConnection()
-        }
         return id
     }
 
@@ -448,6 +436,7 @@ FocusScope {
         const shift = (event.modifiers & Qt.ShiftModifier) !== 0
         if (event.key === Qt.Key_Space && !event.isAutoRepeat) {
             spaceDown = true
+            spacePanned = false
             event.accepted = true
         } else if (event.key === Qt.Key_Delete || event.key === Qt.Key_Backspace) {
             deleteSelection()
@@ -500,8 +489,13 @@ FocusScope {
 
     Keys.onReleased: (event) => {
         if (event.key === Qt.Key_Space && !event.isAutoRepeat) {
+            const tapped = spaceDown && !spacePanned
             spaceDown = false
             event.accepted = true
+            if (tapped && !controller.connecting) {
+                const at = isNaN(hoverPos.x) ? Qt.point(width / 2, height / 2) : hoverPos
+                quickAddRequested(at, toWorld(at.x, at.y))
+            }
         }
     }
 
@@ -720,6 +714,7 @@ FocusScope {
             startX = root.panX
             startY = root.panY
             pressPoint = Qt.point(m.x, m.y)
+            root.spacePanned = true
             root.userMoved = true
         }
         onPositionChanged: (m) => {

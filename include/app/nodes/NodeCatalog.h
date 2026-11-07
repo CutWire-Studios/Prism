@@ -1,11 +1,27 @@
 #pragma once
 
 #include <QObject>
+#include <QList>
 #include <QString>
 #include <QStringList>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
+
+/// One thing the quick-add popup can create.
+struct QuickAddEntry {
+    QString id;            // stable, e.g. "process:blend", "source:camera", "modulator:lfo"
+    QString name;
+    QString category;
+    QString description;   // one plain-language line
+    QStringList keywords;
+    int nodeType = 0;      // ClipGraph::NodeType
+    QVariantMap params;    // initial node params (effect id, modulator kind)
+    QList<int> inKinds;    // ClipGraph::PortKind of the ports a fresh node has
+    QList<int> outKinds;
+    QString source;        // non-empty for Input sources: the kind AppController::requestAddSource takes
+    bool unique = false;   // at most one per graph
+};
 
 // Read-only facts the node editor view needs from the core: the effect registries, the port
 // compatibility table and whether script nodes are compiled in.
@@ -36,6 +52,21 @@ public:
     /// ClipGraph::PortKind values.
     Q_INVOKABLE bool portsCompatible(int a, int b) const;
     Q_INVOKABLE bool scriptingAvailable() const;
+
+    /// Everything addable, in catalogue order. Built once; descriptions are translated at that point.
+    static const QList<QuickAddEntry> &quickAddCatalogue();
+    /// Rank of @p entry for @p query, -1 for no match: name prefix > word start in name > substring in
+    /// name > category > keyword > description. Case-insensitive.
+    static int quickAddScore(const QString &query, const QuickAddEntry &entry);
+    /// Entries matching @p query ordered by score, then shorter name, then catalogue order. An empty
+    /// query lists everything grouped by category. fromPortKind >= 0 keeps only entries with a port
+    /// that can be wired to a dragged port of that kind (fromOutput: the dragged port is an output).
+    static QList<QuickAddEntry> quickAddSearch(const QString &query, int fromPortKind = -1,
+                                               bool fromOutput = false);
+    /// quickAddSearch as [{id, name, category, description, nodeType, params, inKinds, outKinds,
+    /// source, unique}] for QML.
+    Q_INVOKABLE QVariantList quickAddEntries(const QString &query, int fromPortKind = -1,
+                                             bool fromOutput = false) const;
 
     /// Keys of the last few entries picked in the add-node palette, newest first (QSettings).
     Q_INVOKABLE QStringList recentNodeKeys() const;

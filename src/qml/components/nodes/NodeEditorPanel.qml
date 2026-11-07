@@ -38,11 +38,15 @@ Item {
             addMenu.openAt(screenPos.x, screenPos.y)
         }
         onConnectionDropped: (screenPos, worldPos, kind, fromOutput) => {
-            addMenu.edgeId = 0
-            addMenu.pendingKind = kind
-            addMenu.pendingIsOutput = fromOutput
-            addMenu.worldPos = worldPos
-            addMenu.openAt(screenPos.x, screenPos.y)
+            quickAdd.pendingKind = kind
+            quickAdd.pendingIsOutput = fromOutput
+            quickAdd.worldPos = worldPos
+            quickAdd.openAt(screenPos.x, screenPos.y)
+        }
+        onQuickAddRequested: (screenPos, worldPos) => {
+            quickAdd.pendingKind = -1
+            quickAdd.worldPos = worldPos
+            quickAdd.openAt(screenPos.x, screenPos.y)
         }
         onNodeMenuRequested: (item, worldPos, screenPos) => {
             nodeMenu.target = item
@@ -184,6 +188,17 @@ Item {
 
     AddNodeMenu {
         id: addMenu
+        canvas: graphCanvas
+
+        onClosed: {
+            if (!wasPicked)
+                graphCanvas.cancelConnection()
+            graphCanvas.forceActiveFocus()
+        }
+    }
+
+    QuickAddPopup {
+        id: quickAdd
         canvas: graphCanvas
 
         onClosed: {

@@ -135,6 +135,9 @@ public:
     Q_INVOKABLE bool canInsertIntoEdge(quint64 node, quint64 edgeId) const;
     /// Adds a node and splices it into edgeId (0 = plain add) as one undo step.
     Q_INVOKABLE quint64 addNodeIntoEdge(int type, qreal x, qreal y, const QVariantMap &params, quint64 edgeId);
+    /// Adds a node and wires it to the pending connection's first compatible port (then clears the
+    /// pending connection) as one undo step. Without a pending connection this is addNode.
+    Q_INVOKABLE quint64 addNodeConnected(int type, qreal x, qreal y, const QVariantMap &params);
     Q_INVOKABLE bool detachNode(quint64 node);
 
     /// Copies the selection (with the edges between its nodes) to the in-process clipboard and,

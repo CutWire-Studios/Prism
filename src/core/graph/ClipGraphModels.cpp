@@ -486,6 +486,33 @@ quint64 ClipGraphController::addNodeIntoEdge(int type, qreal x, qreal y, const Q
     return id;
 }
 
+quint64 ClipGraphController::addNodeConnected(int type, qreal x, qreal y, const QVariantMap &params) {
+    if (m_pending.node == 0) return addNode(type, x, y, params);
+    if (!sceneRefAllowed(params)) {
+        cancelConnection();
+        return 0;
+    }
+    const QJsonObject before = m_graph->toJson();
+    const NodeId id = m_graph->addNode(ClipGraph::NodeType(type), QPointF(x, y), params);
+    if (id != 0) {
+        const auto ports = m_pending.output ? m_graph->inputPorts(id) : m_graph->outputPorts(id);
+        for (const ClipGraph::Port &p : ports) {
+            const bool ok = m_pending.output
+                ? m_graph->canConnectPorts(m_pending.node, m_pending.port, id, p.index)
+                : m_graph->canConnectPorts(id, p.index, m_pending.node, m_pending.port);
+            if (!ok) continue;
+            if (m_pending.output)
+                m_graph->connectPorts(m_pending.node, m_pending.port, id, p.index);
+            else
+                m_graph->connectPorts(id, p.index, m_pending.node, m_pending.port);
+            break;
+        }
+        pushSnapshot(QStringLiteral("Add node"), before);
+    }
+    cancelConnection();
+    return id;
+}
+
 bool ClipGraphController::detachNode(quint64 node) {
     const QJsonObject before = m_graph->toJson();
     const bool ok = m_graph->detachNode(node);

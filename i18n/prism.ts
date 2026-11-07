@@ -1315,6 +1315,22 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>OSC %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for OSC…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Learn</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use the next incoming OSC message as the input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Kind</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1352,6 +1368,10 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Math</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Control In</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2284,6 +2304,10 @@ low/mid/high · beat</source>
         <source>Math</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Control In</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ModulatorCard</name>
@@ -2318,11 +2342,363 @@ low/mid/high · beat</source>
         <source>New LFO</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Learn OSC…</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>NodeCatalog</name>
     <message>
         <source>Split</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transform</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cut the picture down to a rectangle.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mirror the picture left to right.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Turn the picture upside down.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keying</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cut a person out of their background automatically.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mirror the picture horizontally, vertically or both.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Turn the picture by an angle.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Make the picture more or less see-through.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Make a green or blue screen transparent.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Blur</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Soften the whole picture.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bring out fine detail and edges.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Distort</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fix perspective by dragging the picture&apos;s corners.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show only the area inside a shape you draw.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sources</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Media File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Play a video, image or audio file from disk.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Slideshow</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cycle through the pictures in a folder.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SVG Template</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A vector graphic with fields you can fill in, like a lower third.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Live video from a webcam or capture card.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Screen Capture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show everything on one of your displays.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Window Capture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show a single application window.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Canvas</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A blank picture in a solid colour, transparent or checkered.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shader</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A picture drawn by a GLSL fragment shader you write.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Text</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Styled text, such as a title or caption.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shape</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A rectangle, circle or other vector shape.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show another scene&apos;s finished picture inside this one.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Video URL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Play a stream or video from a web address.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>NDI Source</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Receive video from another computer over NDI.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Phone Camera (WebRTC)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use your phone&apos;s camera as a video source.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Video FX</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A video effect.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Layer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Compositing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stack several pictures into one, with position and order.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A chain of audio effects such as reverb, EQ and compression.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mixer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Combine several audio streams with a volume for each.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Output</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Send sound to a speaker or audio device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mic Input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sound from a microphone or line input.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Capture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Record whatever this computer is playing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Logic</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Script</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Run a Lua script that reacts to events and sends out values.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Analyzer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Turn sound into numbers such as level, bass and beat.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>LFO</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A repeating wave that moves a parameter up and down in time.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Envelope Follower</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Follows how loud a sound is to move a parameter.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Map Range</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Rescale another value into a new minimum and maximum.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Smooth</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Make another value glide instead of jump.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Random</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A new random value on every tick or beat.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Trigger</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A short pulse when another value goes over a threshold.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Counter</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Step through a set of values each time it is triggered.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Toggle</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Flip between on and off each time it is triggered.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Math</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Combine two values by adding, multiplying and similar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Control In</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Turns an incoming OSC control into a value you can link to parameters.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Modulators</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3189,6 +3565,21 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
     </message>
     <message>
         <source>Edit scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>QuickAddPopup</name>
+    <message>
+        <source>Add and connect…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Search nodes…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No matching nodes</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -4870,7 +5261,15 @@ Continue anyway? Your phone may not be able to connect.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Waiting for OSC…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Unlink from modulator</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel OSC learn</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
