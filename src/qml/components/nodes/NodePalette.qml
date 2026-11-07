@@ -140,7 +140,7 @@ QtObject {
     // SourceDescriptor::Kind order.
     readonly property var kindIcons: ["film", "image", "folder", "camera", "screen-share",
         "square-dashed", "app-window", "sparkles", "film", "radio-receiver", "smartphone", "type",
-        "music", "shapes", "layout-grid"]
+        "music", "shapes", "layout-grid", "clapperboard"]
 
     function sourceIcon(source) {
         return source && kindIcons[source.kind] ? kindIcons[source.kind] : meta[nodeType.Input].icon

@@ -56,7 +56,7 @@ Pinned endpoints (`/mcp/sources`, `/mcp/decks`, `/mcp/transition`, `/mcp/panic`,
 
 | Toolbox | When to use |
 |---------|-------------|
-| `sources` | Add/list/rename clips; set clip speed; text/SVG template/shader updates; cameras and NDI |
+| `sources` | Add/list/rename clips; set clip speed; text/SVG template/shader updates; scene sources (one scene inside another); cameras and NDI |
 | `decks` | List/add/enter/stage/take/edit/reorder scenes, preflight, play/pause/seek per deck |
 | `transition` | `set_transition_progress`, `cut`, `take`, look and duration |
 | `panic` | Blackout, freeze, stay-tuned slate |

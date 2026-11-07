@@ -91,6 +91,7 @@ QString mcpKindName(SourceDescriptor::Kind kind)
     case K::Shape:     return QStringLiteral("shape");
     case K::AudioFile: return QStringLiteral("audio");
     case K::SvgTemplate: return QStringLiteral("svg_template");
+    case K::Scene:     return QStringLiteral("scene");
     default: break;
     }
     return QStringLiteral("unknown");
@@ -155,6 +156,20 @@ AppController::AppController(QObject *parent)
     m_oscServer = new OscServer(this, this);
     m_mcp = new prism::mcp::McpServer(this, this);
 
+    SourceFactory::setSceneResolver([this](const QString &sceneId) -> std::unique_ptr<MediaSource> {
+        const Scene *target = m_show->scene(sceneId);
+        if (!target)
+            return nullptr;
+        ClipGraph *graph = target->graph();
+        const NodeId producer = graph->outputSingleProducer();
+        if (!producer)
+            return nullptr;
+        const ClipGraph::ResolvedStream stream = graph->evaluateVideoInput(producer);
+        if (stream.layers.isEmpty())
+            return nullptr;
+        return SourceFactory::buildLayerSource(stream.layers.first(), graph, target->runtime());
+    });
+
     m_pushTimer = new QTimer(this);
     m_pushTimer->setSingleShot(true);
     m_pushTimer->setInterval(0);
@@ -189,6 +204,7 @@ AppController::~AppController()
     delete m_sessionManager;
     delete m_deckController;
     delete m_outputHub;
+    SourceFactory::setSceneResolver({});
     delete m_show;
     GraphRuntime::waitForRetiredScripts(2000);
     m_compositor.reset();
@@ -258,6 +274,8 @@ void AppController::connectSignals()
             emit editedGraphChanged();
         }
     });
+    connect(m_show, &ShowManager::sceneAboutToBeRemoved, this, [this]() { m_pushTimer->start(); });
+    connect(m_show, &ShowManager::sceneAdded, this, [this]() { m_pushTimer->start(); });
     connect(m_show, &ShowManager::scenesReset, this, [this]() {
         m_pushTimer->start();
         emit showChanged();
@@ -850,9 +868,14 @@ void AppController::refreshSceneWarnings()
     m_sceneWarnings.clear();
     for (const PreflightIssue &i : runPreflight(false)) {
         QString &w = m_sceneWarnings[i.sceneId];
-        w += (w.isEmpty() ? QString() : QStringLiteral("\n"))
-            + (i.kind == PreflightIssue::Kind::MissingFile ? tr("Missing file: %1") : tr("Missing device: %1"))
-                  .arg(i.detail.isEmpty() ? i.source : i.detail);
+        QString text;
+        switch (i.kind) {
+        case PreflightIssue::Kind::MissingFile: text = tr("Missing file: %1"); break;
+        case PreflightIssue::Kind::MissingDevice: text = tr("Missing device: %1"); break;
+        case PreflightIssue::Kind::MissingScene: text = tr("Missing scene: %1"); break;
+        case PreflightIssue::Kind::SceneCycle: text = tr("Scene loops back into itself: %1"); break;
+        }
+        w += (w.isEmpty() ? QString() : QStringLiteral("\n")) + text.arg(i.detail.isEmpty() ? i.source : i.detail);
     }
     m_show->model()->refresh();
     emit scenesEdited();
@@ -887,6 +910,22 @@ void AppController::enterSceneRelative(int delta)
 }
 void AppController::exitScene() { m_show->exitScene(); }
 
+bool AppController::sceneWouldCycle(const QString &targetId) const
+{
+    return m_show->wouldCreateSceneCycle(m_show->editedSceneId(), targetId);
+}
+
+QVariantList AppController::sceneChoices() const
+{
+    QVariantList out;
+    for (const Scene *scene : m_show->scenes()) {
+        out.append(QVariantMap{{QStringLiteral("id"), scene->id()},
+                               {QStringLiteral("name"), scene->name()},
+                               {QStringLiteral("available"), !sceneWouldCycle(scene->id())}});
+    }
+    return out;
+}
+
 QVariantMap AppController::sceneInfo(const QString &id) const
 {
     const Scene *scene = m_show->scene(id);
@@ -897,7 +936,10 @@ QVariantMap AppController::sceneInfo(const QString &id) const
                      {"autoAdvanceMs", scene->autoAdvanceMs()},
                      {"advanceOnMediaEnd", scene->advanceOnMediaEnd()},
                      {"hotkey", sceneHotkey(id)}, {"warning", m_sceneWarnings.value(id)},
-                     {"live", id == m_show->liveSceneId()}};
+                     {"live", id == m_show->liveSceneId()},
+                     {"thumbnail", scene->thumbnail().isEmpty()
+                                       ? QString()
+                                       : QStringLiteral("image://scenethumb/%1?%2").arg(id).arg(scene->thumbnailRev())}};
     if (scene->incoming())
         info["transition"] = QVariantMap{{"mode", scene->incoming()->mode}, {"durationMs", scene->incoming()->durationMs}};
     else
@@ -1134,7 +1176,8 @@ void AppController::onSceneGraphChanged(Scene *scene)
 {
     if (m_shuttingDown)
         return;
-    if (scene != m_show->liveScene() && scene != m_show->stagingScene())
+    m_show->updateRuntimeActivity();
+    if (!m_show->activeSceneIds(false).contains(scene->id()))
         return;
     m_pushTimer->start();
     if (m_deckController->activeNode(Deck::Live))
@@ -1186,6 +1229,7 @@ void AppController::pushDecks()
     using Layer = ClipGraph::ResolvedLayer;
     using Stream = ClipGraph::ResolvedStream;
 
+    int sceneKeyDepth = 0;
     std::function<QString(const ClipGraph *, const Layer &)> layerKey =
         [&](const ClipGraph *g, const Layer &l) -> QString {
         if (l.composite) {
@@ -1203,11 +1247,26 @@ void AppController::pushDecks()
             return QStringLiteral("%1:?").arg(l.inputNodeId);
         const SourceDescriptor d = g->sourceDescriptor(l.inputNodeId);
         const ClipSettings cs = g->clipSettings(l.inputNodeId);
+        QString nested;
+        if (d.kind == SourceDescriptor::Kind::Scene && sceneKeyDepth < SourceFactory::kMaxSceneDepth) {
+            if (const Scene *target = m_show->scene(d.sceneId)) {
+                const ClipGraph *tg = target->graph();
+                if (const NodeId producer = tg->outputSingleProducer()) {
+                    const Stream ts = tg->evaluateVideoInput(producer);
+                    if (!ts.layers.isEmpty()) {
+                        ++sceneKeyDepth;
+                        nested = layerKey(tg, ts.layers.first());
+                        --sceneKeyDepth;
+                    }
+                }
+            }
+        }
         return QStringLiteral("%1:%2:%3:%4:%5:%6:%7:%8")
             .arg(l.inputNodeId).arg(int(d.kind)).arg(d.path)
             .arg(cs.startTime).arg(cs.endTime).arg(d.captureId)
             .arg(ProcessEffects::sourceEffectsKey(l.sourceEffects))
-            .arg(qHash(d.contentKey()));
+            .arg(qHash(d.contentKey()))
+            + (nested.isEmpty() ? QString() : QStringLiteral("<") + nested + QStringLiteral(">"));
     };
     auto keysOf = [&](const ClipGraph *g, const Stream &s, QString &base, QStringList &ov) {
         base.clear(); ov.clear();
@@ -2016,6 +2075,13 @@ void AppController::cancelPendingSourcePos()
 void AppController::requestAddSource(const QString &kind, qreal x, qreal y)
 {
     m_pendingSourcePos = QPointF(x, y);
+    if (kind == QLatin1String("scene")) {
+        SourceDescriptor desc;
+        desc.kind = SourceDescriptor::Kind::Scene;
+        desc.displayName = tr("Scene");
+        addSourceFromDescriptor(desc, {});
+        return;
+    }
     static const QStringList editorKinds = {QStringLiteral("shader"), QStringLiteral("svgTemplate"),
                                             QStringLiteral("text"), QStringLiteral("shape")};
     if (editorKinds.contains(kind))
@@ -2132,6 +2198,8 @@ QJsonObject AppController::mcpInspect(bool includeClips, bool detail, int sinceR
                     row.insert(QStringLiteral("text"), d.textTemplate);
                 if (!d.svgTemplateId.isEmpty())
                     row.insert(QStringLiteral("template"), d.svgTemplateId);
+                if (!d.sceneId.isEmpty())
+                    row.insert(QStringLiteral("scene"), d.sceneId);
                 if (!d.shaderCode.isEmpty())
                     row.insert(QStringLiteral("shader"), true);
                 row.insert(QStringLiteral("live"), d.isLiveSource());

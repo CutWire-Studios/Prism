@@ -176,7 +176,7 @@ private slots:
                             "canvasWidth": 1280, "canvasHeight": 720, "canvasFill": 0,
                             "shaderCode": "", "obsSceneName": "", "textTemplate": "",
                             "textStyle": "", "shapeStyle": "", "svgTemplateId": "",
-                            "svgParams": "", "webrtcRelayUrl": ""}}
+                            "svgParams": "", "sceneId": "", "webrtcRelayUrl": ""}}
             ],
             "processNodes": [
                 {"id": 2, "posX": 200.5, "posY": 20, "effect": 4, "params": {"direction": 0}}

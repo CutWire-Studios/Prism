@@ -115,6 +115,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Network</source>
         <translation type="unfinished"></translation>
     </message>
@@ -286,6 +290,14 @@ Workflow: catalog, toolbox({name}), apply({ops}).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Missing scene: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Scene loops back into itself: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Clear All</source>
         <translation type="unfinished"></translation>
     </message>
@@ -447,6 +459,10 @@ Another application may already be using the virtual camera, or softcam.dll may 
     </message>
     <message>
         <source>Capture %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Scene</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1094,6 +1110,14 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Default Camera</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Renders another scene&apos;s output here. A scene cannot contain itself, so scenes that would loop back are disabled.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2582,6 +2606,14 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Missing scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Scene loops back into itself</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Missing device</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3016,6 +3048,17 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
     </message>
     <message>
         <source>Could not start the remote control server on port %1. Check whether another application is using the port.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>SceneBody</name>
+    <message>
+        <source>Missing scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No scene</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

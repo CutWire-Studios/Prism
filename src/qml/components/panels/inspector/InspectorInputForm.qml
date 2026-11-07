@@ -17,6 +17,7 @@ InspectorForm {
     readonly property int deck: AppController.activeNodeLive === Number(nodeId) ? 0
                               : AppController.activeNodeStaging === Number(nodeId) ? 1 : -1
 
+    property var sceneChoices: []
     property var cameras: []
     property var ndiSources: []
     property var captureTargets: []
@@ -50,7 +51,13 @@ InspectorForm {
         return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2)
     }
 
+    function refreshSceneChoices() {
+        sceneChoices = AppController.sceneChoices()
+    }
+
     Component.onCompleted: {
+        if (kind === 15)
+            refreshSceneChoices()
         switch (kind) {
         case 0:
         case 12:
@@ -127,6 +134,36 @@ InspectorForm {
                 })
             }
         }
+    }
+
+    StyleFieldRow {
+        Layout.fillWidth: true
+        visible: root.kind === 15
+        label: qsTr("Scene")
+        ThemedComboBox {
+            Layout.fillWidth: true
+            textRole: "name"
+            model: root.sceneChoices
+            currentIndex: {
+                for (let i = 0; i < root.sceneChoices.length; ++i) {
+                    if (root.sceneChoices[i].id === root.source.sceneId)
+                        return i
+                }
+                return -1
+            }
+            onPressedChanged: if (pressed) root.refreshSceneChoices()
+            onActivated: index => {
+                const choice = root.sceneChoices[index]
+                root.setSource({ sceneId: choice.id, displayName: choice.name })
+            }
+        }
+    }
+
+    ThemedLabel {
+        Layout.fillWidth: true
+        visible: root.kind === 15
+        wrapMode: Text.WordWrap
+        text: qsTr("Renders another scene's output here. A scene cannot contain itself, so scenes that would loop back are disabled.")
     }
 
     ThemedLabel {

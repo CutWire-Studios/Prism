@@ -329,6 +329,7 @@ set(SOURCES
     src/core/sources/ShaderSource.cpp
     src/core/sources/EffectSources.cpp
     src/core/sources/LayerCompositorSource.cpp
+    src/core/sources/SceneSource.cpp
     src/core/effects/EffectPassRunner.cpp
     src/core/sources/SvgTemplates.cpp
     src/core/sources/SvgTemplateSource.cpp
@@ -482,6 +483,7 @@ set(HEADERS
     include/core/sources/ShaderSource.h
     include/core/sources/EffectSources.h
     include/core/sources/LayerCompositorSource.h
+    include/core/sources/SceneSource.h
     include/core/effects/EffectPassRunner.h
     include/core/sources/SvgTemplates.h
     include/core/sources/SvgTemplateSource.h

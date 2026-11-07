@@ -11,6 +11,7 @@
 #include "core/sources/SvgTemplateSource.h"
 #include "core/sources/TextSource.h"
 #include "core/sources/LayerCompositorSource.h"
+#include "core/sources/SceneSource.h"
 #include "core/sources/NdiSource.h"
 #include "core/sources/SharedSourcePool.h"
 #ifdef PRISM_HAVE_WEBRTC
@@ -24,6 +25,9 @@
 #include <QCameraDevice>
 
 namespace {
+
+SourceFactory::SceneResolver g_sceneResolver;
+int g_sceneDepth = 0;
 
 std::unique_ptr<MediaSource> screenView(MediaSource::Type type, const std::shared_ptr<ScreenSource> &backend,
                                         const QString &name) {
@@ -57,6 +61,11 @@ std::unique_ptr<MediaSource> sharedScreen(const QString &captureId, const QStrin
 }
 #endif
 
+}
+
+void SourceFactory::setSceneResolver(SceneResolver resolver)
+{
+    g_sceneResolver = std::move(resolver);
 }
 
 std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc) {
@@ -177,6 +186,15 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
         auto src = std::make_unique<SvgTemplateSource>(desc);
         if (!src->isReady()) return nullptr;
         return src;
+    }
+    case Kind::Scene: {
+        std::unique_ptr<MediaSource> content;
+        if (g_sceneResolver && !desc.sceneId.isEmpty() && g_sceneDepth < kMaxSceneDepth) {
+            ++g_sceneDepth;
+            content = g_sceneResolver(desc.sceneId);
+            --g_sceneDepth;
+        }
+        return std::make_unique<SceneSource>(std::move(content), desc.displayName);
     }
     case Kind::Ndi: {
         const QString path = SharedSourcePool::instance().resolve(desc.path);

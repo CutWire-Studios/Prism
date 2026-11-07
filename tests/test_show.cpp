@@ -1,4 +1,5 @@
 #include "app/AppController.h"
+#include "app/graph/GraphRuntime.h"
 #include "app/session/SessionManager.h"
 #include "app/remote/OscProtocol.h"
 #include "app/remote/OscServer.h"
@@ -9,6 +10,7 @@
 #include "app/show/VenueProfile.h"
 #include "app/show/ShowManager.h"
 #include "core/graph/ClipGraph.h"
+#include "core/graph/ClipGraphModels.h"
 #include "core/sources/SourceDescriptor.h"
 
 #include <QtTest>
@@ -45,6 +47,13 @@ QString addClipScene(AppController &app, const QString &path, const QColor &colo
     if (!clip || !app.clipGraph()->connectNodes(clip, app.clipGraph()->outputNodeId()))
         return {};
     return scene;
+}
+
+// Adds a Scene source node pointing at @p target to @p host's graph.
+void addSceneRef(Scene *host, const QString &target)
+{
+    host->graph()->addNode(NT::Input, {}, {{"source", QVariantMap{{"kind", int(SourceDescriptor::Kind::Scene)},
+                                                                  {"sceneId", target}}}});
 }
 
 }  // namespace
@@ -387,6 +396,87 @@ private slots:
         }
         QCOMPARE(files, 1);
         QCOMPARE(devices, 1);
+    }
+
+    void sceneCycleDetection() {
+        ShowManager show;
+        Scene *a = show.addScene(QStringLiteral("A"));
+        Scene *b = show.addScene(QStringLiteral("B"));
+        Scene *c = show.addScene(QStringLiteral("C"));
+        QVERIFY(show.wouldCreateSceneCycle(a->id(), a->id()));
+        QVERIFY(!show.wouldCreateSceneCycle(a->id(), b->id()));
+
+        addSceneRef(a, b->id());
+        QVERIFY(show.wouldCreateSceneCycle(b->id(), a->id()));
+        QVERIFY(!show.wouldCreateSceneCycle(a->id(), b->id()));
+
+        addSceneRef(b, c->id());
+        QVERIFY(show.wouldCreateSceneCycle(c->id(), a->id()));
+        QVERIFY(show.wouldCreateSceneCycle(c->id(), b->id()));
+        QVERIFY(!show.wouldCreateSceneCycle(a->id(), c->id()));
+    }
+
+    void sceneRefValidatorRefusesCycles() {
+        ShowManager show;
+        Scene *a = show.addScene(QStringLiteral("A"));
+        Scene *b = show.addScene(QStringLiteral("B"));
+        addSceneRef(a, b->id());
+        const QVariantMap toA{{"source", QVariantMap{{"kind", int(SourceDescriptor::Kind::Scene)},
+                                                     {"sceneId", a->id()}}}};
+        QCOMPARE(b->controller()->addNode(int(NT::Input), 0, 0, toA), quint64(0));
+        const quint64 own = b->controller()->addNode(int(NT::Input), 0, 0, {{"source", QVariantMap{
+            {"kind", int(SourceDescriptor::Kind::Scene)}}}});
+        QVERIFY(own != 0);
+        QVERIFY(!b->controller()->setParams(own, toA));
+        QVERIFY(b->controller()->setParams(own, {{"source", QVariantMap{
+            {"kind", int(SourceDescriptor::Kind::Scene)}, {"sceneId", QStringLiteral("none")}}}}));
+    }
+
+    void sceneRefsActivateTransitiveClosure() {
+        ShowManager show;
+        Scene *a = show.liveScene();
+        Scene *b = show.addScene(QStringLiteral("B"));
+        Scene *c = show.addScene(QStringLiteral("C"));
+        Scene *d = show.addScene(QStringLiteral("D"));
+        addSceneRef(a, b->id());
+        addSceneRef(b, c->id());
+        show.updateRuntimeActivity();
+        QVERIFY(a->runtime()->isActive());
+        QVERIFY(b->runtime()->isActive());
+        QVERIFY(c->runtime()->isActive());
+        QVERIFY(!d->runtime()->isActive());
+    }
+
+    void loadClearsCyclicSceneRef() {
+        ShowManager show;
+        Scene *a = show.liveScene();
+        Scene *b = show.addScene(QStringLiteral("B"));
+        addSceneRef(a, b->id());
+        addSceneRef(b, a->id());
+
+        ShowManager other;
+        QVERIFY(other.fromJson(show.toJson()));
+        const bool aKept = !other.sceneReferences(a->id()).isEmpty();
+        const bool bKept = !other.sceneReferences(b->id()).isEmpty();
+        QVERIFY(aKept != bKept);
+        QVERIFY(!other.wouldCreateSceneCycle(a->id(), b->id()) || !other.wouldCreateSceneCycle(b->id(), a->id()));
+    }
+
+    void preflightReportsMissingAndCyclicScenes() {
+        ShowManager show;
+        Scene *a = show.liveScene();
+        Scene *b = show.addScene(QStringLiteral("B"));
+        addSceneRef(a, QStringLiteral("deleted"));
+        addSceneRef(a, b->id());
+        addSceneRef(b, a->id());
+        const auto issues = Preflight::run(show, QDir(), {});
+        int missing = 0, cycles = 0;
+        for (const PreflightIssue &i : issues) {
+            missing += i.kind == PreflightIssue::Kind::MissingScene;
+            cycles += i.kind == PreflightIssue::Kind::SceneCycle;
+        }
+        QCOMPARE(missing, 1);
+        QCOMPARE(cycles, 2);
     }
 
     void stageRelativeStepsFromLiveScene() {

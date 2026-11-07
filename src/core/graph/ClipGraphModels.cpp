@@ -336,7 +336,16 @@ void ClipGraphController::pushSnapshot(const QString &text, const QJsonObject &b
     m_undo.push(new SnapshotCommand(m_graph, text, before, after));
 }
 
+bool ClipGraphController::sceneRefAllowed(const QVariantMap &params) const {
+    if (!m_sceneRefValidator) return true;
+    const QVariantMap source = params.value("source").toMap();
+    if (source.value("kind").toInt() != int(SourceDescriptor::Kind::Scene)) return true;
+    const QString sceneId = source.value("sceneId").toString();
+    return sceneId.isEmpty() || m_sceneRefValidator(sceneId);
+}
+
 quint64 ClipGraphController::addNode(int type, qreal x, qreal y, const QVariantMap &params) {
+    if (!sceneRefAllowed(params)) return 0;
     const QJsonObject before = m_graph->toJson();
     const NodeId id = m_graph->addNode(ClipGraph::NodeType(type), QPointF(x, y), params);
     if (id != 0) pushSnapshot(QStringLiteral("Add node"), before);
@@ -364,6 +373,7 @@ void ClipGraphController::endMove() {
 bool ClipGraphController::setParams(quint64 id, const QVariantMap &params, bool coalesce) {
     const ClipGraph::Node *n = m_graph->node(id);
     if (!n) return false;
+    if (!sceneRefAllowed(params)) return false;
     QVariantMap next = n->params;
     for (auto it = params.begin(); it != params.end(); ++it)
         next.insert(it.key(), it.value());
@@ -437,6 +447,7 @@ bool ClipGraphController::canInsertIntoEdge(quint64 node, quint64 edgeId) const 
 
 quint64 ClipGraphController::addNodeIntoEdge(int type, qreal x, qreal y, const QVariantMap &params,
                                              quint64 edgeId) {
+    if (!sceneRefAllowed(params)) return 0;
     const QJsonObject before = m_graph->toJson();
     const NodeId id = m_graph->addNode(ClipGraph::NodeType(type), QPointF(x, y), params);
     if (id != 0 && edgeId != 0) m_graph->insertIntoEdge(id, edgeId);

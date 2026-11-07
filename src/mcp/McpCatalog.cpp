@@ -8,7 +8,8 @@ const QStringList kSourceKinds = {
     QStringLiteral("video"),     QStringLiteral("image"),  QStringLiteral("audio"),
     QStringLiteral("slideshow"), QStringLiteral("camera"), QStringLiteral("canvas"),
     QStringLiteral("shader"),    QStringLiteral("text"),   QStringLiteral("shape"),
-    QStringLiteral("svg_template"), QStringLiteral("ndi")};
+    QStringLiteral("svg_template"), QStringLiteral("ndi"),
+    QStringLiteral("scene")};
 
 const QStringList kPanicModes = {QStringLiteral("none"), QStringLiteral("blackout"),
                                  QStringLiteral("freeze"), QStringLiteral("stay_tuned")};
@@ -78,7 +79,8 @@ const QList<Op> &ops()
          "Add a non-file source. kind is required. Extra fields depend on kind: "
          "text needs text; svg_template needs template (built-in id or .svg path) and optional params; shader needs code (a default gradient is used if "
          "omitted); camera uses camera/index; slideshow needs path (folder); canvas uses "
-         "w/h/fill/color; ndi needs ndi (sender name from list_ndi_sources). Returns {id, name, kind}.",
+         "w/h/fill/color; ndi needs ndi (sender name from list_ndi_sources); scene needs scene (id or 1-based "
+         "position) and fails if that scene would contain itself. Returns {id, name, kind}.",
          objectSchema({{QStringLiteral("kind"),
                         enumProp(QStringLiteral("Source kind"), kSourceKinds)},
                        {QStringLiteral("name"), stringProp(QStringLiteral("Display name"))},
@@ -98,6 +100,8 @@ const QList<Op> &ops()
                         integerProp(QStringLiteral("camera kind: 0-based index if camera id omitted"))},
                        {QStringLiteral("ndi"),
                         stringProp(QStringLiteral("ndi kind: sender name from list_ndi_sources"))},
+                       {QStringLiteral("scene"),
+                        stringProp(QStringLiteral("scene kind: scene id from list_scenes, or its 1-based position"))},
                        {QStringLiteral("w"), integerProp(QStringLiteral("canvas kind: width px (default 1280)"))},
                        {QStringLiteral("h"), integerProp(QStringLiteral("canvas kind: height px (default 720)"))},
                        {QStringLiteral("fill"),
@@ -137,6 +141,13 @@ const QList<Op> &ops()
                                  {{QStringLiteral("code"),
                                    stringProp(QStringLiteral("GLSL fragment shader"))}}),
                       {QStringLiteral("clip"), QStringLiteral("code")})},
+
+        {"set_scene_source", "sources", "Point a scene source at another scene",
+         "Retarget a scene-kind clip to another scene (the scene is rendered inside the edited scene). "
+         "Fails type_mismatch if the clip is not kind scene, and bad_args if the target would create "
+         "a cycle (a scene containing itself, directly or through other scenes).",
+         objectSchema(mergeProps(clipRefProps(), sceneRefProps()),
+                      {QStringLiteral("clip"), QStringLiteral("scene")})},
 
         {"list_scenes", "decks", "See the scene list",
          "List the show's scenes. Returns {scenes:[{id, index, name, live, staging, edited, endAction, "
@@ -199,7 +210,7 @@ const QList<Op> &ops()
                        {QStringLiteral("durationMs"), integerProp(QStringLiteral("Duration in milliseconds"))}},
                       {QStringLiteral("mode"), QStringLiteral("durationMs")})},
         {"preflight", "decks", "Check the show for missing media",
-         "Scan every scene for missing files and devices. Returns {issues:[{kind: missing_file|missing_device, "
+         "Scan every scene for missing files, devices and scene references. Returns {issues:[{kind: missing_file|missing_device|missing_scene|scene_cycle, "
          "sceneId, scene, source, detail}]}.",
          objectSchema({}), true, false, true},
         {"play", "decks", "Play a deck", "Start playback on the Live or Staging deck.",

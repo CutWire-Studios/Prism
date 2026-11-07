@@ -3,7 +3,9 @@
 #include <QJsonObject>
 #include <QList>
 #include <QObject>
+#include <QSet>
 #include <QString>
+#include <QStringList>
 #include <memory>
 
 #include "app/show/Scene.h"
@@ -60,6 +62,16 @@ public:
 
     /// The scene whose graph owns @p nodeId (ids are unique across scenes).
     Scene *sceneForNode(quint64 nodeId) const;
+
+    // ── Scene references ─────────────────────────────────────────────────────
+    /// Ids named by the Scene source nodes of scene @p id (unknown ids included).
+    QStringList sceneReferences(const QString &id) const;
+    /// True when a Scene node in @p host pointing at @p target would make @p host contain itself,
+    /// directly (host == target) or through other scenes.
+    bool wouldCreateSceneCycle(const QString &host, const QString &target) const;
+    /// Live, Staging and (with @p includeEdited) the edited scene, plus every scene reachable from
+    /// them through Scene nodes.
+    QSet<QString> activeSceneIds(bool includeEdited = true) const;
 
     // ── Editing ──────────────────────────────────────────────────────────────
     /// Makes @p id the edited scene and enters it.

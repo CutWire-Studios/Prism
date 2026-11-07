@@ -34,6 +34,7 @@ public:
     static std::shared_ptr<NodeThumbStore> createThumbStore();
     /// An inactive runtime stops polling and pauses its Lua scripts and expressions; activating restarts them.
     void setActive(bool active);
+    bool isActive() const;
     ~GraphRuntime() override;
 
     ClipGraph *graph() const { return m_graph; }

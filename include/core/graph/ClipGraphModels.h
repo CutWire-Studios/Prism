@@ -7,6 +7,7 @@
 #include <QVariantList>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
+#include <functional>
 
 #include "core/graph/ClipGraph.h"
 
@@ -113,6 +114,9 @@ public:
     /// Undoable replacement of an Input node's source; descriptor uses the .psm "source" keys.
     Q_INVOKABLE bool setSource(quint64 id, const QVariantMap &descriptor);
     bool setSourceDescriptor(quint64 id, const SourceDescriptor &desc);
+    /// Decides whether a Scene source of this graph may point at the given scene id; setParams and
+    /// addNode refuse a "source" naming a scene it rejects.
+    void setSceneRefValidator(std::function<bool(const QString &)> validator) { m_sceneRefValidator = std::move(validator); }
 
     Q_INVOKABLE bool beginConnection(quint64 node, bool isOutput, int port);
     Q_INVOKABLE bool canConnect(quint64 node, bool isOutput, int port) const;
@@ -163,6 +167,7 @@ private:
     };
 
     void init();
+    bool sceneRefAllowed(const QVariantMap &params) const;
     void pushSnapshot(const QString &text, const QJsonObject &before);
     QVariantList pasteDocument(const QJsonObject &clip, const QPointF &delta, const QString &text);
 
@@ -175,4 +180,5 @@ private:
     QJsonObject m_clipboard;
     bool m_mergeMoves = false;
     int m_revision = 0;
+    std::function<bool(const QString &)> m_sceneRefValidator;
 };

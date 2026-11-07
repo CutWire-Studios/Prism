@@ -30,6 +30,7 @@ struct SourceDescriptor {
         AudioFile, // audio-only media file — path = file path
         Shape,  // CPU-rendered vector shape — shapeStyleJson field
         SvgTemplate, // SVG with {token} placeholders — svgTemplateId / svgParamsJson
+        Scene,  // another scene's final composite — sceneId
     };
 
     Kind    kind    = Kind::VideoFile;
@@ -56,6 +57,7 @@ struct SourceDescriptor {
     QString shapeStyleJson;             // Shape kind — serialized prism::ShapeStyle
     QString svgTemplateId;              // SvgTemplate kind — built-in id, or path of a custom SVG file
     QString svgParamsJson;              // SvgTemplate kind — JSON object of the user's param overrides
+    QString sceneId;                    // Scene kind — id of the scene rendered by this source
 
     // Descriptor-held content that defines the rendered output (as opposed to
     // on-disk content referenced by `path`). Deck reuse keys include a hash of
@@ -63,7 +65,7 @@ struct SourceDescriptor {
     // reloads any deck currently showing the source.
     QString contentKey() const {
         return QStringList{
-            shaderCode, textTemplate, textStyleJson, shapeStyleJson, svgTemplateId, svgParamsJson,
+            shaderCode, textTemplate, textStyleJson, shapeStyleJson, svgTemplateId, svgParamsJson, sceneId,
             QString::number(color.rgba()),
             QString::number(cameraIndex),
             QString::number(screenIndex),
@@ -82,7 +84,8 @@ struct SourceDescriptor {
                kind == Kind::Canvas || kind == Kind::Window ||
                kind == Kind::Shader ||
                kind == Kind::Ndi || kind == Kind::WebRtc ||
-               kind == Kind::Text || kind == Kind::Shape || kind == Kind::SvgTemplate;
+               kind == Kind::Text || kind == Kind::Shape || kind == Kind::SvgTemplate ||
+               kind == Kind::Scene;
     }
     bool isFileSource() const {
         return kind == Kind::VideoFile || kind == Kind::Image || kind == Kind::Slideshow
@@ -107,7 +110,7 @@ struct SourceDescriptor {
     /// Play/pause is meaningful (static images and canvases have no motion;
     /// live sources freeze on the current frame).
     bool isPausable() const {
-        return kind != Kind::Image && kind != Kind::Canvas;
+        return kind != Kind::Image && kind != Kind::Canvas && kind != Kind::Scene;
     }
     /// Playback rate can be changed.
     bool hasSpeedControl() const {

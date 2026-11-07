@@ -273,6 +273,10 @@ public:
     Q_INVOKABLE void exitScene();
     /// {id, name, color, notes, transition:{mode,durationMs}|null, endAction, autoAdvanceMs, advanceOnMediaEnd}.
     Q_INVOKABLE QVariantMap sceneInfo(const QString &id) const;
+    /// True when a Scene node in the edited scene pointing at @p targetId would make that scene contain itself.
+    Q_INVOKABLE bool sceneWouldCycle(const QString &targetId) const;
+    /// Every scene as {id, name, available}; available is false for cyclic targets (the scene picker greys them out).
+    Q_INVOKABLE QVariantList sceneChoices() const;
     /// Applies the keys present in @p props (same names as sceneInfo; transition null clears the override).
     Q_INVOKABLE void setSceneProps(const QString &id, const QVariantMap &props);
     /// The @p deck arguments below are int(Deck): 0 = Live, 1 = Staging.

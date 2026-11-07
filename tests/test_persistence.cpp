@@ -305,6 +305,25 @@ private slots:
         QCOMPARE(nodeSource["path"].toString(), QStringLiteral("media/pic.png"));
     }
 
+    void sceneSourceNodeRoundTrips() {
+        ShowManager show;
+        Scene *outer = show.liveScene();
+        Scene *inner = show.addScene(QStringLiteral("Inner"));
+        SourceDescriptor desc;
+        desc.kind = SourceDescriptor::Kind::Scene;
+        desc.sceneId = inner->id();
+        desc.displayName = QStringLiteral("Inner");
+        const NodeId node = outer->graph()->addInputNode(desc);
+        QVERIFY(node != 0);
+
+        ShowManager loaded;
+        QVERIFY(loaded.fromJson(show.toJson()));
+        const SourceDescriptor back = loaded.scene(outer->id())->graph()->sourceDescriptor(node);
+        QCOMPARE(back.kind, SourceDescriptor::Kind::Scene);
+        QCOMPARE(back.sceneId, inner->id());
+        QCOMPARE(back.displayName, QStringLiteral("Inner"));
+    }
+
     void sessionManager_recoveryAndBackups() {
         SessionManager::markCleanExit();
         if (QFile::exists(SessionManager::lockFilePath())) {

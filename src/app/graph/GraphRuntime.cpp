@@ -122,6 +122,7 @@ QImage generateThumbnail(const SourceDescriptor &desc) {
     case K::SvgTemplate:
         return ThumbHelper::makeSvgTemplateThumb(desc);
     case K::AudioFile:
+    case K::Scene:
         break;
     }
     return {};
@@ -901,6 +902,10 @@ int GraphRuntime::thumbnailRevision(NodeId id) const {
 
 QQuickImageProvider *GraphRuntime::createImageProvider(std::shared_ptr<NodeThumbStore> thumbs) {
     return new NodeThumbProvider(std::move(thumbs));
+}
+
+bool GraphRuntime::isActive() const {
+    return d->active;
 }
 
 void GraphRuntime::setActive(bool active) {

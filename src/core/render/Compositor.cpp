@@ -724,7 +724,7 @@ void Compositor::setSourceLive(std::unique_ptr<MediaSource> source) {
         setupTextureGL(m_textureLive, m_sourceLive->frameSize());
         const bool primed = m_sourceLive->nextFrame();
         m_pendingFrameLive = !primed && m_sourceLive->type() == MediaSource::Type::VideoFile;
-        if (primed) {
+        if (primed || m_sourceLive->isReady()) {
             // nextFrame() may switch GL contexts internally (e.g. DynamicInterfaceSource
             // creates its own context for offscreen QML rendering). Re-assert ours.
             m_ctx->makeCurrent(m_surface.get());
@@ -755,7 +755,7 @@ void Compositor::setSourceStaging(std::unique_ptr<MediaSource> source) {
         setupTextureGL(m_textureStaging, m_sourceStaging->frameSize());
         const bool primed = m_sourceStaging->nextFrame();
         m_pendingFrameStaging = !primed && m_sourceStaging->type() == MediaSource::Type::VideoFile;
-        if (primed) {
+        if (primed || m_sourceStaging->isReady()) {
             m_ctx->makeCurrent(m_surface.get());
             uploadSourceFrameGL(m_textureStaging, m_sourceStaging.get());
         }

@@ -1,4 +1,9 @@
+#include "app/graph/GraphRuntime.h"
+#include "app/mainwindow/SourceFactory.h"
+#include "app/show/ShowManager.h"
 #include "app/transitions/TransitionController.h"
+#include "core/graph/ClipGraph.h"
+#include "core/sources/SourceDescriptor.h"
 #include "core/render/Compositor.h"
 #include "core/sources/CameraSource.h"
 #include "core/sources/CanvasSource.h"
@@ -7,6 +12,7 @@
 #include <cmath>
 #include <QMediaDevices>
 #include <QPainter>
+#include <QScopeGuard>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -49,6 +55,79 @@ private slots:
         const QColor bottom = frame.pixelColor(frame.width() / 2, frame.height() - 5);
         QVERIFY2(top.red() > 200 && top.blue() < 50, qPrintable(top.name()));
         QVERIFY2(bottom.blue() > 200 && bottom.red() < 50, qPrintable(bottom.name()));
+    }
+
+    void sceneSource_rendersNestedSceneThroughSceneNode() {
+        ShowManager show;
+        Compositor comp;
+        if (!comp.glAvailable())
+            QSKIP("No OpenGL context available in this environment");
+
+        Scene *inner = show.addScene(QStringLiteral("Inner"));
+        Scene *outer = show.addScene(QStringLiteral("Outer"));
+
+        SourceDescriptor solid;
+        solid.kind = SourceDescriptor::Kind::Canvas;
+        solid.canvasFill = SourceDescriptor::CanvasFill::Color;
+        solid.color = Qt::red;
+        const NodeId solidNode = inner->graph()->addInputNode(solid);
+        QVERIFY(inner->graph()->connectNodes(solidNode, inner->graph()->outputNodeId()));
+
+        SourceDescriptor ref;
+        ref.kind = SourceDescriptor::Kind::Scene;
+        ref.sceneId = inner->id();
+        const NodeId refNode = outer->graph()->addInputNode(ref);
+        QVERIFY(outer->graph()->connectNodes(refNode, outer->graph()->outputNodeId()));
+
+        SourceFactory::setSceneResolver([&show](const QString &id) -> std::unique_ptr<MediaSource> {
+            const Scene *target = show.scene(id);
+            if (!target)
+                return nullptr;
+            ClipGraph *g = target->graph();
+            const ClipGraph::ResolvedStream stream = g->evaluateVideoInput(g->outputSingleProducer());
+            if (stream.layers.isEmpty())
+                return nullptr;
+            return SourceFactory::buildLayerSource(stream.layers.first(), g, target->runtime());
+        });
+        const auto resetResolver = qScopeGuard([] { SourceFactory::setSceneResolver({}); });
+
+        const ClipGraph::ResolvedStream stream =
+            outer->graph()->evaluateVideoInput(outer->graph()->outputSingleProducer());
+        QCOMPARE(stream.layers.size(), 1);
+        auto src = SourceFactory::buildLayerSource(stream.layers.first(), outer->graph(), outer->runtime());
+        QVERIFY(src);
+        QVERIFY(src->isReady());
+
+        comp.setProgramFrameConsumerCount(1);
+        comp.setSourceLive(std::move(src));
+        comp.playLive();
+        comp.setCrossfade(0.f);
+
+        QSignalSpy spy(&comp, &Compositor::frameReady);
+        QTRY_VERIFY_WITH_TIMEOUT(spy.count() > 1, 2000);
+
+        const QImage frame = comp.programFrame();
+        QVERIFY(!frame.isNull());
+        const QColor centre = frame.pixelColor(frame.width() / 2, frame.height() / 2);
+        QVERIFY2(centre.red() > 200 && centre.green() < 50 && centre.blue() < 50, qPrintable(centre.name()));
+    }
+
+    void sceneSource_deletedSceneRendersEmpty() {
+        ShowManager show;
+        Scene *outer = show.addScene(QStringLiteral("Outer"));
+        SourceDescriptor ref;
+        ref.kind = SourceDescriptor::Kind::Scene;
+        ref.sceneId = QStringLiteral("gone");
+        const NodeId refNode = outer->graph()->addInputNode(ref);
+        SourceFactory::setSceneResolver([](const QString &) -> std::unique_ptr<MediaSource> { return nullptr; });
+        const auto resetResolver = qScopeGuard([] { SourceFactory::setSceneResolver({}); });
+
+        auto src = SourceFactory::create(outer->graph()->sourceDescriptor(refNode));
+        QVERIFY(src);
+        QVERIFY(src->isReady());
+        QVERIFY(src->hasAlpha());
+        QVERIFY(!src->nextFrame());
+        QCOMPARE(src->frameData()[3], uint8_t(0));
     }
 
     void noConsumers_noReadback() {

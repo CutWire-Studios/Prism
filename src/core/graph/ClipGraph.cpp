@@ -135,6 +135,7 @@ QJsonObject descriptorToJson(const SourceDescriptor &d) {
     o["shapeStyle"]         = d.shapeStyleJson;
     o["svgTemplateId"]      = d.svgTemplateId;
     o["svgParams"]          = d.svgParamsJson;
+    o["sceneId"]            = d.sceneId;
     o["webrtcRelayUrl"]     = d.webrtcRelayUrl;
     return o;
 }
@@ -167,6 +168,7 @@ SourceDescriptor descriptorFromJson(const QJsonObject &o) {
     d.shapeStyleJson     = o["shapeStyle"].toString();
     d.svgTemplateId      = o["svgTemplateId"].toString();
     d.svgParamsJson      = o["svgParams"].toString();
+    d.sceneId            = o["sceneId"].toString();
     d.webrtcRelayUrl     = o["webrtcRelayUrl"].toString();
     return d;
 }
@@ -200,6 +202,7 @@ QString sourceKindName(int kind) {
     case K::Text:      return QStringLiteral("text");
     case K::Shape:     return QStringLiteral("shape");
     case K::SvgTemplate: return QStringLiteral("svg_template");
+    case K::Scene:     return QStringLiteral("scene");
     default: break;
     }
     return QStringLiteral("unknown");

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include "core/sources/MediaSource.h"
 #include "core/sources/SourceDescriptor.h"
@@ -13,6 +14,13 @@
 class SourceFactory {
 public:
     SourceFactory() = delete;
+
+    /// Builds the final composite of a scene as a source; null when the scene is missing or empty.
+    /// The app installs it so Scene sources can reach the show without core depending on it.
+    using SceneResolver = std::function<std::unique_ptr<MediaSource>(const QString &sceneId)>;
+    static void setSceneResolver(SceneResolver resolver);
+    /// Scene sources nested deeper than this render empty.
+    static constexpr int kMaxSceneDepth = 4;
 
     /// Create a ready-to-play MediaSource from a descriptor.
     /// Returns nullptr if the descriptor cannot produce a source

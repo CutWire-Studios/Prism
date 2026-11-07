@@ -241,6 +241,7 @@ Item {
     }
 
     Component { id: inputBody; InputBody { node: root } }
+    Component { id: sceneBody; SceneBody { node: root } }
     Component { id: processBody; ProcessBody { node: root } }
     Component { id: audioEffectBody; AudioEffectBody { node: root } }
     Component { id: layerBody; LayerBody { node: root } }
@@ -256,7 +257,8 @@ Item {
         anchors.fill: parent
         sourceComponent: {
             switch (root.type) {
-            case NodePalette.nodeType.Input: return inputBody
+            case NodePalette.nodeType.Input:
+                return root.params.source && root.params.source.kind === 15 ? sceneBody : inputBody
             case NodePalette.nodeType.Process: return processBody
             case NodePalette.nodeType.AudioEffect: return audioEffectBody
             case NodePalette.nodeType.Layer: return layerBody

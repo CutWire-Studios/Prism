@@ -50,7 +50,10 @@ ThemedDialog {
                         width: issueColumn.width
                         wrapMode: Text.WordWrap
                         tone: "default"
-                        text: (issue.modelData.kind === "missing_file" ? qsTr("Missing file") : qsTr("Missing device"))
+                        text: (issue.modelData.kind === "missing_file" ? qsTr("Missing file")
+                               : issue.modelData.kind === "missing_scene" ? qsTr("Missing scene")
+                               : issue.modelData.kind === "scene_cycle" ? qsTr("Scene loops back into itself")
+                               : qsTr("Missing device"))
                               + " - " + issue.modelData.scene + " / " + issue.modelData.source + "\n" + issue.modelData.detail
                     }
                 }

@@ -12,8 +12,14 @@
 
 QJsonObject PreflightIssue::toJson() const
 {
-    return {{QStringLiteral("kind"), kind == Kind::MissingFile ? QStringLiteral("missing_file")
-                                                                : QStringLiteral("missing_device")},
+    QString kindName;
+    switch (kind) {
+    case Kind::MissingFile: kindName = QStringLiteral("missing_file"); break;
+    case Kind::MissingDevice: kindName = QStringLiteral("missing_device"); break;
+    case Kind::MissingScene: kindName = QStringLiteral("missing_scene"); break;
+    case Kind::SceneCycle: kindName = QStringLiteral("scene_cycle"); break;
+    }
+    return {{QStringLiteral("kind"), kindName},
             {QStringLiteral("sceneId"), sceneId},
             {QStringLiteral("scene"), sceneName},
             {QStringLiteral("source"), source},
@@ -49,6 +55,20 @@ QList<PreflightIssue> Preflight::run(const ShowManager &show, const QDir &sessio
             issue.sceneId = scene->id();
             issue.sceneName = scene->name();
             issue.source = g->sourceName(id);
+            if (desc.kind == Kind::Scene) {
+                if (desc.sceneId.isEmpty())
+                    continue;
+                if (!show.scene(desc.sceneId)) {
+                    issue.kind = PreflightIssue::Kind::MissingScene;
+                    issue.detail = desc.displayName.isEmpty() ? desc.sceneId : desc.displayName;
+                    issues.append(issue);
+                } else if (show.wouldCreateSceneCycle(scene->id(), desc.sceneId)) {
+                    issue.kind = PreflightIssue::Kind::SceneCycle;
+                    issue.detail = show.scene(desc.sceneId)->name();
+                    issues.append(issue);
+                }
+                continue;
+            }
             if (desc.isFileSource() && !desc.path.isEmpty()) {
                 const QString resolved = AssetPathResolver::resolvePath(desc.path, opts, desc.kind == Kind::Slideshow);
                 const QFileInfo fi(resolved);

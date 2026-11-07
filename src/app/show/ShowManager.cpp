@@ -3,7 +3,9 @@
 #include "app/graph/GraphRuntime.h"
 #include "app/show/SceneListModel.h"
 #include "core/graph/ClipGraph.h"
+#include "core/graph/ClipGraphModels.h"
 
+#include <QDebug>
 #include <QJsonArray>
 #include <QTimer>
 #include <QUndoCommand>
@@ -41,6 +43,65 @@ QJsonObject shiftIds(QJsonObject graph, qint64 delta)
         }
     }
     return graph;
+}
+
+QStringList sceneRefsOf(const Scene *scene)
+{
+    QStringList refs;
+    const ClipGraph *g = scene->graph();
+    for (const NodeId id : g->nodeIdsOfType(ClipGraph::NodeType::Input)) {
+        const SourceDescriptor d = g->sourceDescriptor(id);
+        if (d.kind == SourceDescriptor::Kind::Scene && !d.sceneId.isEmpty())
+            refs.append(d.sceneId);
+    }
+    return refs;
+}
+
+const Scene *findScene(const QList<Scene *> &scenes, const QString &id)
+{
+    for (const Scene *c : scenes) {
+        if (c->id() == id)
+            return c;
+    }
+    return nullptr;
+}
+
+/// True when @p goal is reachable from @p from (inclusive) through Scene nodes.
+bool reaches(const QList<Scene *> &scenes, const QString &from, const QString &goal)
+{
+    QSet<QString> seen;
+    QStringList stack{from};
+    while (!stack.isEmpty()) {
+        const QString id = stack.takeLast();
+        if (id == goal)
+            return true;
+        if (seen.contains(id))
+            continue;
+        seen.insert(id);
+        if (const Scene *c = findScene(scenes, id))
+            stack.append(sceneRefsOf(c));
+    }
+    return false;
+}
+
+/// Clears the Scene nodes whose target leads back to their own scene; returns how many.
+int breakSceneCycles(const QList<Scene *> &scenes)
+{
+    int cleared = 0;
+    for (Scene *c : scenes) {
+        ClipGraph *g = c->graph();
+        for (const NodeId id : g->nodeIdsOfType(ClipGraph::NodeType::Input)) {
+            SourceDescriptor d = g->sourceDescriptor(id);
+            if (d.kind != SourceDescriptor::Kind::Scene || d.sceneId.isEmpty() || !reaches(scenes, d.sceneId, c->id()))
+                continue;
+            qWarning().noquote() << "Scene" << c->name() << "node" << id << "referenced scene" << d.sceneId
+                                 << "which contains it; reference cleared";
+            d.sceneId.clear();
+            g->setSourceDescriptor(id, d);
+            ++cleared;
+        }
+    }
+    return cleared;
 }
 
 } // namespace
@@ -171,6 +232,8 @@ Scene *ShowManager::makeScene(const QString &id, int serial, bool withDefaults)
 {
     auto *c = new Scene(id, serial, m_thumbs, withDefaults, this);
     c->graph()->setOutputCanvasSize(m_canvasW, m_canvasH);
+    c->controller()->setSceneRefValidator(
+        [this, id](const QString &target) { return !wouldCreateSceneCycle(id, target); });
     connect(c, &Scene::metaChanged, this, &ShowManager::changed);
     connect(c, &Scene::metaChanged, this, [this, c] { emit sceneMetaChanged(c); });
     connect(c, &Scene::thumbnailChanged, this, &ShowManager::thumbnailChanged);
@@ -414,13 +477,39 @@ QQuickImageProvider *ShowManager::createImageProvider() const
     return GraphRuntime::createImageProvider(m_thumbs);
 }
 
+QStringList ShowManager::sceneReferences(const QString &id) const
+{
+    const Scene *c = scene(id);
+    return c ? sceneRefsOf(c) : QStringList();
+}
+
+bool ShowManager::wouldCreateSceneCycle(const QString &host, const QString &target) const
+{
+    return reaches(m_scenes, target, host);
+}
+
+QSet<QString> ShowManager::activeSceneIds(bool includeEdited) const
+{
+    QSet<QString> active;
+    QStringList stack{m_liveId, m_stagingId};
+    if (includeEdited && m_inScene)
+        stack.append(m_editedId);
+    while (!stack.isEmpty()) {
+        const QString id = stack.takeLast();
+        const Scene *c = id.isEmpty() ? nullptr : scene(id);
+        if (!c || active.contains(id))
+            continue;
+        active.insert(id);
+        stack.append(sceneRefsOf(c));
+    }
+    return active;
+}
+
 void ShowManager::updateRuntimeActivity()
 {
-    for (Scene *c : std::as_const(m_scenes)) {
-        const bool active = c->id() == m_liveId || c->id() == m_stagingId
-            || (m_inScene && c->id() == m_editedId);
-        c->runtime()->setActive(active);
-    }
+    const QSet<QString> active = activeSceneIds();
+    for (Scene *c : std::as_const(m_scenes))
+        c->runtime()->setActive(active.contains(c->id()));
 }
 
 QJsonObject ShowManager::toJson() const
@@ -473,6 +562,8 @@ bool ShowManager::fromJson(const QJsonObject &root)
         reset();
         return false;
     }
+
+    breakSceneCycles(loaded);
 
     m_undo->clear();
     for (Scene *c : std::as_const(m_scenes))

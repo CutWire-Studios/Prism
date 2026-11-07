@@ -69,6 +69,8 @@ bool jsonBool(const QJsonValue &v, bool fallback = false)
     return fallback;
 }
 
+Scene *resolveScene(AppController *w, const QJsonObject &args, QJsonObject *error);
+
 QString kindName(SourceDescriptor::Kind kind)
 {
     using K = SourceDescriptor::Kind;
@@ -87,6 +89,7 @@ QString kindName(SourceDescriptor::Kind kind)
     case K::Shape:      return QStringLiteral("shape");
     case K::AudioFile:  return QStringLiteral("audio");
     case K::SvgTemplate: return QStringLiteral("svg_template");
+    case K::Scene:      return QStringLiteral("scene");
     }
     return QStringLiteral("unknown");
 }
@@ -117,6 +120,8 @@ bool parseKind(const QString &name, SourceDescriptor::Kind *out)
         *out = K::Shape;
     else if (k == QLatin1String("ndi"))
         *out = K::Ndi;
+    else if (k == QLatin1String("scene"))
+        *out = K::Scene;
     else
         return false;
     return true;
@@ -260,6 +265,8 @@ QJsonObject McpDispatcher::applyOne(const QString &tool, const QJsonObject &args
         return opSetSvgParams(args);
     if (tool == QLatin1String("set_shader"))
         return opSetShader(args);
+    if (tool == QLatin1String("set_scene_source"))
+        return opSetSceneSource(args);
     if (tool == QLatin1String("list_scenes"))
         return opListScenes();
     if (tool == QLatin1String("stage_scene"))
@@ -633,6 +640,19 @@ QJsonObject McpDispatcher::opAddSource(const QJsonObject &args)
             desc.displayName = ndi;
         break;
     }
+    case SourceDescriptor::Kind::Scene: {
+        QJsonObject error;
+        const Scene *target = resolveScene(m_window, args, &error);
+        if (!target)
+            return error;
+        const ShowManager *show = m_window->showManager();
+        if (show->wouldCreateSceneCycle(show->editedSceneId(), target->id()))
+            return err("bad_args", QStringLiteral("Scene %1 would contain itself").arg(target->name()));
+        desc.sceneId = target->id();
+        if (desc.displayName.isEmpty())
+            desc.displayName = target->name();
+        break;
+    }
     default:
         return err("bad_args", QStringLiteral("Unsupported kind: %1").arg(kindStr));
     }
@@ -719,6 +739,28 @@ QJsonObject McpDispatcher::opSetShader(const QJsonObject &args)
     SourceDescriptor desc = m_window->clipGraph()->sourceDescriptor(node);
     desc.shaderCode = args.value(QStringLiteral("code")).toString();
     if (!m_window->mcpUpdateSource(node, desc, thumbFor(desc)))
+        return err("not_found");
+    return clipOk(m_window->clipGraph(), node);
+}
+
+QJsonObject McpDispatcher::opSetSceneSource(const QJsonObject &args)
+{
+    QJsonObject error;
+    const NodeId node = resolveClip(m_window, args, &error);
+    if (!node)
+        return error;
+    if (m_window->clipGraph()->sourceDescriptor(node).kind != SourceDescriptor::Kind::Scene)
+        return err("type_mismatch", QStringLiteral("Clip is not a scene source"));
+    const Scene *target = resolveScene(m_window, args, &error);
+    if (!target)
+        return error;
+    const ShowManager *show = m_window->showManager();
+    if (show->wouldCreateSceneCycle(show->editedSceneId(), target->id()))
+        return err("bad_args", QStringLiteral("Scene %1 would contain itself").arg(target->name()));
+    SourceDescriptor desc = m_window->clipGraph()->sourceDescriptor(node);
+    desc.sceneId = target->id();
+    desc.displayName = target->name();
+    if (!m_window->mcpUpdateSource(node, desc, {}))
         return err("not_found");
     return clipOk(m_window->clipGraph(), node);
 }

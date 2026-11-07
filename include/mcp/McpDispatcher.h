@@ -31,6 +31,7 @@ private:
     QJsonObject opSetText(const QJsonObject &args);
     QJsonObject opSetSvgParams(const QJsonObject &args);
     QJsonObject opSetShader(const QJsonObject &args);
+    QJsonObject opSetSceneSource(const QJsonObject &args);
     static bool parseDeck(const QJsonObject &args, Deck &deck, QJsonObject *error);
     QJsonObject opListScenes() const;
     QJsonObject opStageScene(const QJsonObject &args);
