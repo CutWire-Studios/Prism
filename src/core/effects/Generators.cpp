@@ -44,33 +44,40 @@ QList<ShaderGeneratorSpec> load() {
     return out;
 }
 
-QByteArray number(double v) {
-    return QByteArray::number(v, 'f', 6);
-}
-
-QByteArray constantFor(const ShaderParam &p, const QJsonValue &v) {
+QJsonValue defaultFor(const ShaderParam &p, const QJsonValue &v) {
     switch (p.type) {
-    case ShaderParam::Bool:
-        return v.toBool() ? "true" : "false";
-    case ShaderParam::Int:
-    case ShaderParam::Choice:
-        return QByteArray::number(qRound(v.toDouble()));
     case ShaderParam::Color: {
         const QJsonArray a = v.toArray();
-        return "vec4(" + number(a.at(0).toDouble()) + ", " + number(a.at(1).toDouble()) + ", "
-               + number(a.at(2).toDouble()) + ", " + number(a.at(3).toDouble(1.0)) + ")";
-    }
-    case ShaderParam::Point: {
-        const QJsonArray a = v.toArray();
-        return "vec2(" + number(a.at(0).toDouble()) + ", " + number(a.at(1).toDouble()) + ")";
+        auto hex = [&](int i) { return QStringLiteral("%1").arg(qRound(a.at(i).toDouble(i == 3 ? 1.0 : 0.0) * 255), 2, 16, QLatin1Char('0')); };
+        return QStringLiteral("#") + hex(0) + hex(1) + hex(2) + hex(3);
     }
     default:
-        return number(v.toDouble());
+        return v;
     }
+}
+
+QByteArray paramsHeader(const ShaderGeneratorSpec &spec, const QJsonObject &values) {
+    static const char *const kTypes[] = {"float", "int", "bool", "choice", "color", "point", "file"};
+    QJsonArray arr;
+    for (const ShaderParam &p : spec.params) {
+        if (p.type == ShaderParam::File)
+            continue;
+        QJsonObject o{{"name", p.name}, {"type", QString::fromLatin1(kTypes[p.type])}, {"label", p.label},
+                      {"default", defaultFor(p, values.value(p.name))}};
+        if (p.type == ShaderParam::Float || p.type == ShaderParam::Int) {
+            o["min"] = p.min;
+            o["max"] = p.max;
+            o["step"] = p.step;
+        }
+        if (p.type == ShaderParam::Choice)
+            o["choices"] = QJsonArray::fromStringList(p.choices);
+        arr.append(o);
+    }
+    return "/* @params\n" + QJsonDocument(arr).toJson(QJsonDocument::Indented) + "*/\n";
 }
 
 // No #version, matching ShaderSource: GLSL 1.10 on desktop compatibility profiles, GLSL ES 1.00 on GLES.
-QByteArray assemble(const ShaderGeneratorSpec &spec, const QJsonObject *bake) {
+QByteArray assemble(const ShaderGeneratorSpec &spec) {
     const QByteArray body = readResource(spec.fragFile);
     if (body.isEmpty())
         return {};
@@ -99,11 +106,7 @@ QByteArray assemble(const ShaderGeneratorSpec &spec, const QJsonObject *bake) {
         if (p.type == ShaderParam::File)
             continue;
         const QByteArray type = ShaderEffects::glslTypeName(p.type);
-        if (bake)
-            src += "const " + type + " " + ShaderEffects::uniformName(p) + " = "
-                   + constantFor(p, bake->value(p.name)) + ";\n";
-        else
-            src += "uniform " + type + " " + ShaderEffects::uniformName(p) + ";\n";
+        src += "uniform " + type + " " + ShaderEffects::uniformName(p) + ";\n";
     }
     src += ShaderEffects::preludeSource();
     src += "\n";
@@ -143,12 +146,12 @@ QJsonObject resolveParams(const ShaderGeneratorSpec &spec, const QJsonObject &va
 }
 
 QByteArray fragmentSource(const ShaderGeneratorSpec &spec) {
-    return assemble(spec, nullptr);
+    return assemble(spec);
 }
 
-QByteArray standaloneSource(const ShaderGeneratorSpec &spec, const QJsonObject &values) {
-    const QJsonObject resolved = resolveParams(spec, values);
-    return assemble(spec, &resolved);
+QByteArray editableSource(const ShaderGeneratorSpec &spec, const QJsonObject &values) {
+    const QByteArray code = assemble(spec);
+    return code.isEmpty() ? code : paramsHeader(spec, resolveParams(spec, values)) + code;
 }
 
 } // namespace Generators

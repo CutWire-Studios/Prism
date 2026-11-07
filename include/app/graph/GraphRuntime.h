@@ -81,7 +81,9 @@ public:
     /// One poll step (script-node input feeds, merged feeds). Driven by an
     /// internal timer; public for tests.
     void pollDataConsumers();
-    QString mergeScriptInputs(const QVector<NodeId> &producers, uint &verSum) const;
+    /// Merges the producers' JSON, later ones winning. @p base (an inline-Lua generator node) goes first,
+    /// so wired data wins over its output.
+    QString mergeScriptInputs(const QVector<NodeId> &producers, uint &verSum, NodeId base = 0) const;
     std::shared_ptr<ScriptOutput> scriptOutputForDataNode(NodeId dataNodeId) const;
     /// What ClipNodeEditor::wireTextScriptBinding installed as ClipCard::scriptBindingProvider.
     ScriptBinding scriptBindingFor(NodeId dataNodeId) const;

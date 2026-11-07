@@ -539,6 +539,7 @@ struct GraphRuntime::Impl {
     GraphRuntime *owner = nullptr;
     std::map<NodeId, std::unique_ptr<ScriptNode>> scripts;
     QHash<NodeId, uint> lastMergedVersion;
+    QHash<NodeId, uint> lastScriptInput;
     mutable QHash<NodeId, std::shared_ptr<ScriptOutput>> dataInputs;
     std::shared_ptr<NodeThumbStore> thumbs;
     QSet<NodeId> thumbIds;
@@ -821,18 +822,23 @@ struct GraphRuntime::Impl {
             modulators.setNode(id, n->params);
         else
             modulators.removeNode(id);
-        if (!n || !isScriptType(n->type)) {
+        const bool inlineLua = n && n->type == NT::Input
+            && graph->sourceDescriptor(id).kind == SourceDescriptor::Kind::Shader
+            && !n->params.value("lua").toString().trimmed().isEmpty();
+        if (!n || (!isScriptType(n->type) && !inlineLua)) {
             scripts.erase(id);
+            lastScriptInput.remove(id);
             return;
         }
+        const NT scriptType = inlineLua ? NT::Script : n->type;
         ScriptNode *sn = script(id);
-        if (sn && sn->type != n->type) {
+        if (sn && sn->type != scriptType) {
             scripts.erase(id);
             sn = nullptr;
         }
         const bool created = !sn;
         if (created) {
-            auto owned = std::make_unique<ScriptNode>(n->type, id, shared, host);
+            auto owned = std::make_unique<ScriptNode>(scriptType, id, shared, host);
             sn = owned.get();
             scripts[id] = std::move(owned);
             if (sn->runtime) {
@@ -843,11 +849,11 @@ struct GraphRuntime::Impl {
         }
 
         const QVariantMap &p = n->params;
-        switch (n->type) {
+        switch (scriptType) {
         case NT::Script: {
-            const QString code = p.value("luaCode").toString();
-            const int mode = std::clamp(p.value("runOn", 0).toInt(), 0, 3);
-            const int interval = std::max(20, p.value("intervalMs", 1000).toInt());
+            const QString code = p.value(inlineLua ? "lua" : "luaCode").toString();
+            const int mode = std::clamp(p.value(inlineLua ? "luaRunOn" : "runOn", inlineLua ? 1 : 0).toInt(), 0, 3);
+            const int interval = std::max(20, p.value(inlineLua ? "luaIntervalMs" : "intervalMs", inlineLua ? 33 : 1000).toInt());
             const QString time = p.value("runTime", QStringLiteral("12:00:00")).toString();
             if (created || code != sn->code || mode != sn->runOn || interval != sn->intervalMs
                 || time != sn->runTime)
@@ -868,6 +874,7 @@ struct GraphRuntime::Impl {
     void rebuild(ClipGraph *graph) {
         scripts.clear();
         lastMergedVersion.clear();
+        lastScriptInput.clear();
         dataInputs.clear();
         expressions.clear();
         expressionErrors.clear();
@@ -898,6 +905,7 @@ struct GraphRuntime::Impl {
                 shared->latestBands = 0;
         }
         lastMergedVersion.remove(id);
+        lastScriptInput.remove(id);
         dataInputs.remove(id);
         thumbKeys.remove(id);
         thumbIds.remove(id);
@@ -1264,8 +1272,8 @@ void GraphRuntime::pollDataConsumers() {
         const QVector<NodeId> producers = m_graph->scriptProducersForData(id);
         uint verSum = 0;
         const QString merged = mergeScriptInputs(producers, verSum);
-        if (!d->lastMergedVersion.contains(id) || d->lastMergedVersion.value(id) != verSum) {
-            d->lastMergedVersion[id] = verSum;
+        if (!d->lastScriptInput.contains(id) || d->lastScriptInput.value(id) != verSum) {
+            d->lastScriptInput[id] = verSum;
             sn->setInputJson(merged);
         }
     }
@@ -1275,10 +1283,11 @@ void GraphRuntime::pollDataConsumers() {
 
     for (auto it = d->dataInputs.begin(); it != d->dataInputs.end(); ++it) {
         const QVector<NodeId> producers = m_graph->scriptProducersForData(it.key());
-        if (producers.size() < 2 || !it.value())
+        const bool hasInline = d->script(it.key()) != nullptr;
+        if ((producers.size() < 2 && !hasInline) || !it.value())
             continue;
         uint verSum = 0;
-        const QString merged = mergeScriptInputs(producers, verSum);
+        const QString merged = mergeScriptInputs(producers, verSum, hasInline ? it.key() : 0);
         if (d->lastMergedVersion.value(it.key(), ~0u) == verSum)
             continue;
         d->lastMergedVersion[it.key()] = verSum;
@@ -1290,10 +1299,13 @@ void GraphRuntime::pollDataConsumers() {
     }
 }
 
-QString GraphRuntime::mergeScriptInputs(const QVector<NodeId> &producers, uint &verSum) const {
+QString GraphRuntime::mergeScriptInputs(const QVector<NodeId> &producers, uint &verSum, NodeId base) const {
     verSum = 0;
     QJsonObject combined;
-    for (NodeId pid : producers) {
+    QVector<NodeId> ordered = producers;
+    if (base)
+        ordered.prepend(base);
+    for (NodeId pid : std::as_const(ordered)) {
         const ScriptNode *sn = d->script(pid);
         if (!sn)
             continue;
@@ -1318,11 +1330,12 @@ QString GraphRuntime::mergeScriptInputs(const QVector<NodeId> &producers, uint &
 
 std::shared_ptr<ScriptOutput> GraphRuntime::scriptOutputForDataNode(NodeId dataNodeId) const {
     const QVector<NodeId> producers = m_graph->scriptProducersForData(dataNodeId);
-    if (producers.isEmpty()) {
+    const bool hasInline = d->script(dataNodeId) != nullptr;
+    if (producers.isEmpty() && !hasInline) {
         d->dataInputs.remove(dataNodeId);
         return nullptr;
     }
-    if (producers.size() == 1) {
+    if (producers.size() == 1 && !hasInline) {
         d->dataInputs.remove(dataNodeId);
         const ScriptNode *sn = d->script(producers.first());
         return sn ? sn->output : nullptr;

@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QDebug>
 
 // Static-library resources are only pulled into the link when something references them.
@@ -160,6 +161,26 @@ QJsonObject defaultParamValues(const QList<ShaderParam> &params) {
 
 ShaderParam parseParam(const QJsonObject &o) {
     return ::parseParam(o);
+}
+
+QList<ShaderParam> parseHeaderParams(const QString &code, QString *error) {
+    static const QRegularExpression re(QStringLiteral(R"(/\*\s*@params(.*?)\*/)"),
+                                       QRegularExpression::DotMatchesEverythingOption);
+    const QRegularExpressionMatch m = re.match(code);
+    if (!m.hasMatch())
+        return {};
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(m.captured(1).toUtf8(), &err);
+    if (!doc.isArray()) {
+        if (error)
+            *error = QStringLiteral("@params: ")
+                     + (err.error != QJsonParseError::NoError ? err.errorString() : QStringLiteral("expected a JSON array"));
+        return {};
+    }
+    QList<ShaderParam> out;
+    for (const QJsonValue &v : doc.array())
+        out << ::parseParam(v.toObject());
+    return out;
 }
 
 const char *glslTypeName(ShaderParam::Type t) {

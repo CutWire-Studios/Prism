@@ -51,10 +51,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Sources: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>File</source>
         <translation type="unfinished"></translation>
     </message>
@@ -83,10 +79,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Sources: Live</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Screen Capture</source>
         <translation type="unfinished"></translation>
     </message>
@@ -103,10 +95,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Shader</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Text</source>
         <translation type="unfinished"></translation>
     </message>
@@ -120,10 +108,6 @@
     </message>
     <message>
         <source>Scene input</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Sources: Generate</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -147,10 +131,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Compositing</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Utility</source>
         <translation type="unfinished"></translation>
     </message>
@@ -167,7 +147,19 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Generators</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Custom Generator</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Logic</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Other</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -925,6 +917,13 @@ low/mid/high · beat</source>
     </message>
 </context>
 <context>
+    <name>CascadeMenu</name>
+    <message>
+        <source>Search…</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ChannelStrip</name>
     <message>
         <source>Unmute</source>
@@ -954,6 +953,13 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>Compositor</name>
+    <message>
+        <source>Stay Tuned</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1791,14 +1797,6 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Edit code</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Turn this into a custom shader with the current values baked in</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Custom canvas size</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1824,6 +1822,14 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Mute</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit as custom</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Turn this into a custom generator with the current values as defaults</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2732,11 +2738,11 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Shader</source>
+        <source>Custom Generator</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>A picture drawn by a GLSL fragment shader you write.</source>
+        <source>A picture drawn by a GLSL fragment shader you write, optionally driven by audio and Lua.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4252,10 +4258,6 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
 <context>
     <name>ScenesPanel</name>
     <message>
-        <source>Back to show</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Show / %1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4313,6 +4315,10 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
     </message>
     <message>
         <source>LIVE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stage scene</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4976,7 +4982,7 @@ Technical detail: %1</source>
 <context>
     <name>ShaderSourceEditor</name>
     <message>
-        <source>Shader Editor</source>
+        <source>Custom Generator Editor</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4988,7 +4994,19 @@ Technical detail: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>GLSL Fragment Shader</source>
+        <source>GLSL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Lua</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Optional script: its output feeds u_ uniforms; wired data wins on conflicts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>GLSL fragment shader; declare controls in a /* @params [...] */ header</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -5465,7 +5483,7 @@ Technical detail: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Shader</source>
+        <source>Custom Generator</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -5848,15 +5866,15 @@ Continue anyway? Your phone may not be able to connect.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Default</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Default transition</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Default time</source>
+        <source>Transition</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Duration</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

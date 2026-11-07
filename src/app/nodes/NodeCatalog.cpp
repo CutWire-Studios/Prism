@@ -87,12 +87,17 @@ QVariantList NodeCatalog::generatorParams(const QString &slug) const
     return spec ? paramDescriptors(spec->params) : QVariantList();
 }
 
+QVariantList NodeCatalog::headerParams(const QString &code) const
+{
+    return paramDescriptors(ShaderEffects::parseHeaderParams(code));
+}
+
 QString NodeCatalog::generatorShaderCode(const QString &slug, const QVariantMap &values) const
 {
     const ShaderGeneratorSpec *spec = Generators::bySlug(slug);
     if (!spec)
         return {};
-    return QString::fromUtf8(Generators::standaloneSource(*spec, QJsonObject::fromVariantMap(values)));
+    return QString::fromUtf8(Generators::editableSource(*spec, QJsonObject::fromVariantMap(values)));
 }
 
 QVariantList NodeCatalog::audioEffects() const
@@ -295,9 +300,9 @@ QList<QuickAddEntry> buildCatalogue()
     src(QStringLiteral("canvas"), NodeCatalog::tr("Canvas"),
         NodeCatalog::tr("A blank picture in a solid colour, transparent or checkered."),
         QStringLiteral("solid color background checkered"));
-    src(QStringLiteral("shader"), NodeCatalog::tr("Shader"),
-        NodeCatalog::tr("A picture drawn by a GLSL fragment shader you write."),
-        QStringLiteral("glsl generator effect code"));
+    src(QStringLiteral("shader"), NodeCatalog::tr("Custom Generator"),
+        NodeCatalog::tr("A picture drawn by a GLSL fragment shader you write, optionally driven by audio and Lua."),
+        QStringLiteral("glsl shader generator visualizer code lua"));
     src(QStringLiteral("text"), NodeCatalog::tr("Text"),
         NodeCatalog::tr("Styled text, such as a title or caption."),
         QStringLiteral("title caption label subtitle"));

@@ -31,7 +31,7 @@ private slots:
             QVERIFY2(QFile::exists(QStringLiteral(":/shaders/generators/") + g.fragFile), qPrintable(g.slug));
             QVERIFY2(!g.description.isEmpty(), qPrintable(g.slug));
             QVERIFY2(!Generators::fragmentSource(g).isEmpty(), qPrintable(g.slug));
-            QVERIFY2(!Generators::standaloneSource(g, {}).isEmpty(), qPrintable(g.slug));
+            QVERIFY2(!Generators::editableSource(g, {}).isEmpty(), qPrintable(g.slug));
         }
     }
 
@@ -45,7 +45,7 @@ private slots:
         for (const ShaderGeneratorSpec &g : Generators::all()) {
             for (int standalone = 0; standalone < 2; ++standalone) {
                 QOpenGLShaderProgram prog;
-                const QByteArray src = standalone ? Generators::standaloneSource(g, {}) : Generators::fragmentSource(g);
+                const QByteArray src = standalone ? Generators::editableSource(g, {}) : Generators::fragmentSource(g);
                 const bool ok = prog.addShaderFromSourceCode(QOpenGLShader::Vertex, vertex)
                                 && prog.addShaderFromSourceCode(QOpenGLShader::Fragment, src) && prog.link();
                 QVERIFY2(ok, qPrintable(g.slug + ": " + prog.log()));

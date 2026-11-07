@@ -53,6 +53,10 @@ QByteArray fragmentSource(const ShaderEffectSpec &spec);
 /// Parses one entry of a "params" array (shared with the generator manifest).
 ShaderParam parseParam(const QJsonObject &o);
 
+/// Params declared by the first `/* @params [ {...}, ... ] */` comment in @p code (entries as in
+/// effects.json). Empty if there is none; on malformed JSON sets @p error and returns empty.
+QList<ShaderParam> parseHeaderParams(const QString &code, QString *error = nullptr);
+
 /// Default values keyed by param name, in the shape ShaderEffectSpec::defaultParams returns.
 QJsonObject defaultParamValues(const QList<ShaderParam> &params);
 

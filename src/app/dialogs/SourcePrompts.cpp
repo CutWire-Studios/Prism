@@ -207,7 +207,7 @@ quint64 SourcePrompts::addShader(const QString &code)
     SourceDescriptor desc;
     desc.kind = SourceDescriptor::Kind::Shader;
     desc.shaderCode = trimmed;
-    desc.displayName = tr("Shader");
+    desc.displayName = tr("Custom Generator");
     return add(desc, ThumbHelper::makeShaderThumb(trimmed));
 }
 

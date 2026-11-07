@@ -51,7 +51,7 @@ public:
         return reinterpret_cast<const uint8_t *>(m_buffer.constData());
     }
     bool    nextFrame()   override;
-    QString displayName() const override { return "Shader"; }
+    QString displayName() const override { return "Generator"; }
 
 private:
     bool initGL();

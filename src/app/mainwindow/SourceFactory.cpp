@@ -308,9 +308,11 @@ bool SourceFactory::updateLayerParams(MediaSource *top, const ClipGraph::Resolve
     MediaSource *base = ProcessEffects::updateSourceEffects(top, layer.sourceEffects, auxUpdater(graph));
     if (!base || !graph->hasNode(layer.inputNodeId)) return false;
     const SourceDescriptor desc = graph->sourceDescriptor(layer.inputNodeId);
-    if (desc.kind == SourceDescriptor::Kind::Shader && !desc.preset.isEmpty()) {
+    if (desc.kind == SourceDescriptor::Kind::Shader) {
         auto *shader = dynamic_cast<ShaderSource *>(base);
-        return shader && shader->updateParams(graph->sourceParams(layer.inputNodeId));
+        if (!shader || (desc.preset.isEmpty() && shader->shaderCode() != desc.shaderCode))
+            return false;
+        return shader->updateParams(graph->sourceParams(layer.inputNodeId));
     }
     if (desc.kind == SourceDescriptor::Kind::SceneInput) {
         if (g_boundInputUpdater) {

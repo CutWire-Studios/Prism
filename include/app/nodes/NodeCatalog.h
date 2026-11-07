@@ -46,7 +46,9 @@ public:
     Q_INVOKABLE QVariantList generators() const;
     /// Param descriptors of a generator, in the shape processEffectParams returns.
     Q_INVOKABLE QVariantList generatorParams(const QString &slug) const;
-    /// Standalone GLSL for a generator with @p values (missing ones default) baked in as constants.
+    /// Param descriptors declared by the @params header of custom generator @p code.
+    Q_INVOKABLE QVariantList headerParams(const QString &code) const;
+    /// Editable GLSL for a generator: its `p_` uniforms plus an @params header defaulting to @p values.
     Q_INVOKABLE QString generatorShaderCode(const QString &slug, const QVariantMap &values) const;
 
     /// Button text for a Process / AudioEffect node (dynamic label of its current params).

@@ -607,7 +607,7 @@ QJsonObject McpDispatcher::opAddSource(const QJsonObject &args)
             code = defaultShader();
         desc.shaderCode = code;
         if (desc.displayName.isEmpty())
-            desc.displayName = QStringLiteral("Shader");
+            desc.displayName = QStringLiteral("Generator");
         break;
     }
     case SourceDescriptor::Kind::Canvas: {

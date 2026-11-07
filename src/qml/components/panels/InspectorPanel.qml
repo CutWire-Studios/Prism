@@ -280,17 +280,32 @@ PanelFrame {
 
                                     ThemedButton {
                                         Layout.fillWidth: true
-                                        text: qsTr("Edit code")
-                                        tooltip: qsTr("Turn this into a custom shader with the current values baked in")
-                                        onClicked: root.graph.setParams(del.nodeId, {
-                                            source: Object.assign({}, del.params.source, {
-                                                preset: "",
-                                                shaderCode: NodeCatalog.generatorShaderCode(preset, del.params.params || {})
-                                            }),
-                                            params: {},
-                                            expressions: {}
-                                        })
+                                        text: qsTr("Edit as custom")
+                                        tooltip: qsTr("Turn this into a custom generator with the current values as defaults")
+                                        onClicked: {
+                                            const id = del.nodeId
+                                            root.graph.setParams(id, {
+                                                source: Object.assign({}, del.params.source, {
+                                                    preset: "",
+                                                    shaderCode: NodeCatalog.generatorShaderCode(preset, del.params.params || {})
+                                                })
+                                            })
+                                            if (root.editors)
+                                                root.editors.open(id, "shader")
+                                        }
                                     }
+                                }
+                            }
+
+                            Loader {
+                                Layout.fillWidth: true
+                                active: del.type === body.nt.Input && !!del.params.source
+                                        && del.params.source.kind === 7 && !del.params.source.preset
+                                visible: active
+                                sourceComponent: ShaderParamForm {
+                                    nodeId: del.nodeId
+                                    params: del.params
+                                    specs: NodeCatalog.headerParams(del.params.source.shaderCode || "")
                                 }
                             }
 

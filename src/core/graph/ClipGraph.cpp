@@ -396,10 +396,17 @@ SourceDescriptor ClipGraph::sourceDescriptor(NodeId inputNodeId) const {
 QJsonObject ClipGraph::sourceParams(NodeId inputNodeId) const {
     const Node *n = node(inputNodeId);
     if (!n || n->type != NT::Input) return {};
-    const ShaderGeneratorSpec *spec =
-        Generators::bySlug(n->params.value("source").toMap().value("preset").toString());
-    if (!spec) return {};
-    return Generators::resolveParams(*spec, toJsonObject(n->params.value("params").toMap()));
+    const QVariantMap source = n->params.value("source").toMap();
+    const QJsonObject values = toJsonObject(n->params.value("params").toMap());
+    if (const ShaderGeneratorSpec *spec = Generators::bySlug(source.value("preset").toString()))
+        return Generators::resolveParams(*spec, values);
+    if (source.value("kind").toInt() != int(SourceDescriptor::Kind::Shader)) return {};
+    const QList<ShaderParam> specs = ShaderEffects::parseHeaderParams(source.value("shaderCode").toString());
+    QJsonObject out = ShaderEffects::defaultParamValues(specs);
+    for (auto it = out.begin(); it != out.end(); ++it)
+        if (values.contains(it.key()))
+            it.value() = values.value(it.key());
+    return out;
 }
 
 ClipSettings ClipGraph::clipSettings(NodeId inputNodeId) const {

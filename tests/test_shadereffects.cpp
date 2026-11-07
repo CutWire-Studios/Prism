@@ -72,6 +72,30 @@ class TestShaderEffects : public QObject {
     Q_OBJECT
 
 private slots:
+    void headerParams() {
+        const QString code = QStringLiteral(
+            "#version 120\n\n/* @params\n[ {\"name\": \"amount\", \"type\": \"float\", \"label\": \"Amount\","
+            " \"min\": 0, \"max\": 2, \"default\": 0.5},\n"
+            "{\"name\": \"tint\", \"type\": \"color\", \"default\": \"#ff000080\"} ]\n*/\n"
+            "uniform float p_amount;\nvoid main() {}\n");
+        QString err;
+        const QList<ShaderParam> ps = ShaderEffects::parseHeaderParams(code, &err);
+        QVERIFY(err.isEmpty());
+        QCOMPARE(ps.size(), 2);
+        QCOMPARE(ps[0].name, QStringLiteral("amount"));
+        QCOMPARE(ps[0].label, QStringLiteral("Amount"));
+        QCOMPARE(ps[0].max, 2.0);
+        QCOMPARE(ps[0].def, 0.5);
+        QCOMPARE(ps[1].type, ShaderParam::Color);
+        QCOMPARE(ps[1].defColor.alpha(), 0x80);
+        QCOMPARE(ShaderEffects::uniformName(ps[0]), QByteArray("p_amount"));
+
+        QVERIFY(ShaderEffects::parseHeaderParams(QStringLiteral("void main() {}")).isEmpty());
+        QString bad;
+        QVERIFY(ShaderEffects::parseHeaderParams(QStringLiteral("/* @params [ */"), &bad).isEmpty());
+        QVERIFY(!bad.isEmpty());
+    }
+
     void hexColor_data() {
         QTest::addColumn<QString>("in");
         QTest::addColumn<int>("r");

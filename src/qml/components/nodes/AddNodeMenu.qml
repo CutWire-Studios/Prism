@@ -57,7 +57,7 @@ CascadeMenu {
         "screen": ["display", "desktop", "monitor"],
         "window": ["app", "application"],
         "canvas": ["solid", "color", "background", "checkered"],
-        "shader": ["glsl", "generator", "effect"],
+        "shader": ["glsl", "shader", "custom", "lua", "visualizer", "effect"],
         "generator": ["generate", "procedural", "gradient", "noise", "pattern", "shape", "spectrum"],
         "text": ["title", "caption", "label", "subtitle"],
         "shape": ["rectangle", "circle", "box"],
@@ -122,12 +122,12 @@ CascadeMenu {
         src([liveCat], "screen", qsTr("Screen Capture"), "monitor")
         src([liveCat], "window", qsTr("Window Capture"), "app-window")
         src([genCat], "canvas", qsTr("Canvas"), "square")
-        src([genCat], "shader", qsTr("Shader"), "code-xml")
         src([genCat], "text", qsTr("Text"), "type")
         src([genCat], "shape", qsTr("Shape"), "shapes")
         src([genCat], "scene", qsTr("Scene"), "clapperboard")
         src([genCat], "sceneInput", qsTr("Scene input"), "log-in",
             AppController.postSceneId.length > 0 && AppController.editedSceneId === AppController.postSceneId)
+        src([genCat, procCat], "shader", qsTr("Custom Generator"), "code-xml")
         for (const g of NodeCatalog.generators())
             list.push({ key: "src:generator:" + g.slug, alias: "generator", label: g.name,
                         path: [genCat, procCat], section: 0, source: "generator:" + g.slug })

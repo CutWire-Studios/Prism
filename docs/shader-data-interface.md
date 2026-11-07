@@ -80,3 +80,26 @@ uniform float u_hue;         // 210.0
 
 Wire an audio-analyzer node into the same shader (fan-in merges both JSON objects into one
 `input`) and the shader additionally gets `u_audioLevel`, `u_bands`, `u_spectrum`, etc.
+
+## Custom generator params
+
+A custom generator (Input node with a GLSL source) can declare inspector controls in the first
+`/* @params ... */` comment, a JSON array of entries in the `effects.json` param format:
+
+```glsl
+/* @params
+[ { "name": "amount", "type": "float", "label": "Amount", "min": 0, "max": 1, "default": 0.5 } ]
+*/
+uniform float p_amount;
+```
+
+Each param is set as the uniform `p_<name>`, which the shader declares itself. Values live in the
+node's `params` and default to the header's `default`. "Edit as custom" on a preset generator
+produces such a program with the current values as defaults.
+
+## Inline Lua
+
+A custom generator can carry its own Lua script (node params `lua`, `luaRunOn`, `luaIntervalMs`;
+default run on a 33 ms interval). Its `input` is the JSON from the wired data port and the table it
+returns is mapped to uniforms as above. The script output and the wired data are merged into one
+object; on key conflicts the wired data wins. Without inline Lua nothing changes.

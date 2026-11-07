@@ -25,9 +25,9 @@ const ShaderGeneratorSpec *bySlug(const QString &slug);
 /// Full GLSL for @p spec with every param as a `p_<name>` uniform. Empty if the body is missing.
 QByteArray fragmentSource(const ShaderGeneratorSpec &spec);
 
-/// Same program with the param values baked in as constants, for editing as a custom shader.
-/// Missing values fall back to the defaults.
-QByteArray standaloneSource(const ShaderGeneratorSpec &spec, const QJsonObject &values);
+/// fragmentSource preceded by a `/* @params */` header declaring the params with @p values (missing
+/// ones default) as their defaults, for editing as a custom generator.
+QByteArray editableSource(const ShaderGeneratorSpec &spec, const QJsonObject &values);
 
 /// @p values over the spec's defaults, limited to the spec's params.
 QJsonObject resolveParams(const ShaderGeneratorSpec &spec, const QJsonObject &values);

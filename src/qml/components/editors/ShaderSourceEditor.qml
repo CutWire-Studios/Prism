@@ -4,7 +4,7 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Prism
 
-// GLSL source editor for Input nodes with a shader source. The inspector opens it through the
+// GLSL and Lua editor for Input nodes with a generator source. The inspector opens it through the
 // editor router with openFor(nodeId); saving writes the code into the node's source descriptor.
 // openForNew() creates a new Input node on accept instead.
 ThemedDialog {
@@ -12,12 +12,20 @@ ThemedDialog {
 
     onClosed: AppController.cancelPendingSourcePos()
 
-    title: qsTr("Shader Editor")
+    title: qsTr("Custom Generator Editor")
     preferredWidth: Theme.dialogWidthLg
     acceptOnReturn: false
 
     property var nodeId: 0
     property bool _loadingPreset: false
+    property bool showLua: false
+    property string scriptError: ""
+    property var scriptLines: []
+
+    function refreshScriptStatus() {
+        scriptError = nodeId === 0 ? "" : AppController.scriptError(nodeId)
+        scriptLines = nodeId === 0 ? [] : AppController.scriptLog(nodeId)
+    }
 
     readonly property int presetCount: preview.presetNames.length
 
@@ -35,6 +43,9 @@ ThemedDialog {
     function openFor(id) {
         nodeId = id
         const code = id === 0 ? "" : graphParams.params(id).source.shaderCode || ""
+        luaArea.text = id === 0 ? "" : graphParams.params(id).lua || ""
+        showLua = false
+        refreshScriptStatus()
 
         _loadingPreset = true
         if (code.length > 0) {
@@ -58,12 +69,25 @@ ThemedDialog {
         const code = codeArea.text.trim()
         if (code.length === 0)
             return
+        const lua = luaArea.text.trim()
         if (root.nodeId === 0) {
-            SourcePrompts.addShader(code)
+            const id = SourcePrompts.addShader(code)
+            if (id !== 0 && lua.length > 0)
+                AppController.graph.setParams(id, { lua: lua })
             return
         }
         const source = Object.assign({}, graphParams.params(root.nodeId).source, { shaderCode: code })
         AppController.graph.setSource(root.nodeId, source)
+        if (lua !== (graphParams.params(root.nodeId).lua || ""))
+            AppController.graph.setParams(root.nodeId, { lua: lua })
+    }
+
+    Connections {
+        target: AppController
+        function onScriptStatusChanged(id) {
+            if (id === 0 || id == root.nodeId)
+                root.refreshScriptStatus()
+        }
     }
 
     AudioGraphParams {
@@ -74,6 +98,11 @@ ThemedDialog {
     CodeHighlighterAttacher {
         textDocument: codeArea.textDocument
         language: "glsl"
+    }
+
+    CodeHighlighterAttacher {
+        textDocument: luaArea.textDocument
+        language: "lua"
     }
 
     contentItem: RowLayout {
@@ -141,16 +170,65 @@ ThemedDialog {
             Layout.fillHeight: true
             spacing: Theme.spacingSm
 
-            ThemedLabel {
-                text: qsTr("GLSL Fragment Shader")
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spacingSm
+
+                ThemedToggleButton {
+                    text: qsTr("GLSL")
+                    checkable: false
+                    checked: !root.showLua
+                    onClicked: root.showLua = false
+                }
+
+                ThemedToggleButton {
+                    text: qsTr("Lua")
+                    checkable: false
+                    checked: root.showLua
+                    onClicked: root.showLua = true
+                }
+
+                ThemedLabel {
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                    text: root.showLua ? qsTr("Optional script: its output feeds u_ uniforms; wired data wins on conflicts")
+                                       : qsTr("GLSL fragment shader; declare controls in a /* @params [...] */ header")
+                }
             }
 
             ThemedTextArea {
                 id: codeArea
+                visible: !root.showLua
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 font.family: Theme.monoFontFamily
                 tabStopDistance: 28
+            }
+
+            ThemedTextArea {
+                id: luaArea
+                visible: root.showLua
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                font.family: Theme.monoFontFamily
+                tabStopDistance: 28
+            }
+
+            ThemedLabel {
+                Layout.fillWidth: true
+                visible: root.showLua && text.length > 0
+                color: Theme.destructive
+                wrapMode: Text.WordWrap
+                text: root.scriptError
+            }
+
+            ThemedTextArea {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 70
+                visible: root.showLua && root.scriptLines.length > 0
+                readOnly: true
+                font.family: Theme.monoFontFamily
+                text: root.scriptLines.join("\n")
             }
 
             RowLayout {

@@ -25,6 +25,8 @@ static const char *kVertexShader =
 ShaderSource::ShaderSource(const QString &fragmentShader, QSize size)
     : m_shaderCode(fragmentShader), m_size(size)
 {
+    m_paramSpecs = ShaderEffects::parseHeaderParams(fragmentShader);
+    m_params = ShaderEffects::defaultParamValues(m_paramSpecs);
     m_timer.start();
 }
 
@@ -34,14 +36,16 @@ ShaderSource::~ShaderSource() {
 
 void ShaderSource::setShaderCode(const QString &code) {
     m_shaderCode  = code;
+    m_paramSpecs  = ShaderEffects::parseHeaderParams(code);
+    m_params      = ShaderEffects::defaultParamValues(m_paramSpecs);
     m_shaderDirty = true;
     m_compiled    = false;
 }
 
 void ShaderSource::setPreset(const ShaderGeneratorSpec &spec) {
+    setShaderCode(QString::fromUtf8(Generators::fragmentSource(spec)));
     m_paramSpecs = spec.params;
     m_params = spec.defaultParams();
-    setShaderCode(QString::fromUtf8(Generators::fragmentSource(spec)));
 }
 
 bool ShaderSource::updateParams(const QJsonObject &params) {
