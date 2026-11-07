@@ -452,6 +452,8 @@ struct ScriptNode {
 
 constexpr int kLiveThumbW = 160;
 constexpr int kLiveThumbH = 90;
+constexpr int kProbeW = 640;
+constexpr int kProbeH = 360;
 
 const char *kBlitFragment =
     "#ifdef GL_ES\n"
@@ -561,11 +563,11 @@ struct GraphRuntime::Impl {
         }
     }
 
-    QImage grabThumb(MediaSource *s) {
+    QImage grabThumb(MediaSource *s, int maxW = kLiveThumbW, int maxH = kLiveThumbH) {
         const QSize sz = s->frameSize();
         if (sz.isEmpty())
             return {};
-        const QSize fit = sz.scaled(kLiveThumbW, kLiveThumbH, Qt::KeepAspectRatio);
+        const QSize fit = sz.scaled(maxW, maxH, Qt::KeepAspectRatio);
         if (s->glTexture() != 0) {
             if (!thumbScaler.begin(fit))
                 return {};
@@ -612,6 +614,46 @@ struct GraphRuntime::Impl {
         const QImage image = grabThumb(top);
         if (!image.isNull() && image != owner->thumbnail(id))
             owner->setThumbnail(id, image);
+    }
+
+    NodeId probeId = 0;
+    LiveThumb probe;
+    QTimer *probeTimer = nullptr;
+
+    void updateProbeTimer() {
+        const bool run = active && probeId != 0;
+        if (run && !probeTimer->isActive())
+            probeTimer->start(66);
+        else if (!run)
+            probeTimer->stop();
+    }
+
+    void refreshProbe() {
+        ClipGraph *graph = owner->m_graph;
+        if (!graph->hasNode(probeId))
+            return;
+        const ClipGraph::ResolvedStream stream = graph->evaluateVideoInput(probeId);
+        if (stream.layers.size() != 1 || !liveThumbCapable(*graph, stream)) {
+            probe = {};
+            return;
+        }
+        const ClipGraph::ResolvedLayer &layer = stream.layers.first();
+        const QString key = liveThumbKey(*graph, layer, layer.composite != nullptr);
+        bool fresh = false;
+        if (!probe.source || probe.key != key
+            || (!layer.composite && !SourceFactory::updateLayerParams(probe.source.get(), layer, graph))) {
+            probe.source = SourceFactory::buildLayerSource(layer, graph, owner);
+            probe.key = key;
+            if (!probe.source)
+                return;
+            fresh = true;
+        }
+        const bool advanced = probe.source->nextFrame();
+        if ((!advanced && !fresh) || !probe.source->isReady())
+            return;
+        const QImage image = grabThumb(probe.source.get(), kProbeW, kProbeH);
+        if (!image.isNull())
+            owner->setThumbnail(kProbeThumbId, image);
     }
 
     std::shared_ptr<RuntimeShared> shared = std::make_shared<RuntimeShared>();
@@ -948,6 +990,7 @@ GraphRuntime::GraphRuntime(ClipGraph *graph, QObject *parent, std::shared_ptr<No
         d->thumbIds.clear();
         d->thumbKeys.clear();
         d->liveThumbs.clear();
+        setProbeNode(0);
         emit thumbnailChanged(0);
         d->rebuild(m_graph);
         generateMissingThumbnails();
@@ -959,6 +1002,13 @@ GraphRuntime::GraphRuntime(ClipGraph *graph, QObject *parent, std::shared_ptr<No
 
     d->thumbTimer = new QTimer(this);
     connect(d->thumbTimer, &QTimer::timeout, this, &GraphRuntime::liveThumbTick);
+
+    d->probeTimer = new QTimer(this);
+    connect(d->probeTimer, &QTimer::timeout, this, &GraphRuntime::probeTick);
+    connect(m_graph, &ClipGraph::nodeRemoved, this, [this](NodeId id) {
+        if (id == d->probeId)
+            setProbeNode(0);
+    });
 }
 
 GraphRuntime::~GraphRuntime() {
@@ -1122,6 +1172,32 @@ void GraphRuntime::liveThumbTick() {
         d->refreshLiveThumb(id);
 }
 
+void GraphRuntime::probeTick() {
+    if (d->active && d->probeId != 0)
+        d->refreshProbe();
+}
+
+NodeId GraphRuntime::probeNode() const {
+    return d->probeId;
+}
+
+void GraphRuntime::setProbeNode(NodeId id) {
+    if (id == d->probeId)
+        return;
+    d->probeId = id;
+    d->probe = {};
+    {
+        QMutexLocker lock(&d->thumbs->mutex);
+        d->thumbs->images.remove(kProbeThumbId);
+        d->thumbs->revisions.remove(kProbeThumbId);
+    }
+    d->thumbIds.remove(kProbeThumbId);
+    d->updateProbeTimer();
+    emit thumbnailChanged(kProbeThumbId);
+    if (id != 0 && d->active)
+        QTimer::singleShot(0, this, &GraphRuntime::probeTick);
+}
+
 int GraphRuntime::thumbnailRevision(NodeId id) const {
     QMutexLocker lock(&d->thumbs->mutex);
     return d->thumbs->revisions.value(id, 0);
@@ -1156,6 +1232,7 @@ void GraphRuntime::setActive(bool active) {
     else
         d->pollTimer->stop();
     d->updateThumbTimer();
+    d->updateProbeTimer();
     for (auto &[id, sn] : d->scripts) {
         if (sn->runtime)
             QMetaObject::invokeMethod(sn->runtime, "setActive", Qt::QueuedConnection, Q_ARG(bool, active));

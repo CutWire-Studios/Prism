@@ -235,6 +235,12 @@ Item {
             }
         }
         ThemedMenuItem {
+            visible: nodeMenu.type === nodeMenu.nodeTypes.Input || nodeMenu.type === nodeMenu.nodeTypes.Process
+                || nodeMenu.type === nodeMenu.nodeTypes.Layer
+            text: qsTr("Preview here")
+            onTriggered: AppController.previewNode(nodeMenu.target.nodeId)
+        }
+        ThemedMenuItem {
             text: qsTr("Delete")
             icon.name: "trash-2"
             enabled: nodeMenu.type !== nodeMenu.nodeTypes.Output || graphCanvas.nodeCount <= 1

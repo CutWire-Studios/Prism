@@ -64,6 +64,15 @@ public:
     void setVisibleNodes(const QVector<NodeId> &ids);
     /// One scheduler tick; public for the timer.
     void liveThumbTick();
+    /// Thumbnail-store id the probe frame is published under (image://nodethumb/<id>).
+    static constexpr NodeId kProbeThumbId = 9007199254740991ULL;
+    /// Renders node @p id from its own standalone source tree at preview size and publishes it
+    /// under kProbeThumbId; 0 stops and drops the frame. No frame appears for nodes a thumbnail
+    /// source cannot be built for (devices, scenes, multi-layer streams).
+    void setProbeNode(NodeId id);
+    NodeId probeNode() const;
+    /// One probe render; public for the timer.
+    void probeTick();
     /// For image://nodethumb/<id>. Ownership passes to the caller (QQmlEngine::addImageProvider).
     /// The provider keeps working only while this GraphRuntime is alive and reads it thread-safely.
     static QQuickImageProvider *createImageProvider(std::shared_ptr<NodeThumbStore> thumbs);

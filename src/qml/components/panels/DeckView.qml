@@ -50,6 +50,58 @@ ColumnLayout {
                 source: root.staging ? PreviewItem.Staging : PreviewItem.Live
             }
 
+            Item {
+                id: probeView
+                anchors.fill: parent
+                anchors.margins: 1
+                visible: root.staging && AppController.previewNodeId !== 0
+
+                Rectangle {
+                    anchors.fill: parent
+                    color: "black"
+                }
+                Image {
+                    anchors.fill: parent
+                    fillMode: Image.PreserveAspectFit
+                    cache: false
+                    source: AppController.previewImageUrl
+                }
+                ThemedLabel {
+                    anchors.centerIn: parent
+                    visible: AppController.previewImageUrl.length === 0
+                    tone: "default"
+                    text: qsTr("No live preview for this node")
+                }
+                Rectangle {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: Theme.spacingSm
+                    width: Math.min(parent.width - Theme.spacingLg * 2, bannerRow.implicitWidth + Theme.spacingLg)
+                    height: bannerRow.implicitHeight + Theme.spacingXs * 2
+                    radius: Theme.radiusSm
+                    color: Qt.rgba(0, 0, 0, 0.7)
+
+                    RowLayout {
+                        id: bannerRow
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.spacingMd
+                        spacing: Theme.spacingSm
+
+                        ThemedLabel {
+                            Layout.fillWidth: true
+                            tone: "default"
+                            elide: Text.ElideRight
+                            wrapMode: Text.NoWrap
+                            text: qsTr("Previewing: %1").arg(AppController.previewNodeName)
+                        }
+                        IconButton {
+                            glyph: "x"
+                            tooltip: qsTr("Stop previewing")
+                            onClicked: AppController.clearNodePreview()
+                        }
+                    }
+                }
+            }
+
             Rectangle {
                 x: Theme.spacingSm
                 y: Theme.spacingSm

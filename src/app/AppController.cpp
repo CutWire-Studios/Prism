@@ -290,16 +290,22 @@ void AppController::connectSignals()
         emit showChanged();
         if (m_show->editedSceneId() != m_lastEditedId) {
             m_lastEditedId = m_show->editedSceneId();
+            clearNodePreview();
             emit editedGraphChanged();
         }
     });
-    connect(m_show, &ShowManager::sceneAboutToBeRemoved, this, [this]() { m_pushTimer->start(); });
+    connect(m_show, &ShowManager::sceneAboutToBeRemoved, this, [this]() {
+        clearNodePreview();
+        m_pushTimer->start();
+    });
     connect(m_show, &ShowManager::sceneAdded, this, [this]() { m_pushTimer->start(); });
     connect(m_show, &ShowManager::scenesReset, this, [this]() {
+        clearNodePreview();
         m_pushTimer->start();
         emit showChanged();
         if (m_show->editedSceneId() != m_lastEditedId) {
             m_lastEditedId = m_show->editedSceneId();
+            clearNodePreview();
             emit editedGraphChanged();
         }
     });
@@ -1191,9 +1197,22 @@ void AppController::attachScene(Scene *scene)
         return osc ? osc->controlValue(address) : 0.0;
     });
     connect(graph, &ClipGraph::changed, this, [this, scene]() { onSceneGraphChanged(scene); });
-    connect(graph, &ClipGraph::graphReset, this, [this]() { m_pushTimer->start(); });
+    connect(graph, &ClipGraph::graphReset, this, [this, scene]() {
+        if (m_previewRuntime == scene->runtime())
+            clearNodePreview();
+        m_pushTimer->start();
+    });
+    connect(graph, &ClipGraph::nodeRemoved, this, [this, scene](NodeId id) {
+        if (id == m_previewNodeId && m_previewRuntime == scene->runtime())
+            clearNodePreview();
+    });
     connect(graph, &ClipGraph::nodeChanged, this, [this, scene](NodeId id) { onNodeChanged(scene, id); });
-    connect(scene->runtime(), &GraphRuntime::thumbnailChanged, this, &AppController::nodeThumbnailChanged);
+    connect(scene->runtime(), &GraphRuntime::thumbnailChanged, this, [this](quint64 id) {
+        if (id == GraphRuntime::kProbeThumbId)
+            emit previewFrameChanged();
+        else
+            emit nodeThumbnailChanged(id);
+    });
     connect(scene->runtime(), &GraphRuntime::scriptStatusChanged, this, &AppController::scriptStatusChanged);
 }
 
@@ -1627,6 +1646,63 @@ void AppController::linkNodeObsScene(quint64 nodeId, const QString &sceneName)
 }
 
 int AppController::nodeThumbnailRevision(quint64 nodeId) const { return graphRuntime()->thumbnailRevision(nodeId); }
+
+void AppController::previewNode(quint64 nodeId)
+{
+    if (m_shuttingDown || !m_show->editedScene())
+        return;
+    if (nodeId == m_previewNodeId && m_previewRuntime == graphRuntime()) {
+        clearNodePreview();
+        return;
+    }
+    const ClipGraph::Node *n = clipGraph()->node(nodeId);
+    using NT = ClipGraph::NodeType;
+    if (!n || (n->type != NT::Input && n->type != NT::Process && n->type != NT::Layer))
+        return;
+    clearNodePreview();
+    m_previewRuntime = graphRuntime();
+    m_previewNodeId = nodeId;
+    m_previewRuntime->setProbeNode(nodeId);
+    emit previewNodeChanged();
+    emit previewFrameChanged();
+}
+
+void AppController::clearNodePreview()
+{
+    if (m_previewNodeId == 0)
+        return;
+    if (m_previewRuntime)
+        m_previewRuntime->setProbeNode(0);
+    m_previewRuntime = nullptr;
+    m_previewNodeId = 0;
+    emit previewNodeChanged();
+    emit previewFrameChanged();
+}
+
+QString AppController::previewNodeName() const
+{
+    if (!m_previewRuntime || !m_previewNodeId)
+        return {};
+    const ClipGraph *g = m_previewRuntime->graph();
+    const ClipGraph::Node *n = g->node(m_previewNodeId);
+    if (!n)
+        return {};
+    QString name = n->type == ClipGraph::NodeType::Input ? g->sourceName(m_previewNodeId)
+                                                         : n->params.value(QStringLiteral("name")).toString();
+    if (name.isEmpty())
+        name = n->title.isEmpty() ? tr("Node %1").arg(m_previewNodeId) : n->title;
+    return name;
+}
+
+QString AppController::previewImageUrl() const
+{
+    if (!m_previewRuntime)
+        return {};
+    const int rev = m_previewRuntime->thumbnailRevision(GraphRuntime::kProbeThumbId);
+    if (rev == 0)
+        return {};
+    return QStringLiteral("image://nodethumb/%1?v=%2").arg(GraphRuntime::kProbeThumbId).arg(rev);
+}
 
 void AppController::setVisibleNodeIds(const QVariantList &ids)
 {

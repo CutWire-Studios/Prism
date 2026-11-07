@@ -289,6 +289,39 @@ private slots:
         QVERIFY(!app.removeScene(scene));
     }
 
+    void previewNodeDoesNotAffectTake() {
+        QTemporaryDir dir;
+        AppController app(nullptr);
+        const QString first = app.liveSceneId();
+        const QString scene = addClipScene(app, dir.filePath(QStringLiteral("p.png")), Qt::red);
+        QVERIFY(!scene.isEmpty());
+        QVERIFY(app.stageScene(scene));
+        QTRY_VERIFY(app.compositor()->sourceStaging());
+
+        const NodeId clip = app.clipGraph()->nodeIdsOfType(NT::Input).first();
+        QSignalSpy changed(&app, &AppController::previewNodeChanged);
+        app.previewNode(clip);
+        QCOMPARE(app.previewNodeId(), clip);
+        QCOMPARE(changed.size(), 1);
+        app.previewNode(clip);
+        QCOMPARE(app.previewNodeId(), quint64(0));
+        app.previewNode(clip);
+        QCOMPARE(app.previewNodeId(), clip);
+        app.previewNode(app.clipGraph()->outputNodeId());
+        QCOMPARE(app.previewNodeId(), clip);
+
+        app.setTransitionDuration(0.05);
+        app.take();
+        QTRY_COMPARE(app.liveSceneId(), scene);
+        QCOMPARE(app.stagingSceneId(), first);
+
+        app.clearNodePreview();
+        QCOMPARE(app.previewNodeId(), quint64(0));
+        app.previewNode(clip);
+        app.removeNode(clip);
+        QCOMPARE(app.previewNodeId(), quint64(0));
+    }
+
     void sceneTransitionAppliesToTakeThenDefaultReturns() {
         QTemporaryDir dir;
         AppController app(nullptr);

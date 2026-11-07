@@ -337,6 +337,10 @@ Please check the URL and ensure the video stream is accessible and valid.</sourc
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Node %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>New Session</source>
         <translation type="unfinished"></translation>
     </message>
@@ -832,6 +836,18 @@ low/mid/high · beat</source>
 </context>
 <context>
     <name>DeckView</name>
+    <message>
+        <source>No live preview for this node</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Previewing: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stop previewing</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message>
         <source>ON AIR</source>
         <translation type="unfinished"></translation>
@@ -2738,6 +2754,14 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Run now</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bypass</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Preview here</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

@@ -68,6 +68,12 @@ class AppController : public QObject {
     // ── Show / scenes ───────────────────────────────────────────────────────────
     Q_PROPERTY(QAbstractItemModel *scenes READ sceneModel CONSTANT)
     Q_PROPERTY(QString liveSceneId READ liveSceneId NOTIFY showChanged)
+    /// Node of the edited scene shown in the staging preview instead of the Staging deck (0 = none).
+    /// Preview only: never reaches the decks, Take or any output.
+    Q_PROPERTY(quint64 previewNodeId READ previewNodeId NOTIFY previewNodeChanged)
+    Q_PROPERTY(QString previewNodeName READ previewNodeName NOTIFY previewNodeChanged)
+    /// image://nodethumb URL of the latest probe frame; empty until one exists.
+    Q_PROPERTY(QString previewImageUrl READ previewImageUrl NOTIFY previewFrameChanged)
     Q_PROPERTY(QString stagingSceneId READ stagingSceneId NOTIFY showChanged)
     Q_PROPERTY(QString editedSceneId READ editedSceneId NOTIFY showChanged)
     /// False after exitScene(): the node editor then asks for a scene to be entered.
@@ -340,6 +346,12 @@ public:
     Q_INVOKABLE QString expressionError(quint64 nodeId, const QString &name) const;
     /// 0 while the node has no thumbnail; otherwise a cache-buster for image://nodethumb/<id>?v=<rev>.
     Q_INVOKABLE int nodeThumbnailRevision(quint64 nodeId) const;
+    /// Shows node @p nodeId of the edited scene in the staging preview; picking the same node again clears it.
+    Q_INVOKABLE void previewNode(quint64 nodeId);
+    Q_INVOKABLE void clearNodePreview();
+    quint64 previewNodeId() const { return m_previewNodeId; }
+    QString previewNodeName() const;
+    QString previewImageUrl() const;
     /// Node ids currently on screen in the node editor (empty when it is hidden); only these get live thumbnails.
     Q_INVOKABLE void setVisibleNodeIds(const QVariantList &ids);
     /// Code, output and run hook of the script feeding a Text/Shader node's data input (empty when unconnected).
@@ -439,6 +451,8 @@ signals:
     void scriptStatusChanged(quint64 id);
     /// id 0 means all node thumbnails were dropped.
     void nodeThumbnailChanged(quint64 id);
+    void previewNodeChanged();
+    void previewFrameChanged();
     // Properties
     void decksChanged();
     void deckClockChanged();
@@ -534,6 +548,8 @@ private:
     std::unique_ptr<VenueProfile> m_venue;
     QString m_lastEditedId;
     QPointer<GraphRuntime> m_thumbRuntime;
+    QPointer<GraphRuntime> m_previewRuntime;
+    quint64 m_previewNodeId = 0;
     DeckController *m_deckController = nullptr;
     SessionManager *m_sessionManager = nullptr;
     TransitionController *m_transitionCtrl = nullptr;
