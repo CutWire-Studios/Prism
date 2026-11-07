@@ -50,6 +50,7 @@ public:
         Script,
         AudioAnalyzer,
         Modulator,
+        Reroute,
     };
     Q_ENUM(NodeType)
 
@@ -68,8 +69,14 @@ public:
         AudioMixerOut,
         AudioEffectIn,
         AudioEffectOut,
+        /// Reroute ports before they are wired to anything: they take whatever is offered first.
+        RerouteIn,
+        RerouteOut,
     };
     Q_ENUM(PortKind)
+
+    /// The signal class a Reroute is currently carrying.
+    enum class Family { None, Video, Data, Audio };
 
     enum class PortDirection { In, Out };
     Q_ENUM(PortDirection)
@@ -114,6 +121,16 @@ public:
         NodeId to = 0;
         int toPort = -1;        // index into the target node's inputs
         EdgeKind kind = EdgeKind::Chain;
+    };
+
+    /// A titled, coloured rectangle behind nodes. Frames are not nodes: they take no part in
+    /// evaluation, ports or edges. Their ids come from the node id space so they never collide.
+    struct Frame {
+        quint64 id = 0;
+        QRectF rect;
+        QString title;
+        QString color;
+        QString comment;
     };
 
     struct ResolvedStream;
@@ -196,6 +213,11 @@ public:
     QVector<Port> outputPorts(NodeId id) const;
     bool isPortConnected(NodeId id, PortDirection dir, int index) const;
 
+    const QList<Frame> &frames() const { return m_frames; }
+    const Frame *frame(quint64 id) const;
+    /// Nodes whose rectangle lies fully inside the frame.
+    QList<NodeId> nodesInsideFrame(quint64 id) const;
+
     // ── Mutators ─────────────────────────────────────────────────────────────
     /// NaN x/y pick a staggered position. Process / AudioEffect nodes read
     /// params["effect"] and optional params["params"]; Input nodes read
@@ -213,6 +235,13 @@ public:
     bool setParams(NodeId id, const QVariantMap &params, bool merge = true);
     /// Process / Audio FX nodes: the nested effect params.
     bool setEffectParams(NodeId id, const QVariantMap &params, bool merge = true);
+
+    quint64 addFrame(const QRectF &rect, const QString &title = {}, const QString &color = {},
+                     const QString &comment = {});
+    bool removeFrame(quint64 id);
+    bool setFrameRect(quint64 id, const QRectF &rect);
+    /// Merges the "title", "color" and "comment" keys present in @p props.
+    bool setFrameProps(quint64 id, const QVariantMap &props);
 
     /// Wire two nodes. kind -1 infers from ports (prefers the video chain).
     /// toPortIndex is the destination slot (Layer / mixer / device).
@@ -293,6 +322,9 @@ public:
     QJsonObject snapshot(const std::function<double(NodeId)> &modulatorValue = {}) const;
 
 signals:
+    void frameAdded(quint64 id);
+    void frameRemoved(quint64 id);
+    void frameChanged(quint64 id);
     void nodeAdded(NodeId id);
     void nodeRemoved(NodeId id);
     void nodeChanged(NodeId id);
@@ -348,12 +380,24 @@ private:
     NodeId clipForAudioAnalyzer(NodeId scriptNodeId) const;
     QString deviceIdAt(const Node &out, int index) const;
 
+    static Family familyOfKind(PortKind kind);
+    Family rerouteFamily(NodeId id) const;
+    Family upstreamFamily(NodeId id, QSet<NodeId> &seen) const;
+    Family downstreamFamily(NodeId id, QSet<NodeId> &seen) const;
+    /// Follows a chain of Reroute nodes upstream to the real producer (0 when it ends unwired).
+    NodeId throughReroutes(NodeId id) const;
+    void collectProducers(NodeId id, QVector<NodeId> &out, QSet<NodeId> &seen) const;
+    /// True when @p to leads back to @p from and the path passes through a Reroute.
+    bool wouldLoopThroughReroute(NodeId from, NodeId to) const;
+    void normalizeRerouteEdges();
+
     void notifyNode(NodeId id);
     void notifyChanged();
 
     QMap<NodeId, Node> m_nodes;
     QList<NodeId> m_order;
     QList<Edge> m_edges;
+    QList<Frame> m_frames;
     NodeId m_outputNode = 0;
     quint64 m_idBase = 0;
     NodeId m_nextId = 1;

@@ -80,6 +80,8 @@ Popup {
         "AudioMixer": ["mix", "volume", "sum"],
         "Script": ["lua", "code", "program", "timer", "pulse", "trigger", "clock"],
         "AudioAnalyzer": ["fft", "beat", "spectrum", "dsp"],
+        "Frame": ["backdrop", "comment", "note", "sticky", "label", "annotation"],
+        "Reroute": ["dot", "knot", "waypoint", "wire", "cable", "bend"],
         "Modulator": ["lfo", "envelope", "random", "bpm", "tempo", "counter", "toggle", "math", "smooth", "link"]
     })
 
@@ -122,6 +124,8 @@ Popup {
                         category: qsTr("Audio"), type: T.AudioEffect, params: { effect: fx.id } })
         node(qsTr("Audio"), "type:" + T.AudioMixer, qsTr("Mixer"), T.AudioMixer)
         node(qsTr("Audio"), "type:" + T.MasterAudioOutput, qsTr("Audio Output"), T.MasterAudioOutput, undefined, true)
+        node(qsTr("Utility"), "type:" + T.Reroute, qsTr("Reroute"), T.Reroute)
+        list.push({ key: "frame", alias: "Frame", label: qsTr("Frame"), category: qsTr("Utility"), frame: true })
         if (NodeCatalog.scriptingAvailable()) {
             node(qsTr("Logic"), "type:" + T.Script, qsTr("Script"), T.Script)
             node(qsTr("Logic"), "type:" + T.AudioAnalyzer, qsTr("Audio Analyzer"), T.AudioAnalyzer)
@@ -131,6 +135,8 @@ Popup {
     }
 
     function compatible(entry) {
+        if (entry.frame)
+            return pendingKind < 0 && !edgeId
         if (edgeId) {
             if (entry.source || !canvas)
                 return false
@@ -245,7 +251,10 @@ Popup {
         NodeCatalog.noteNodeAdded(entry.key)
         const x = worldPos.x
         const y = worldPos.y - 28
-        if (entry.source) {
+        if (entry.frame) {
+            if (canvas)
+                canvas.addFrameAt(worldPos.x, worldPos.y)
+        } else if (entry.source) {
             if (canvas)
                 canvas.cancelConnection()
             if (entry.source === "file")

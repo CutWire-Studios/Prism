@@ -143,6 +143,18 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Utility</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reroute</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Frame</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Script</source>
         <translation type="unfinished"></translation>
     </message>
@@ -939,6 +951,13 @@ low/mid/high · beat</source>
     <name>EditorHeaderSettingsButton</name>
     <message>
         <source>Settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>FrameItem</name>
+    <message>
+        <source>Double-click to add a comment</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2614,6 +2633,18 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Reroute</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Utility</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A tiny waypoint that bends a wire around other nodes; it carries whatever you connect.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Logic</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2765,11 +2796,35 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Add frame around selection</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Delete</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Delete connection</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit comment</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Colour</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete frame</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2834,6 +2889,10 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Any</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Input</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2851,6 +2910,10 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Modulator</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reroute</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

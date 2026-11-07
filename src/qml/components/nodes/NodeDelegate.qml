@@ -106,7 +106,7 @@ Item {
     Rectangle {
         id: card
         anchors.fill: parent
-        radius: Theme.radiusLg
+        radius: root.type === NodePalette.nodeType.Reroute ? height / 2 : Theme.radiusLg
         color: Theme.panelAccent
         border.width: 1
         border.color: Theme.panelBorder
@@ -114,6 +114,7 @@ Item {
 
     Item {
         id: header
+        visible: root.type !== NodePalette.nodeType.Reroute
         width: parent.width
         height: root.headerH
 
@@ -230,7 +231,7 @@ Item {
         }
 
         onDoubleClicked: (mouse) => {
-            if (mouse.button === Qt.LeftButton)
+            if (mouse.button === Qt.LeftButton && root.type !== NodePalette.nodeType.Reroute)
                 root.canvas.inspectorRequested()
         }
 

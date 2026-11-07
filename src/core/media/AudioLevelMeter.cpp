@@ -62,7 +62,8 @@ QHash<quint64, float> AudioMeterBank::poll(float dtSeconds, const QList<const Cl
         QList<quint64> derived;
         for (quint64 id : g->nodeIds()) {
             const ClipGraph::Node *n = g->node(id);
-            if (n->type == NT::AudioEffect || n->type == NT::AudioMixer || n->type == NT::MasterAudioOutput)
+            if (n->type == NT::AudioEffect || n->type == NT::AudioMixer || n->type == NT::MasterAudioOutput
+                || n->type == NT::Reroute)
                 derived.append(id);
         }
         for (int pass = 0; pass < derived.size(); ++pass) {

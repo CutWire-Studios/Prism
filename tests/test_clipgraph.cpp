@@ -1130,6 +1130,234 @@ private slots:
         QVERIFY(c.graph()->hasNode(mod));
         QCOMPARE(c.bindParam(p, QStringLiteral("params.opacity"), 999999), quint64(0));
     }
+
+    void framesRoundTripAndAreOptional() {
+        ClipGraph g;
+        const NodeId a = g.addNode(NT::Input, {}, canvas("a"));
+        QVERIFY(!g.toJson().contains("frames"));
+        QVERIFY(!g.snapshot().contains("frames"));
+
+        const quint64 f = g.addFrame(QRectF(10, 20, 300, 200), "Intro", "#0090ff", "line one\nline two");
+        QVERIFY(f != 0);
+        QVERIFY(f != a && !g.hasNode(f));
+        QCOMPARE(g.toJson()["graphVersion"].toInt(), 6);
+        QCOMPARE(g.toJson()["frames"].toArray().size(), 1);
+
+        ClipGraph again;
+        QVERIFY(again.fromJson(g.toJson()));
+        QCOMPARE(again.frames().size(), 1);
+        const ClipGraph::Frame *r = again.frame(f);
+        QVERIFY(r);
+        QCOMPARE(r->rect, QRectF(10, 20, 300, 200));
+        QCOMPARE(r->title, QStringLiteral("Intro"));
+        QCOMPARE(r->color, QStringLiteral("#0090ff"));
+        QCOMPARE(r->comment, QStringLiteral("line one\nline two"));
+        QCOMPARE(again.toJson().value("frames"), g.toJson().value("frames"));
+        QVERIFY(again.addNode(NT::Input, {}, canvas("b")) != f);
+
+        const QJsonArray snapFrames = g.snapshot()["frames"].toArray();
+        QCOMPARE(snapFrames.size(), 1);
+        QCOMPARE(snapFrames[0].toObject()["title"].toString(), QStringLiteral("Intro"));
+        QCOMPARE(snapFrames[0].toObject()["comment"].toString(), QStringLiteral("line one\nline two"));
+
+        QJsonObject noFrames = g.toJson();
+        noFrames.remove("frames");
+        QVERIFY(again.fromJson(noFrames));
+        QVERIFY(again.frames().isEmpty());
+
+        QVERIFY(g.removeFrame(f));
+        QVERIFY(!g.toJson().contains("frames"));
+    }
+
+    void frameMoveCarriesNodesInsideAsOneUndoStep() {
+        ClipGraphController c;
+        const quint64 inside = c.addNode(int(NT::Input), 100, 100, canvas("in"));
+        const quint64 outside = c.addNode(int(NT::Input), 1000, 1000, canvas("out"));
+        const quint64 frame = c.addFrame(0, 0, 400, 400);
+        QVERIFY(frame != 0);
+        c.clearHistory();
+
+        c.moveFrame(frame, 10, 20);
+        c.moveFrame(frame, 50, 60);
+        c.endMove();
+        ClipGraph *g = c.graph();
+        QCOMPARE(g->frame(frame)->rect.topLeft(), QPointF(50, 60));
+        QCOMPARE(g->node(inside)->pos, QPointF(150, 160));
+        QCOMPARE(g->node(outside)->pos, QPointF(1000, 1000));
+        QCOMPARE(c.undoStack()->count(), 1);
+
+        c.undo();
+        QCOMPARE(g->frame(frame)->rect.topLeft(), QPointF(0, 0));
+        QCOMPARE(g->node(inside)->pos, QPointF(100, 100));
+        QVERIFY(!c.canUndo());
+
+        c.redo();
+        QCOMPARE(g->node(inside)->pos, QPointF(150, 160));
+    }
+
+    void frameEditsAreUndoable() {
+        ClipGraphController c;
+        const quint64 a = c.addNode(int(NT::Input), 100, 100, canvas("a"));
+        c.select({QVariant::fromValue<quint64>(a)});
+        c.clearHistory();
+        const quint64 f = c.frameSelection();
+        QVERIFY(f != 0);
+        QVERIFY(c.graph()->frame(f)->rect.contains(QRectF(c.graph()->node(a)->pos, c.graph()->node(a)->size)));
+        QCOMPARE(c.selectedFrame(), f);
+        QVERIFY(c.selection().isEmpty());
+
+        QVERIFY(c.setFrameProps(f, {{"title", "Renamed"}, {"comment", "note"}}));
+        c.resizeFrame(f, 500, 300);
+        c.resizeFrame(f, 600, 320);
+        c.endMove();
+        QCOMPARE(c.graph()->frame(f)->rect.size(), QSizeF(600, 320));
+        c.undo();
+        QVERIFY(c.graph()->frame(f)->rect.size() != QSizeF(600, 320));
+        c.undo();
+        QCOMPARE(c.graph()->frame(f)->title, QStringLiteral("Frame"));
+        QVERIFY(c.removeFrame(f));
+        QVERIFY(!c.graph()->frame(f));
+        c.undo();
+        QVERIFY(c.graph()->frame(f));
+    }
+
+    void rerouteInVideoEdgeKeepsStream() {
+        ClipGraph g;
+        const NodeId a = g.addNode(NT::Input, {}, canvas("a"));
+        const NodeId p = g.addNode(NT::Process, {}, {{"effect", 4}});
+        const NodeId q = g.addNode(NT::Process, {}, {{"effect", 4}});
+        QVERIFY(g.connectNodes(a, p));
+        QVERIFY(g.connectNodes(p, q));
+        const auto key = [&](const ClipGraph &gr) {
+            const auto s = gr.evaluateVideoInput(q);
+            return ProcessEffects::sourceEffectsKey(s.layers.first().sourceEffects);
+        };
+        const QString before = key(g);
+        QCOMPARE(g.evaluateVideoInput(q).layers.first().sourceEffects.size(), 2);
+
+        EdgeId edge = 0;
+        for (const ClipGraph::Edge &e : g.edges())
+            if (e.from == p && e.to == q) edge = e.id;
+        QVERIFY(edge != 0);
+        const NodeId r = g.addNode(NT::Reroute, QPointF(5, 5));
+        QVERIFY(r != 0);
+        QVERIFY(g.canInsertIntoEdge(r, edge));
+        QVERIFY(g.insertIntoEdge(r, edge));
+
+        QCOMPARE(g.edges().size(), 3);
+        QCOMPARE(g.outputPorts(r)[0].kind, ClipGraph::PortKind::ChainOut);
+        QCOMPARE(g.producerForInput(q, 0), p);
+        QCOMPARE(key(g), before);
+        const auto viaReroute = g.evaluateVideoInput(r);
+        QCOMPARE(viaReroute.layers.first().inputNodeId, a);
+        QCOMPARE(viaReroute.layers.first().sourceEffects.size(), 1);
+
+        ClipGraph again;
+        QVERIFY(again.fromJson(g.toJson()));
+        QCOMPARE(again.edges().size(), 3);
+        QCOMPARE(key(again), before);
+        QVERIFY(again.node(r)->type == NT::Reroute);
+        QVERIFY(!g.toJson()["rerouteNodes"].toArray().isEmpty());
+    }
+
+    void rerouteInLayerSlotIsTransparent() {
+        ClipGraph g;
+        const NodeId a = g.addNode(NT::Input, {}, canvas("alpha"));
+        const NodeId layer = g.addNode(NT::Layer);
+        QVERIFY(g.connectNodes(a, layer, int(EK::Chain), 0));
+        EdgeId edge = g.edges().first().id;
+        const NodeId r = g.addNode(NT::Reroute);
+        QVERIFY(g.insertIntoEdge(r, edge));
+
+        QCOMPARE(g.producerForInput(layer, 0), a);
+        const auto stream = g.evaluateVideoInput(layer);
+        QCOMPARE(stream.layers.first().composite->layers.size(), 1);
+        QCOMPARE(stream.layers.first().composite->layers[0].inputNodeId, a);
+        const auto views = g.layerSlotViews(layer);
+        QCOMPARE(views.size(), 1);
+        QCOMPARE(views[0].producer, a);
+        QCOMPARE(views[0].sourceNode, a);
+        QCOMPARE(views[0].name, QStringLiteral("alpha"));
+    }
+
+    void rerouteInAudioPathIsTransparent() {
+        ClipGraph g;
+        const NodeId clip = g.addNode(NT::Input, {}, canvas("song", true));
+        const NodeId mixer = g.addNode(NT::AudioMixer);
+        const NodeId master = g.addNode(NT::MasterAudioOutput);
+        QVERIFY(g.connectNodes(clip, mixer, int(EK::StreamToMixer), 0));
+        QVERIFY(g.connectNodes(mixer, master, int(EK::MixerToOutput), 0));
+        ClipGraph::ResolvedAudioRoute before;
+        QVERIFY(g.resolveAudioStreamRoute(clip, before));
+
+        EdgeId edge = 0;
+        for (const ClipGraph::Edge &e : g.edges())
+            if (e.from == clip && e.to == mixer) edge = e.id;
+        const NodeId r = g.addNode(NT::Reroute);
+        QVERIFY(g.insertIntoEdge(r, edge));
+        QCOMPARE(g.outputPorts(r)[0].kind, ClipGraph::PortKind::AudioEffectOut);
+
+        ClipGraph::ResolvedAudioRoute after;
+        QVERIFY(g.resolveAudioStreamRoute(clip, after));
+        QCOMPARE(after.mixerNodeId, before.mixerNodeId);
+        QCOMPARE(after.mixerSlotIndex, before.mixerSlotIndex);
+        QCOMPARE(after.outputNodeId, master);
+        QVERIFY(after.effects.isEmpty());
+
+        ClipGraph again;
+        QVERIFY(again.fromJson(g.toJson()));
+        QVERIFY(again.resolveAudioStreamRoute(clip, after));
+        QCOMPARE(after.mixerNodeId, mixer);
+        QCOMPARE(after.outputNodeId, master);
+    }
+
+    void rerouteAdaptsKindAndRefusesMismatches() {
+        ClipGraph g;
+        const NodeId a = g.addNode(NT::Input, {}, canvas("a"));
+        const NodeId r = g.addNode(NT::Reroute);
+        const NodeId script = g.addNode(NT::Script);
+        const NodeId proc = g.addNode(NT::Process, {}, {{"effect", 4}});
+
+        QCOMPARE(g.inputPorts(r)[0].kind, ClipGraph::PortKind::RerouteIn);
+        QVERIFY(g.canConnectPorts(r, 0, script, 0));
+        QVERIFY(g.connectNodes(a, r));
+        QCOMPARE(g.inputPorts(r)[0].kind, ClipGraph::PortKind::ChainIn);
+        QCOMPARE(g.outputPorts(r)[0].kind, ClipGraph::PortKind::ChainOut);
+        QVERIFY(!g.canConnectPorts(r, 0, script, 0));
+        QVERIFY(!g.canConnectNodes(r, script));
+        QVERIFY(g.canConnectPorts(r, 0, proc, 0));
+        QVERIFY(g.connectPorts(r, 0, proc, 0));
+
+        g.disconnectNodes(a, r);
+        g.disconnectNodes(r, proc);
+        QCOMPARE(g.outputPorts(r)[0].kind, ClipGraph::PortKind::RerouteOut);
+
+        const NodeId s1 = g.addNode(NT::Script);
+        const NodeId r2 = g.addNode(NT::Reroute);
+        QVERIFY(g.connectNodes(s1, r2));
+        QVERIFY(g.connectNodes(r2, script));
+        QCOMPARE(g.scriptProducersForData(script), QVector<NodeId>{s1});
+        QCOMPARE(g.dataScriptNodeId(script), s1);
+        QVERIFY(!g.canConnectPorts(a, 0, r2, 0));
+        QVERIFY(!g.canConnectPorts(r2, 0, proc, 0));
+    }
+
+    void reroutesCannotFormLoops() {
+        ClipGraph g;
+        const NodeId r1 = g.addNode(NT::Reroute);
+        const NodeId r2 = g.addNode(NT::Reroute);
+        QVERIFY(g.connectPorts(r1, 0, r2, 0));
+        QVERIFY(!g.canConnectPorts(r2, 0, r1, 0));
+        QVERIFY(!g.connectPorts(r2, 0, r1, 0));
+        QVERIFY(!g.connectNodes(r2, r1));
+
+        const NodeId p = g.addNode(NT::Process, {}, {{"effect", 4}});
+        const NodeId q = g.addNode(NT::Process, {}, {{"effect", 4}});
+        QVERIFY(g.connectPorts(p, 0, r1, 0));
+        QVERIFY(g.connectPorts(r2, 0, q, 0));
+        QVERIFY(!g.canConnectPorts(q, 0, p, 0));
+        QCOMPARE(g.evaluateVideoInput(r1).layers.size(), 0);
+    }
 };
 
 QTEST_MAIN(TestClipGraph)

@@ -41,6 +41,8 @@ constexpr qreal kLayerW = 158.0, kLayerHdr = 20.0, kLayerRow = 22.0, kLayerFoot 
 constexpr qreal kOutW = 116.0, kOutH = 78.0, kOutBodyH = 52.0;
 constexpr qreal kMixW = 158.0, kMixHdr = 20.0, kMixRow = 22.0, kMixFoot = 26.0;
 constexpr qreal kAoW = 168.0, kAoHdr = 22.0, kAoRow = 20.0;
+constexpr qreal kRerouteW = 22.0, kRerouteH = 16.0;
+constexpr qreal kFrameMinW = 80.0, kFrameMinH = 50.0;
 
 int processExtraInputs(const ClipGraph::Node &n) {
     const ShaderEffectSpec *spec = ShaderEffects::byId(n.params.value("effect").toInt());
@@ -227,8 +229,56 @@ QString sourceKindName(int kind) {
 
 // ── Static validation tables ────────────────────────────────────────────────
 
+ClipGraph::Family ClipGraph::familyOfKind(PortKind kind) {
+    switch (kind) {
+    case PK::ChainIn:
+    case PK::ChainOut:
+        return Family::Video;
+    case PK::ScriptOut:
+    case PK::DataIn:
+        return Family::Data;
+    case PK::AudioControllerOut:
+    case PK::MasterAudioInputOut:
+    case PK::AudioEffectOut:
+    case PK::AudioEffectIn:
+    case PK::AudioMixerIn:
+    case PK::MasterAudioIn:
+    case PK::AudioIn:
+        return Family::Audio;
+    default:
+        return Family::None;
+    }
+}
+
+namespace {
+PK rerouteInKind(ClipGraph::Family f) {
+    switch (f) {
+    case ClipGraph::Family::Video: return PK::ChainIn;
+    case ClipGraph::Family::Data:  return PK::DataIn;
+    case ClipGraph::Family::Audio: return PK::AudioEffectIn;
+    default:                       return PK::RerouteIn;
+    }
+}
+PK rerouteOutKind(ClipGraph::Family f) {
+    switch (f) {
+    case ClipGraph::Family::Video: return PK::ChainOut;
+    case ClipGraph::Family::Data:  return PK::ScriptOut;
+    case ClipGraph::Family::Audio: return PK::AudioEffectOut;
+    default:                       return PK::RerouteOut;
+    }
+}
+}  // namespace
+
 bool ClipGraph::portsCompatible(PortKind a, PortKind b) {
     if (a == b) return false;
+    const bool ra = a == PK::RerouteIn || a == PK::RerouteOut;
+    const bool rb = b == PK::RerouteIn || b == PK::RerouteOut;
+    if (ra || rb) {
+        if (ra && rb) return a != b;
+        const PK other = ra ? b : a;
+        const PK open = ra ? a : b;
+        return familyOfKind(other) != Family::None && directionOf(other) != directionOf(open);
+    }
     if ((a == PK::ChainOut && b == PK::ChainIn) || (a == PK::ChainIn && b == PK::ChainOut)) return true;
     if ((isAudioStreamOutKind(a) && isAudioMixerInKind(b)) ||
         (isAudioMixerInKind(a) && isAudioStreamOutKind(b))) return true;
@@ -272,6 +322,7 @@ ClipGraph::PortDirection ClipGraph::directionOf(PortKind kind) {
     case PK::DataIn:
     case PK::AudioMixerIn:
     case PK::AudioEffectIn:
+    case PK::RerouteIn:
         return PD::In;
     default:
         return PD::Out;
@@ -386,6 +437,8 @@ QSizeF ClipGraph::nodeSize(const Node &n) const {
         return {kMixW, kMixHdr + slotCount(n) * kMixRow + kMixFoot};
     case NT::MasterAudioOutput:
         return {kAoW, kAoHdr + n.params.value("devicePorts").toList().size() * kAoRow + 4.0};
+    case NT::Reroute:
+        return {kRerouteW, kRerouteH};
     default:
         return {kSmallW, kSmallH};
     }
@@ -482,6 +535,12 @@ void ClipGraph::buildPorts(const Node &n, QVector<Port> &in, QVector<Port> &out)
     case NT::Modulator:
         add(out, PK::ScriptOut, PD::Out, QStringLiteral("value"), false, {kSmallW, kSmallH / 2});
         break;
+    case NT::Reroute: {
+        const Family f = rerouteFamily(n.id);
+        add(in, rerouteInKind(f), PD::In, QStringLiteral("in"), false, {0.0, sz.height() / 2.0});
+        add(out, rerouteOutKind(f), PD::Out, QStringLiteral("out"), false, {sz.width(), sz.height() / 2.0});
+        break;
+    }
     }
 }
 
@@ -521,6 +580,12 @@ int ClipGraph::findPortIndex(NodeId id, PortKind kind, int slot) const {
     QVector<Port> in, out;
     buildPorts(*n, in, out);
     const QVector<Port> &list = directionOf(kind) == PD::In ? in : out;
+    if (n->type == NT::Reroute) {
+        if (list.isEmpty()) return -1;
+        const PK pk = list[0].kind;
+        const bool open = pk == PK::RerouteIn || pk == PK::RerouteOut;
+        return (pk == kind || (open && familyOfKind(kind) != Family::None)) ? 0 : -1;
+    }
     QVector<int> matches;
     for (const Port &p : list)
         if (p.kind == kind) matches.append(p.index);
@@ -619,6 +684,7 @@ void ClipGraph::refreshNode(Node &n) {
         n.title = d ? d->name : QStringLiteral("Audio Effect");
         break;
     }
+    case NT::Reroute:           n.title = QStringLiteral("Reroute"); break;
     case NT::Layer:             n.title = QStringLiteral("Layer"); break;
     case NT::Output:            n.title = QStringLiteral("Output"); break;
     case NT::AudioMixer:        n.title = QStringLiteral("Audio Mixer"); break;
@@ -833,9 +899,86 @@ void ClipGraph::clear() {
     m_nodes.clear();
     m_order.clear();
     m_edges.clear();
+    m_frames.clear();
     m_outputNode = 0;
     emit graphReset();
     emit changed();
+}
+
+// ── Frames ──────────────────────────────────────────────────────────────────
+
+const ClipGraph::Frame *ClipGraph::frame(quint64 id) const {
+    for (const Frame &f : m_frames)
+        if (f.id == id) return &f;
+    return nullptr;
+}
+
+QList<NodeId> ClipGraph::nodesInsideFrame(quint64 id) const {
+    QList<NodeId> out;
+    const Frame *f = frame(id);
+    if (!f) return out;
+    for (NodeId nid : m_order) {
+        const Node *n = node(nid);
+        if (n && f->rect.contains(QRectF(n->pos, n->size))) out.append(nid);
+    }
+    return out;
+}
+
+quint64 ClipGraph::addFrame(const QRectF &rect, const QString &title, const QString &color,
+                            const QString &comment) {
+    Frame f;
+    f.id = allocateId();
+    f.rect = QRectF(rect.topLeft(), QSizeF(std::max(rect.width(), kFrameMinW),
+                                           std::max(rect.height(), kFrameMinH)));
+    f.title = title;
+    f.color = color;
+    f.comment = comment;
+    m_frames.append(f);
+    emit frameAdded(f.id);
+    return f.id;
+}
+
+bool ClipGraph::removeFrame(quint64 id) {
+    for (qsizetype i = 0; i < m_frames.size(); ++i) {
+        if (m_frames[i].id != id) continue;
+        m_frames.removeAt(i);
+        emit frameRemoved(id);
+        return true;
+    }
+    return false;
+}
+
+bool ClipGraph::setFrameRect(quint64 id, const QRectF &rect) {
+    for (Frame &f : m_frames) {
+        if (f.id != id) continue;
+        const QRectF next(rect.topLeft(), QSizeF(std::max(rect.width(), kFrameMinW),
+                                                 std::max(rect.height(), kFrameMinH)));
+        if (f.rect == next) return true;
+        f.rect = next;
+        emit frameChanged(id);
+        return true;
+    }
+    return false;
+}
+
+bool ClipGraph::setFrameProps(quint64 id, const QVariantMap &props) {
+    for (Frame &f : m_frames) {
+        if (f.id != id) continue;
+        bool changed = false;
+        auto assign = [&](const char *key, QString &field) {
+            if (!props.contains(QLatin1String(key))) return;
+            const QString v = props.value(QLatin1String(key)).toString();
+            if (v == field) return;
+            field = v;
+            changed = true;
+        };
+        assign("title", f.title);
+        assign("color", f.color);
+        assign("comment", f.comment);
+        if (changed) emit frameChanged(id);
+        return true;
+    }
+    return false;
 }
 
 // ── Edges ───────────────────────────────────────────────────────────────────
@@ -885,6 +1028,7 @@ bool ClipGraph::connectPortsRaw(NodeId from, int fromPort, NodeId to, int toPort
 }
 
 void ClipGraph::afterConnectionsChanged() {
+    normalizeRerouteEdges();
     if (!m_restoring) {
         normalizeSwitchingInputs();
         normalizeMixerInputs();
@@ -894,6 +1038,7 @@ void ClipGraph::afterConnectionsChanged() {
 
 bool ClipGraph::connectNodes(NodeId from, NodeId to, int kind, int toPortIndex) {
     if (from == 0 || to == 0 || from == to || !hasNode(from) || !hasNode(to)) return false;
+    if (wouldLoopThroughReroute(from, to)) return false;
 
     static const EK kTryOrder[] = {
         EK::Chain, EK::ScriptToData, EK::ClipToShaderAudio, EK::AudioEffectChain,
@@ -916,6 +1061,7 @@ bool ClipGraph::connectNodes(NodeId from, NodeId to, int kind, int toPortIndex) 
 
 bool ClipGraph::canConnectNodes(NodeId from, NodeId to, int kind, int toPortIndex) const {
     if (from == 0 || to == 0 || from == to || !hasNode(from) || !hasNode(to)) return false;
+    if (wouldLoopThroughReroute(from, to)) return false;
     static const EK kTryOrder[] = {
         EK::Chain, EK::ScriptToData, EK::ClipToShaderAudio, EK::AudioEffectChain,
         EK::StreamToMixer, EK::MixerToOutput, EK::InputToMaster,
@@ -942,9 +1088,15 @@ std::optional<ClipGraph::ConnectPlan> ClipGraph::planConnection(NodeId from, int
     if (fromPort < 0 || fromPort >= outs.size() || toPort < 0 || toPort >= ins.size())
         return std::nullopt;
 
-    const PK a = outs[fromPort].kind;
-    const PK b = ins[toPort].kind;
+    PK a = outs[fromPort].kind;
+    PK b = ins[toPort].kind;
     if (!portsCompatible(a, b)) return std::nullopt;
+
+    if (wouldLoopThroughReroute(from, to)) return std::nullopt;
+
+    if (a == PK::RerouteOut && b == PK::RerouteIn) return ConnectPlan{};
+    if (a == PK::RerouteOut) a = rerouteOutKind(familyOfKind(b));
+    if (b == PK::RerouteIn) b = rerouteInKind(familyOfKind(a));
 
     ConnectPlan plan;
     if (a == PK::ChainOut && b == PK::ChainIn) plan.kind = EK::Chain;
@@ -959,9 +1111,10 @@ std::optional<ClipGraph::ConnectPlan> ClipGraph::planConnection(NodeId from, int
 
     if (plan.insertMixer) return plan;
 
-    if (plan.kind == EK::Chain && tn->type == NT::Process
-        && fn->type != NT::Input && fn->type != NT::Process
-        && !(fn->type == NT::Layer && toPort > 0))
+    const Node *src = fn->type == NT::Reroute ? node(throughReroutes(from)) : fn;
+    if (plan.kind == EK::Chain && tn->type == NT::Process && src
+        && src->type != NT::Input && src->type != NT::Process
+        && !(src->type == NT::Layer && toPort > 0))
         return std::nullopt;
     return plan;
 }
@@ -1312,11 +1465,121 @@ void ClipGraph::normalizeMixerInputs() {
     }
 }
 
+// ── Reroutes ────────────────────────────────────────────────────────────────
+
+ClipGraph::Family ClipGraph::upstreamFamily(NodeId id, QSet<NodeId> &seen) const {
+    if (seen.contains(id)) return Family::None;
+    seen.insert(id);
+    for (const Edge &e : m_edges) {
+        if (e.to != id) continue;
+        const Node *from = node(e.from);
+        if (!from) continue;
+        Family f = Family::None;
+        if (from->type == NT::Reroute) {
+            f = upstreamFamily(e.from, seen);
+        } else {
+            const QVector<Port> outs = outputPorts(e.from);
+            if (e.fromPort >= 0 && e.fromPort < outs.size()) f = familyOfKind(outs[e.fromPort].kind);
+        }
+        if (f != Family::None) return f;
+    }
+    return Family::None;
+}
+
+ClipGraph::Family ClipGraph::downstreamFamily(NodeId id, QSet<NodeId> &seen) const {
+    if (seen.contains(id)) return Family::None;
+    seen.insert(id);
+    for (const Edge &e : m_edges) {
+        if (e.from != id) continue;
+        const Node *to = node(e.to);
+        if (!to) continue;
+        Family f = Family::None;
+        if (to->type == NT::Reroute) {
+            f = downstreamFamily(e.to, seen);
+        } else {
+            const QVector<Port> ins = inputPorts(e.to);
+            if (e.toPort >= 0 && e.toPort < ins.size()) f = familyOfKind(ins[e.toPort].kind);
+        }
+        if (f != Family::None) return f;
+    }
+    return Family::None;
+}
+
+ClipGraph::Family ClipGraph::rerouteFamily(NodeId id) const {
+    QSet<NodeId> seen;
+    const Family up = upstreamFamily(id, seen);
+    if (up != Family::None) return up;
+    seen.clear();
+    return downstreamFamily(id, seen);
+}
+
+NodeId ClipGraph::throughReroutes(NodeId id) const {
+    for (qsizetype guard = 0; guard <= m_nodes.size(); ++guard) {
+        const Node *n = node(id);
+        if (!n || n->type != NT::Reroute) return id;
+        NodeId up = 0;
+        for (const Edge &e : m_edges) {
+            if (e.to == id) { up = e.from; break; }
+        }
+        if (up == 0) return 0;
+        id = up;
+    }
+    return 0;
+}
+
+void ClipGraph::collectProducers(NodeId id, QVector<NodeId> &out, QSet<NodeId> &seen) const {
+    if (seen.contains(id)) return;
+    seen.insert(id);
+    const Node *n = node(id);
+    if (!n) return;
+    if (n->type != NT::Reroute) {
+        out.append(id);
+        return;
+    }
+    for (const Edge &e : m_edges)
+        if (e.to == id) collectProducers(e.from, out, seen);
+}
+
+bool ClipGraph::wouldLoopThroughReroute(NodeId from, NodeId to) const {
+    auto isReroute = [this](NodeId id) {
+        const Node *n = node(id);
+        return n && n->type == NT::Reroute;
+    };
+    QSet<NodeId> seen[2];
+    QList<std::pair<NodeId, bool>> stack{{to, isReroute(from) || isReroute(to)}};
+    while (!stack.isEmpty()) {
+        const auto [id, viaReroute] = stack.takeLast();
+        if (seen[viaReroute].contains(id)) continue;
+        seen[viaReroute].insert(id);
+        if (id == from && viaReroute) return true;
+        for (const Edge &e : m_edges)
+            if (e.from == id) stack.append(std::make_pair(e.to, viaReroute || isReroute(e.to)));
+    }
+    return false;
+}
+
+void ClipGraph::normalizeRerouteEdges() {
+    for (Edge &e : m_edges) {
+        const Node *a = node(e.from);
+        const Node *b = node(e.to);
+        if (!a || !b || a->type != NT::Reroute || b->type != NT::Reroute) continue;
+        EdgeKind kind = EK::Chain;
+        switch (rerouteFamily(e.from)) {
+        case Family::Data:  kind = EK::ScriptToData; break;
+        case Family::Audio: kind = EK::AudioEffectChain; break;
+        default:            break;
+        }
+        if (e.kind == kind) continue;
+        e.kind = kind;
+        if (!m_restoring) emit edgeChanged(e.id);
+    }
+}
+
 // ── Evaluation ──────────────────────────────────────────────────────────────
 
 NodeId ClipGraph::edgeProducer(NodeId nodeId, int inPort, EdgeKind kind) const {
     for (const Edge &e : m_edges)
-        if (e.kind == kind && e.to == nodeId && e.toPort == inPort) return e.from;
+        if (e.kind == kind && e.to == nodeId && e.toPort == inPort) return throughReroutes(e.from);
     return 0;
 }
 
@@ -1336,6 +1599,8 @@ ClipGraph::ResolvedStream ClipGraph::evaluateGuarded(NodeId producerNode, QSet<N
 
     const Node *n = node(producerNode);
     if (!n) return out;
+
+    if (n->type == NT::Reroute) return evaluateGuarded(throughReroutes(producerNode), visited);
 
     if (n->type == NT::Input) {
         ResolvedLayer layer;
@@ -1549,6 +1814,10 @@ bool ClipGraph::resolveAudioStreamRoute(NodeId sourceNodeId, ResolvedAudioRoute 
 
         if (e->kind == EK::AudioEffectChain) {
             const Node *ae = node(toId);
+            if (ae && ae->type == NT::Reroute) {
+                current = toId;
+                continue;
+            }
             if (ae && ae->type == NT::AudioEffect) {
                 if (!ae->params.value("bypass").toBool())
                     route.effects.append({int(toId), prism::audiofx::fromJson(
@@ -1681,7 +1950,7 @@ bool ClipGraph::mixerSlotSettings(NodeId mixerId, int slotIndex, int &volume, bo
 
 NodeId ClipGraph::clipForAudioAnalyzer(NodeId scriptNodeId) const {
     for (const Edge &e : m_edges)
-        if (e.kind == EK::ClipToAudioAnalyzer && e.to == scriptNodeId) return e.from;
+        if (e.kind == EK::ClipToAudioAnalyzer && e.to == scriptNodeId) return throughReroutes(e.from);
     return 0;
 }
 
@@ -1712,15 +1981,15 @@ bool ClipGraph::hasAudioAnalyzerConsumer(NodeId producerId) const {
 }
 
 NodeId ClipGraph::dataScriptNodeId(NodeId dataNodeId) const {
-    for (const Edge &e : m_edges)
-        if (e.kind == EK::ScriptToData && e.to == dataNodeId) return e.from;
-    return 0;
+    const QVector<NodeId> producers = scriptProducersForData(dataNodeId);
+    return producers.isEmpty() ? 0 : producers.first();
 }
 
 QVector<NodeId> ClipGraph::scriptProducersForData(NodeId dataNodeId) const {
     QVector<NodeId> out;
+    QSet<NodeId> seen;
     for (const Edge &e : m_edges)
-        if (e.kind == EK::ScriptToData && e.to == dataNodeId) out.append(e.from);
+        if (e.kind == EK::ScriptToData && e.to == dataNodeId) collectProducers(e.from, out, seen);
     return out;
 }
 
@@ -1733,7 +2002,7 @@ QJsonObject ClipGraph::toJson() const {
 
     QJsonArray inputNodes, processNodes, audioEffectNodes, layerNodes,
         audioMixerNodes, scriptNodes, masterAudioNodes, masterAudioInputNodes,
-        masterAudioCaptureNodes, modulatorNodes;
+        masterAudioCaptureNodes, modulatorNodes, rerouteNodes;
 
     for (const Node &n : m_nodes) {
         QJsonObject o = toJsonObject(n.params);
@@ -1766,6 +2035,7 @@ QJsonObject ClipGraph::toJson() const {
         case NT::Script:
         case NT::AudioAnalyzer:     scriptNodes.append(o); break;
         case NT::Modulator:         modulatorNodes.append(o); break;
+        case NT::Reroute:           rerouteNodes.append(o); break;
         case NT::MasterAudioOutput: masterAudioNodes.append(o); break;
         case NT::MasterAudioInput:  masterAudioInputNodes.append(o); break;
         case NT::MasterAudioCapture: masterAudioCaptureNodes.append(o); break;
@@ -1778,6 +2048,16 @@ QJsonObject ClipGraph::toJson() const {
     root["audioMixerNodes"] = audioMixerNodes;
     root["scriptNodes"] = scriptNodes;
     if (!modulatorNodes.isEmpty()) root["modulatorNodes"] = modulatorNodes;
+    if (!rerouteNodes.isEmpty()) root["rerouteNodes"] = rerouteNodes;
+    if (!m_frames.isEmpty()) {
+        QJsonArray frames;
+        for (const Frame &f : m_frames)
+            frames.append(QJsonObject{{"id", (qint64)f.id}, {"x", f.rect.x()}, {"y", f.rect.y()},
+                                      {"w", f.rect.width()}, {"h", f.rect.height()},
+                                      {"title", f.title}, {"color", f.color},
+                                      {"comment", f.comment}});
+        root["frames"] = frames;
+    }
     root["masterAudioNodes"] = masterAudioNodes;
     root["masterAudioInputNodes"] = masterAudioInputNodes;
     root["masterAudioCaptureNodes"] = masterAudioCaptureNodes;
@@ -1802,6 +2082,7 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
     m_nodes.clear();
     m_order.clear();
     m_edges.clear();
+    m_frames.clear();
     m_outputNode = 0;
     m_nextId = m_idBase + 1;
 
@@ -1954,6 +2235,9 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         restore(obj, NT::Modulator, p);
     }
 
+    for (const QJsonValue &val : state["rerouteNodes"].toArray())
+        restore(val.toObject(), NT::Reroute, {});
+
     for (const QJsonValue &val : state["masterAudioNodes"].toArray()) {
         const QJsonObject obj = val.toObject();
         QVariantList ports;
@@ -1991,7 +2275,29 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         }
     }
 
+    QList<Frame> loadedFrames;
+    for (const QJsonValue &val : state["frames"].toArray()) {
+        const QJsonObject obj = val.toObject();
+        Frame f;
+        f.id = (quint64)obj["id"].toInteger();
+        f.rect = QRectF(obj["x"].toDouble(), obj["y"].toDouble(),
+                        std::max(obj["w"].toDouble(kFrameMinW), kFrameMinW),
+                        std::max(obj["h"].toDouble(kFrameMinH), kFrameMinH));
+        f.title = obj["title"].toString();
+        f.color = obj["color"].toString();
+        f.comment = obj["comment"].toString();
+        maxId = std::max(maxId, f.id);
+        loadedFrames.append(f);
+    }
+
     m_nextId = std::max({maxId + 1, (NodeId)state["nextId"].toInteger(0), NodeId(m_idBase + 1)});
+
+    QSet<quint64> usedFrameIds;
+    for (Frame &f : loadedFrames) {
+        if (f.id == 0 || m_nodes.contains(f.id) || usedFrameIds.contains(f.id)) f.id = allocateId();
+        usedFrameIds.insert(f.id);
+        m_frames.append(f);
+    }
 
     for (const QJsonValue &val : state["connections"].toArray()) {
         const QJsonObject obj = val.toObject();
@@ -2004,6 +2310,7 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
     }
     migrateLegacyAudioConnections();
 
+    normalizeRerouteEdges();
     normalizeSwitchingInputs();
     normalizeMixerInputs();
     if (m_outputNode == 0 && !m_nodes.isEmpty())
@@ -2025,7 +2332,7 @@ QJsonObject ClipGraph::snapshot(const std::function<double(NodeId)> &modulatorVa
         nodes.append(extra);
     };
 
-    for (NodeType type : {NT::Input, NT::Process, NT::Layer, NT::Modulator}) {
+    for (NodeType type : {NT::Input, NT::Process, NT::Layer, NT::Modulator, NT::Reroute}) {
         for (NodeId id : nodeIdsOfType(type)) {
             const Node &n = *node(id);
             switch (type) {
@@ -2052,6 +2359,9 @@ QJsonObject ClipGraph::snapshot(const std::function<double(NodeId)> &modulatorVa
             }
             case NT::Layer:
                 append(n, QStringLiteral("layer"), {{QStringLiteral("slots"), slotCount(n)}});
+                break;
+            case NT::Reroute:
+                append(n, QStringLiteral("reroute"));
                 break;
             case NT::Modulator: {
                 static const char *const kKinds[] = {"lfo", "envelope", "map_range", "smooth", "random",
@@ -2088,9 +2398,22 @@ QJsonObject ClipGraph::snapshot(const std::function<double(NodeId)> &modulatorVa
         });
     }
 
-    return QJsonObject{
+    QJsonObject result{
         {QStringLiteral("output"), m_outputNode ? QString::number(m_outputNode) : QString()},
         {QStringLiteral("nodes"), nodes},
         {QStringLiteral("connections"), connections},
     };
+    if (!m_frames.isEmpty()) {
+        QJsonArray frames;
+        for (const Frame &f : m_frames)
+            frames.append(QJsonObject{{QStringLiteral("id"), QString::number(f.id)},
+                                      {QStringLiteral("title"), f.title},
+                                      {QStringLiteral("x"), f.rect.x()},
+                                      {QStringLiteral("y"), f.rect.y()},
+                                      {QStringLiteral("w"), f.rect.width()},
+                                      {QStringLiteral("h"), f.rect.height()},
+                                      {QStringLiteral("comment"), f.comment}});
+        result.insert(QStringLiteral("frames"), frames);
+    }
+    return result;
 }

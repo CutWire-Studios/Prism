@@ -56,6 +56,10 @@ Item {
             edgeMenu.edgeId = edgeId
             edgeMenu.popup(graphCanvas, screenPos.x, screenPos.y)
         }
+        onFrameMenuRequested: (frameId, screenPos) => {
+            frameMenu.frameId = frameId
+            frameMenu.popup(graphCanvas, screenPos.x, screenPos.y)
+        }
     }
 
     DropArea {
@@ -241,6 +245,10 @@ Item {
             onTriggered: AppController.previewNode(nodeMenu.target.nodeId)
         }
         ThemedMenuItem {
+            text: qsTr("Add frame around selection")
+            onTriggered: root.controller.frameSelection()
+        }
+        ThemedMenuItem {
             text: qsTr("Delete")
             icon.name: "trash-2"
             enabled: nodeMenu.type !== nodeMenu.nodeTypes.Output || graphCanvas.nodeCount <= 1
@@ -261,6 +269,47 @@ Item {
                 root.controller.disconnectEdge(edgeMenu.edgeId)
                 graphCanvas.selectedEdge = 0
             }
+        }
+        onClosed: graphCanvas.forceActiveFocus()
+    }
+
+    ThemedContextMenu {
+        id: frameMenu
+
+        property var frameId: 0
+
+        ThemedMenuItem {
+            text: qsTr("Rename")
+            onTriggered: {
+                const item = graphCanvas.frameItem(frameMenu.frameId)
+                if (item)
+                    item.beginTitleEdit()
+            }
+        }
+        ThemedMenuItem {
+            text: qsTr("Edit comment")
+            onTriggered: {
+                const item = graphCanvas.frameItem(frameMenu.frameId)
+                if (item)
+                    item.beginCommentEdit()
+            }
+        }
+        ThemedContextMenu {
+            title: qsTr("Colour")
+            Repeater {
+                model: NodePalette.frameColors
+                ThemedMenuItem {
+                    required property string modelData
+                    text: modelData.length > 0 ? modelData : qsTr("None")
+                    onTriggered: root.controller.setFrameProps(frameMenu.frameId, { color: modelData })
+                }
+            }
+        }
+        ThemedMenuSeparator { }
+        ThemedMenuItem {
+            text: qsTr("Delete frame")
+            icon.name: "trash-2"
+            onTriggered: root.controller.removeFrame(frameMenu.frameId)
         }
         onClosed: graphCanvas.forceActiveFocus()
     }

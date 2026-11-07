@@ -10,14 +10,17 @@ QtObject {
     readonly property var nodeType: ({
         Input: 0, Process: 1, AudioEffect: 2, Layer: 3, Output: 4, AudioMixer: 5,
         MasterAudioOutput: 6, MasterAudioInput: 7, MasterAudioCapture: 8, Script: 9,
-        AudioAnalyzer: 10, Modulator: 11
+        AudioAnalyzer: 10, Modulator: 11, Reroute: 12
     })
 
     readonly property var portKind: ({
         ChainIn: 0, ChainOut: 1, AudioOut: 2, ShaderAudioIn: 3, AudioIn: 4,
         AudioControllerOut: 5, MasterAudioIn: 6, MasterAudioInputOut: 7, ScriptOut: 8, DataIn: 9,
-        AudioMixerIn: 10, AudioMixerOut: 11, AudioEffectIn: 12, AudioEffectOut: 13
+        AudioMixerIn: 10, AudioMixerOut: 11, AudioEffectIn: 12, AudioEffectOut: 13, RerouteIn: 14, RerouteOut: 15
     })
+
+    // The same list the scene tabs use; "" is no colour.
+    readonly property var frameColors: ["", "#e5484d", "#f76b15", "#ffc53d", "#30a46c", "#0090ff", "#8e4ec6"]
 
     readonly property var edgeKind: ({
         Chain: 0, TransformToContext: 1, AudioToController: 2,
@@ -74,6 +77,7 @@ QtObject {
         case k.MasterAudioIn: return qsTr("Audio output")
         case k.AudioIn: case k.ShaderAudioIn: case k.AudioOut: return qsTr("Audio")
         case k.ScriptOut: case k.DataIn: return qsTr("Script data")
+        case k.RerouteIn: case k.RerouteOut: return qsTr("Any")
         }
         return ""
     }
@@ -123,11 +127,13 @@ QtObject {
         { name: qsTr("Audio Analyzer"), icon: "activity", hue: "#e6be5a", header: 20, category: "script",
           inKinds: [4], outKinds: [8] },
         { name: qsTr("Modulator"), icon: "audio-waveform", hue: "#78dcaa", header: 20, category: "script",
-          inKinds: [], outKinds: [8] }
+          inKinds: [], outKinds: [8] },
+        { name: qsTr("Reroute"), icon: "circle", hue: "#8a8f98", header: 0, category: "utility",
+          inKinds: [14], outKinds: [15] }
     ]
 
     // Default node width per type, used to place a node so its port lands under the cursor.
-    readonly property var defaultWidth: [122, 116, 116, 158, 116, 158, 168, 100, 100, 100, 100, 100]
+    readonly property var defaultWidth: [122, 116, 116, 158, 116, 158, 168, 100, 100, 100, 100, 100, 22]
 
     function tooltip(type) {
         switch (type) {

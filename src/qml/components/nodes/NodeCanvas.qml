@@ -7,7 +7,8 @@ import Prism
 //
 // Pointer map: wheel zooms about the cursor (trackpad scroll pans, Ctrl+scroll zooms), middle
 // drag or Space+drag pans, pinch zooms, left drag on empty space rubber-bands, a drag from a port
-// wires a connection, and a click on a wire selects it.
+// wires a connection, and a click on a wire selects it. Alt+click or double-click on a wire
+// splices in a reroute; Shift+F wraps the selection in a frame.
 FocusScope {
     id: root
 
@@ -59,6 +60,7 @@ FocusScope {
     signal outputWindowRequested()
     signal nodeMenuRequested(var item, point worldPos, point screenPos)
     signal edgeMenuRequested(var edgeId, point screenPos)
+    signal frameMenuRequested(var frameId, point screenPos)
     signal addMenuRequested(point screenPos, point worldPos)
     // Space was tapped (pressed and released without a pan drag).
     signal quickAddRequested(point screenPos, point worldPos)
@@ -227,6 +229,32 @@ FocusScope {
         return it ? it : null
     }
 
+    function frameItem(id) {
+        if (!controller)
+            return null
+        const row = controller.frames.rowOfFrame(id)
+        return row < 0 ? null : frameRepeater.itemAt(row)
+    }
+
+    // Wraps the selection in a frame; with nothing selected, drops an empty frame (a sticky note).
+    function addFrameAt(wx, wy) {
+        if (!controller)
+            return
+        if (controller.selection.length > 0)
+            controller.frameSelection()
+        else
+            controller.addFrame(wx, wy, 280, 180)
+    }
+
+    // Splices a reroute into an edge so its dot sits on the wire at the world position.
+    function addRerouteOnEdge(edgeId, wx, wy) {
+        const id = controller.addNodeIntoEdge(NodePalette.nodeType.Reroute, wx - 11, wy - 8, {}, edgeId)
+        if (id) {
+            selectedEdge = 0
+            controller.select([id])
+        }
+    }
+
     function hasNodeOfType(type) {
         for (let i = 0; i < nodeRepeater.count; ++i) {
             const it = nodeRepeater.itemAt(i)
@@ -280,6 +308,10 @@ FocusScope {
         if (selectedEdge !== 0) {
             controller.disconnectEdge(selectedEdge)
             selectedEdge = 0
+            return
+        }
+        if (controller.selectedFrame != 0) {
+            controller.removeFrame(controller.selectedFrame)
             return
         }
         const sel = controller.selection
@@ -475,6 +507,11 @@ FocusScope {
         } else if (!ctrl && !shift && event.key === Qt.Key_M) {
             controller.toggleBypass(controller.selection)
             event.accepted = true
+        } else if (!ctrl && shift && event.key === Qt.Key_F) {
+            const at = isNaN(hoverPos.x) ? Qt.point(width / 2, height / 2) : hoverPos
+            const w = toWorld(at.x, at.y)
+            addFrameAt(w.x, w.y)
+            event.accepted = true
         } else if (!ctrl && event.key === Qt.Key_F) {
             frameSelection()
             event.accepted = true
@@ -616,6 +653,11 @@ FocusScope {
                 return
             }
             if (e !== 0) {
+                if (m.modifiers & Qt.AltModifier) {
+                    const w = root.toWorld(m.x, m.y)
+                    root.addRerouteOnEdge(e, w.x, w.y)
+                    return
+                }
                 root.selectedEdge = e
                 root.controller.clearSelection()
                 return
@@ -669,8 +711,14 @@ FocusScope {
         onExited: root.hoverEdge = 0
 
         onDoubleClicked: (m) => {
-            if (m.button === Qt.LeftButton && pickEdge(m) === 0)
-                root.addMenuRequested(Qt.point(m.x, m.y), root.toWorld(m.x, m.y))
+            if (m.button !== Qt.LeftButton)
+                return
+            const e = pickEdge(m)
+            const w = root.toWorld(m.x, m.y)
+            if (e === 0)
+                root.addMenuRequested(Qt.point(m.x, m.y), w)
+            else
+                root.addRerouteOnEdge(e, w.x, w.y)
         }
     }
 
@@ -680,6 +728,14 @@ FocusScope {
         y: root.panY
         scale: root.zoom
         transformOrigin: Item.TopLeft
+
+        Repeater {
+            id: frameRepeater
+            model: root.controller ? root.controller.frames : null
+            delegate: FrameItem {
+                canvas: root
+            }
+        }
 
         EdgeLayer {
             id: edges

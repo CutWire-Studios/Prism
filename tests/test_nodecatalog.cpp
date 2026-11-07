@@ -61,7 +61,8 @@ private slots:
         const auto r = NodeCatalog::quickAddSearch({}, chainOut, true);
         QVERIFY(!r.isEmpty());
         for (const QuickAddEntry &e : r)
-            QVERIFY2(e.inKinds.contains(int(ClipGraph::PortKind::ChainIn)), qPrintable(e.id));
+            QVERIFY2(e.inKinds.contains(int(ClipGraph::PortKind::ChainIn))
+                     || e.inKinds.contains(int(ClipGraph::PortKind::RerouteIn)), qPrintable(e.id));
         QVERIFY(indexOf(r, "Blur") >= 0);
         QCOMPARE(indexOf(r, "Camera"), -1);
         QCOMPARE(indexOf(r, "Mixer"), -1);

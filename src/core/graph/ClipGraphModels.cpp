@@ -87,6 +87,71 @@ private:
     const bool *m_mergeFlag;
 };
 
+class FrameMoveCommand : public QUndoCommand {
+public:
+    struct Entry { NodeId id; QPointF from; QPointF to; };
+
+    FrameMoveCommand(ClipGraph *graph, quint64 frameId, const QPointF &from, const QPointF &to,
+                     const QVector<Entry> &entries, const bool *mergeFlag)
+        : QUndoCommand(QStringLiteral("Move frame")), m_graph(graph), m_frameId(frameId),
+          m_from(from), m_to(to), m_entries(entries), m_mergeFlag(mergeFlag) {}
+
+    int id() const override { return 4; }
+    void undo() override { apply(m_from, false); }
+    void redo() override { apply(m_to, true); }
+    bool mergeWith(const QUndoCommand *other) override {
+        if (!*m_mergeFlag || other->id() != id()) return false;
+        const auto *o = static_cast<const FrameMoveCommand *>(other);
+        if (o->m_frameId != m_frameId || o->m_entries.size() != m_entries.size()) return false;
+        for (qsizetype i = 0; i < m_entries.size(); ++i)
+            if (m_entries[i].id != o->m_entries[i].id) return false;
+        m_to = o->m_to;
+        for (qsizetype i = 0; i < m_entries.size(); ++i) m_entries[i].to = o->m_entries[i].to;
+        return true;
+    }
+
+private:
+    void apply(const QPointF &framePos, bool forward) {
+        if (const ClipGraph::Frame *f = m_graph->frame(m_frameId))
+            m_graph->setFrameRect(m_frameId, QRectF(framePos, f->rect.size()));
+        for (const Entry &e : std::as_const(m_entries))
+            m_graph->moveNode(e.id, forward ? e.to : e.from);
+    }
+
+    ClipGraph *m_graph;
+    quint64 m_frameId;
+    QPointF m_from;
+    QPointF m_to;
+    QVector<Entry> m_entries;
+    const bool *m_mergeFlag;
+};
+
+class FrameResizeCommand : public QUndoCommand {
+public:
+    FrameResizeCommand(ClipGraph *graph, quint64 frameId, const QRectF &from, const QRectF &to,
+                       const bool *mergeFlag)
+        : QUndoCommand(QStringLiteral("Resize frame")), m_graph(graph), m_frameId(frameId),
+          m_from(from), m_to(to), m_mergeFlag(mergeFlag) {}
+
+    int id() const override { return 5; }
+    void undo() override { m_graph->setFrameRect(m_frameId, m_from); }
+    void redo() override { m_graph->setFrameRect(m_frameId, m_to); }
+    bool mergeWith(const QUndoCommand *other) override {
+        if (!*m_mergeFlag || other->id() != id()) return false;
+        const auto *o = static_cast<const FrameResizeCommand *>(other);
+        if (o->m_frameId != m_frameId) return false;
+        m_to = o->m_to;
+        return true;
+    }
+
+private:
+    ClipGraph *m_graph;
+    quint64 m_frameId;
+    QRectF m_from;
+    QRectF m_to;
+    const bool *m_mergeFlag;
+};
+
 class ParamsCommand : public QUndoCommand {
 public:
     ParamsCommand(ClipGraph *graph, NodeId id, const QVariantMap &before, const QVariantMap &after,
@@ -228,6 +293,77 @@ QHash<int, QByteArray> ClipGraphNodesModel::roleNames() const {
     };
 }
 
+// ── Frames model ────────────────────────────────────────────────────────────
+
+ClipGraphFramesModel::ClipGraphFramesModel(ClipGraph *graph, QObject *parent)
+    : QAbstractListModel(parent), m_graph(graph)
+{
+    for (const ClipGraph::Frame &f : graph->frames())
+        m_ids.append(f.id);
+
+    connect(graph, &ClipGraph::frameAdded, this, [this](quint64 id) {
+        beginInsertRows({}, int(m_ids.size()), int(m_ids.size()));
+        m_ids.append(id);
+        endInsertRows();
+    });
+    connect(graph, &ClipGraph::frameRemoved, this, [this](quint64 id) {
+        const int row = rowOfFrame(id);
+        if (row < 0) return;
+        beginRemoveRows({}, row, row);
+        m_ids.removeAt(row);
+        endRemoveRows();
+    });
+    connect(graph, &ClipGraph::frameChanged, this, [this](quint64 id) {
+        const int row = rowOfFrame(id);
+        if (row >= 0) emit dataChanged(index(row), index(row));
+    });
+    connect(graph, &ClipGraph::graphReset, this, [this] {
+        beginResetModel();
+        m_ids.clear();
+        for (const ClipGraph::Frame &f : m_graph->frames())
+            m_ids.append(f.id);
+        endResetModel();
+    });
+}
+
+int ClipGraphFramesModel::rowCount(const QModelIndex &parent) const {
+    return parent.isValid() ? 0 : int(m_ids.size());
+}
+
+int ClipGraphFramesModel::rowOfFrame(quint64 id) const {
+    return int(m_ids.indexOf(id));
+}
+
+QVariant ClipGraphFramesModel::data(const QModelIndex &idx, int role) const {
+    if (!idx.isValid() || idx.row() >= m_ids.size() || !m_graph) return {};
+    const ClipGraph::Frame *f = m_graph->frame(m_ids[idx.row()]);
+    if (!f) return {};
+    switch (role) {
+    case FrameIdRole: return QVariant::fromValue<quint64>(f->id);
+    case XRole:       return f->rect.x();
+    case YRole:       return f->rect.y();
+    case WidthRole:   return f->rect.width();
+    case HeightRole:  return f->rect.height();
+    case TitleRole:   return f->title;
+    case ColorRole:   return f->color;
+    case CommentRole: return f->comment;
+    }
+    return {};
+}
+
+QHash<int, QByteArray> ClipGraphFramesModel::roleNames() const {
+    return {
+        {FrameIdRole, "frameId"},
+        {XRole, "x"},
+        {YRole, "y"},
+        {WidthRole, "width"},
+        {HeightRole, "height"},
+        {TitleRole, "title"},
+        {ColorRole, "color"},
+        {CommentRole, "comment"},
+    };
+}
+
 // ── Edges model ─────────────────────────────────────────────────────────────
 
 ClipGraphEdgesModel::ClipGraphEdgesModel(ClipGraph *graph, QObject *parent)
@@ -312,6 +448,7 @@ ClipGraphController::ClipGraphController(ClipGraph *graph, QObject *parent)
 void ClipGraphController::init() {
     m_nodes = new ClipGraphNodesModel(m_graph, this);
     m_edges = new ClipGraphEdgesModel(m_graph, this);
+    m_frames = new ClipGraphFramesModel(m_graph, this);
     connect(&m_undo, &QUndoStack::indexChanged, this, &ClipGraphController::undoStateChanged);
     connect(&m_undo, &QUndoStack::cleanChanged, this, &ClipGraphController::undoStateChanged);
     connect(m_graph, &ClipGraph::graphReset, this, [this] {
@@ -319,6 +456,10 @@ void ClipGraphController::init() {
         m_selection.removeIf([this](NodeId id) { return !m_graph->hasNode(id); });
         if (m_selection.size() != before) emit selectionChanged();
         if (m_pending.node != 0 && !m_graph->hasNode(m_pending.node)) cancelConnection();
+        if (m_selectedFrame != 0 && !m_graph->frame(m_selectedFrame)) {
+            m_selectedFrame = 0;
+            emit selectedFrameChanged();
+        }
     });
     connect(m_graph, &ClipGraph::nodeRemoved, this, [this](NodeId id) {
         if (m_selection.remove(id)) emit selectionChanged();
@@ -399,6 +540,82 @@ void ClipGraphController::moveNode(quint64 id, qreal x, qreal y) {
 
 void ClipGraphController::endMove() {
     m_mergeMoves = false;
+    m_dragFrame = 0;
+}
+
+quint64 ClipGraphController::addFrame(qreal x, qreal y, qreal w, qreal h) {
+    const QJsonObject before = m_graph->toJson();
+    const quint64 id = m_graph->addFrame(QRectF(x, y, w, h), QStringLiteral("Frame"));
+    pushSnapshot(QStringLiteral("Add frame"), before);
+    selectFrame(id);
+    return id;
+}
+
+quint64 ClipGraphController::frameSelection() {
+    QRectF bounds;
+    for (NodeId id : std::as_const(m_selection)) {
+        const ClipGraph::Node *n = m_graph->node(id);
+        if (n) bounds = bounds.united(QRectF(n->pos, n->size));
+    }
+    if (bounds.isNull()) return 0;
+    constexpr qreal pad = 24.0, header = 34.0;
+    return addFrame(bounds.x() - pad, bounds.y() - pad - header, bounds.width() + 2 * pad,
+                    bounds.height() + 2 * pad + header);
+}
+
+void ClipGraphController::moveFrame(quint64 id, qreal x, qreal y) {
+    const ClipGraph::Frame *f = m_graph->frame(id);
+    if (!f || f->rect.topLeft() == QPointF(x, y)) return;
+    if (!m_mergeMoves || m_dragFrame != id) {
+        m_dragFrame = id;
+        m_dragFrameNodes = m_graph->nodesInsideFrame(id);
+    }
+    const QPointF delta = QPointF(x, y) - f->rect.topLeft();
+    QVector<FrameMoveCommand::Entry> entries;
+    for (NodeId nid : std::as_const(m_dragFrameNodes)) {
+        const ClipGraph::Node *n = m_graph->node(nid);
+        if (n) entries.append({nid, n->pos, n->pos + delta});
+    }
+    m_undo.push(new FrameMoveCommand(m_graph, id, f->rect.topLeft(), QPointF(x, y), entries, &m_mergeMoves));
+    m_mergeMoves = true;
+}
+
+void ClipGraphController::resizeFrame(quint64 id, qreal w, qreal h) {
+    const ClipGraph::Frame *f = m_graph->frame(id);
+    if (!f) return;
+    const QRectF from = f->rect;
+    const QRectF to(from.topLeft(), QSizeF(w, h));
+    if (to.size() == from.size()) return;
+    m_undo.push(new FrameResizeCommand(m_graph, id, from, to, &m_mergeMoves));
+    m_mergeMoves = true;
+}
+
+bool ClipGraphController::setFrameProps(quint64 id, const QVariantMap &props) {
+    if (!m_graph->frame(id)) return false;
+    const QJsonObject before = m_graph->toJson();
+    m_graph->setFrameProps(id, props);
+    pushSnapshot(QStringLiteral("Edit frame"), before);
+    return true;
+}
+
+bool ClipGraphController::removeFrame(quint64 id) {
+    if (!m_graph->frame(id)) return false;
+    const QJsonObject before = m_graph->toJson();
+    m_graph->removeFrame(id);
+    pushSnapshot(QStringLiteral("Remove frame"), before);
+    if (m_selectedFrame == id) selectFrame(0);
+    return true;
+}
+
+void ClipGraphController::selectFrame(quint64 id) {
+    if (id != 0 && !m_graph->frame(id)) id = 0;
+    if (id != 0 && !m_selection.isEmpty()) {
+        m_selection.clear();
+        emit selectionChanged();
+    }
+    if (id == m_selectedFrame) return;
+    m_selectedFrame = id;
+    emit selectedFrameChanged();
 }
 
 bool ClipGraphController::setParams(quint64 id, const QVariantMap &params, bool coalesce) {
@@ -605,12 +822,14 @@ void ClipGraphController::select(const QVariantList &ids, bool additive) {
     QSet<NodeId> next = additive ? m_selection : QSet<NodeId>{};
     for (const QVariant &v : ids)
         if (m_graph->hasNode(v.toULongLong())) next.insert(v.toULongLong());
+    if (!next.isEmpty()) selectFrame(0);
     if (next == m_selection) return;
     m_selection = next;
     emit selectionChanged();
 }
 
 void ClipGraphController::clearSelection() {
+    selectFrame(0);
     if (m_selection.isEmpty()) return;
     m_selection.clear();
     emit selectionChanged();
@@ -633,6 +852,7 @@ void ClipGraphController::clearHistory() {
 void ClipGraphController::selectAll() {
     QSet<NodeId> next;
     for (NodeId id : m_graph->nodeIds()) next.insert(id);
+    if (!next.isEmpty()) selectFrame(0);
     if (next == m_selection) return;
     m_selection = next;
     emit selectionChanged();

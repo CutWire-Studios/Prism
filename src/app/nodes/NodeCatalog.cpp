@@ -338,6 +338,11 @@ QList<QuickAddEntry> buildCatalogue()
         NodeCatalog::tr("Record whatever this computer is playing."), QStringLiteral("system desktop loopback"),
         NT::MasterAudioCapture, {}, kinds({PK::MasterAudioInputOut}));
 
+    add(QStringLiteral("reroute"), NodeCatalog::tr("Reroute"), NodeCatalog::tr("Utility"),
+        NodeCatalog::tr("A tiny waypoint that bends a wire around other nodes; it carries whatever you connect."),
+        QStringLiteral("dot knot waypoint wire cable bend"), NT::Reroute, kinds({PK::RerouteIn}),
+        kinds({PK::RerouteOut}));
+
 #ifdef PRISM_HAVE_LUA
     const QString logicCat = NodeCatalog::tr("Logic");
     add(QStringLiteral("script"), NodeCatalog::tr("Script"), logicCat,
