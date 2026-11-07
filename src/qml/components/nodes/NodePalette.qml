@@ -166,7 +166,9 @@ QtObject {
             case 14: return "svgTemplate"
             }
             return ""
-        case nodeType.Process: return [0, 10, 11].indexOf(params.effect) >= 0 ? "process" : ""
+        case nodeType.Process:
+            if (params.effect === 67) return "shaderEffect"
+            return [0, 10, 11].indexOf(params.effect) >= 0 ? "process" : ""
         case nodeType.AudioEffect: return "audioEffect"
         case nodeType.Layer: return "layerLayout"
         case nodeType.Script: return "script"

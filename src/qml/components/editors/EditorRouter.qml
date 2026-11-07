@@ -14,6 +14,7 @@ QtObject {
         "layerLayout": "LayerLayoutEditor.qml",
         "script": "ScriptEditor.qml",
         "shader": "ShaderSourceEditor.qml",
+        "shaderEffect": "ShaderEffectEditor.qml",
         "text": "TextSourceEditor.qml",
         "shape": "ShapeSourceEditor.qml",
         "svgTemplate": "SvgTemplateEditor.qml"

@@ -324,7 +324,8 @@ const QList<Op> &ops()
         {"add_process_node", "graph", "Add a video effect on the blue chain",
          "Place a process node (Crop, Flip, Blur, …). effect is required (name, slug, or id from "
          "list_process_effects). Optional params merge over defaults. Optional x/y are scene "
-         "coordinates. Does not wire it — call connect. Returns {id, effect, name, params}.",
+         "coordinates. Does not wire it — call connect. The Shader effect takes its full GLSL in "
+         "params.code (see docs/shader-data-interface.md). Returns {id, effect, name, params}.",
          objectSchema({{QStringLiteral("effect"),
                         stringProp(QStringLiteral("Effect name, slug (crop, chroma_key), or numeric id"))},
                        {QStringLiteral("params"),

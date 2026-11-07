@@ -15,6 +15,10 @@ struct SourceEffectAux;
 struct SourceEffectRef {
     int effectId = -1;
     QJsonObject params;
+    /// Shader effect only (ProcessEffects::kShaderEffectId): the user's fragment shader and the node
+    /// whose data feed it reads.
+    QString code;
+    quint64 nodeId = 0;
     /// Runtime-only (not persisted): the streams wired to the effect's extra input ports, in port
     /// order. A null entry is an unconnected port. Defined in ClipGraph.h.
     QVector<std::shared_ptr<SourceEffectAux>> aux;
@@ -58,6 +62,9 @@ struct ProcessEffectDescriptor {
 };
 
 namespace ProcessEffects {
+
+/// The Shader node, which runs user-written GLSL (see ShaderEffectSource's code constructor).
+constexpr int kShaderEffectId = 67;
 
 const QVector<ProcessEffectDescriptor> &all();
 const ProcessEffectDescriptor *byId(int id);

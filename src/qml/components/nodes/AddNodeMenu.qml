@@ -66,6 +66,7 @@ CascadeMenu {
         "url": ["stream", "http", "rtmp", "hls", "rtsp", "link", "network"],
         "ndi": ["network", "newtek"],
         "webrtc": ["phone", "mobile", "webrtc", "smartphone"],
+        "shaderFx": ["glsl", "shader", "custom"],
         "crop": ["trim", "cut", "region"],
         "flip h": ["mirror", "horizontal"],
         "flip v": ["vertical"],
@@ -147,7 +148,13 @@ CascadeMenu {
                 if (e.nodeType === T.Process)
                     fxGroup[e.params.effect] = e.category
             }
+            const shaderFx = NodeCatalog.processEffects().find(fx => fx.id === 67)
+            if (shaderFx)
+                list.push({ key: "fx:" + shaderFx.id, alias: "shaderFx", label: shaderFx.menuLabel, icon: "code-xml",
+                            path: [fxCat], section: 1, type: T.Process, params: { effect: shaderFx.id } })
             for (const fx of NodeCatalog.processEffects()) {
+                if (fx.id === 67)
+                    continue
                 const group = fxGroup[fx.id] || qsTr("Other")
                 if (fxIcons[group])
                     icons[group] = fxIcons[group]

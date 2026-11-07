@@ -103,3 +103,63 @@ A custom generator can carry its own Lua script (node params `lua`, `luaRunOn`, 
 default run on a 33 ms interval). Its `input` is the JSON from the wired data port and the table it
 returns is mapped to uniforms as above. The script output and the wired data are merged into one
 object; on key conflicts the wired data wins. Without inline Lua nothing changes.
+
+## Shader process node
+
+The Shader node (Video FX) runs a fragment shader you write on its input frame. The code is compiled
+as written, so it declares its own precision, varying, uniforms and `main()`; there is no `#version`
+line (GLSL 1.10 style: `texture2D`, `gl_FragColor`). A compile error passes the input through
+unchanged and is shown in the node's editor.
+
+Coordinates: use the varying `v_uv` (`varying vec2 v_uv;`), 0..1 across the frame with (0,0) at the
+top left. `gl_FragCoord` is vertically flipped relative to the image, so do not sample with it.
+
+The app binds, when the code declares them:
+
+| Uniform | Meaning |
+|---|---|
+| `uniform sampler2D u_input` | the incoming frame |
+| `uniform vec2 u_texel` | 1 / frame size |
+| `uniform vec2 u_resolution` | frame size in pixels |
+| `uniform float u_time` | seconds since the node started |
+| `uniform sampler2D u_input1` ... `u_inputN` | extra video inputs; N is the highest index declared (at most 8) and the node gets contiguous ports `in1`..`inN`. An unwired port reads as transparent |
+| `uniform sampler2D u_prev` | this node's previous output |
+| `uniform sampler2D u_history` | the last frames of the input, see below |
+| `uniform float p_<name>` ... | the `@params` controls, as for custom generators |
+| `u_<key>`, `u_bands`, `u_audioLevel`, `u_spectrum`, ... | the data port, mapped as in the sections above |
+
+The node has a `data` input port after the video ports; wired and inline data are merged and mapped
+to uniforms exactly like a custom generator's. Changing which `u_input<N>` the code declares adds or
+removes ports; connections to removed ports are dropped.
+
+Besides an array, the `@params` header may be an object that also sets the history length
+(1..32, default 8 when `u_history` is declared):
+
+```glsl
+/* @params
+{ "params": [ { "name": "amount", "type": "float", "min": 0, "max": 1, "default": 0.5 } ],
+  "history": 8 }
+*/
+```
+
+`u_history` is an atlas of the last frames; declare its helpers and read frames with `historyFrame`
+(age 1 is the previous frame):
+
+```glsl
+uniform sampler2D u_history;
+uniform vec4 u_historyInfo;   // cols, rows, ring size, next slot to write
+uniform vec2 u_historyAtlas;  // atlas size in px
+uniform vec2 u_historyTile;   // tile size in px
+vec4 historyFrame(float age, vec2 uv) {
+    float n = u_historyInfo.z;
+    float slot = mod(u_historyInfo.w + n - clamp(floor(age + 0.5), 1.0, n), n);
+    float row = floor((slot + 0.5) / u_historyInfo.x);
+    float col = slot - row * u_historyInfo.x;
+    vec2 px = vec2(col, row) * u_historyTile
+            + clamp(uv * u_historyTile, vec2(0.5), u_historyTile - 0.5);
+    return texture2D(u_history, px / u_historyAtlas);
+}
+```
+
+The code is stored in the node's `code` param and the control values in `params`. Over MCP,
+`add_process_node` / `set_process_params` accept it as `params.code` (effect `shader`, id 67).

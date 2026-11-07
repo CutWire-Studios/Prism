@@ -19,6 +19,7 @@
 #include "core/sources/WebRtcSource.h"
 #endif
 #include "core/graph/ProcessEffects.h"
+#include "core/effects/ShaderEffectSource.h"
 #include "core/platform/MacPermissions.h"
 #include <QObject>
 #include <QtGlobal>
@@ -292,6 +293,16 @@ AuxBuilder SourceFactory::auxBuilder(ClipGraph *graph, GraphRuntime *runtime)
     };
 }
 
+void SourceFactory::attachEffectData(MediaSource *top, GraphRuntime *runtime)
+{
+    for (MediaSource *s = top; s; s = s->inner()) {
+        auto *shader = dynamic_cast<ShaderEffectSource *>(s);
+        if (!shader || !shader->isCustom()) continue;
+        const auto data = runtime->scriptOutputForDataNode(shader->nodeId());
+        if (shader->dataSource() != data) shader->setDataSource(data);
+    }
+}
+
 AuxUpdater SourceFactory::auxUpdater(ClipGraph *graph)
 {
     return [graph](MediaSource *src, const SourceEffectAux &aux) {
@@ -366,8 +377,10 @@ std::unique_ptr<MediaSource> SourceFactory::buildLayerSource(const ClipGraph::Re
         if (subs.empty() || canvas.isEmpty()) return nullptr;
         std::unique_ptr<MediaSource> comp =
             std::make_unique<LayerCompositorSource>(std::move(subs), canvas);
-        return ProcessEffects::applySourceEffects(std::move(comp), layer.sourceEffects,
-                                                  auxBuilder(graph, runtime));
+        auto withEffects = ProcessEffects::applySourceEffects(std::move(comp), layer.sourceEffects,
+                                                              auxBuilder(graph, runtime));
+        attachEffectData(withEffects.get(), runtime);
+        return withEffects;
     }
 
     if (!graph->hasNode(layer.inputNodeId)) return nullptr;
@@ -402,8 +415,10 @@ std::unique_ptr<MediaSource> SourceFactory::buildLayerSource(const ClipGraph::Re
             shaderSrc->updateParams(graph->sourceParams(layer.inputNodeId));
     }
 
-    return ProcessEffects::applySourceEffects(std::move(src), layer.sourceEffects,
-                                              auxBuilder(graph, runtime));
+    auto withEffects = ProcessEffects::applySourceEffects(std::move(src), layer.sourceEffects,
+                                                          auxBuilder(graph, runtime));
+    attachEffectData(withEffects.get(), runtime);
+    return withEffects;
 }
 
 Compositor::NodeChainSource SourceFactory::makeLayerEntry(const ClipGraph::ResolvedLayer &layer,

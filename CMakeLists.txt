@@ -332,6 +332,7 @@ set(SOURCES
     src/core/sources/SceneSource.cpp
     src/core/effects/EffectPassRunner.cpp
     src/core/effects/ShaderEffects.cpp
+    src/core/effects/ShaderData.cpp
     src/core/effects/Generators.cpp
     src/core/effects/LutLoader.cpp
     src/core/effects/ShaderEffectSource.cpp

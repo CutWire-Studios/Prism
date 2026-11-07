@@ -3,6 +3,7 @@
 #include "core/graph/ClipGraph.h"
 
 #include "core/effects/Generators.h"
+#include "core/effects/EffectPassRunner.h"
 #include "core/effects/ShaderEffects.h"
 #include "core/audio/AudioRack.h"
 #include "core/audio/dsp/PedalCatalog.h"
@@ -90,6 +91,20 @@ QVariantList NodeCatalog::generatorParams(const QString &slug) const
 QVariantList NodeCatalog::headerParams(const QString &code) const
 {
     return paramDescriptors(ShaderEffects::parseHeaderParams(code));
+}
+
+QString NodeCatalog::shaderEffectError(const QString &code) const
+{
+    QString error;
+    ShaderEffects::parseHeader(code, &error);
+    if (!error.isEmpty())
+        return error;
+    EffectPassRunner runner;
+    if (!runner.begin(QSize(16, 16)))
+        return tr("Could not initialize OpenGL offscreen context.");
+    runner.program(0, code.toUtf8().constData());
+    runner.end();
+    return runner.lastError();
 }
 
 QString NodeCatalog::generatorShaderCode(const QString &slug, const QVariantMap &values) const
@@ -244,6 +259,9 @@ const BuiltinFx *builtinFx(int id)
          QT_TRANSLATE_NOOP("NodeCatalog", "Bring out fine detail and edges."), "crisp detail"},
         {10, "keystone", QT_TRANSLATE_NOOP("NodeCatalog", "Distort"),
          QT_TRANSLATE_NOOP("NodeCatalog", "Fix perspective by dragging the picture's corners."), "perspective warp skew"},
+        {67, "shader", QT_TRANSLATE_NOOP("NodeCatalog", "Video FX"),
+         QT_TRANSLATE_NOOP("NodeCatalog", "Run your own GLSL fragment shader on the picture."),
+         "glsl code custom"},
         {11, "poly_mask", QT_TRANSLATE_NOOP("NodeCatalog", "Keying"),
          QT_TRANSLATE_NOOP("NodeCatalog", "Show only the area inside a shape you draw."), "mask polygon"},
     };

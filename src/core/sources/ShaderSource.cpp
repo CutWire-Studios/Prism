@@ -1,5 +1,6 @@
 #include "core/sources/ShaderSource.h"
 #include "core/effects/Generators.h"
+#include "core/effects/ShaderData.h"
 #include "core/media/AudioAnalyzer.h"
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
@@ -249,92 +250,24 @@ bool ShaderSource::compileProgram() {
 }
 
 void ShaderSource::applyDataUniforms(const QJsonObject &obj, bool &hasAudioBlock) {
-    auto *f = m_context->functions();
+    hasAudioBlock = ShaderData::applyUniforms(m_program, obj);
 
-    // ── Generic block: expose every JSON key as u_<key> ─────────────────────
-    for (auto it = obj.begin(); it != obj.end(); ++it) {
-        const QByteArray uni = it.key().startsWith(QLatin1String("u_"))
-            ? it.key().toUtf8() : ("u_" + it.key().toUtf8());
-        const QJsonValue v = it.value();
-        if (v.isBool()) {
-            m_program->setUniformValue(uni.constData(), v.toBool());
-        } else if (v.isDouble()) {
-            m_program->setUniformValue(uni.constData(), static_cast<GLfloat>(v.toDouble()));
-        } else if (v.isArray()) {
-            const QJsonArray a = v.toArray();
-            if (a.size() == 2)
-                m_program->setUniformValue(uni.constData(),
-                    QVector2D(a.at(0).toDouble(), a.at(1).toDouble()));
-            else if (a.size() == 3)
-                m_program->setUniformValue(uni.constData(),
-                    QVector3D(a.at(0).toDouble(), a.at(1).toDouble(), a.at(2).toDouble()));
-            else if (a.size() == 4)
-                m_program->setUniformValue(uni.constData(),
-                    QVector4D(a.at(0).toDouble(), a.at(1).toDouble(),
-                              a.at(2).toDouble(), a.at(3).toDouble()));
-            // Larger arrays (e.g. spectrum) are exposed as a texture below.
-        } else if (v.isObject()) {
-            const QJsonObject o = v.toObject();
-            if (o.contains("x") && o.contains("y")) {
-                if (o.contains("w"))
-                    m_program->setUniformValue(uni.constData(),
-                        QVector4D(o.value("x").toDouble(), o.value("y").toDouble(),
-                                  o.value("z").toDouble(), o.value("w").toDouble()));
-                else if (o.contains("z"))
-                    m_program->setUniformValue(uni.constData(),
-                        QVector3D(o.value("x").toDouble(), o.value("y").toDouble(),
-                                  o.value("z").toDouble()));
-                else
-                    m_program->setUniformValue(uni.constData(),
-                        QVector2D(o.value("x").toDouble(), o.value("y").toDouble()));
-            }
+    const QByteArray spectrum = ShaderData::spectrumBytes(obj);
+    const int n = static_cast<int>(spectrum.size());
+    if (n > 0) {
+        auto *f = m_context->functions();
+        f->glActiveTexture(GL_TEXTURE0);
+        f->glBindTexture(GL_TEXTURE_2D, m_spectrumTex);
+        if (n != m_spectrumTexWidth) {
+            f->glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, n, 1, 0,
+                            GL_LUMINANCE, GL_UNSIGNED_BYTE, spectrum.constData());
+            m_spectrumTexWidth = n;
+        } else {
+            f->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, n, 1,
+                               GL_LUMINANCE, GL_UNSIGNED_BYTE, spectrum.constData());
         }
-    }
-
-    // ── Audio block: a stable named contract, independent of FFT internals ──
-    const bool hasAudioFields = obj.contains("low") || obj.contains("mid")
-        || obj.contains("high") || obj.contains("level") || obj.contains("beat")
-        || obj.contains("spectrum") || obj.contains("hasAudio");
-    if (hasAudioFields) {
-        const float low   = std::clamp(static_cast<float>(obj.value("low").toDouble(0.0)),   0.0f, 1.0f);
-        const float mid   = std::clamp(static_cast<float>(obj.value("mid").toDouble(0.0)),   0.0f, 1.0f);
-        const float high  = std::clamp(static_cast<float>(obj.value("high").toDouble(0.0)),  0.0f, 1.0f);
-        const float level = std::clamp(static_cast<float>(obj.value("level").toDouble(0.0)), 0.0f, 1.0f);
-        const float beat  = std::clamp(static_cast<float>(obj.value("beat").toDouble(0.0)),  0.0f, 1.0f);
-        const bool hasAudio = obj.value("hasAudio").toBool(level > 0.001f);
-
-        m_program->setUniformValue("u_bands", QVector3D(low, mid, high));
-        m_program->setUniformValue("u_bass", low);
-        m_program->setUniformValue("u_mid", mid);
-        m_program->setUniformValue("u_treble", high);
-        m_program->setUniformValue("u_audioLevel", level);
-        m_program->setUniformValue("u_beat", beat);
-        m_program->setUniformValue("u_beatPulse", beat);   // legacy uniform name
-        m_program->setUniformValue("u_hasAudio", hasAudio);
-        hasAudioBlock = true;
-
-        if (obj.value("spectrum").isArray()) {
-            const QJsonArray arr = obj.value("spectrum").toArray();
-            const int n = std::min(static_cast<int>(arr.size()), AudioAnalyzer::kMaxBins);
-            if (n > 0) {
-                QByteArray texData(n, 0);
-                for (int i = 0; i < n; ++i)
-                    texData[i] = static_cast<char>(
-                        std::clamp(static_cast<float>(arr.at(i).toDouble(0.0)), 0.0f, 1.0f) * 255.0f);
-                f->glActiveTexture(GL_TEXTURE0);
-                f->glBindTexture(GL_TEXTURE_2D, m_spectrumTex);
-                if (n != m_spectrumTexWidth) {
-                    f->glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, n, 1, 0,
-                                    GL_LUMINANCE, GL_UNSIGNED_BYTE, texData.constData());
-                    m_spectrumTexWidth = n;
-                } else {
-                    f->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, n, 1,
-                                       GL_LUMINANCE, GL_UNSIGNED_BYTE, texData.constData());
-                }
-                m_program->setUniformValue("u_spectrum", 0);
-                m_program->setUniformValue("u_spectrumSize", n);
-            }
-        }
+        m_program->setUniformValue("u_spectrum", 0);
+        m_program->setUniformValue("u_spectrumSize", n);
     }
 }
 
@@ -402,14 +335,9 @@ void ShaderSource::renderToBuffer() {
     if (m_dataSource) {
         m_dataVersion = m_dataSource->version.load(std::memory_order_acquire);
 
-        QString json;
-        {
-            QMutexLocker lock(&m_dataSource->mutex);
-            json = m_dataSource->json;
-        }
-        const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
-        if (doc.isObject())
-            applyDataUniforms(doc.object(), hasAudioBlock);
+        const QJsonObject obj = ShaderData::current(m_dataSource);
+        if (!obj.isEmpty())
+            applyDataUniforms(obj, hasAudioBlock);
     }
     if (!hasAudioBlock)
         m_program->setUniformValue("u_hasAudio", false);

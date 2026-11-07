@@ -48,6 +48,8 @@ public:
     Q_INVOKABLE QVariantList generatorParams(const QString &slug) const;
     /// Param descriptors declared by the @params header of custom generator @p code.
     Q_INVOKABLE QVariantList headerParams(const QString &code) const;
+    /// Header or compile error of Shader process node @p code; empty when it builds.
+    Q_INVOKABLE QString shaderEffectError(const QString &code) const;
     /// Editable GLSL for a generator: its `p_` uniforms plus an @params header defaulting to @p values.
     Q_INVOKABLE QString generatorShaderCode(const QString &slug, const QVariantMap &values) const;
 

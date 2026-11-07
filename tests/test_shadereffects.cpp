@@ -96,6 +96,51 @@ private slots:
         QVERIFY(!bad.isEmpty());
     }
 
+    void headerObjectForm() {
+        const QString code = QStringLiteral(
+            "/* @params { \"params\": [ {\"name\": \"k\", \"type\": \"int\", \"default\": 3} ], \"history\": 6 } */\n"
+            "void main() {}\n");
+        QString err;
+        const ShaderEffects::ShaderHeader h = ShaderEffects::parseHeader(code, &err);
+        QVERIFY(err.isEmpty());
+        QCOMPARE(h.params.size(), 1);
+        QCOMPARE(h.params[0].name, QStringLiteral("k"));
+        QCOMPARE(h.history, 6);
+        QCOMPARE(ShaderEffects::parseHeaderParams(code).size(), 1);
+        QCOMPARE(ShaderEffects::parseHeader(QStringLiteral("/* @params [] */")).history, 0);
+    }
+
+    void customSpecFromCode() {
+        const ShaderEffectSpec plain = ShaderEffects::customSpec(ShaderEffects::defaultCustomCode());
+        QCOMPARE(plain.extraInputs, 0);
+        QVERIFY(!plain.needsPrevFrame);
+        QCOMPARE(plain.historyFrames, 0);
+        QCOMPARE(plain.params.size(), 1);
+
+        const QString code = QStringLiteral(
+            "/* @params {\"params\": [], \"history\": 4} */\n"
+            "// uniform sampler2D u_input5;\n"
+            "uniform sampler2D u_input;\nuniform sampler2D u_input1;\nuniform sampler2D u_input3;\n"
+            "uniform sampler2D u_prev;\nuniform sampler2D u_history;\nvoid main() {}\n");
+        const ShaderEffectSpec spec = ShaderEffects::customSpec(code);
+        QCOMPARE(spec.extraInputs, 3);
+        QCOMPARE(spec.inputName(2), QStringLiteral("in3"));
+        QVERIFY(spec.needsPrevFrame);
+        QCOMPARE(spec.historyFrames, 4);
+        QCOMPARE(ShaderEffects::customSpec(QStringLiteral("uniform sampler2D u_history;")).historyFrames, 8);
+    }
+
+    void defaultCodeCompiles() {
+        EffectPassRunner runner;
+        if (!runner.begin(QSize(16, 16)))
+            QSKIP("no GL context");
+        const QByteArray src = ShaderEffects::defaultCustomCode().toUtf8();
+        QVERIFY(runner.program(0, src.constData()) != nullptr);
+        QVERIFY(runner.program(1, "void main() { nonsense }") == nullptr);
+        QVERIFY(!runner.lastError().isEmpty());
+        runner.end();
+    }
+
     void hexColor_data() {
         QTest::addColumn<QString>("in");
         QTest::addColumn<int>("r");

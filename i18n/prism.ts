@@ -2674,6 +2674,10 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Run your own GLSL fragment shader on the picture.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Show only the area inside a shape you draw.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2807,6 +2811,10 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Video FX</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not initialize OpenGL offscreen context.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4954,6 +4962,17 @@ Technical detail: %1</source>
     </message>
     <message>
         <source>The built-in Live preset keeps a copy of the original, so Reset brings it back.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ShaderEffectEditor</name>
+    <message>
+        <source>Shader Editor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Full GLSL fragment shader with its own main(). Declare u_input1..N for extra video inputs and controls in a /* @params [...] */ header.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

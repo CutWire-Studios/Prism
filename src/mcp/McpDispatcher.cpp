@@ -16,6 +16,7 @@
 #include "app/show/ShowManager.h"
 #include "core/graph/ClipGraph.h"
 #include "core/graph/ProcessEffects.h"
+#include "core/effects/ShaderEffects.h"
 #include "app/output/OutputHub.h"
 #include "app/session/SessionManager.h"
 #include "app/transitions/TransitionController.h"
@@ -1264,11 +1265,14 @@ QJsonObject McpDispatcher::opListProcessEffects() const
     for (const ProcessEffectDescriptor &d : ProcessEffects::all()) {
         if (!d.available)
             continue;
+        QJsonObject params = d.defaultParams;
+        if (d.id == ProcessEffects::kShaderEffectId)
+            params.insert(QStringLiteral("code"), ShaderEffects::defaultCustomCode());
         effects.append(QJsonObject{
             {QStringLiteral("id"), d.id},
             {QStringLiteral("name"), d.name},
             {QStringLiteral("slug"), effectSlugOf(d)},
-            {QStringLiteral("params"), d.defaultParams},
+            {QStringLiteral("params"), params},
         });
     }
     return ok({{QStringLiteral("effects"), effects}});
@@ -1303,14 +1307,16 @@ QJsonObject McpDispatcher::opAddProcessNode(const QJsonObject &args)
     const ProcessEffectDescriptor *desc = resolveEffect(args.value(QStringLiteral("effect")));
     if (!desc)
         return err("not_found", QStringLiteral("Unknown effect — call list_process_effects"));
-    const QJsonObject params = args.value(QStringLiteral("params")).toObject();
+    QJsonObject params = args.value(QStringLiteral("params")).toObject();
+    QVariantMap nodeParams{{QStringLiteral("effect"), desc->id}};
+    if (desc->id == ProcessEffects::kShaderEffectId && params.contains(QStringLiteral("code")))
+        nodeParams.insert(QStringLiteral("code"), params.take(QStringLiteral("code")).toString());
+    nodeParams.insert(QStringLiteral("params"), params.toVariantMap());
     const bool hasX = args.contains(QStringLiteral("x"));
     const bool hasY = args.contains(QStringLiteral("y"));
     const double x = hasX ? jsonNumber(args.value(QStringLiteral("x")), 0) : qQNaN();
     const double y = hasY ? jsonNumber(args.value(QStringLiteral("y")), 0) : qQNaN();
-    const NodeId id = editor->addNode(ClipGraph::NodeType::Process, QPointF(x, y),
-                                      {{QStringLiteral("effect"), desc->id},
-                                       {QStringLiteral("params"), params.toVariantMap()}});
+    const NodeId id = editor->addNode(ClipGraph::NodeType::Process, QPointF(x, y), nodeParams);
     if (!id)
         return err("conflict", QStringLiteral("Could not add process node"));
     m_window->mcpBumpRevision();
@@ -1418,12 +1424,15 @@ QJsonObject McpDispatcher::opSetProcessParams(const QJsonObject &args)
         return err("bad_args", QStringLiteral("node is required"));
     if (!editor->hasNode(id))
         return err("not_found", QStringLiteral("No node %1").arg(id));
-    const QJsonObject params = args.value(QStringLiteral("params")).toObject();
+    QJsonObject params = args.value(QStringLiteral("params")).toObject();
     const bool hasBypass = args.value(QStringLiteral("bypass")).isBool();
     if (params.isEmpty() && !hasBypass)
         return err("bad_args", QStringLiteral("params or bypass is required"));
     if (editor->node(id)->type != ClipGraph::NodeType::Process)
         return err("type_mismatch", QStringLiteral("Node is not a process node"));
+    if (editor->node(id)->params.value(QStringLiteral("effect")).toInt() == ProcessEffects::kShaderEffectId
+        && params.value(QStringLiteral("code")).isString())
+        editor->setParams(id, {{QStringLiteral("code"), params.take(QStringLiteral("code")).toString()}}, true);
     if (hasBypass)
         editor->setParams(id, {{QStringLiteral("bypass"), args.value(QStringLiteral("bypass")).toBool()}}, true);
     if (!params.isEmpty() && !editor->setEffectParams(id, params.toVariantMap(), true))

@@ -242,10 +242,12 @@ QOpenGLShaderProgram *EffectPassRunner::program(int key, const char *fragmentSrc
         !prog->addShaderFromSourceCode(QOpenGLShader::Fragment, fragmentSrc) ||
         !prog->link()) {
         qWarning() << "EffectPassRunner: shader build failed:" << prog->log();
+        m_lastError = prog->log();
         delete prog;
         m_programs.insert(key, nullptr);
         return nullptr;
     }
+    m_lastError.clear();
     m_programs.insert(key, prog);
     return prog;
 }

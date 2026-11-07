@@ -2,6 +2,7 @@
 
 #include "core/effects/EffectPassRunner.h"
 #include "core/effects/ShaderEffects.h"
+#include "core/scripting/ScriptOutput.h"
 #include "core/sources/MediaSource.h"
 
 #include <QElapsedTimer>
@@ -18,10 +19,26 @@
 /// loaded as textures and bound as p_<name>. Effects with needsPrevFrame / history
 /// keep per-source GPU history (u_prev, u_history), run every tick, and clear it when taken off air;
 /// the history dies with the source, so a structural rebuild starts fresh.
+///
+/// The code constructor runs a user-written fragment shader (the Shader process node) with a spec the
+/// source owns, derived from the code; the code is used as written and a compile error passes the
+/// input through. Such a source may take a JSON data feed mapped to uniforms (see ShaderData).
 class ShaderEffectSource : public MediaSource {
 public:
     ShaderEffectSource(std::unique_ptr<MediaSource> inner, const ShaderEffectSpec &spec,
                        const QJsonObject &params);
+
+    ShaderEffectSource(std::unique_ptr<MediaSource> inner, const QString &code,
+                       const QJsonObject &params);
+
+    bool isCustom() const { return m_custom; }
+    const QString &code() const { return m_code; }
+    QString lastError() const { return m_lastError; }
+    /// Node the data feed belongs to (custom shaders only).
+    quint64 nodeId() const { return m_nodeId; }
+    void setNodeId(quint64 id) { m_nodeId = id; }
+    void setDataSource(std::shared_ptr<ScriptOutput> data);
+    const std::shared_ptr<ScriptOutput> &dataSource() const { return m_data; }
 
     /// Update parameter values; takes effect on the next frame without recompiling.
     void setParams(const QJsonObject &params) { m_params = params; m_dirty = true; }
@@ -60,10 +77,18 @@ public:
     QString displayName() const override { return m_inner ? m_inner->displayName() : QString(); }
 
 private:
-    void applyUniforms(class QOpenGLShaderProgram *p, QSize size) const;
+    void applyUniforms(class QOpenGLShaderProgram *p, QSize size, const QJsonObject &data) const;
 
     std::unique_ptr<MediaSource> m_inner;
+    std::unique_ptr<ShaderEffectSpec> m_ownSpec;
     const ShaderEffectSpec *m_spec;
+    int          m_programKey = 0;
+    bool         m_custom = false;
+    QString      m_code;
+    QString      m_lastError;
+    quint64      m_nodeId = 0;
+    std::shared_ptr<ScriptOutput> m_data;
+    uint         m_dataVersion = 0;
     QByteArray   m_fragment;
     QJsonObject  m_params;
     QElapsedTimer m_clock;

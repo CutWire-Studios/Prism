@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QHash>
+#include <QString>
 #include <QImage>
 #include <QByteArray>
 #include <QSize>
@@ -92,6 +93,8 @@ public:
     /// Compile + cache a full-screen-quad program for @p fragmentSrc, keyed by
     /// @p key (stable per shader). Returns null on compile/link failure.
     QOpenGLShaderProgram *program(int key, const char *fragmentSrc);
+    /// Compile log of the last failed program(); cleared by a successful one.
+    const QString &lastError() const { return m_lastError; }
 
     /// Render one full-screen pass sampling @p inputTex through @p prog into the
     /// next ping-pong FBO. u_input (sampler, unit 0) and u_texel (1/size) are set
@@ -146,6 +149,7 @@ private:
     int                       m_ping     = 0;
     unsigned int              m_lastTex  = 0;
     bool                      m_glInit   = false;
+    QString                   m_lastError;
     QHash<int, unsigned int> m_slotTex;
     unsigned int             m_transparentTex = 0;
     QHash<int, QOpenGLShaderProgram *> m_programs;

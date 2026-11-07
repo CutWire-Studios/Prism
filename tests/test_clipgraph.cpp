@@ -313,6 +313,47 @@ private slots:
         QCOMPARE(graph.inputPorts(flip).size(), 1);
     }
 
+    void shaderNodePortsFollowCode() {
+        ClipGraph graph;
+        const NodeId a = graph.addNode(NT::Input, {}, canvas("a"));
+        const NodeId b = graph.addNode(NT::Input, {}, canvas("b"));
+        const NodeId script = graph.addNode(NT::Script);
+        const NodeId sh = graph.addNode(NT::Process, {}, {{"effect", ProcessEffects::kShaderEffectId}});
+        QVERIFY(sh != 0);
+        QVERIFY(!graph.node(sh)->params.value("code").toString().isEmpty());
+        QCOMPARE(graph.inputPorts(sh).size(), 2);
+        QVERIFY(graph.inputPorts(sh)[1].kind == ClipGraph::PortKind::DataIn);
+
+        QVERIFY(graph.setParams(sh, {{"code", "uniform sampler2D u_input1;\nuniform sampler2D u_input2;\nvoid main(){}"}}, true));
+        const auto ins = graph.inputPorts(sh);
+        QCOMPARE(ins.size(), 4);
+        QCOMPARE(ins[2].label, QStringLiteral("in2"));
+        QVERIFY(ins[3].kind == ClipGraph::PortKind::DataIn);
+        QVERIFY(graph.connectPorts(a, 0, sh, 0));
+        QVERIFY(graph.connectPorts(b, 0, sh, 2));
+        QVERIFY(graph.connectPorts(script, 0, sh, 3));
+        QCOMPARE(graph.scriptProducersForData(sh).size(), 1);
+
+        const ClipGraph::ResolvedStream rs = graph.evaluateVideoInput(sh);
+        const SourceEffectRef &ref = rs.layers.first().sourceEffects.first();
+        QCOMPARE(ref.nodeId, sh);
+        QVERIFY(ref.code.contains("u_input2"));
+        QCOMPARE(ref.aux.size(), 2);
+        QVERIFY(!ref.aux[0]);
+        QVERIFY(ref.aux[1]);
+
+        QVERIFY(graph.setParams(sh, {{"code", "uniform sampler2D u_input1;\nvoid main(){}"}}, true));
+        QCOMPARE(graph.inputPorts(sh).size(), 3);
+        QCOMPARE(graph.producerForInput(sh, 2), NodeId(0));
+        QCOMPARE(graph.producerForInput(sh, 0), a);
+        QCOMPARE(graph.scriptProducersForData(sh).size(), 1);
+
+        ClipGraph again;
+        QVERIFY(again.fromJson(graph.toJson()));
+        QCOMPARE(again.inputPorts(sh).size(), 3);
+        QCOMPARE(again.node(sh)->params.value("code").toString(), graph.node(sh)->params.value("code").toString());
+    }
+
     void extraInputEdgesValidateAndRoundTrip() {
         ClipGraph graph;
         const NodeId a = graph.addNode(NT::Input, {}, canvas("a"));

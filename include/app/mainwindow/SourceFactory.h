@@ -71,6 +71,8 @@ public:
     /// Callbacks that build / update the aux streams wired to a shader effect's extra input ports.
     static AuxBuilder auxBuilder(ClipGraph *graph, GraphRuntime *runtime);
     static AuxUpdater auxUpdater(ClipGraph *graph);
+    /// Points every Shader process node in the decorator chain @p top at its data feed.
+    static void attachEffectData(MediaSource *top, GraphRuntime *runtime);
 
     /// Build the full deck stream (index 0 = bottom/deck-primary, 1..N = overlays).
     static std::vector<Compositor::NodeChainSource>

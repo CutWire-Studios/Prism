@@ -340,10 +340,11 @@ void DeckController::refreshShaderAudioForActiveDecks() {
     auto refresh = [&](Deck deck, NodeId nodeId) {
         ClipGraph *g = graphOf(deck);
         if (!nodeId || !g) return;
-        if (g->sourceDescriptor(nodeId).kind != SourceDescriptor::Kind::Shader)
-            return;
         MediaSource *src = isLive(deck) ? out->sourceLive() : out->sourceStaging();
         if (!src) return;
+        SourceFactory::attachEffectData(src, runtimeOf(deck));
+        if (g->sourceDescriptor(nodeId).kind != SourceDescriptor::Kind::Shader)
+            return;
         if (auto *shader = dynamic_cast<ShaderSource *>(src->innermost()))
             shader->setDataSource(runtimeOf(deck)->scriptOutputForDataNode(nodeId));
     };
@@ -423,7 +424,9 @@ std::unique_ptr<MediaSource> DeckController::buildNodeSource(ClipGraph *g, Graph
         src->seek(clip.startTime);
     }
     if (sourceEffects.isEmpty()) return src;
-    return ProcessEffects::applySourceEffects(std::move(src), sourceEffects, SourceFactory::auxBuilder(g, rt));
+    auto withEffects = ProcessEffects::applySourceEffects(std::move(src), sourceEffects, SourceFactory::auxBuilder(g, rt));
+    SourceFactory::attachEffectData(withEffects.get(), rt);
+    return withEffects;
 }
 
 void DeckController::assignNodeToDeck(NodeId nodeId, Deck deck,

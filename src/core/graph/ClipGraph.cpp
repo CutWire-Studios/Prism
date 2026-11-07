@@ -48,7 +48,14 @@ constexpr qreal kFrameMinW = 80.0, kFrameMinH = 50.0;
 constexpr qreal kGroupW = 180.0, kGroupHdr = 26.0, kGroupRow = 20.0, kGroupFoot = 8.0;
 constexpr qreal kGroupPad = 24.0;
 
+bool isShaderNode(const ClipGraph::Node &n) {
+    return n.type == ClipGraph::NodeType::Process
+        && n.params.value("effect").toInt() == ProcessEffects::kShaderEffectId;
+}
+
 int processExtraInputs(const ClipGraph::Node &n) {
+    if (isShaderNode(n))
+        return ShaderEffects::customSpec(n.params.value("code").toString()).extraInputs;
     const ShaderEffectSpec *spec = ShaderEffects::byId(n.params.value("effect").toInt());
     return spec ? spec->extraInputs : 0;
 }
@@ -449,7 +456,7 @@ QSizeF ClipGraph::nodeSize(const Node &n) const {
         return {kCardW, kProxyY + kCardBodyH + (hasAudio ? kAudioStripH : 0.0) + kPortR + kPortR};
     }
     case NT::Process:
-        return {kProcW, kProcVideoH + processExtraInputs(n) * kProcExtraRow};
+        return {kProcW, kProcVideoH + (processExtraInputs(n) + (isShaderNode(n) ? 1 : 0)) * kProcExtraRow};
     case NT::AudioEffect:
         return {kProcW, kProcH};
     case NT::Layer:
@@ -502,7 +509,14 @@ void ClipGraph::buildPorts(const Node &n, QVector<Port> &in, QVector<Port> &out)
     }
     case NT::Process: {
         add(in, PK::ChainIn, PD::In, QStringLiteral("in"), true, {0.0, kProcVideoH / 2});
-        if (const ShaderEffectSpec *spec = ShaderEffects::byId(n.params.value("effect").toInt())) {
+        if (isShaderNode(n)) {
+            const ShaderEffectSpec spec = ShaderEffects::customSpec(n.params.value("code").toString());
+            for (int i = 0; i < spec.extraInputs; ++i)
+                add(in, PK::ChainIn, PD::In, spec.inputName(i), true,
+                    {0.0, kProcVideoH + i * kProcExtraRow + kProcExtraRow / 2});
+            add(in, PK::DataIn, PD::In, QStringLiteral("data"), false,
+                {0.0, kProcVideoH + spec.extraInputs * kProcExtraRow + kProcExtraRow / 2});
+        } else if (const ShaderEffectSpec *spec = ShaderEffects::byId(n.params.value("effect").toInt())) {
             for (int i = 0; i < spec->extraInputs; ++i)
                 add(in, PK::ChainIn, PD::In, spec->inputName(i), true,
                     {0.0, kProcVideoH + i * kProcExtraRow + kProcExtraRow / 2});
@@ -811,6 +825,11 @@ NodeId ClipGraph::addNode(NodeType type, const QPointF &pos, const QVariantMap &
             const ProcessEffectDescriptor *d = ProcessEffects::byId(effect);
             if (!d) return 0;
             effectParams = d->defaultParams;
+            if (effect == ProcessEffects::kShaderEffectId) {
+                p["code"] = params.value("code", ShaderEffects::defaultCustomCode());
+                effectParams = ShaderEffects::defaultParamValues(
+                    ShaderEffects::parseHeaderParams(p.value("code").toString()));
+            }
         } else {
             const AudioEffectDescriptor *d = AudioEffects::byId(effect);
             if (!d) return 0;
@@ -854,6 +873,7 @@ bool ClipGraph::setParams(NodeId id, const QVariantMap &params, bool merge) {
     Node *n = mutableNode(id);
     if (!n) return false;
     const QVariantList oldDevices = n->params.value("devicePorts").toList();
+    const bool shaderFx = isShaderNode(*n) && params.contains("code");
     if (merge) {
         for (auto it = params.begin(); it != params.end(); ++it)
             n->params.insert(it.key(), it.value());
@@ -870,6 +890,22 @@ bool ClipGraph::setParams(NodeId id, const QVariantMap &params, bool merge) {
         n->params["deviceId"] = first.value("deviceId");
         n->params["deviceLabel"] = first.value("deviceLabel");
         remapDevicePorts(*n, oldDevices);
+    }
+    if (shaderFx) {
+        // The data port follows the last video input; edges to inputs the code no longer declares go.
+        const int extra = processExtraInputs(*n);
+        for (int i = int(m_edges.size()) - 1; i >= 0; --i) {
+            Edge &e = m_edges[i];
+            if (e.to != id) continue;
+            if (e.kind == EK::ScriptToData) {
+                if (e.toPort != extra + 1) {
+                    e.toPort = extra + 1;
+                    if (!m_restoring) emit edgeChanged(e.id);
+                }
+            } else if (e.toPort > extra) {
+                removeEdgeAt(i);
+            }
+        }
     }
     refreshNode(*n);
     notifyNode(id);
@@ -1886,7 +1922,11 @@ ClipGraph::ResolvedStream ClipGraph::evaluateGuarded(NodeId producerNode, QSet<N
         if (!desc) return out;
         out = evaluateGuarded(producerForInput(producerNode, 0), visited);
         if (desc->isDecorator && !n->params.value("bypass").toBool()) {
-            SourceEffectRef ref{desc->id, toJsonObject(n->params.value("params").toMap()), {}};
+            SourceEffectRef ref{desc->id, toJsonObject(n->params.value("params").toMap()), {}, 0, {}};
+            if (desc->id == ProcessEffects::kShaderEffectId) {
+                ref.code = n->params.value("code").toString();
+                ref.nodeId = producerNode;
+            }
             for (int i = 1; i <= processExtraInputs(*n); ++i) {
                 const NodeId up = producerForInput(producerNode, i);
                 std::shared_ptr<SourceEffectAux> aux;
@@ -2439,6 +2479,8 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         }
         QVariantMap nodeParams{{"effect", desc->id}, {"params", params.toVariantMap()}};
         if (obj.contains("bypass")) nodeParams["bypass"] = obj["bypass"].toBool();
+        if (desc->id == ProcessEffects::kShaderEffectId)
+            nodeParams["code"] = obj.contains("code") ? obj["code"].toString() : ShaderEffects::defaultCustomCode();
         restore(obj, NT::Process, nodeParams);
     }
 
@@ -2661,6 +2703,8 @@ QJsonObject ClipGraph::snapshot(const std::function<double(NodeId)> &modulatorVa
                                   {QStringLiteral("params"), toJsonObject(n.params.value("params").toMap())}};
                 if (n.params.value("bypass").toBool())
                     extra.insert(QStringLiteral("bypass"), true);
+                if (isShaderNode(n))
+                    extra.insert(QStringLiteral("code"), n.params.value("code").toString());
                 if (processExtraInputs(n) > 0) {
                     QJsonArray inputs;
                     for (const Port &p : inputPorts(id)) inputs.append(p.label);

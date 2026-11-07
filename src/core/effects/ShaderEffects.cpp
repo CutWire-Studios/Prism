@@ -163,7 +163,7 @@ ShaderParam parseParam(const QJsonObject &o) {
     return ::parseParam(o);
 }
 
-QList<ShaderParam> parseHeaderParams(const QString &code, QString *error) {
+ShaderHeader parseHeader(const QString &code, QString *error) {
     static const QRegularExpression re(QStringLiteral(R"(/\*\s*@params(.*?)\*/)"),
                                        QRegularExpression::DotMatchesEverythingOption);
     const QRegularExpressionMatch m = re.match(code);
@@ -171,16 +171,67 @@ QList<ShaderParam> parseHeaderParams(const QString &code, QString *error) {
         return {};
     QJsonParseError err;
     const QJsonDocument doc = QJsonDocument::fromJson(m.captured(1).toUtf8(), &err);
-    if (!doc.isArray()) {
+    if (!doc.isArray() && !doc.isObject()) {
         if (error)
             *error = QStringLiteral("@params: ")
-                     + (err.error != QJsonParseError::NoError ? err.errorString() : QStringLiteral("expected a JSON array"));
+                     + (err.error != QJsonParseError::NoError ? err.errorString() : QStringLiteral("expected a JSON array or object"));
         return {};
     }
-    QList<ShaderParam> out;
-    for (const QJsonValue &v : doc.array())
-        out << ::parseParam(v.toObject());
+    ShaderHeader out;
+    const QJsonArray params = doc.isArray() ? doc.array() : doc.object().value("params").toArray();
+    for (const QJsonValue &v : params)
+        out.params << ::parseParam(v.toObject());
+    if (doc.isObject())
+        out.history = qBound(0, doc.object().value("history").toInt(0), 32);
     return out;
+}
+
+QList<ShaderParam> parseHeaderParams(const QString &code, QString *error) {
+    return parseHeader(code, error).params;
+}
+
+ShaderEffectSpec customSpec(const QString &code, QString *error) {
+    static const QRegularExpression comments(QStringLiteral(R"(/\*.*?\*/|//[^\n]*)"),
+                                              QRegularExpression::DotMatchesEverythingOption);
+    static const QRegularExpression input(QStringLiteral(R"(\buniform\s+(?:\w+\s+)*sampler2D\s+u_input(\d+)\s*;)"));
+    static const QRegularExpression prev(QStringLiteral(R"(\buniform\s+(?:\w+\s+)*sampler2D\s+u_prev\s*;)"));
+    static const QRegularExpression history(QStringLiteral(R"(\buniform\s+(?:\w+\s+)*sampler2D\s+u_history\s*;)"));
+    constexpr int kMaxExtraInputs = 8;
+
+    ShaderEffectSpec spec;
+    spec.name = QStringLiteral("Shader");
+    const ShaderHeader header = parseHeader(code, error);
+    spec.params = header.params;
+    QString stripped = code;
+    stripped.remove(comments);
+    for (auto it = input.globalMatch(stripped); it.hasNext();)
+        spec.extraInputs = qMax(spec.extraInputs, qMin(it.next().captured(1).toInt(), kMaxExtraInputs));
+    spec.needsPrevFrame = prev.match(stripped).hasMatch();
+    if (history.match(stripped).hasMatch())
+        spec.historyFrames = header.history > 0 ? header.history : 8;
+    return spec;
+}
+
+QString defaultCustomCode() {
+    return QStringLiteral(R"(/* @params
+[ { "name": "amount", "type": "float", "label": "Amount", "min": 0, "max": 1, "default": 0.5 } ]
+*/
+#ifdef GL_ES
+precision mediump float;
+#endif
+varying vec2 v_uv;            // 0..1 across the frame, (0,0) at the top left
+uniform sampler2D u_input;    // the incoming frame
+uniform vec2 u_resolution;    // frame size in pixels
+uniform float u_time;         // seconds since the node started
+uniform float p_amount;       // from the @params header
+
+void main() {
+    vec4 c = texture2D(u_input, v_uv);
+    float pulse = 0.5 + 0.5 * sin(u_time * 2.0);
+    c.rgb = mix(c.rgb, c.rgb * vec3(1.0, 1.0 - pulse, 1.0), p_amount);
+    gl_FragColor = c;
+}
+)");
 }
 
 const char *glslTypeName(ShaderParam::Type t) {

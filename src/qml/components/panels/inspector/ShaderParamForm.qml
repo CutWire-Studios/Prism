@@ -5,13 +5,15 @@ import Prism
 
 // Parameters of the data-driven shader effects (Process effect id >= 12), built from the
 // param list in NodeCatalog.processEffectParams. Generators on Input nodes override specs with
-// NodeCatalog.generatorParams; their values live in the same "params" map.
+// NodeCatalog.generatorParams; their values live in the same "params" map. The Shader node, the only
+// Process node with a "code" param, takes its list from the @params header of that code.
 InspectorForm {
     id: root
 
     readonly property int effect: params.effect !== undefined ? params.effect : -1
     readonly property var values: params.params ? params.params : ({})
-    property var specs: NodeCatalog.processEffectParams(effect)
+    property var specs: params.code !== undefined ? NodeCatalog.headerParams(params.code)
+                                                  : NodeCatalog.processEffectParams(effect)
 
     function val(spec) {
         const v = values[spec.name]

@@ -257,6 +257,24 @@ ProcessEffectDescriptor makeShaderEffect(const ShaderEffectSpec &spec) {
     return d;
 }
 
+// ── Shader (decorator running user GLSL; ids 12..66 belong to effects.json) ──
+ProcessEffectDescriptor makeShader() {
+    ProcessEffectDescriptor d;
+    d.id = ProcessEffects::kShaderEffectId;
+    d.name = "Shader";
+    d.menuLabel = "Shader";
+    d.slug = "shader";
+    d.isDecorator = true;
+    d.defaultParams = ShaderEffects::defaultParamValues(
+        ShaderEffects::parseHeaderParams(ShaderEffects::defaultCustomCode()));
+    d.wrapSource = [](std::unique_ptr<MediaSource> inner, const QJsonObject &p)
+        -> std::unique_ptr<MediaSource> {
+        return std::make_unique<ShaderEffectSource>(std::move(inner), ShaderEffects::defaultCustomCode(), p);
+    };
+    d.editLabel = "Edit Shader";
+    return d;
+}
+
 } // namespace
 
 namespace ProcessEffects {
@@ -269,6 +287,7 @@ const QVector<ProcessEffectDescriptor> &all() {
             makeBlur(), makeSharpen(), makeKeystone(), makePolygonMask()};
         for (const ShaderEffectSpec &spec : ShaderEffects::all())
             r.append(makeShaderEffect(spec));
+        r.append(makeShader());
         return r;
     }();
     return registry;
@@ -320,8 +339,15 @@ std::unique_ptr<MediaSource> applySourceEffects(std::unique_ptr<MediaSource> sou
                                                 const AuxBuilder &auxBuilder) {
     for (const SourceEffectRef &ref : effects) {
         const ProcessEffectDescriptor *d = byId(ref.effectId);
-        if (source && d && d->wrapSource)
-            source = d->wrapSource(std::move(source), ref.params);
+        if (source && d && d->wrapSource) {
+            if (ref.effectId == kShaderEffectId) {
+                auto shader = std::make_unique<ShaderEffectSource>(std::move(source), ref.code, ref.params);
+                shader->setNodeId(ref.nodeId);
+                source = std::move(shader);
+            } else {
+                source = d->wrapSource(std::move(source), ref.params);
+            }
+        }
         if (auxBuilder && !ref.aux.isEmpty()) {
             if (auto *ses = dynamic_cast<ShaderEffectSource *>(source.get())) {
                 for (int i = 0; i < ref.aux.size(); ++i)
@@ -334,8 +360,11 @@ std::unique_ptr<MediaSource> applySourceEffects(std::unique_ptr<MediaSource> sou
 
 QString sourceEffectsKey(const QVector<SourceEffectRef> &effects) {
     QString key;
-    for (const SourceEffectRef &ref : effects)
+    for (const SourceEffectRef &ref : effects) {
         key += QStringLiteral("%1;").arg(ref.effectId);
+        if (ref.effectId == kShaderEffectId)
+            key += QStringLiteral("%1:").arg(qHash(ref.code));
+    }
     return key;
 }
 
@@ -353,6 +382,10 @@ MediaSource *updateSourceEffects(MediaSource *top, const QVector<SourceEffectRef
     for (int i = effects.size() - 1; i >= 0; --i) {
         const ProcessEffectDescriptor *d = byId(effects[i].effectId);
         if (!d || !d->wrapSource) continue;
+        if (effects[i].effectId == kShaderEffectId) {
+            auto *shader = dynamic_cast<ShaderEffectSource *>(s);
+            if (!shader || shader->code() != effects[i].code) return nullptr;
+        }
         if (!s || !s->updateParams(effects[i].params)) return nullptr;
         if (auxUpdater) {
             auto *ses = dynamic_cast<ShaderEffectSource *>(s);
