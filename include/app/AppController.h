@@ -259,7 +259,8 @@ public:
     // ── Decks / transitions (QML) ─────────────────────────────────────────────
     /// Puts a scene on Staging. False for an unknown scene, the Live scene, or while a take is running.
     Q_INVOKABLE bool stageScene(const QString &id);
-    /// Stages @p id and starts the take; false when it could not be staged.
+    /// Stages @p id and starts the take; false when it could not be staged. During a running take it
+    /// retargets instead: the on-air blend becomes a still "from" and the transition restarts toward @p id.
     Q_INVOKABLE bool stageAndTake(const QString &id);
     /// Stages the scene @p delta places after (or before, when negative) the Live scene.
     Q_INVOKABLE bool stageRelative(int delta);
@@ -514,6 +515,8 @@ signals:
 private:
     /// Exchanges the Live/Staging audio players and per-deck UI/stream state (pairs with Compositor::swapDeckContents).
     void swapDeckState();
+    /// Stage-and-take of @p id while a take is running: freezes the blend on air as the new "from" and restarts toward @p id.
+    bool retargetTake(const QString &id);
     void onTakeCommitted();
 
     struct DeckUi {

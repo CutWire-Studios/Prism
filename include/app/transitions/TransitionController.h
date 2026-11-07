@@ -34,6 +34,9 @@ public:
 
     /// Stop any running fader animation.
     void shutdown();
+    /// Abandons a running take without committing it: progress returns to 0 and the deck contents stay
+    /// as they are. Neither takeCommitted nor takeCancelled is emitted; the caller restarts a take.
+    void abortForRetarget();
 
 public slots:
     /// Take: animates Live -> Staging with the configured mode and duration. No-op when Staging is empty.

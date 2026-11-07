@@ -168,6 +168,35 @@ private slots:
         QCOMPARE(comp.crossfade(), 0.f);
     }
 
+    void abortForRetarget_resetsProgressWithoutCommitOrCancel() {
+        Compositor comp;
+        comp.adoptSourceLive(std::make_unique<CanvasSource>());
+        comp.adoptSourceStaging(std::make_unique<CanvasSource>());
+        TransitionController tc(&comp);
+        tc.setTransitionDuration(2.0);
+        QSignalSpy started(&tc, &TransitionController::takeStarted);
+        QSignalSpy committed(&tc, &TransitionController::takeCommitted);
+        QSignalSpy cancelled(&tc, &TransitionController::takeCancelled);
+
+        tc.autoTransition();
+        QTRY_VERIFY_WITH_TIMEOUT(tc.progress() > 0.3f, 3000);
+        QCOMPARE(started.count(), 1);
+
+        tc.abortForRetarget();
+        QVERIFY(!tc.isRunning());
+        QCOMPARE(tc.progress(), 0.f);
+        QCOMPARE(tc.faderValue(), 0);
+        QCOMPARE(comp.crossfade(), 0.f);
+        QCOMPARE(committed.count(), 0);
+        QCOMPARE(cancelled.count(), 0);
+
+        tc.autoTransition();
+        QVERIFY(tc.isRunning());
+        QTRY_VERIFY_WITH_TIMEOUT(tc.progress() > 0.f, 3000);
+        QVERIFY(tc.progress() < 0.3f);
+        QCOMPARE(started.count(), 2);
+    }
+
     void cut_isImmediate() {
         Compositor comp;
         comp.adoptSourceLive(std::make_unique<CanvasSource>());

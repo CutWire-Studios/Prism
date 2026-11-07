@@ -1,6 +1,7 @@
 #include "app/AppController.h"
 #include "app/graph/GraphRuntime.h"
 #include "app/session/SessionManager.h"
+#include "app/transitions/TransitionController.h"
 #include "app/remote/OscProtocol.h"
 #include "app/remote/OscServer.h"
 #include "app/remote/RemoteControlServer.h"
@@ -287,6 +288,44 @@ private slots:
         QTRY_COMPARE(app.liveSceneId(), scene);
         QCOMPARE(app.stagingSceneId(), first);
         QVERIFY(!app.removeScene(scene));
+    }
+
+    void takeDuringTransitionRetargetsFromFrozenBlend() {
+        QTemporaryDir dir;
+        AppController app(nullptr);
+        const QString first = app.liveSceneId();
+        const QString b = addClipScene(app, dir.filePath(QStringLiteral("b.png")), Qt::red);
+        const QString c = addClipScene(app, dir.filePath(QStringLiteral("c.png")), Qt::blue);
+        QVERIFY(!b.isEmpty() && !c.isEmpty());
+        app.setTransitionMode(0);
+        app.setTransitionDuration(3.0);
+
+        QVERIFY(app.stageAndTake(b));
+        QTRY_VERIFY_WITH_TIMEOUT(app.transitionRunning(), 2000);
+        QTRY_VERIFY_WITH_TIMEOUT(app.faderValue() >= 30, 3000);
+        QCOMPARE(app.stagingSceneId(), b);
+
+        QVERIFY(app.stageAndTake(b));   // already the target
+        QCOMPARE(app.stagingSceneId(), b);
+        QVERIFY(app.faderValue() >= 30);
+        QVERIFY(!app.stageAndTake(first));   // the Live scene is not a retarget candidate
+
+        QSignalSpy committed(app.transitionController(), &TransitionController::takeCommitted);
+        QVERIFY(app.stageAndTake(c));
+        QCOMPARE(app.liveSceneId(), first);
+        QCOMPARE(app.stagingSceneId(), c);
+        QVERIFY(app.faderValue() < 30);
+        QVERIFY(app.transitionRunning());
+        QCOMPARE(committed.count(), 0);
+        if (app.compositor()->glAvailable()) {
+            QVERIFY(app.compositor()->sourceLive());
+            QCOMPARE(app.compositor()->sourceLive()->displayName(), QStringLiteral("Frozen Frame"));
+        }
+
+        app.setTransitionDuration(0.05);
+        QTRY_COMPARE_WITH_TIMEOUT(app.liveSceneId(), c, 6000);
+        QCOMPARE(app.stagingSceneId(), first);
+        QCOMPARE(committed.count(), 1);
     }
 
     void previewNodeDoesNotAffectTake() {

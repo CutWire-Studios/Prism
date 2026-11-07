@@ -183,7 +183,7 @@ bool Compositor::renderNow() {
 }
 
 bool Compositor::wantsProgramFrame() const {
-    return m_programFrameConsumers > 0 || (!m_sharesWithGui && m_viewers[0] > 0);
+    return m_syncReadback || m_programFrameConsumers > 0 || (!m_sharesWithGui && m_viewers[0] > 0);
 }
 
 bool Compositor::wantsDeckFrame() const {

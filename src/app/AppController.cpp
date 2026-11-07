@@ -805,9 +805,45 @@ bool AppController::stageScene(const QString &id)
 
 bool AppController::stageAndTake(const QString &id)
 {
+    if (m_transitionCtrl->isRunning())
+        return retargetTake(id);
     if (!stageScene(id))
         return false;
     take();
+    return true;
+}
+
+bool AppController::retargetTake(const QString &id)
+{
+    if (id.isEmpty() || id == m_show->liveSceneId() || !m_show->scene(id))
+        return false;
+    if (id == m_show->stagingSceneId())
+        return true;
+
+    const QImage frame = m_compositor->captureProgramFrame();
+    m_transitionCtrl->abortForRetarget();
+    m_pushTimer->stop();
+    m_show->stageScene(id);
+    pushDecks();
+
+    if (m_compositor->sourceStaging()) {
+        if (!frame.isNull()) {
+            m_compositor->holdLayerAsStill(Deck::Live, -1, frame);
+            m_compositor->setNodeChainLive({});
+            m_compositor->setBaseLive(0.f, 0.f, 1.f, 1.f);
+            m_compositor->setCropLive(0.f, 0.f, 1.f, 1.f);
+            m_compositor->setFlipLive(false, false);
+            m_compositor->setCanvasSizeLive(0, 0);
+            m_deckBase[0].clear();
+            m_deckOverlays[0].clear();
+            m_deckBaseParams[0].clear();
+            m_deckOverlayParams[0].clear();
+        }
+        const TransitionSpec spec = m_show->resolveTransition(m_show->stagingScene());
+        applyTransition(spec.mode, spec.durationMs);
+        m_transitionCtrl->autoTransition();
+    }
+    emit decksChanged();
     return true;
 }
 

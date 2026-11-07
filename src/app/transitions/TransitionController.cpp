@@ -19,6 +19,18 @@ void TransitionController::shutdown() {
     emitRunningIfChanged();
 }
 
+void TransitionController::abortForRetarget() {
+    m_waitingForOut = false;
+    stopAnimation();
+    m_progress = 0;
+    m_progressF = 0.f;
+    m_incomingStarted = false;
+    m_compositor->setCrossfade(0.f);
+    emit crossfadeChanged(0.f);
+    emit faderValueChanged(0);
+    emitRunningIfChanged();
+}
+
 void TransitionController::stopAnimation() {
     m_animating = false;
     QObject::disconnect(m_tickConnection);
