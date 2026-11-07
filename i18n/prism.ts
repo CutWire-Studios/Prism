@@ -1829,6 +1829,14 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Keep resident</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep this scene loaded so switching to it is instant (uses more memory)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Hotkey</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3485,6 +3493,10 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Too many resident scenes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Missing device</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3755,6 +3767,14 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Keep resident</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 scenes are kept resident (more than %2); expect higher memory use</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Frame history needs about %1 MB at %2x%3 (cap %4 MB across the app); %5</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3959,6 +3979,10 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
 <context>
     <name>SceneTab</name>
     <message>
+        <source>Kept resident</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>LIVE</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3987,6 +4011,14 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
     </message>
     <message>
         <source>None</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stop keeping resident</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep resident</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4050,6 +4082,10 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
     </message>
     <message>
         <source>Preflight check</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Kept resident</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

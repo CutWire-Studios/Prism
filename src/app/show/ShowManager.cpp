@@ -264,6 +264,7 @@ Scene *ShowManager::makeScene(const QString &id, int serial, bool withDefaults)
         [this, id](const QString &target) { return !wouldCreateSceneCycle(id, target); });
     connect(c, &Scene::metaChanged, this, &ShowManager::changed);
     connect(c, &Scene::metaChanged, this, [this, c] { emit sceneMetaChanged(c); });
+    connect(c, &Scene::metaChanged, this, &ShowManager::updateRuntimeActivity);
     connect(c, &Scene::thumbnailChanged, this, &ShowManager::thumbnailChanged);
     connect(c->graph(), &ClipGraph::changed, this, &ShowManager::changed);
     c->runtime()->setGlobals(globalValues());
@@ -685,7 +686,22 @@ QSet<QString> ShowManager::activeSceneIds(bool includeEdited) const
 
 void ShowManager::updateRuntimeActivity()
 {
-    const QSet<QString> active = activeSceneIds();
+    QSet<QString> active = activeSceneIds();
+    QSet<QString> visited;
+    QStringList stack;
+    for (const Scene *c : std::as_const(m_scenes)) {
+        if (c->keepResident())
+            stack.append(c->id());
+    }
+    while (!stack.isEmpty()) {
+        const QString id = stack.takeLast();
+        const Scene *c = scene(id);
+        if (!c || visited.contains(id))
+            continue;
+        visited.insert(id);
+        active.insert(id);
+        stack.append(sceneRefsOf(c));
+    }
     for (Scene *c : std::as_const(m_scenes))
         c->runtime()->setActive(active.contains(c->id()));
 }

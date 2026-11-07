@@ -331,6 +331,18 @@ private slots:
         QVERIFY(loaded.globals().isEmpty());
     }
 
+    void keepResidentRoundTrips() {
+        ShowManager show;
+        Scene *a = show.liveScene();
+        Scene *b = show.addScene(QStringLiteral("B"));
+        b->setKeepResident(true);
+
+        ShowManager loaded;
+        QVERIFY(loaded.fromJson(show.toJson()));
+        QVERIFY(!loaded.scene(a->id())->keepResident());
+        QVERIFY(loaded.scene(b->id())->keepResident());
+    }
+
     void sceneSourceNodeRoundTrips() {
         ShowManager show;
         Scene *outer = show.liveScene();

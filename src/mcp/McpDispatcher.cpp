@@ -845,6 +845,7 @@ QJsonObject sceneJson(const AppController *w, const Scene *scene)
             {QStringLiteral("transition"), QJsonValue::fromVariant(info.value(QStringLiteral("transition")))},
             {QStringLiteral("autoAdvanceMs"), scene->autoAdvanceMs()},
             {QStringLiteral("advanceOnMediaEnd"), scene->advanceOnMediaEnd()},
+            {QStringLiteral("keepResident"), scene->keepResident()},
             {QStringLiteral("hotkey"), info.value(QStringLiteral("hotkey")).toString()},
             {QStringLiteral("warning"), info.value(QStringLiteral("warning")).toString()}};
 }
@@ -970,7 +971,7 @@ QJsonObject McpDispatcher::opSetSceneProps(const QJsonObject &args)
     if (!scene)
         return error;
     QVariantMap props;
-    for (const char *key : {"name", "color", "notes", "endAction", "autoAdvanceMs", "advanceOnMediaEnd", "hotkey"}) {
+    for (const char *key : {"name", "color", "notes", "endAction", "autoAdvanceMs", "advanceOnMediaEnd", "keepResident", "hotkey"}) {
         const QString k = QString::fromLatin1(key);
         if (args.contains(k))
             props.insert(k, args.value(k).toVariant());

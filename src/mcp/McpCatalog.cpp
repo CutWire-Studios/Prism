@@ -151,7 +151,7 @@ const QList<Op> &ops()
 
         {"list_scenes", "decks", "See the scene list",
          "List the show's scenes. Returns {scenes:[{id, index, name, live, staging, edited, endAction, "
-         "transition:{mode,durationMs}|null, autoAdvanceMs, advanceOnMediaEnd, hotkey, warning}]}.",
+         "transition:{mode,durationMs}|null, autoAdvanceMs, advanceOnMediaEnd, keepResident, hotkey, warning}]}.",
          objectSchema({}), true, false, true},
         {"stage_scene", "decks", "Put a scene on Staging (next up)",
          "Load a scene onto the Staging deck (the next-up deck, shown on the left). It does not go on "
@@ -199,6 +199,8 @@ const QList<Op> &ops()
                                    integerProp(QStringLiteral("Auto-advance delay in ms, 0 = off"))},
                                   {QStringLiteral("advanceOnMediaEnd"),
                                    boolProp(QStringLiteral("Advance when the media ends"))},
+                                  {QStringLiteral("keepResident"),
+                                   boolProp(QStringLiteral("Keep the scene loaded so switching to it is instant (uses more memory)"))},
                                   {QStringLiteral("transition"),
                                    objectProp(QStringLiteral("{mode, durationMs} or null to clear"))},
                                   {QStringLiteral("hotkey"), stringProp(QStringLiteral("Key chord"))}}),
@@ -210,7 +212,7 @@ const QList<Op> &ops()
                        {QStringLiteral("durationMs"), integerProp(QStringLiteral("Duration in milliseconds"))}},
                       {QStringLiteral("mode"), QStringLiteral("durationMs")})},
         {"preflight", "decks", "Check the show for missing media",
-         "Scan every scene for missing files, devices and scene references. Returns {issues:[{kind: missing_file|missing_device|missing_scene|scene_cycle|history_memory, "
+         "Scan every scene for missing files, devices and scene references. Returns {issues:[{kind: missing_file|missing_device|missing_scene|scene_cycle|history_memory|resident_memory, "
          "sceneId, scene, source, detail}]}.",
          objectSchema({}), true, false, true},
         {"play", "decks", "Play a deck", "Start playback on the Live or Staging deck.",

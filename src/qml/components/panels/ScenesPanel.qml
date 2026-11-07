@@ -183,6 +183,7 @@ PanelFrame {
                 required property string thumbnail
                 required property string hotkey
                 required property string warning
+                required property bool keepResident
 
                 readonly property bool selected: sceneId === AppController.selectedSceneId
 
@@ -318,6 +319,16 @@ PanelFrame {
                             text: row.name
                         }
 
+                        Rectangle {
+                            visible: row.keepResident
+                            implicitWidth: 6
+                            implicitHeight: 6
+                            radius: 3
+                            color: Theme.primary
+                            ToolTip.visible: residentHover.hovered
+                            ToolTip.text: qsTr("Kept resident")
+                            HoverHandler { id: residentHover }
+                        }
                         IconGlyph {
                             visible: row.warning.length > 0
                             glyph: "triangle-alert"

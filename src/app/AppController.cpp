@@ -944,6 +944,7 @@ void AppController::refreshSceneWarnings()
         case PreflightIssue::Kind::MissingScene: text = tr("Missing scene: %1"); break;
         case PreflightIssue::Kind::SceneCycle: text = tr("Scene loops back into itself: %1"); break;
         case PreflightIssue::Kind::HistoryMemory: text = tr("%1"); break;
+        case PreflightIssue::Kind::ResidentMemory: text = tr("%1"); break;
         }
         w += (w.isEmpty() ? QString() : QStringLiteral("\n")) + text.arg(i.detail.isEmpty() ? i.source : i.detail);
     }
@@ -1005,6 +1006,7 @@ QVariantMap AppController::sceneInfo(const QString &id) const
                      {"notes", scene->notes()}, {"endAction", Scene::endActionName(scene->endAction())},
                      {"autoAdvanceMs", scene->autoAdvanceMs()},
                      {"advanceOnMediaEnd", scene->advanceOnMediaEnd()},
+                     {"keepResident", scene->keepResident()},
                      {"hotkey", sceneHotkey(id)}, {"warning", m_sceneWarnings.value(id)},
                      {"live", id == m_show->liveSceneId()},
                      {"thumbnail", scene->thumbnail().isEmpty()
@@ -1035,6 +1037,8 @@ void AppController::setSceneProps(const QString &id, const QVariantMap &props)
         m.autoAdvanceMs = qMax(0, props.value("autoAdvanceMs").toInt());
     if (props.contains("advanceOnMediaEnd"))
         m.advanceOnMediaEnd = props.value("advanceOnMediaEnd").toBool();
+    if (props.contains("keepResident"))
+        m.keepResident = props.value("keepResident").toBool();
     if (props.contains("transition")) {
         const QVariantMap t = props.value("transition").toMap();
         if (t.isEmpty())

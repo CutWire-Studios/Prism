@@ -519,6 +519,28 @@ private slots:
         QVERIFY(!d->runtime()->isActive());
     }
 
+    void residentScenesStayActiveWithNestedScenes() {
+        ShowManager show;
+        Scene *live = show.liveScene();
+        Scene *b = show.addScene(QStringLiteral("B"));
+        Scene *c = show.addScene(QStringLiteral("C"));
+        Scene *d = show.addScene(QStringLiteral("D"));
+        addSceneRef(b, c->id());
+        show.updateRuntimeActivity();
+        QVERIFY(live->runtime()->isActive());
+        QVERIFY(!b->runtime()->isActive());
+        QVERIFY(!c->runtime()->isActive());
+
+        show.setSceneMeta(b->id(), [&] { SceneMeta m = b->meta(); m.keepResident = true; return m; }());
+        QVERIFY(b->runtime()->isActive());
+        QVERIFY(c->runtime()->isActive());
+        QVERIFY(!d->runtime()->isActive());
+
+        b->setKeepResident(false);
+        QVERIFY(!b->runtime()->isActive());
+        QVERIFY(!c->runtime()->isActive());
+    }
+
     void loadClearsCyclicSceneRef() {
         ShowManager show;
         Scene *a = show.liveScene();

@@ -51,6 +51,7 @@ QVariant SceneListModel::data(const QModelIndex &index, int role) const
             : QStringLiteral("image://scenethumb/%1?%2").arg(scene->id()).arg(scene->thumbnailRev());
     case HotkeyRole: return m_hotkey ? m_hotkey(scene->id()) : QString();
     case WarningRole: return m_warning ? m_warning(scene->id()) : QString();
+    case ResidentRole: return scene->keepResident();
     }
     return {};
 }
@@ -61,5 +62,6 @@ QHash<int, QByteArray> SceneListModel::roleNames() const
             {IsLiveRole, "isLive"}, {IsStagingRole, "isStaging"}, {IsEditedRole, "isEdited"},
             {EndActionRole, "endAction"}, {HasTransitionRole, "hasTransition"},
             {TransitionModeRole, "transitionMode"}, {TransitionMsRole, "transitionMs"},
-            {ThumbnailRole, "thumbnail"}, {HotkeyRole, "hotkey"}, {WarningRole, "warning"}};
+            {ThumbnailRole, "thumbnail"}, {HotkeyRole, "hotkey"}, {WarningRole, "warning"},
+            {ResidentRole, "keepResident"}};
 }

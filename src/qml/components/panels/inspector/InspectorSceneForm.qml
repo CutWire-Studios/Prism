@@ -148,6 +148,17 @@ ColumnLayout {
         onToggled: root.setProps({ advanceOnMediaEnd: checked })
     }
 
+    ThemedSwitch {
+        text: qsTr("Keep resident")
+        checked: !!root.info.keepResident
+        onToggled: root.setProps({ keepResident: checked })
+    }
+    ThemedLabel {
+        Layout.fillWidth: true
+        wrapMode: Text.WordWrap
+        text: qsTr("Keep this scene loaded so switching to it is instant (uses more memory)")
+    }
+
     StyleFieldRow {
         Layout.fillWidth: true
         label: qsTr("Hotkey")

@@ -29,11 +29,12 @@ struct SceneMeta {
     int endAction = 0;
     int autoAdvanceMs = 0;
     bool advanceOnMediaEnd = false;
+    bool keepResident = false;
 
     bool operator==(const SceneMeta &o) const {
         return name == o.name && color == o.color && notes == o.notes && incoming == o.incoming
             && endAction == o.endAction && autoAdvanceMs == o.autoAdvanceMs
-            && advanceOnMediaEnd == o.advanceOnMediaEnd;
+            && advanceOnMediaEnd == o.advanceOnMediaEnd && keepResident == o.keepResident;
     }
 };
 
@@ -63,6 +64,7 @@ public:
     EndAction endAction() const { return m_endAction; }
     int autoAdvanceMs() const { return m_autoAdvanceMs; }
     bool advanceOnMediaEnd() const { return m_advanceOnMediaEnd; }
+    bool keepResident() const { return m_keepResident; }
 
     /// Bumps on every setThumbnail so image URLs can be cache-busted.
     int thumbnailRev() const { return m_thumbRev; }
@@ -80,6 +82,7 @@ public:
     void setEndAction(EndAction action);
     void setAutoAdvanceMs(int ms);
     void setAdvanceOnMediaEnd(bool on);
+    void setKeepResident(bool on);
 
     QJsonObject toJson() const;
     /// False when the stored graph is older than ClipGraph::kGraphVersion.
@@ -109,5 +112,6 @@ private:
     EndAction m_endAction = EndAction::Hold;
     int m_autoAdvanceMs = 0;
     bool m_advanceOnMediaEnd = false;
+    bool m_keepResident = false;
     int m_thumbRev = 0;
 };

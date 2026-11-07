@@ -23,6 +23,7 @@ public:
         ThumbnailRole,
         HotkeyRole,
         WarningRole,
+        ResidentRole,
     };
 
     explicit SceneListModel(ShowManager *show);

@@ -41,6 +41,10 @@ Rectangle {
                 }
             }
         }
+        ThemedMenuItem {
+            text: tabMenu.tab && tabMenu.tab.keepResident ? qsTr("Stop keeping resident") : qsTr("Keep resident")
+            onTriggered: AppController.setSceneProps(tabMenu.sceneId, { keepResident: !tabMenu.tab.keepResident })
+        }
         ThemedMenuSeparator { }
         ThemedMenuItem {
             text: qsTr("Stage")

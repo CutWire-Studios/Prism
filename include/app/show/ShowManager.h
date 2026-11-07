@@ -128,7 +128,8 @@ public:
     void setCanvasSize(int w, int h);
     QSize canvasSize() const { return {m_canvasW, m_canvasH}; }
     QQuickImageProvider *createImageProvider() const;
-    /// Live, Staging and the edited scene run their scripts; the rest are paused.
+    /// Live, Staging, the edited scene and scenes kept resident (with everything they nest through
+    /// Scene nodes) run their scripts; the rest are paused.
     void updateRuntimeActivity();
 
     // ── Persistence ──────────────────────────────────────────────────────────

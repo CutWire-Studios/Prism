@@ -8,6 +8,7 @@
 #include "core/sources/SharedSourcePool.h"
 
 #include <QFileInfo>
+#include <algorithm>
 #include <QJsonObject>
 #include <QCameraDevice>
 #include <QMediaDevices>
@@ -21,6 +22,7 @@ QJsonObject PreflightIssue::toJson() const
     case Kind::MissingScene: kindName = QStringLiteral("missing_scene"); break;
     case Kind::SceneCycle: kindName = QStringLiteral("scene_cycle"); break;
     case Kind::HistoryMemory: kindName = QStringLiteral("history_memory"); break;
+    case Kind::ResidentMemory: kindName = QStringLiteral("resident_memory"); break;
     }
     return {{QStringLiteral("kind"), kindName},
             {QStringLiteral("sceneId"), sceneId},
@@ -50,8 +52,20 @@ QList<PreflightIssue> Preflight::run(const ShowManager &show, const QDir &sessio
     using Kind = SourceDescriptor::Kind;
     const AssetPathResolver::Options opts{sessionDir};
     QList<PreflightIssue> issues;
+    const int residentCount = int(std::count_if(show.scenes().cbegin(), show.scenes().cend(),
+                                                [](const Scene *s) { return s->keepResident(); }));
     for (const Scene *scene : show.scenes()) {
         const ClipGraph *g = scene->graph();
+        if (scene->keepResident() && residentCount > kMaxResidentScenes) {
+            PreflightIssue issue;
+            issue.kind = PreflightIssue::Kind::ResidentMemory;
+            issue.sceneId = scene->id();
+            issue.sceneName = scene->name();
+            issue.source = QObject::tr("Keep resident");
+            issue.detail = QObject::tr("%1 scenes are kept resident (more than %2); expect higher memory use")
+                               .arg(residentCount).arg(kMaxResidentScenes);
+            issues.append(issue);
+        }
         qint64 historyBytes = 0;
         bool historyReduced = false;
         QStringList historyEffects;

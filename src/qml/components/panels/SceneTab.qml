@@ -17,6 +17,7 @@ Rectangle {
     required property bool isStaging
     required property bool isEdited
     required property string hotkey
+    required property bool keepResident
 
     property bool canClose: true
     property bool dragging: false
@@ -123,6 +124,16 @@ Rectangle {
             onAccepted: root.finishRename(true)
             onActiveFocusChanged: if (!activeFocus) root.finishRename(true)
             Keys.onEscapePressed: root.finishRename(false)
+        }
+        Rectangle {
+            visible: root.keepResident
+            implicitWidth: 6
+            implicitHeight: 6
+            radius: 3
+            color: Theme.primary
+            ToolTip.visible: residentHover.hovered
+            ToolTip.text: qsTr("Kept resident")
+            HoverHandler { id: residentHover }
         }
         ThemedLabel {
             visible: root.hotkey.length > 0
