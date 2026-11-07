@@ -358,6 +358,12 @@ QJsonObject McpDispatcher::applyOne(const QString &tool, const QJsonObject &args
         return opDisconnect(args);
     if (tool == QLatin1String("set_process_params"))
         return opSetProcessParams(args);
+    if (tool == QLatin1String("add_modulator_node"))
+        return opAddModulatorNode(args);
+    if (tool == QLatin1String("set_modulator_params"))
+        return opSetModulatorParams(args);
+    if (tool == QLatin1String("bind_param"))
+        return opBindParam(args);
     if (tool == QLatin1String("remove_node"))
         return opRemoveNode(args);
     return err("unknown_op", tool);
@@ -1242,7 +1248,7 @@ QJsonObject McpDispatcher::opListNodes() const
     auto *editor = m_window->clipGraph();
     if (!editor)
         return err("not_found", QStringLiteral("No node editor"));
-    QJsonObject snap = editor->snapshot();
+    QJsonObject snap = editor->snapshot([this](NodeId id) { return m_window->modulatorValue(id); });
     snap.insert(QStringLiteral("ok"), true);
     return snap;
 }
@@ -1378,6 +1384,115 @@ QJsonObject McpDispatcher::opSetProcessParams(const QJsonObject &args)
         return err("type_mismatch", QStringLiteral("Node is not a process node"));
     m_window->mcpBumpRevision();
     return ok({{QStringLiteral("id"), QString::number(id)}, {QStringLiteral("params"), params}});
+}
+
+namespace {
+
+const QStringList kModulatorKinds = {
+    QStringLiteral("lfo"),     QStringLiteral("envelope"), QStringLiteral("map_range"),
+    QStringLiteral("smooth"),  QStringLiteral("random"),   QStringLiteral("trigger"),
+    QStringLiteral("counter"), QStringLiteral("toggle"),   QStringLiteral("math")};
+
+// -1 when the value is neither a kind name nor an index.
+int modulatorKindIndex(const QJsonValue &v)
+{
+    if (v.isString())
+        return kModulatorKinds.indexOf(v.toString().toLower());
+    if (v.isDouble() && v.toInt() >= 0 && v.toInt() < kModulatorKinds.size())
+        return v.toInt();
+    return -1;
+}
+
+} // namespace
+
+QJsonObject McpDispatcher::opAddModulatorNode(const QJsonObject &args)
+{
+    auto *editor = m_window->clipGraph();
+    if (!editor)
+        return err("not_found", QStringLiteral("No node editor"));
+    QVariantMap params = args.value(QStringLiteral("params")).toObject().toVariantMap();
+    const QJsonValue kindArg = args.value(QStringLiteral("kind"));
+    if (!kindArg.isUndefined()) {
+        const int kind = modulatorKindIndex(kindArg);
+        if (kind < 0)
+            return err("bad_args", QStringLiteral("kind must be one of: %1").arg(kModulatorKinds.join(QStringLiteral(", "))));
+        params.insert(QStringLiteral("kind"), kind);
+    }
+    const double x = args.contains(QStringLiteral("x")) ? jsonNumber(args.value(QStringLiteral("x")), 0) : qQNaN();
+    const double y = args.contains(QStringLiteral("y")) ? jsonNumber(args.value(QStringLiteral("y")), 0) : qQNaN();
+    const NodeId id = editor->addNode(ClipGraph::NodeType::Modulator, QPointF(x, y), params);
+    if (!id)
+        return err("conflict", QStringLiteral("Could not add modulator node"));
+    m_window->mcpBumpRevision();
+    const int kind = editor->node(id)->params.value(QStringLiteral("kind")).toInt();
+    return ok({{QStringLiteral("id"), QString::number(id)},
+               {QStringLiteral("type"), QStringLiteral("modulator")},
+               {QStringLiteral("kind"), kModulatorKinds.value(kind)}});
+}
+
+QJsonObject McpDispatcher::opSetModulatorParams(const QJsonObject &args)
+{
+    auto *editor = m_window->clipGraph();
+    if (!editor)
+        return err("not_found", QStringLiteral("No node editor"));
+    const NodeId id = static_cast<NodeId>(parseNodeId(args.value(QStringLiteral("node"))));
+    if (!id)
+        return err("bad_args", QStringLiteral("node is required"));
+    if (!editor->hasNode(id))
+        return err("not_found", QStringLiteral("No node %1").arg(id));
+    if (editor->node(id)->type != ClipGraph::NodeType::Modulator)
+        return err("type_mismatch", QStringLiteral("Node is not a modulator node"));
+    QVariantMap params = args.value(QStringLiteral("params")).toObject().toVariantMap();
+    const QJsonValue kindArg = args.value(QStringLiteral("kind"));
+    if (!kindArg.isUndefined()) {
+        const int kind = modulatorKindIndex(kindArg);
+        if (kind < 0)
+            return err("bad_args", QStringLiteral("kind must be one of: %1").arg(kModulatorKinds.join(QStringLiteral(", "))));
+        params.insert(QStringLiteral("kind"), kind);
+    }
+    if (params.isEmpty())
+        return err("bad_args", QStringLiteral("params or kind is required"));
+    editor->setParams(id, params, true);
+    m_window->mcpBumpRevision();
+    return ok({{QStringLiteral("id"), QString::number(id)}});
+}
+
+QJsonObject McpDispatcher::opBindParam(const QJsonObject &args)
+{
+    auto *editor = m_window->clipGraph();
+    if (!editor)
+        return err("not_found", QStringLiteral("No node editor"));
+    const NodeId id = static_cast<NodeId>(parseNodeId(args.value(QStringLiteral("node"))));
+    if (!id)
+        return err("bad_args", QStringLiteral("node is required"));
+    const ClipGraph::Node *node = editor->node(id);
+    if (!node)
+        return err("not_found", QStringLiteral("No node %1").arg(id));
+    QString param = args.value(QStringLiteral("param")).toString();
+    if (param.isEmpty())
+        return err("bad_args", QStringLiteral("param is required"));
+    if (node->type == ClipGraph::NodeType::Process && !param.contains(QLatin1Char('.')))
+        param.prepend(QStringLiteral("params."));
+
+    QVariantMap exprs = node->params.value(QStringLiteral("expressions")).toMap();
+    const QJsonValue modArg = args.value(QStringLiteral("modulator"));
+    NodeId modId = 0;
+    if (modArg.isUndefined() || modArg.isNull()) {
+        exprs.remove(param);
+    } else {
+        modId = static_cast<NodeId>(parseNodeId(modArg));
+        const ClipGraph::Node *mod = editor->node(modId);
+        if (!mod)
+            return err("not_found", QStringLiteral("No node %1").arg(modId));
+        if (mod->type != ClipGraph::NodeType::Modulator)
+            return err("type_mismatch", QStringLiteral("modulator must be a modulator node"));
+        exprs.insert(param, QStringLiteral("mod(%1)").arg(modId));
+    }
+    editor->setParams(id, {{QStringLiteral("expressions"), exprs}}, true);
+    m_window->mcpBumpRevision();
+    return ok({{QStringLiteral("node"), QString::number(id)},
+               {QStringLiteral("param"), param},
+               {QStringLiteral("modulator"), modId ? QString::number(modId) : QString()}});
 }
 
 QJsonObject McpDispatcher::opRemoveNode(const QJsonObject &args)

@@ -252,6 +252,7 @@ Item {
     Component { id: masterAudioCaptureBody; MasterAudioCaptureBody { node: root } }
     Component { id: scriptBody; ScriptBody { node: root } }
     Component { id: audioAnalyzerBody; AudioAnalyzerBody { node: root } }
+    Component { id: modulatorBody; ModulatorBody { node: root } }
 
     Loader {
         anchors.fill: parent
@@ -269,6 +270,7 @@ Item {
             case NodePalette.nodeType.MasterAudioCapture: return masterAudioCaptureBody
             case NodePalette.nodeType.Script: return scriptBody
             case NodePalette.nodeType.AudioAnalyzer: return audioAnalyzerBody
+            case NodePalette.nodeType.Modulator: return modulatorBody
             }
             return null
         }

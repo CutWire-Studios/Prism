@@ -42,6 +42,8 @@ the run is aborted with an `instruction limit exceeded` error; the app keeps run
 | `prism.param(nodeId, name)` | Reads a parameter of a node in this scene. `name` may be dotted for nested values, for example `"params.opacity"`. |
 | `prism.param(nodeId, name, value)` | Sets it. The write is applied on the GUI thread without an undo entry. |
 | `prism.audio.bands([analyzerId])` | `{low, mid, high, level, beat, hasAudio}` of an Audio Analyzer node (the most recently updated one without an id). Zeros when there is no audio. |
+| `prism.bpm` | Tempo of the global BPM clock (default 120; set with the transport Tap button or saved in the session). |
+| `prism.beat` | Beat position of the BPM clock as a float: beat count plus phase (`12.25` is a quarter of the way through beat 12). Read it at the moment you need it; it is not updated while a script runs. |
 | `prism.log(...)` | Same as `print`. |
 | `prism.time()`, `prism.clock()`, `prism.date(fmt, t)` | The `os.time`, `os.clock` and `os.date` equivalents. |
 
@@ -59,6 +61,9 @@ Expressions are evaluated at about 30 Hz while the scene's runtime is active. Av
 
 - `t`: seconds since the scene's runtime was created
 - `audio`: `{low, mid, high, level, beat}` (zeros without an analyzer)
+- `bpm`, `beat`: the BPM clock's tempo and beat position, as `prism.bpm` / `prism.beat`
+- `mod(nodeId)`: the current output of a Modulator node. The inspector's link button writes
+  `mod(<id>)` into the parameter's expression
 - `param(nodeId, name)`: as `prism.param` (read only)
 - everything in `math` through the global environment, for example `math.sin(t)`
 

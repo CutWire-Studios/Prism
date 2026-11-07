@@ -79,7 +79,8 @@ Popup {
         "MasterAudioOutput": ["speaker", "master", "device"],
         "AudioMixer": ["mix", "volume", "sum"],
         "Script": ["lua", "code", "program", "timer", "pulse", "trigger", "clock"],
-        "AudioAnalyzer": ["fft", "beat", "spectrum", "dsp"]
+        "AudioAnalyzer": ["fft", "beat", "spectrum", "dsp"],
+        "Modulator": ["lfo", "envelope", "random", "bpm", "tempo", "counter", "toggle", "math", "smooth", "link"]
     })
 
     function allEntries() {
@@ -124,6 +125,7 @@ Popup {
         if (NodeCatalog.scriptingAvailable()) {
             node(qsTr("Logic"), "type:" + T.Script, qsTr("Script"), T.Script)
             node(qsTr("Logic"), "type:" + T.AudioAnalyzer, qsTr("Audio Analyzer"), T.AudioAnalyzer)
+            node(qsTr("Logic"), "type:" + T.Modulator, qsTr("Modulator"), T.Modulator)
         }
         return list
     }

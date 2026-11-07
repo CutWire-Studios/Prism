@@ -54,6 +54,7 @@ InspectorForm {
         unit: "%"
         value: root.num("opacity", 1) * 100
         onEdited: v => root.setValues({ opacity: v / 100 }, true)
+        exprScale: 0.01
         expressionName: "params.opacity"
         expression: root.expr(expressionName)
         expressionError: root.exprError(expressionName)
@@ -84,6 +85,7 @@ InspectorForm {
         decimals: 0
         value: root.num("threshold", 0.25) * 100
         onEdited: v => root.setValues({ threshold: v / 100 }, true)
+        exprScale: 0.01
         expressionName: "params.threshold"
         expression: root.expr(expressionName)
         expressionError: root.exprError(expressionName)
@@ -100,6 +102,7 @@ InspectorForm {
         decimals: 0
         value: root.num("smoothness", 0.1) * 100
         onEdited: v => root.setValues({ smoothness: v / 100 }, true)
+        exprScale: 0.01
         expressionName: "params.smoothness"
         expression: root.expr(expressionName)
         expressionError: root.exprError(expressionName)

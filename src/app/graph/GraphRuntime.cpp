@@ -1,5 +1,8 @@
 #include "app/graph/GraphRuntime.h"
 
+#include "app/BpmClock.h"
+#include "app/graph/ModulatorEngine.h"
+
 #include "core/media/AudioAnalyzer.h"
 #include "core/media/MediaProbe.h"
 #include "app/common/ThumbHelper.h"
@@ -157,6 +160,9 @@ struct RuntimeShared {
     QHash<NodeId, QVariantMap> params;
     QHash<NodeId, QVariantMap> bands;
     NodeId latestBands = 0;
+    QHash<NodeId, double> modulators;
+    double bpm = 120.0;
+    double beat = 0.0;
     QVector<PendingWrite> pending;
 };
 
@@ -464,6 +470,24 @@ struct GraphRuntime::Impl {
     ScriptRuntime *exprRuntime = nullptr;
     bool exprBusy = false;
     QElapsedTimer clock;
+    ModulatorEngine modulators;
+    BpmClock *bpmClock = nullptr;
+
+    void tickModulators() {
+        const ModulatorClock mc{clock.elapsed() / 1000.0, bpmClock ? bpmClock->beats() : 0.0};
+        modulators.tick(mc, [this](const QString &spec) {
+            QMutexLocker lock(&shared->mutex);
+            const int colon = spec.indexOf(QLatin1Char(':'));
+            const NodeId analyzer = colon > 0 ? spec.left(colon).toULongLong() : shared->latestBands;
+            return shared->bands.value(analyzer).value(colon > 0 ? spec.mid(colon + 1) : spec).toDouble();
+        });
+        QMutexLocker lock(&shared->mutex);
+        shared->bpm = bpmClock ? bpmClock->bpm() : 120.0;
+        shared->beat = mc.beat;
+        shared->modulators.clear();
+        for (NodeId id : modulators.ids())
+            shared->modulators.insert(id, modulators.value(id));
+    }
 
     ScriptNode *script(NodeId id) const {
         auto it = scripts.find(id);
@@ -591,6 +615,10 @@ struct GraphRuntime::Impl {
                 shared->params.remove(id);
         }
         syncExpressions(id, n);
+        if (n && n->type == NT::Modulator)
+            modulators.setNode(id, n->params);
+        else
+            modulators.removeNode(id);
         if (!n || !isScriptType(n->type)) {
             scripts.erase(id);
             return;
@@ -641,9 +669,11 @@ struct GraphRuntime::Impl {
         dataInputs.clear();
         expressions.clear();
         expressionErrors.clear();
+        modulators.clear();
         {
             QMutexLocker lock(&shared->mutex);
             shared->params.clear();
+            shared->modulators.clear();
             shared->bands.clear();
             shared->latestBands = 0;
         }
@@ -656,8 +686,10 @@ struct GraphRuntime::Impl {
         scripts.erase(id);
         expressions.remove(id);
         expressionErrors.remove(id);
+        modulators.removeNode(id);
         {
             QMutexLocker lock(&shared->mutex);
+            shared->modulators.remove(id);
             shared->params.remove(id);
             shared->bands.remove(id);
             if (shared->latestBands == id)
@@ -712,6 +744,14 @@ GraphRuntime::GraphRuntime(ClipGraph *graph, QObject *parent, std::shared_ptr<No
                 QMetaObject::invokeMethod(this, [this] { applyScriptWrites(); }, Qt::QueuedConnection);
             }
             return true;
+        };
+        d->host->clockInfo = [sh] {
+            QMutexLocker lock(&sh->mutex);
+            return QVariantMap{{QStringLiteral("bpm"), sh->bpm}, {QStringLiteral("beat"), sh->beat}};
+        };
+        d->host->modulatorValue = [sh](quint64 id) {
+            QMutexLocker lock(&sh->mutex);
+            return sh->modulators.value(id);
         };
         d->host->audioBands = [sh](quint64 id) {
             QMutexLocker lock(&sh->mutex);
@@ -904,6 +944,14 @@ QQuickImageProvider *GraphRuntime::createImageProvider(std::shared_ptr<NodeThumb
     return new NodeThumbProvider(std::move(thumbs));
 }
 
+void GraphRuntime::setBpmClock(BpmClock *clock) {
+    d->bpmClock = clock;
+}
+
+double GraphRuntime::modulatorValue(NodeId id) const {
+    return d->modulators.value(id);
+}
+
 bool GraphRuntime::isActive() const {
     return d->active;
 }
@@ -940,6 +988,7 @@ void GraphRuntime::pollDataConsumers() {
         }
     }
 
+    d->tickModulators();
     d->runExpressions();
 
     for (auto it = d->dataInputs.begin(); it != d->dataInputs.end(); ++it) {

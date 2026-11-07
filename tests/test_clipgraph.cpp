@@ -1033,6 +1033,77 @@ private slots:
         QVERIFY(!c.graph()->hasNode(p));
         QCOMPARE(c.graph()->producerForInput(layer, 0), a);
     }
+
+    void modulatorRoundTripsThroughJson() {
+        ClipGraph g;
+        const NodeId m = g.addNode(NT::Modulator, QPointF(10, 20),
+                                   {{"kind", 4}, {"smooth", true}, {"rateBeats", 0.5}, {"sync", true},
+                                    {"seed", 7}, {"max", 100.0}, {"in", QStringLiteral("mod:3")}});
+        QVERIFY(m != 0);
+        QCOMPARE(g.node(m)->title, QStringLiteral("Random"));
+        QCOMPARE(g.outputPorts(m).size(), 1);
+        QCOMPARE(g.outputPorts(m).first().label, QStringLiteral("value"));
+
+        const QJsonObject json = g.toJson();
+        QCOMPARE(json["modulatorNodes"].toArray().size(), 1);
+        ClipGraph again;
+        QVERIFY(again.fromJson(json));
+        QVERIFY(again.hasNode(m));
+        const ClipGraph::Node &n = *again.node(m);
+        QCOMPARE(n.type, NT::Modulator);
+        QCOMPARE(n.pos, QPointF(10, 20));
+        QCOMPARE(n.params.value("kind").toInt(), 4);
+        QCOMPARE(n.params.value("smooth").toBool(), true);
+        QCOMPARE(n.params.value("sync").toBool(), true);
+        QCOMPARE(n.params.value("rateBeats").toDouble(), 0.5);
+        QCOMPARE(n.params.value("seed").toInt(), 7);
+        QCOMPARE(n.params.value("max").toDouble(), 100.0);
+        QCOMPARE(n.params.value("in").toString(), QStringLiteral("mod:3"));
+        QCOMPARE(again.toJson()["modulatorNodes"], json["modulatorNodes"]);
+        QVERIFY(again.toJson()["nextId"].toInteger() > qint64(m));
+
+        const QJsonObject snap = again.snapshot([](NodeId) { return 0.25; });
+        bool found = false;
+        for (const QJsonValue &v : snap["nodes"].toArray()) {
+            const QJsonObject row = v.toObject();
+            if (row["type"].toString() != QStringLiteral("modulator")) continue;
+            found = true;
+            QCOMPARE(row["kind"].toString(), QStringLiteral("random"));
+            QCOMPARE(row["value"].toDouble(), 0.25);
+        }
+        QVERIFY(found);
+    }
+
+    void bindParamRoundTripsAndIsOneUndoStep() {
+        ClipGraphController c;
+        const quint64 p = c.addNode(int(NT::Process), 0, 0, {{"effect", 6}});
+        QVERIFY(p != 0);
+        c.clearHistory();
+
+        const quint64 mod = c.bindParam(p, QStringLiteral("params.opacity"), 0, 0.0, 1.0);
+        QVERIFY(mod != 0);
+        QCOMPARE(c.graph()->node(mod)->type, NT::Modulator);
+        QCOMPARE(c.graph()->node(mod)->params.value("max").toDouble(), 1.0);
+        QCOMPARE(c.graph()->node(p)->params.value("expressions").toMap().value("params.opacity").toString(),
+                 QStringLiteral("mod(%1)").arg(mod));
+        QCOMPARE(c.modulators().size(), 1);
+
+        const QJsonObject json = c.graph()->toJson();
+        ClipGraph again;
+        QVERIFY(again.fromJson(json));
+        QCOMPARE(again.node(p)->params.value("expressions").toMap().value("params.opacity").toString(),
+                 QStringLiteral("mod(%1)").arg(mod));
+        QVERIFY(again.hasNode(mod));
+
+        c.undo();
+        QVERIFY(!c.graph()->hasNode(mod));
+        QVERIFY(c.graph()->node(p)->params.value("expressions").toMap().isEmpty());
+        QVERIFY(!c.canUndo());
+
+        c.redo();
+        QVERIFY(c.graph()->hasNode(mod));
+        QCOMPARE(c.bindParam(p, QStringLiteral("params.opacity"), 999999), quint64(0));
+    }
 };
 
 QTEST_MAIN(TestClipGraph)

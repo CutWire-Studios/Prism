@@ -359,6 +359,37 @@ void ClipGraphController::removeNodes(const QVariantList &ids) {
     pushSnapshot(QStringLiteral("Remove nodes"), before);
 }
 
+QVariantList ClipGraphController::modulators() const {
+    QVariantList out;
+    for (NodeId id : m_graph->nodeIdsOfType(ClipGraph::NodeType::Modulator)) {
+        const ClipGraph::Node *n = m_graph->node(id);
+        out.append(QVariantMap{{"id", QVariant::fromValue<quint64>(id)}, {"name", n->title},
+                               {"label", QStringLiteral("%1 #%2").arg(n->title).arg(id & 0xFFFFFFFFFFull)},
+                               {"kind", n->params.value("kind").toInt()}});
+    }
+    return out;
+}
+
+quint64 ClipGraphController::bindParam(quint64 node, const QString &param, quint64 modulator,
+                                       qreal min, qreal max) {
+    const ClipGraph::Node *target = m_graph->node(node);
+    if (!target || param.isEmpty()) return 0;
+    const ClipGraph::Node *existing = modulator ? m_graph->node(modulator) : nullptr;
+    if (modulator && (!existing || existing->type != ClipGraph::NodeType::Modulator)) return 0;
+    const QJsonObject before = m_graph->toJson();
+    if (!modulator) {
+        modulator = m_graph->addNode(ClipGraph::NodeType::Modulator,
+                                     target->pos + QPointF(-190.0, 0.0),
+                                     {{"min", min}, {"max", max}});
+        if (!modulator) return 0;
+    }
+    QVariantMap exprs = m_graph->node(node)->params.value("expressions").toMap();
+    exprs.insert(param, QStringLiteral("mod(%1)").arg(modulator));
+    m_graph->setParams(node, {{"expressions", exprs}}, true);
+    pushSnapshot(QStringLiteral("Link parameter"), before);
+    return modulator;
+}
+
 void ClipGraphController::moveNode(quint64 id, qreal x, qreal y) {
     const ClipGraph::Node *n = m_graph->node(id);
     if (!n || n->pos == QPointF(x, y)) return;

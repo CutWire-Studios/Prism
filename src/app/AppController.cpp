@@ -151,6 +151,9 @@ AppController::AppController(QObject *parent)
     SharedSourcePool::instance().setDeviceResolver([this](const QString &logical) { return m_venue->resolveDevice(logical); });
     m_hotkeyManager = new HotkeyManager(m_show, this);
     m_sessionManager = new SessionManager(m_show, m_compositor.get(), &m_clipManager, this);
+    m_sessionManager->setBpmClock(&m_bpmClock);
+    connect(&m_bpmClock, &BpmClock::bpmChanged, this, &AppController::bpmChanged);
+    connect(&m_bpmClock, &BpmClock::bpmChanged, this, &AppController::markDirty);
     m_transitionCtrl = new TransitionController(m_compositor.get(), this);
     m_remoteServer = new RemoteControlServer(this, this);
     m_oscServer = new OscServer(this, this);
@@ -1181,6 +1184,7 @@ void AppController::markDirty()
 void AppController::attachScene(Scene *scene)
 {
     ClipGraph *graph = scene->graph();
+    scene->runtime()->setBpmClock(&m_bpmClock);
     connect(graph, &ClipGraph::changed, this, [this, scene]() { onSceneGraphChanged(scene); });
     connect(graph, &ClipGraph::graphReset, this, [this]() { m_pushTimer->start(); });
     connect(graph, &ClipGraph::nodeChanged, this, [this, scene](NodeId id) { onNodeChanged(scene, id); });
@@ -1618,6 +1622,8 @@ void AppController::linkNodeObsScene(quint64 nodeId, const QString &sceneName)
 }
 
 int AppController::nodeThumbnailRevision(quint64 nodeId) const { return graphRuntime()->thumbnailRevision(nodeId); }
+
+double AppController::modulatorValue(quint64 nodeId) const { return graphRuntime()->modulatorValue(nodeId); }
 
 bool AppController::runScript(quint64 nodeId) { return graphRuntime()->runScript(nodeId); }
 
@@ -2285,7 +2291,8 @@ QJsonObject AppController::mcpInspect(bool includeClips, bool detail, int sinceR
     }
 
     if (includeGraph)
-        body.insert(QStringLiteral("graph"), clipGraph()->snapshot());
+        body.insert(QStringLiteral("graph"),
+                    clipGraph()->snapshot([this](NodeId id) { return modulatorValue(id); }));
 
     return ok(body);
 }

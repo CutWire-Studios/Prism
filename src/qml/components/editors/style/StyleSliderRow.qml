@@ -19,6 +19,13 @@ RowLayout {
     property string expression: ""
     property string expressionError: ""
     property bool expressionOpen: false
+    // Raw parameter units per displayed unit; a new modulator is scaled to from*exprScale..to*exprScale.
+    property real exprScale: 1
+    property var linkForm: null
+    readonly property string linkedId: {
+        const m = /^mod\((\d+)\)$/.exec(expression)
+        return m ? m[1] : ""
+    }
     readonly property bool exprMode: expressionName.length > 0 && (expressionOpen || expression.length > 0)
 
     signal edited(real value)
@@ -30,6 +37,13 @@ RowLayout {
     }
 
     spacing: Theme.spacingSm
+
+    Component.onCompleted: {
+        let p = root.parent
+        while (p && p.bindModulator === undefined)
+            p = p.parent
+        linkForm = p
+    }
 
     ThemedLabel {
         Layout.preferredWidth: 78
@@ -53,7 +67,7 @@ RowLayout {
 
     ThemedTextField {
         id: exprField
-        visible: root.exprMode
+        visible: root.exprMode && root.linkedId.length === 0
         Layout.fillWidth: true
         placeholderText: qsTr("e.g. 0.5 + audio.low * 0.5")
         errorText: root.expressionError
@@ -85,6 +99,49 @@ RowLayout {
     ThemedLabel {
         visible: root.unit.length > 0
         text: root.unit
+    }
+
+    Rectangle {
+        visible: root.linkedId.length > 0
+        Layout.fillWidth: true
+        Layout.preferredHeight: Theme.controlHeightSm
+        radius: height / 2
+        color: Theme.panelSecondaryBg
+        border.color: Theme.panelBorder
+
+        ThemedLabel {
+            anchors.left: parent.left
+            anchors.leftMargin: Theme.spacingLg
+            anchors.right: unlinkButton.left
+            anchors.verticalCenter: parent.verticalCenter
+            elide: Text.ElideRight
+            wrapMode: Text.NoWrap
+            text: root.linkForm && root.linkedId.length > 0 ? root.linkForm.modulatorLabel(root.linkedId) : ""
+        }
+
+        IconButton {
+            id: unlinkButton
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            glyph: "unlink-2"
+            tooltip: qsTr("Unlink from modulator")
+            buttonSize: Theme.controlHeightSm
+            onClicked: root.expressionEdited("")
+        }
+    }
+
+    IconButton {
+        visible: root.linkForm !== null && root.expressionName.length > 0 && root.linkedId.length === 0
+        glyph: "link-2"
+        tooltip: qsTr("Link to a modulator")
+        buttonSize: Theme.controlHeightSm
+        onClicked: linkMenu.popup()
+
+        ModulatorLinkMenu {
+            id: linkMenu
+            onPicked: id => root.linkForm.bindModulator(root.expressionName, id,
+                                                        root.from * root.exprScale, root.to * root.exprScale)
+        }
     }
 
     ThemedToggleButton {

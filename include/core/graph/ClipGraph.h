@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include <QHash>
 #include <QJsonObject>
 #include <QList>
@@ -47,6 +49,7 @@ public:
         MasterAudioCapture,
         Script,
         AudioAnalyzer,
+        Modulator,
     };
     Q_ENUM(NodeType)
 
@@ -286,7 +289,8 @@ public:
     bool fromJson(const QJsonObject &state);
     static constexpr int kGraphVersion = 6;
     /// The summary ClipNodeEditor::graphSnapshot() returns (MCP / remote control).
-    QJsonObject snapshot() const;
+    /// @p modulatorValue, when given, supplies the live "value" of each modulator row.
+    QJsonObject snapshot(const std::function<double(NodeId)> &modulatorValue = {}) const;
 
 signals:
     void nodeAdded(NodeId id);

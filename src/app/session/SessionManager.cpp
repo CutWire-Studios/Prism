@@ -1,4 +1,5 @@
 #include "app/session/SessionManager.h"
+#include "app/BpmClock.h"
 #include "app/show/ShowManager.h"
 #include "core/project/AssetPathResolver.h"
 #include "core/project/ClipManager.h"
@@ -189,6 +190,8 @@ QJsonObject SessionManager::buildJson(int transitionProgress, const QJsonArray &
     QJsonObject root;
     root["version"]            = kFormatVersion;
     root["transitionProgress"] = transitionProgress;
+    if (m_bpmClock)
+        root["bpm"] = m_bpmClock->bpm();
 
     const QDir sessionDir = sessionFilePath.isEmpty()
         ? QDir()
@@ -280,6 +283,9 @@ bool SessionManager::loadFromFile(const QString &path) {
         emit loadFailed(tr("This project was saved by an older version of Prism and cannot be opened."));
         return false;
     }
+
+    if (m_bpmClock)
+        m_bpmClock->setBpm(root["bpm"].toDouble(BpmClock::kDefaultBpm));
 
     AssetPathResolver::Options relinkOpts;
     const QString savedSessionDir = root["sessionDir"].toString();

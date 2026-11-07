@@ -17,6 +17,7 @@
 #include <functional>
 #include <memory>
 
+#include "app/BpmClock.h"
 #include "app/show/Preflight.h"
 #include "core/graph/ClipGraph.h"
 #include "core/graph/ClipGraphModels.h"
@@ -145,6 +146,7 @@ class AppController : public QObject {
     Q_PROPERTY(bool obsConnected READ obsConnected NOTIFY obsChanged)
     Q_PROPERTY(QStringList obsScenes READ obsScenes NOTIFY obsChanged)
     Q_PROPERTY(bool mcpEnabled READ mcpEnabled WRITE setMcpEnabled NOTIFY mcpEnabledChanged)
+    Q_PROPERTY(double bpm READ bpm WRITE setBpm NOTIFY bpmChanged)
 
 public:
     // No default argument: a default-constructible type makes QML build its own instance instead of calling create().
@@ -316,6 +318,13 @@ public:
     Q_INVOKABLE void setAudioDevice(const QString &logical, const QString &physical);
     Q_INVOKABLE void clearAudioDevice(const QString &logical);
     Q_INVOKABLE void linkNodeObsScene(quint64 nodeId, const QString &sceneName);
+    double bpm() const { return m_bpmClock.bpm(); }
+    void setBpm(double bpm) { m_bpmClock.setBpm(bpm); }
+    BpmClock *bpmClock() { return &m_bpmClock; }
+    Q_INVOKABLE void tap() { m_bpmClock.tap(); }
+    Q_INVOKABLE void nudge(int dir) { m_bpmClock.nudge(dir); }
+    /// Live output of a Modulator node of the edited scene.
+    Q_INVOKABLE double modulatorValue(quint64 nodeId) const;
     /// "Run now" on a Script node; false when the node is not a running Script node.
     Q_INVOKABLE bool runScript(quint64 nodeId);
     /// Error of the Script node's last run (empty when it succeeded) and its print/prism.log output.
@@ -448,6 +457,7 @@ signals:
     void outputScaleModeChanged();
     void obsChanged();
     void mcpEnabledChanged();
+    void bpmChanged();
 
     // Requests for the QML shell
     void confirmRequested(const QString &id, const QString &title, const QString &text);
@@ -522,6 +532,7 @@ private:
     RemoteControlServer *m_remoteServer = nullptr;
     OscServer *m_oscServer = nullptr;
     prism::mcp::McpServer *m_mcp = nullptr;
+    BpmClock m_bpmClock;
     ClipManager m_clipManager;
 
     QTimer *m_updateTimer = nullptr;

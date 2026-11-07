@@ -11,6 +11,7 @@
 #include "core/graph/ClipGraph.h"
 
 class Compositor;
+class BpmClock;
 class ShowManager;
 class ClipManager;
 
@@ -26,6 +27,9 @@ public:
 
     SessionManager(ShowManager *show, Compositor *compositor, ClipManager *clipManager,
                    QObject *parent = nullptr);
+
+    /// Optional: the session then stores and restores the global tempo ("bpm"; missing = 120).
+    void setBpmClock(BpmClock *clock) { m_bpmClock = clock; }
 
     bool loadFromFile(const QString &path);
 
@@ -66,6 +70,7 @@ signals:
 private:
     static void relativizeGraphPaths(QJsonObject &graph, const QDir &sessionDir);
 
+    BpmClock *m_bpmClock = nullptr;
     ShowManager *m_show;
     Compositor  *m_compositor;
     ClipManager *m_clipManager;

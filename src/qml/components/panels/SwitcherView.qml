@@ -213,5 +213,32 @@ ColumnLayout {
         }
     }
 
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: Theme.spacingSm
+
+        ThemedButton {
+            text: qsTr("Tap")
+            tooltip: qsTr("Tap the tempo; four taps set the BPM")
+            onClicked: AppController.tap()
+        }
+        ThemedLabel {
+            Layout.preferredWidth: 64
+            font.family: Theme.monoFontFamily
+            text: qsTr("%1 BPM").arg(AppController.bpm.toFixed(1))
+        }
+        ThemedButton {
+            text: "\u2212"
+            tooltip: qsTr("Nudge the beat phase back")
+            onClicked: AppController.nudge(-1)
+        }
+        ThemedButton {
+            text: "+"
+            tooltip: qsTr("Nudge the beat phase forward")
+            onClicked: AppController.nudge(1)
+        }
+        Item { Layout.fillWidth: true }
+    }
+
     Item { Layout.fillHeight: true }
 }

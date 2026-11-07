@@ -368,6 +368,15 @@ void ScriptRuntime::setupEngine() {
         return variantToLua(sol::state_view(ts.L), out);
     };
 
+    sol::table prismMeta = lua.create_table();
+    prismMeta[sol::meta_function::index] = [this](sol::table, const std::string &key,
+                                                  sol::this_state ts) -> sol::object {
+        if ((key == "bpm" || key == "beat") && m_host && m_host->clockInfo)
+            return sol::make_object(ts, m_host->clockInfo().value(QString::fromStdString(key)).toDouble());
+        return sol::make_object(ts, sol::nil);
+    };
+    prism[sol::metatable_key] = prismMeta;
+
     sol::table audio = lua.create_table();
     prism["audio"] = audio;
     audio["bands"] = [this](sol::optional<lua_Integer> id, sol::this_state ts) -> sol::table {
@@ -429,6 +438,9 @@ void ScriptRuntime::setupEngine() {
             throw std::runtime_error("node " + std::to_string(id) + " is not in this scene");
         return variantToLua(sol::state_view(ts.L), out);
     };
+    env["mod"] = [this](lua_Integer id) -> double {
+        return m_host && m_host->modulatorValue ? m_host->modulatorValue(quint64(id)) : 0.0;
+    };
     m_lua->exprEnv = env;
 }
 
@@ -442,6 +454,11 @@ void ScriptRuntime::evaluateExpressions(const QVariantList &jobs, double t) {
     sol::state &lua = m_lua->lua;
     sol::environment &env = m_lua->exprEnv;
     env["t"] = t;
+    {
+        const QVariantMap clockInfo = m_host && m_host->clockInfo ? m_host->clockInfo() : QVariantMap{};
+        env["bpm"] = clockInfo.value(QStringLiteral("bpm"), 120.0).toDouble();
+        env["beat"] = clockInfo.value(QStringLiteral("beat"), 0.0).toDouble();
+    }
     env["audio"] = bandsToLua(lua, m_host && m_host->audioBands ? m_host->audioBands(0) : QVariantMap{});
 
     QVariantList results;

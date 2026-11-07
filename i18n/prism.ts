@@ -155,6 +155,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Modulator</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Recent</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1087,6 +1091,13 @@ low/mid/high · beat</source>
     </message>
 </context>
 <context>
+    <name>InspectorForm</name>
+    <message>
+        <source>Missing modulator</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>InspectorInputForm</name>
     <message>
         <source>Select Image Folder</source>
@@ -1250,6 +1261,253 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Delay</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>InspectorModulatorForm</name>
+    <message>
+        <source>1 bar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>2 bars</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>4 bars</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>8 bars</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio low</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio mid</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio high</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio level</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio beat</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Modulator: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Constant %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Kind</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>LFO</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Envelope follower</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Map range</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Smooth / Lag</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Random</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Trigger</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Counter</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Toggle</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Math</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shape</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sine</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Triangle</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Saw</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Square</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pulse</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Random steps</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Smooth</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sync to BPM</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Rate</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Phase</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Width</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Seed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Min</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Max</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>B</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Operation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Subtract</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Multiply</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Divide</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Power</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Abs(A)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Attack</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Release</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Time</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>In min</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>In max</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Out min</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Out max</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clamp</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Curve</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Linear</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ease in</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ease out</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Threshold</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wrap at</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1989,6 +2247,45 @@ low/mid/high · beat</source>
     </message>
 </context>
 <context>
+    <name>ModulatorBody</name>
+    <message>
+        <source>LFO</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Envelope</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Map range</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Smooth</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Random</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Trigger</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Counter</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Toggle</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Math</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ModulatorCard</name>
     <message>
         <source>Remove</source>
@@ -2012,6 +2309,13 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Depth</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ModulatorLinkMenu</name>
+    <message>
+        <source>New LFO</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2143,6 +2447,10 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Audio Analyzer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Modulator</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4566,6 +4874,14 @@ Continue anyway? Your phone may not be able to connect.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Unlink from modulator</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Link to a modulator</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Drive this value with a Lua expression</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4684,6 +5000,26 @@ Continue anyway? Your phone may not be able to connect.</source>
     </message>
     <message>
         <source>Show a &quot;Stay Tuned&quot; holding screen on program output (F9)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tap</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tap the tempo; four taps set the BPM</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 BPM</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Nudge the beat phase back</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Nudge the beat phase forward</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

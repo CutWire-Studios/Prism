@@ -154,6 +154,16 @@ PanelFrame {
 
                             Loader {
                                 Layout.fillWidth: true
+                                active: del.type === body.nt.Modulator
+                                visible: active
+                                sourceComponent: InspectorModulatorForm {
+                                    nodeId: del.nodeId
+                                    params: del.params
+                                }
+                            }
+
+                            Loader {
+                                Layout.fillWidth: true
                                 active: del.type === body.nt.Script
                                 visible: active
                                 sourceComponent: InspectorScriptForm {

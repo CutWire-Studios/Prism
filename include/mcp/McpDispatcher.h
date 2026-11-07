@@ -69,6 +69,9 @@ private:
     QJsonObject opConnect(const QJsonObject &args);
     QJsonObject opDisconnect(const QJsonObject &args);
     QJsonObject opSetProcessParams(const QJsonObject &args);
+    QJsonObject opAddModulatorNode(const QJsonObject &args);
+    QJsonObject opSetModulatorParams(const QJsonObject &args);
+    QJsonObject opBindParam(const QJsonObject &args);
     QJsonObject opRemoveNode(const QJsonObject &args);
 
     AppController *m_window = nullptr;

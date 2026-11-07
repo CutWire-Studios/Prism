@@ -31,6 +31,16 @@ ColumnLayout {
         set({ expressions: next })
     }
 
+    function bindModulator(name, modulatorId, lo, hi) {
+        return graph.bindParam(nodeId, name, modulatorId, lo, hi)
+    }
+
+    function modulatorLabel(id) {
+        void graph.revision
+        const m = graph.modulators().find(x => String(x.id) === String(id))
+        return m ? m.label : qsTr("Missing modulator")
+    }
+
     Connections {
         target: AppController
         function onScriptStatusChanged() { form.statusRev++ }

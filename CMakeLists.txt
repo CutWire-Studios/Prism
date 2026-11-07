@@ -377,6 +377,8 @@ set(SOURCES
     src/core/graph/ClipGraph.cpp
     src/core/graph/ClipGraphModels.cpp
     src/app/graph/GraphRuntime.cpp
+    src/app/graph/ModulatorEngine.cpp
+    src/app/BpmClock.cpp
     src/app/show/Scene.cpp
     src/app/show/SceneListModel.cpp
     src/app/show/SceneThumbnails.cpp
@@ -512,6 +514,8 @@ set(HEADERS
     include/core/graph/ClipGraph.h
     include/core/graph/ClipGraphModels.h
     include/app/graph/GraphRuntime.h
+    include/app/graph/ModulatorEngine.h
+    include/app/BpmClock.h
     include/app/show/Scene.h
     include/app/show/SceneListModel.h
     include/app/show/SceneThumbnails.h

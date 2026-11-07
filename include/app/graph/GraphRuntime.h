@@ -15,6 +15,7 @@
 #include "core/graph/ClipGraph.h"
 #include "core/scripting/ScriptOutput.h"
 
+class BpmClock;
 class QQuickImageProvider;
 class QTimer;
 struct NodeThumbStore;
@@ -77,6 +78,12 @@ public:
     QString expressionError(NodeId id, const QString &name) const;
     /// Waits (pumping events) until script threads from deleted runtimes or nodes have ended.
     static bool waitForRetiredScripts(int timeoutMs);
+
+    // ── Modulators ────────────────────────────────────────────────────────────
+    /// The global tempo clock; its bpm and beat position feed Modulator nodes, expressions and Lua.
+    void setBpmClock(BpmClock *clock);
+    /// Last value of a Modulator node (0 when unknown); refreshed by pollDataConsumers.
+    double modulatorValue(NodeId id) const;
 
     // ── Audio analyzers ─────────────────────────────────────────────────────────
     void feedLiveAudioForProducer(NodeId producerId, const QByteArray &pcm);

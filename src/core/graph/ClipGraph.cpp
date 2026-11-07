@@ -114,6 +114,13 @@ QVariantMap defaultParams(NT type) {
                 {"smoothing", double(c.smoothing)}, {"beatSensitivity", double(c.beatSensitivity)},
                 {"lowMidHz", double(c.lowMidHz)}, {"midHighHz", double(c.midHighHz)}};
     }
+    case NT::Modulator:
+        return {{"kind", 0}, {"shape", 0}, {"sync", false}, {"rateHz", 1.0}, {"rateBeats", 1.0},
+                {"phase", 0.0}, {"width", 0.5}, {"seed", 1}, {"min", 0.0}, {"max", 1.0},
+                {"in", QString()}, {"b", QString()}, {"attackMs", 10.0}, {"releaseMs", 200.0},
+                {"inMin", 0.0}, {"inMax", 1.0}, {"outMin", 0.0}, {"outMax", 1.0},
+                {"clamp", true}, {"curve", 0}, {"timeMs", 200.0}, {"smooth", false},
+                {"threshold", 0.5}, {"durationMs", 100.0}, {"steps", 4}, {"op", 0}};
     default:
         return {};
     }
@@ -471,6 +478,9 @@ void ClipGraph::buildPorts(const Node &n, QVector<Port> &in, QVector<Port> &out)
         add(in, PK::AudioIn, PD::In, QStringLiteral("audio"), false, {0.0, kSmallH / 2});
         add(out, PK::ScriptOut, PD::Out, QStringLiteral("out"), false, {kSmallW, kSmallH / 2});
         break;
+    case NT::Modulator:
+        add(out, PK::ScriptOut, PD::Out, QStringLiteral("value"), false, {kSmallW, kSmallH / 2});
+        break;
     }
 }
 
@@ -616,6 +626,12 @@ void ClipGraph::refreshNode(Node &n) {
     case NT::MasterAudioCapture: n.title = QStringLiteral("Audio Capture"); break;
     case NT::Script:            n.title = QStringLiteral("Lua Script"); break;
     case NT::AudioAnalyzer:       n.title = QStringLiteral("Audio Analyzer"); break;
+    case NT::Modulator: {
+        static const char *const kTitles[] = {"LFO", "Envelope", "Map Range", "Smooth", "Random",
+                                              "Trigger", "Counter", "Toggle", "Math"};
+        n.title = QString::fromLatin1(kTitles[std::clamp(n.params.value("kind").toInt(), 0, 8)]);
+        break;
+    }
     }
     if (n.type != NT::Input) {
         const QString custom = n.params.value("name").toString();
@@ -1716,7 +1732,7 @@ QJsonObject ClipGraph::toJson() const {
 
     QJsonArray inputNodes, processNodes, audioEffectNodes, layerNodes,
         audioMixerNodes, scriptNodes, masterAudioNodes, masterAudioInputNodes,
-        masterAudioCaptureNodes;
+        masterAudioCaptureNodes, modulatorNodes;
 
     for (const Node &n : m_nodes) {
         QJsonObject o = toJsonObject(n.params);
@@ -1748,6 +1764,7 @@ QJsonObject ClipGraph::toJson() const {
             break;
         case NT::Script:
         case NT::AudioAnalyzer:     scriptNodes.append(o); break;
+        case NT::Modulator:         modulatorNodes.append(o); break;
         case NT::MasterAudioOutput: masterAudioNodes.append(o); break;
         case NT::MasterAudioInput:  masterAudioInputNodes.append(o); break;
         case NT::MasterAudioCapture: masterAudioCaptureNodes.append(o); break;
@@ -1759,6 +1776,7 @@ QJsonObject ClipGraph::toJson() const {
     root["layerNodes"] = layerNodes;
     root["audioMixerNodes"] = audioMixerNodes;
     root["scriptNodes"] = scriptNodes;
+    if (!modulatorNodes.isEmpty()) root["modulatorNodes"] = modulatorNodes;
     root["masterAudioNodes"] = masterAudioNodes;
     root["masterAudioInputNodes"] = masterAudioInputNodes;
     root["masterAudioCaptureNodes"] = masterAudioCaptureNodes;
@@ -1919,6 +1937,22 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         }
     }
 
+    for (const QJsonValue &val : state["modulatorNodes"].toArray()) {
+        const QJsonObject obj = val.toObject();
+        QVariantMap p = defaultParams(NT::Modulator);
+        for (auto it = p.begin(); it != p.end(); ++it) {
+            if (!obj.contains(it.key())) continue;
+            const QJsonValue jv = obj[it.key()];
+            switch (it.value().typeId()) {
+            case QMetaType::Bool:   it.value() = jv.toBool(it.value().toBool()); break;
+            case QMetaType::Int:    it.value() = jv.toInt(it.value().toInt()); break;
+            case QMetaType::Double: it.value() = jv.toDouble(it.value().toDouble()); break;
+            default:                it.value() = jv.toString(); break;
+            }
+        }
+        restore(obj, NT::Modulator, p);
+    }
+
     for (const QJsonValue &val : state["masterAudioNodes"].toArray()) {
         const QJsonObject obj = val.toObject();
         QVariantList ports;
@@ -1977,17 +2011,20 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
     return finish(true);
 }
 
-QJsonObject ClipGraph::snapshot() const {
+QJsonObject ClipGraph::snapshot(const std::function<double(NodeId)> &modulatorValue) const {
     QJsonArray nodes;
     auto append = [&](const Node &n, const QString &type, QJsonObject extra = {}) {
         extra.insert(QStringLiteral("id"), QString::number(n.id));
         extra.insert(QStringLiteral("type"), type);
         extra.insert(QStringLiteral("x"), n.pos.x());
         extra.insert(QStringLiteral("y"), n.pos.y());
+        const QVariantMap exprs = n.params.value("expressions").toMap();
+        if (!exprs.isEmpty())
+            extra.insert(QStringLiteral("expressions"), QJsonObject::fromVariantMap(exprs));
         nodes.append(extra);
     };
 
-    for (NodeType type : {NT::Input, NT::Process, NT::Layer}) {
+    for (NodeType type : {NT::Input, NT::Process, NT::Layer, NT::Modulator}) {
         for (NodeId id : nodeIdsOfType(type)) {
             const Node &n = *node(id);
             switch (type) {
@@ -2013,6 +2050,20 @@ QJsonObject ClipGraph::snapshot() const {
             case NT::Layer:
                 append(n, QStringLiteral("layer"), {{QStringLiteral("slots"), slotCount(n)}});
                 break;
+            case NT::Modulator: {
+                static const char *const kKinds[] = {"lfo", "envelope", "map_range", "smooth", "random",
+                                                     "trigger", "counter", "toggle", "math"};
+                const int kind = std::clamp(n.params.value("kind").toInt(), 0, 8);
+                QJsonObject params = toJsonObject(n.params);
+                params.remove(QStringLiteral("expressions"));
+                QJsonObject extra{{QStringLiteral("kind"), QString::fromLatin1(kKinds[kind])},
+                                  {QStringLiteral("name"), n.title},
+                                  {QStringLiteral("params"), params}};
+                if (modulatorValue)
+                    extra.insert(QStringLiteral("value"), modulatorValue(id));
+                append(n, QStringLiteral("modulator"), extra);
+                break;
+            }
             default:
                 break;
             }

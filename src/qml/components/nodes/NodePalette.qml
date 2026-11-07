@@ -10,7 +10,7 @@ QtObject {
     readonly property var nodeType: ({
         Input: 0, Process: 1, AudioEffect: 2, Layer: 3, Output: 4, AudioMixer: 5,
         MasterAudioOutput: 6, MasterAudioInput: 7, MasterAudioCapture: 8, Script: 9,
-        AudioAnalyzer: 10
+        AudioAnalyzer: 10, Modulator: 11
     })
 
     readonly property var portKind: ({
@@ -121,11 +121,13 @@ QtObject {
         { name: qsTr("Script"), icon: "binary", hue: "#78dcaa", header: 20, category: "script",
           inKinds: [9], outKinds: [8] },
         { name: qsTr("Audio Analyzer"), icon: "activity", hue: "#e6be5a", header: 20, category: "script",
-          inKinds: [4], outKinds: [8] }
+          inKinds: [4], outKinds: [8] },
+        { name: qsTr("Modulator"), icon: "audio-waveform", hue: "#78dcaa", header: 20, category: "script",
+          inKinds: [], outKinds: [8] }
     ]
 
     // Default node width per type, used to place a node so its port lands under the cursor.
-    readonly property var defaultWidth: [122, 116, 116, 158, 116, 158, 168, 100, 100, 100, 100]
+    readonly property var defaultWidth: [122, 116, 116, 158, 116, 158, 168, 100, 100, 100, 100, 100]
 
     function tooltip(type) {
         switch (type) {

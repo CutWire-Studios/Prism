@@ -106,6 +106,13 @@ public:
     /// type is a ClipGraph::NodeType value; returns the new id, 0 on failure.
     Q_INVOKABLE quint64 addNode(int type, qreal x, qreal y, const QVariantMap &params = {});
     Q_INVOKABLE void removeNodes(const QVariantList &ids);
+    /// The Modulator nodes of this graph as [{id, name, label, kind}].
+    Q_INVOKABLE QVariantList modulators() const;
+    /// Drives param @p param (a name in the node's params.expressions, e.g. "params.opacity") with
+    /// the output of Modulator @p modulator as one undo step. A modulator of 0 first creates an LFO
+    /// next to the node, scaled to [min, max]. Returns the modulator id, 0 on failure.
+    Q_INVOKABLE quint64 bindParam(quint64 node, const QString &param, quint64 modulator = 0,
+                                  qreal min = 0.0, qreal max = 1.0);
     /// Consecutive moves of one node collapse into a single undo step until endMove().
     Q_INVOKABLE void moveNode(quint64 id, qreal x, qreal y);
     Q_INVOKABLE void endMove();
