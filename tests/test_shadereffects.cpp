@@ -3,6 +3,7 @@
 #include "core/graph/ProcessEffects.h"
 #include "core/effects/ShaderEffectSource.h"
 #include "core/effects/LutLoader.h"
+#include "core/sources/EffectSources.h"
 #include "core/sources/ImageSource.h"
 #include "core/sources/MediaSource.h"
 
@@ -28,6 +29,24 @@ public:
     QSize frameSize() const override { return {}; }
     const uint8_t *frameData() const override { return nullptr; }
     bool nextFrame() override { return false; }
+};
+
+// A ready timeline source that counts how it is advanced.
+class TimelineStub : public MediaSource {
+public:
+    TimelineStub() { m_frame.fill(Qt::red); }
+    Type type() const override { return Type::VideoFile; }
+    bool isReady() const override { return true; }
+    QSize frameSize() const override { return m_frame.size(); }
+    const uint8_t *frameData() const override { return m_frame.constBits(); }
+    double duration() const override { return 10.0; }
+    bool nextFrame() override { ++steps; return true; }
+    bool presentAt(double) override { ++presents; return true; }
+    int steps = 0;
+    int presents = 0;
+
+private:
+    QImage m_frame{4, 4, QImage::Format_RGBA8888};
 };
 
 struct HistoryRig {
@@ -194,6 +213,24 @@ private slots:
         QCOMPARE(ProcessEffects::updateSourceEffects(top.get(), edited), innerPtr);
         QCOMPARE(decorator->params(), after);
         QCOMPARE(dynamic_cast<ShaderEffectSource *>(top.get()), decorator);
+    }
+
+    void paramChange_keepsPlayingDeckAdvancingButHoldsPausedFrame() {
+        auto stub = std::make_unique<TimelineStub>();
+        TimelineStub *inner = stub.get();
+        OpacitySource fx(std::move(stub), 1.0);
+        QVERIFY(fx.nextFrame());
+        QCOMPARE(inner->steps, 1);
+
+        for (int i = 0; i < 5; ++i) {
+            QVERIFY(fx.updateParams(QJsonObject{{"opacity", 0.1 * i}}));
+            QVERIFY(fx.presentAt(i / 30.0));
+        }
+        QCOMPARE(inner->presents, 5);
+
+        QVERIFY(fx.updateParams(QJsonObject{{"opacity", 0.5}}));
+        QVERIFY(fx.nextFrame());
+        QCOMPARE(inner->steps, 1);
     }
 
     void structureChange_changesKeyAndUnsupportedDecoratorsRebuild() {

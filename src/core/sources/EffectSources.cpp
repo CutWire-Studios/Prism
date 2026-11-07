@@ -39,12 +39,13 @@ QVector<QPointF> effectPointsFromJson(const QJsonArray &arr) {
 bool FrameEffectSource::nextFrame() {
     if (!m_inner) return false;
 
-    // After a param change, re-render the frame already held by the inner source instead of
-    // advancing it, so a paused deck neither steps nor drops a frame.
+    // After a param change on a paused timeline source, re-render the frame the inner source
+    // already holds so the deck does not step. A playing deck (presentAt) keeps following its
+    // clock: expression-driven params change every tick and must not hold the video still.
     const bool reprocess = m_dirty && !m_output.isNull();
-    const bool innerNew = reprocess ? false
-                        : m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
-                                             : m_inner->nextFrame();
+    const bool innerNew = m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
+                        : reprocess && m_inner->duration() > 0.0 ? false
+                                                                 : m_inner->nextFrame();
     if (!innerNew && !reprocess && !m_output.isNull()) return false;
     if (!m_inner->isReady()) return false;
     m_dirty = false;
@@ -313,9 +314,9 @@ bool GpuBlurSource::nextFrame() {
     if (!m_inner) return false;
 
     const bool reprocess = m_dirty && m_outTex != 0;
-    const bool innerNew = reprocess ? false
-                        : m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
-                                             : m_inner->nextFrame();
+    const bool innerNew = m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
+                        : reprocess && m_inner->duration() > 0.0 ? false
+                                                                 : m_inner->nextFrame();
     if (!innerNew && !reprocess && m_outTex != 0) return false;
     if (!m_inner->isReady()) return false;
     m_dirty = false;

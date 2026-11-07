@@ -100,9 +100,9 @@ bool ShaderEffectSource::nextFrame() {
         if (m_aux[i] && m_aux[i]->nextFrame()) { auxNew[i] = 1; anyAuxNew = true; }
 
     const bool reprocess = m_dirty && m_outTex != 0;
-    const bool innerNew = reprocess ? false
-                        : m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
-                                             : m_inner->nextFrame();
+    const bool innerNew = m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
+                        : reprocess && m_inner->duration() > 0.0 ? false
+                                                                 : m_inner->nextFrame();
     const bool timeBased = m_spec->needsPrevFrame || m_spec->historyFrames > 0;
     const uint dataVersion = m_data ? m_data->version.load(std::memory_order_acquire) : 0;
     const bool dataNew = m_data && dataVersion != m_dataVersion;
