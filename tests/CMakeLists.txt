@@ -33,6 +33,7 @@ prism_add_test(test_skiarender)
 prism_add_test(test_clipgraph)
 prism_add_test(test_compositor)
 prism_add_test(test_shadereffects)
+target_compile_definitions(test_shadereffects PRIVATE PRISM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 
 find_program(GLSLANG_VALIDATOR glslangValidator)
 if(GLSLANG_VALIDATOR)

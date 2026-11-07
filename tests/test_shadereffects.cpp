@@ -1,11 +1,15 @@
 #include "core/effects/ShaderEffects.h"
 #include "core/graph/ProcessEffects.h"
 #include "core/effects/ShaderEffectSource.h"
+#include "core/sources/ImageSource.h"
 #include "core/sources/MediaSource.h"
 
 #include <QDir>
 #include <QFile>
 #include <QGuiApplication>
+#include <QImage>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
 #include <QOpenGLShaderProgram>
@@ -22,6 +26,14 @@ public:
     bool nextFrame() override { return false; }
 };
 } // namespace
+
+static QColor parseColor(const QString &s) {
+    // "#rrggbbaa" (CSS order, unlike QColor's #aarrggbb)
+    const QColor rgb(s.left(7));
+    QColor c = rgb;
+    if (s.size() == 9) c.setAlpha(s.mid(7, 2).toInt(nullptr, 16));
+    return c;
+}
 
 class TestShaderEffects : public QObject {
     Q_OBJECT
@@ -140,6 +152,87 @@ private slots:
             QVERIFY2(ok, qPrintable(s.slug + ": " + prog.log()));
         }
         ctx.doneCurrent();
+    }
+
+    void goldenPixels_data() {
+        QTest::addColumn<QJsonObject>("c");
+        QFile f(QStringLiteral(PRISM_TEST_DATA_DIR "/effects_golden.json"));
+        QVERIFY2(f.open(QIODevice::ReadOnly), "cannot open effects_golden.json");
+        const QJsonArray cases = QJsonDocument::fromJson(f.readAll()).array();
+        QVERIFY(!cases.isEmpty());
+        for (int i = 0; i < cases.size(); ++i) {
+            const QJsonObject o = cases.at(i).toObject();
+            QTest::newRow(qPrintable(QStringLiteral("%1#%2").arg(o.value("slug").toString()).arg(i))) << o;
+        }
+    }
+
+    void goldenPixels() {
+        QFETCH(QJsonObject, c);
+        QOffscreenSurface surface;
+        surface.create();
+        QOpenGLContext ctx;
+        if (!surface.isValid() || !ctx.create() || !ctx.makeCurrent(&surface))
+            QSKIP("No OpenGL context available in this environment");
+        ctx.doneCurrent();
+
+        const ShaderEffectSpec *spec = ShaderEffects::bySlug(c.value("slug").toString());
+        QVERIFY2(spec, "unknown slug");
+
+        const QJsonArray sz = c.value("size").toArray();
+        const int w = sz.size() == 2 ? sz.at(0).toInt() : 64;
+        const int h = sz.size() == 2 ? sz.at(1).toInt() : 64;
+        const QJsonObject in = c.value("input").toObject();
+        const QString type = in.value("type").toString();
+        QImage img(w, h, QImage::Format_RGBA8888);
+        if (type == "solid") {
+            img.fill(parseColor(in.value("color").toString()));
+        } else if (type == "hgradient") {
+            const QColor a = parseColor(in.value("from").toString());
+            const QColor b = parseColor(in.value("to").toString());
+            for (int x = 0; x < w; ++x) {
+                const double t = w > 1 ? double(x) / (w - 1) : 0.0;
+                const QColor px = QColor::fromRgbF(a.redF() + (b.redF() - a.redF()) * t,
+                                                   a.greenF() + (b.greenF() - a.greenF()) * t,
+                                                   a.blueF() + (b.blueF() - a.blueF()) * t,
+                                                   a.alphaF() + (b.alphaF() - a.alphaF()) * t);
+                for (int y = 0; y < h; ++y) {
+                    uchar *p = img.scanLine(y) + x * 4;
+                    p[0] = uchar(px.red()); p[1] = uchar(px.green());
+                    p[2] = uchar(px.blue()); p[3] = uchar(px.alpha());
+                }
+            }
+        } else {
+            QFAIL(qPrintable("unknown input type " + type));
+        }
+
+        auto image = std::make_unique<ImageSource>();
+        QVERIFY(image->setImage(img));
+        QJsonObject params = spec->defaultParams();
+        const QJsonObject over = c.value("params").toObject();
+        for (auto it = over.begin(); it != over.end(); ++it) params[it.key()] = it.value();
+
+        ShaderEffectSource src(std::move(image), *spec, params);
+        QVERIFY(src.nextFrame());
+        const uint8_t *data = src.frameData();
+        QVERIFY(data);
+        const QImage out(data, w, h, w * 4, QImage::Format_RGBA8888);
+
+        const QJsonArray samples = c.value("samples").toArray();
+        QVERIFY(!samples.isEmpty());
+        for (const QJsonValue &sv : samples) {
+            const QJsonObject s = sv.toObject();
+            const QJsonArray uv = s.value("uv").toArray();
+            const QJsonArray exp = s.value("rgba").toArray();
+            const int tol = s.value("tol").toInt(3);
+            const int x = qRound(uv.at(0).toDouble() * (w - 1));
+            const int y = qRound(uv.at(1).toDouble() * (h - 1));
+            const uchar *p = out.constScanLine(y) + x * 4;
+            for (int ch = 0; ch < 4; ++ch)
+                QVERIFY2(qAbs(int(p[ch]) - exp.at(ch).toInt()) <= tol,
+                         qPrintable(QStringLiteral("uv(%1,%2) px(%3,%4) ch%5: got %6 expected %7 (got rgba %8,%9,%10,%11)")
+                                        .arg(uv.at(0).toDouble()).arg(uv.at(1).toDouble()).arg(x).arg(y).arg(ch)
+                                        .arg(p[ch]).arg(exp.at(ch).toInt()).arg(p[0]).arg(p[1]).arg(p[2]).arg(p[3])));
+        }
     }
 
     // Used by the glslangValidator CTest: PRISM_DUMP_SHADERS=<dir> test_shadereffects dumpSources

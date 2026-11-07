@@ -1,0 +1,14 @@
+[
+  {
+    "_comment": "uv (0,0) = top-left of the image as seen; pixel x = uv.x*(w-1), y = uv.y*(h-1). Colors are straight (non-premultiplied) RGBA; rgba expectations are 0-255.",
+    "slug": "invert",
+    "input": {"type": "solid", "color": "#ff000080"},
+    "samples": [{"uv": [0.5, 0.5], "rgba": [0, 255, 255, 128], "tol": 3}]
+  },
+  {
+    "slug": "invert",
+    "input": {"type": "solid", "color": "#000000ff"},
+    "params": {"amount": 0.5},
+    "samples": [{"uv": [0.5, 0.5], "rgba": [128, 128, 128, 255], "tol": 3}]
+  }
+]
