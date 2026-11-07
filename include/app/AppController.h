@@ -81,6 +81,8 @@ class AppController : public QObject {
     Q_PROPERTY(QString previewImageUrl READ previewImageUrl NOTIFY previewFrameChanged)
     Q_PROPERTY(QString stagingSceneId READ stagingSceneId NOTIFY showChanged)
     Q_PROPERTY(QString editedSceneId READ editedSceneId NOTIFY showChanged)
+    /// The post-processing scene wrapped around every other scene's output; empty when none.
+    Q_PROPERTY(QString postSceneId READ postSceneId NOTIFY showChanged)
     /// False after exitScene(): the node editor then asks for a scene to be entered.
     Q_PROPERTY(bool inScene READ inScene NOTIFY showChanged)
     /// The scene the scene list has selected (what the inspector shows when no node is selected);
@@ -220,6 +222,7 @@ public:
     QString liveSceneId() const;
     QString stagingSceneId() const;
     QString editedSceneId() const;
+    QString postSceneId() const;
     bool inScene() const;
     QString selectedSceneId() const;
     void setSelectedSceneId(const QString &id);
@@ -300,6 +303,8 @@ public:
     Q_INVOKABLE QVariantList sceneChoices() const;
     /// Applies the keys present in @p props (same names as sceneInfo; transition null clears the override).
     Q_INVOKABLE void setSceneProps(const QString &id, const QVariantMap &props);
+    /// Makes @p id the post-processing scene; empty clears it.
+    Q_INVOKABLE void setPostSceneId(const QString &id);
     /// The @p deck arguments below are int(Deck): 0 = Live, 1 = Staging.
     Q_INVOKABLE void togglePlay(int deck);
     Q_INVOKABLE void playDeck(int deck, bool play);

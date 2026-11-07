@@ -1645,6 +1645,22 @@ private slots:
             if (v.toObject()["group"].toString() == QString::number(gid)) ++tagged;
         QCOMPARE(tagged, 3);
     }
+
+    void sceneInputNodeRoundTrips() {
+        ClipGraph g;
+        SourceDescriptor desc;
+        desc.kind = SourceDescriptor::Kind::SceneInput;
+        desc.displayName = QStringLiteral("Scene input");
+        const NodeId node = g.addInputNode(desc);
+        QVERIFY(node != 0);
+        QCOMPARE(int(g.sourceDescriptor(node).kind), 16);
+
+        ClipGraph again;
+        QVERIFY(again.fromJson(g.toJson()));
+        QCOMPARE(again.sourceDescriptor(node).kind, SourceDescriptor::Kind::SceneInput);
+        QCOMPARE(again.sourceDescriptor(node).displayName, QStringLiteral("Scene input"));
+        QVERIFY(again.sourceDescriptor(node).isLiveSource());
+    }
 };
 
 QTEST_MAIN(TestClipGraph)

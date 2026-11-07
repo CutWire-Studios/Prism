@@ -31,6 +31,7 @@ struct SourceDescriptor {
         Shape,  // CPU-rendered vector shape — shapeStyleJson field
         SvgTemplate, // SVG with {token} placeholders — svgTemplateId / svgParamsJson
         Scene,  // another scene's final composite — sceneId
+        SceneInput, // the scene a post-processing scene is processing; no fields
     };
 
     Kind    kind    = Kind::VideoFile;
@@ -86,7 +87,7 @@ struct SourceDescriptor {
                kind == Kind::Shader ||
                kind == Kind::Ndi || kind == Kind::WebRtc ||
                kind == Kind::Text || kind == Kind::Shape || kind == Kind::SvgTemplate ||
-               kind == Kind::Scene;
+               kind == Kind::Scene || kind == Kind::SceneInput;
     }
     bool isFileSource() const {
         return kind == Kind::VideoFile || kind == Kind::Image || kind == Kind::Slideshow
@@ -111,7 +112,7 @@ struct SourceDescriptor {
     /// Play/pause is meaningful (static images and canvases have no motion;
     /// live sources freeze on the current frame).
     bool isPausable() const {
-        return kind != Kind::Image && kind != Kind::Canvas && kind != Kind::Scene;
+        return kind != Kind::Image && kind != Kind::Canvas && kind != Kind::Scene && kind != Kind::SceneInput;
     }
     /// Playback rate can be changed.
     bool hasSpeedControl() const {

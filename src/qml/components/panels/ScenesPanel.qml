@@ -14,8 +14,10 @@ PanelFrame {
     readonly property var modeNames: AppController.transitionModeNames
     property var chipInfo: ({})
     property string editedName: ""
+    property var sceneChoices: []
 
     function reloadName() {
+        sceneChoices = AppController.sceneChoices()
         editedName = AppController.editedSceneId.length > 0 ? AppController.sceneInfo(AppController.editedSceneId).name : ""
     }
 
@@ -49,6 +51,13 @@ PanelFrame {
                 root.reloadChip()
         }
         function onShowChanged() { root.reloadName() }
+    }
+
+    Connections {
+        target: AppController.scenes
+        function onModelReset() { root.reloadName() }
+        function onRowsInserted() { root.reloadName() }
+        function onRowsRemoved() { root.reloadName() }
     }
 
     Popup {
@@ -132,6 +141,24 @@ PanelFrame {
             }
         }
 
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spacingSm
+
+            ThemedLabel {
+                text: qsTr("Post-processing")
+            }
+            ThemedComboBox {
+                Layout.fillWidth: true
+                model: [qsTr("None")].concat(root.sceneChoices.map(s => s.name))
+                currentIndex: {
+                    const i = root.sceneChoices.findIndex(s => s.id === AppController.postSceneId)
+                    return i + 1
+                }
+                onActivated: index => AppController.setPostSceneId(index === 0 ? "" : root.sceneChoices[index - 1].id)
+            }
+        }
+
         ListView {
             id: list
 
@@ -184,6 +211,7 @@ PanelFrame {
                 required property string hotkey
                 required property string warning
                 required property bool keepResident
+                required property bool isPost
 
                 readonly property bool selected: sceneId === AppController.selectedSceneId
 
@@ -328,6 +356,21 @@ PanelFrame {
                             ToolTip.visible: residentHover.hovered
                             ToolTip.text: qsTr("Kept resident")
                             HoverHandler { id: residentHover }
+                        }
+                        Rectangle {
+                            visible: row.isPost
+                            implicitWidth: postText.implicitWidth + Theme.spacingSm
+                            implicitHeight: postText.implicitHeight + 2
+                            radius: Theme.radiusSm
+                            color: Theme.primary
+                            ToolTip.visible: postHover.hovered
+                            ToolTip.text: qsTr("Post-processing scene")
+                            HoverHandler { id: postHover }
+                            ThemedLabel {
+                                id: postText
+                                anchors.centerIn: parent
+                                text: qsTr("POST")
+                            }
                         }
                         IconGlyph {
                             visible: row.warning.length > 0

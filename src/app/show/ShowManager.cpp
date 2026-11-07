@@ -185,6 +185,18 @@ private:
     QString m_key;
 };
 
+class PostSceneCommand : public QUndoCommand {
+public:
+    PostSceneCommand(ShowManager *show, const QString &before, const QString &after)
+        : QUndoCommand(QObject::tr("Set post-processing scene")), m_show(show), m_before(before), m_after(after) {}
+    void redo() override { m_show->applyPostSceneId(m_after); }
+    void undo() override { m_show->applyPostSceneId(m_before); }
+
+private:
+    ShowManager *m_show;
+    QString m_before, m_after;
+};
+
 namespace {
 
 class SceneMetaCommand : public QUndoCommand {
@@ -218,6 +230,7 @@ ShowManager::ShowManager(QObject *parent)
     m_endTimer->setSingleShot(true);
     connect(m_endTimer, &QTimer::timeout, this, &ShowManager::notifyLiveEnded);
     connect(this, &ShowManager::liveSceneChanged, this, &ShowManager::rearmEndTimer);
+    connect(this, &ShowManager::postSceneChanged, m_model, &SceneListModel::refresh);
     reset();
 }
 
@@ -308,7 +321,14 @@ bool ShowManager::removeScene(const QString &id)
     Scene *c = scene(id);
     if (!c || id == m_liveId || m_scenes.size() <= 1)
         return false;
+    const bool wasPost = id == m_postId;
+    if (wasPost)
+        m_undo->beginMacro(tr("Remove scene"));
+    if (wasPost)
+        m_undo->push(new PostSceneCommand(this, id, {}));
     m_undo->push(new SceneStructureCommand(this, false, id, c->toJson(), indexOf(id), false, tr("Remove scene")));
+    if (wasPost)
+        m_undo->endMacro();
     return true;
 }
 
@@ -339,6 +359,10 @@ bool ShowManager::eraseScene(const QString &id)
         m_editedId = m_liveId;
         emit editedSceneChanged();
     }
+    if (m_postId == id) {
+        m_postId.clear();
+        emit postSceneChanged();
+    }
     delete c;
     emit scenesReset();
     emit changed();
@@ -359,6 +383,31 @@ void ShowManager::setSceneMeta(const QString &id, const SceneMeta &meta)
     if (!c || c->meta() == meta)
         return;
     m_undo->push(new SceneMetaCommand(this, id, c->meta(), meta));
+}
+
+void ShowManager::setPostSceneId(const QString &id)
+{
+    const QString next = scene(id) ? id : QString();
+    if (next == m_postId)
+        return;
+    m_undo->push(new PostSceneCommand(this, m_postId, next));
+}
+
+void ShowManager::applyPostSceneId(const QString &id)
+{
+    const QString next = scene(id) ? id : QString();
+    if (next == m_postId)
+        return;
+    m_postId = next;
+    emit postSceneChanged();
+    updateRuntimeActivity();
+    emit changed();
+}
+
+bool ShowManager::postAppliesTo(const QString &sceneId) const
+{
+    const Scene *c = scene(sceneId);
+    return c && !m_postId.isEmpty() && sceneId != m_postId && scene(m_postId) && !c->excludeFromPost();
 }
 
 bool ShowManager::isValidGlobalName(const QString &name)
@@ -527,6 +576,7 @@ void ShowManager::reset()
     m_scenes.clear();
     m_nextSerial = 1;
     m_default = {};
+    m_postId.clear();
     m_globals.clear();
     emit globalsReset();
     Scene *c = makeScene(QUuid::createUuid().toString(QUuid::WithoutBraces), m_nextSerial, true);
@@ -542,6 +592,7 @@ void ShowManager::reset()
     emit stagingSceneChanged();
     emit editedSceneChanged();
     emit defaultTransitionChanged();
+    emit postSceneChanged();
     updateRuntimeActivity();
     emit changed();
 }
@@ -673,6 +724,8 @@ QSet<QString> ShowManager::activeSceneIds(bool includeEdited) const
     QStringList stack{m_liveId, m_stagingId};
     if (includeEdited && m_inScene)
         stack.append(m_editedId);
+    if (postAppliesTo(m_liveId) || postAppliesTo(m_stagingId))
+        stack.append(m_postId);
     while (!stack.isEmpty()) {
         const QString id = stack.takeLast();
         const Scene *c = id.isEmpty() ? nullptr : scene(id);
@@ -720,15 +773,18 @@ QJsonObject ShowManager::toJson() const
         globals.append(QJsonObject{{QStringLiteral("name"), g.name}, {QStringLiteral("value"), g.value},
                                    {QStringLiteral("min"), g.min}, {QStringLiteral("max"), g.max}});
     }
-    return {
-        {QStringLiteral("show"), QJsonObject{
-            {QStringLiteral("defaultTransition"), m_default.toJson()},
-            {QStringLiteral("state"), QJsonObject{
-                {QStringLiteral("liveSceneId"), m_liveId},
-                {QStringLiteral("stagingSceneId"), m_stagingId},
-                {QStringLiteral("editedSceneId"), m_editedId},
-            }},
+    QJsonObject show{
+        {QStringLiteral("defaultTransition"), m_default.toJson()},
+        {QStringLiteral("state"), QJsonObject{
+            {QStringLiteral("liveSceneId"), m_liveId},
+            {QStringLiteral("stagingSceneId"), m_stagingId},
+            {QStringLiteral("editedSceneId"), m_editedId},
         }},
+    };
+    if (!m_postId.isEmpty())
+        show[QStringLiteral("postSceneId")] = m_postId;
+    return {
+        {QStringLiteral("show"), show},
         {QStringLiteral("scenes"), scenes},
         {QStringLiteral("globals"), globals},
     };
@@ -784,6 +840,9 @@ bool ShowManager::fromJson(const QJsonObject &root)
     m_editedId = state.value(QStringLiteral("editedSceneId")).toString();
     m_inScene = true;
     fixRoles();
+    m_postId = show.value(QStringLiteral("postSceneId")).toString();
+    if (!scene(m_postId))
+        m_postId.clear();
 
     m_globals.clear();
     for (const QJsonValue &v : root.value(QStringLiteral("globals")).toArray()) {
@@ -809,6 +868,7 @@ bool ShowManager::fromJson(const QJsonObject &root)
     emit stagingSceneChanged();
     emit editedSceneChanged();
     emit defaultTransitionChanged();
+    emit postSceneChanged();
     updateRuntimeActivity();
     emit changed();
     return true;

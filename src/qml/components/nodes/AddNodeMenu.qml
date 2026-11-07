@@ -60,6 +60,7 @@ Popup {
         "text": ["title", "caption", "label", "subtitle"],
         "shape": ["rectangle", "circle", "box"],
         "scene": ["nested", "embed", "picture in picture"],
+        "sceneInput": ["post", "processing", "input", "wrap", "filter"],
         "url": ["stream", "http", "rtmp", "hls", "rtsp", "link", "network"],
         "ndi": ["network", "newtek"],
         "webrtc": ["phone", "mobile", "webrtc", "smartphone"],
@@ -111,6 +112,7 @@ Popup {
         src(qsTr("Generated"), "text", qsTr("Text"))
         src(qsTr("Generated"), "shape", qsTr("Shape"))
         src(qsTr("Generated"), "scene", qsTr("Scene"))
+        src(qsTr("Generated"), "sceneInput", qsTr("Scene input"), AppController.postSceneId.length > 0 && AppController.editedSceneId === AppController.postSceneId)
         for (const g of NodeCatalog.generators())
             list.push({ key: "src:generator:" + g.slug, alias: "generator", label: g.name,
                         category: qsTr("Sources: Generate"), source: "generator:" + g.slug })

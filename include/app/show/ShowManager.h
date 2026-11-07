@@ -74,6 +74,17 @@ public:
     /// name -> value, the form expressions see.
     QVariantMap globalValues() const;
 
+    // ── Post-processing ──────────────────────────────────────────────────────
+    /// The scene whose graph wraps every other scene's output (its Scene input node receives that
+    /// scene's picture); empty when there is none.
+    QString postSceneId() const { return m_postId; }
+    Scene *postScene() const { return scene(m_postId); }
+    /// Undoable. An empty or unknown @p id clears it.
+    void setPostSceneId(const QString &id);
+    /// True when a deck playing scene @p sceneId gets the post scene wrapped around it: there is a
+    /// post scene, it is not @p sceneId itself, and @p sceneId is not excluded.
+    bool postAppliesTo(const QString &sceneId) const;
+
     // ── Roles ────────────────────────────────────────────────────────────────
     Scene *liveScene() const { return scene(m_liveId); }
     Scene *stagingScene() const { return scene(m_stagingId); }
@@ -100,7 +111,7 @@ public:
     /// directly (host == target) or through other scenes.
     bool wouldCreateSceneCycle(const QString &host, const QString &target) const;
     /// Live, Staging and (with @p includeEdited) the edited scene, plus every scene reachable from
-    /// them through Scene nodes.
+    /// them through Scene nodes. The post scene joins when a deck's scene is post-processed.
     QSet<QString> activeSceneIds(bool includeEdited = true) const;
     /// Scenes kept resident plus everything they nest through Scene nodes.
     QSet<QString> residentSceneIds() const;
@@ -135,7 +146,7 @@ public:
     void updateRuntimeActivity();
 
     // ── Persistence ──────────────────────────────────────────────────────────
-    /// {show:{defaultTransition, state:{liveSceneId, stagingSceneId, editedSceneId}}, scenes:[...],
+    /// {show:{defaultTransition, postSceneId?, state:{liveSceneId, stagingSceneId, editedSceneId}}, scenes:[...],
     /// globals:[{name, value, min, max}]}.
     QJsonObject toJson() const;
     /// Replaces the show. False (leaving a fresh single-scene show) when it is missing, empty or
@@ -156,6 +167,7 @@ signals:
     void stagingSceneChanged();
     void editedSceneChanged();
     void defaultTransitionChanged();
+    void postSceneChanged();
     /// Anything the session should save changed (structure, roles, metadata).
     void changed();
     void thumbnailChanged();
@@ -173,6 +185,9 @@ private:
     bool eraseScene(const QString &id);
     bool moveSceneRaw(int from, int to);
 
+    friend class PostSceneCommand;
+    void applyPostSceneId(const QString &id);
+
     friend class GlobalsCommand;
     int globalIndex(const QString &name) const;
     /// Replaces the list in place: rows are inserted/removed/updated when the change is that
@@ -189,6 +204,7 @@ private:
     QTimer *m_endTimer;
     QUndoStack *m_undo;
     QString m_liveId, m_stagingId, m_editedId;
+    QString m_postId;
     bool m_inScene = true;
     TransitionSpec m_default;
     int m_nextSerial = 1;

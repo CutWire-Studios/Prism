@@ -226,6 +226,7 @@ QString sourceKindName(int kind) {
     case K::Shape:     return QStringLiteral("shape");
     case K::SvgTemplate: return QStringLiteral("svg_template");
     case K::Scene:     return QStringLiteral("scene");
+    case K::SceneInput: return QStringLiteral("scene_input");
     default: break;
     }
     return QStringLiteral("unknown");

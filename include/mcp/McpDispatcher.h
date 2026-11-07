@@ -43,6 +43,7 @@ private:
     QJsonObject opDuplicateScene(const QJsonObject &args);
     QJsonObject opExitScene();
     QJsonObject opSetSceneProps(const QJsonObject &args);
+    QJsonObject opSetPostScene(const QJsonObject &args);
     QJsonObject opSetDefaultTransition(const QJsonObject &args);
     QJsonObject opPreflight() const;
     QJsonObject opPlayDeck(const QJsonObject &args, bool play);

@@ -11,6 +11,7 @@
 #include "app/show/VenueProfile.h"
 #include "app/show/ShowManager.h"
 #include "core/graph/ClipGraph.h"
+#include "core/effects/ShaderEffects.h"
 #include "core/graph/ClipGraphModels.h"
 #include "core/sources/SourceDescriptor.h"
 
@@ -539,6 +540,138 @@ private slots:
         b->setKeepResident(false);
         QVERIFY(!b->runtime()->isActive());
         QVERIFY(!c->runtime()->isActive());
+    }
+
+    void postSceneSetClearAndUndo() {
+        ShowManager show;
+        Scene *a = show.liveScene();
+        Scene *b = show.addScene(QStringLiteral("B"));
+        QVERIFY(show.postSceneId().isEmpty());
+        QVERIFY(!show.postAppliesTo(a->id()));
+
+        show.setPostSceneId(b->id());
+        QCOMPARE(show.postSceneId(), b->id());
+        QVERIFY(show.postAppliesTo(a->id()));
+        QVERIFY(!show.postAppliesTo(b->id()));
+
+        show.setPostSceneId(QStringLiteral("nope"));
+        QVERIFY(show.postSceneId().isEmpty());
+        show.undoStack()->undo();
+        QCOMPARE(show.postSceneId(), b->id());
+
+        show.setPostSceneId({});
+        QVERIFY(show.postSceneId().isEmpty());
+        QVERIFY(!show.postAppliesTo(a->id()));
+    }
+
+    void deletingPostSceneClearsItAndUndoRestoresIt() {
+        ShowManager show;
+        Scene *b = show.addScene(QStringLiteral("B"));
+        const QString id = b->id();
+        show.setPostSceneId(id);
+        QVERIFY(show.removeScene(id));
+        QVERIFY(!show.scene(id));
+        QVERIFY(show.postSceneId().isEmpty());
+
+        show.undoStack()->undo();
+        QVERIFY(show.scene(id));
+        QCOMPARE(show.postSceneId(), id);
+
+        show.undoStack()->redo();
+        QVERIFY(show.postSceneId().isEmpty());
+    }
+
+    void excludeFromPostIsUndoable() {
+        ShowManager show;
+        Scene *a = show.liveScene();
+        show.setSceneMeta(a->id(), [&] { SceneMeta m = a->meta(); m.excludeFromPost = true; return m; }());
+        QVERIFY(a->excludeFromPost());
+        show.undoStack()->undo();
+        QVERIFY(!a->excludeFromPost());
+        show.undoStack()->redo();
+        QVERIFY(a->excludeFromPost());
+    }
+
+    void postSceneIsActiveWhileADeckUsesItWithItsNestedScenes() {
+        ShowManager show;
+        Scene *live = show.liveScene();
+        Scene *post = show.addScene(QStringLiteral("Post"));
+        Scene *nested = show.addScene(QStringLiteral("Nested"));
+        Scene *other = show.addScene(QStringLiteral("Other"));
+        addSceneRef(post, nested->id());
+        show.updateRuntimeActivity();
+        QVERIFY(!post->runtime()->isActive());
+
+        show.setPostSceneId(post->id());
+        QVERIFY(post->runtime()->isActive());
+        QVERIFY(nested->runtime()->isActive());
+        QVERIFY(!other->runtime()->isActive());
+
+        live->setExcludeFromPost(true);
+        QVERIFY(!post->runtime()->isActive());
+        QVERIFY(!nested->runtime()->isActive());
+
+        live->setExcludeFromPost(false);
+        QVERIFY(post->runtime()->isActive());
+        show.setPostSceneId({});
+        QVERIFY(!post->runtime()->isActive());
+    }
+
+    void preflightWarnsWhenPostSceneHasNoSceneInput() {
+        ShowManager show;
+        Scene *post = show.addScene(QStringLiteral("Post"));
+        show.setPostSceneId(post->id());
+        auto count = [&] {
+            int n = 0;
+            for (const PreflightIssue &i : Preflight::run(show, QDir(), nullptr))
+                n += i.kind == PreflightIssue::Kind::PostWithoutInput;
+            return n;
+        };
+        QCOMPARE(count(), 1);
+        SourceDescriptor desc;
+        desc.kind = SourceDescriptor::Kind::SceneInput;
+        post->graph()->addInputNode(desc);
+        QCOMPARE(count(), 0);
+    }
+
+    void postSceneInvertsLiveDeckUnlessExcluded() {
+        AppController app(nullptr);
+        if (!app.compositor()->glAvailable())
+            QSKIP("No OpenGL context available in this environment");
+
+        Scene *live = app.showManager()->liveScene();
+        SourceDescriptor solid;
+        solid.kind = SourceDescriptor::Kind::Canvas;
+        solid.canvasFill = SourceDescriptor::CanvasFill::Color;
+        solid.color = Qt::red;
+        ClipGraph *lg = live->graph();
+        QVERIFY(lg->connectNodes(lg->addInputNode(solid), lg->outputNodeId()));
+
+        const QString postId = app.addScene(QStringLiteral("Post"));
+        Scene *post = app.showManager()->scene(postId);
+        ClipGraph *pg = post->graph();
+        SourceDescriptor input;
+        input.kind = SourceDescriptor::Kind::SceneInput;
+        const NodeId in = pg->addInputNode(input);
+        const ShaderEffectSpec *invert = ShaderEffects::bySlug(QStringLiteral("invert"));
+        QVERIFY(invert);
+        const NodeId fx = pg->addNode(NT::Process, {}, {{"effect", invert->id}});
+        QVERIFY(in && fx);
+        QVERIFY(pg->connectNodes(in, fx, 0));
+        QVERIFY(pg->connectNodes(fx, pg->outputNodeId(), 0));
+        app.setPostSceneId(postId);
+
+        // The effect pass draws into a GL texture that stays black on the software rasteriser used by
+        // tests, so the deck source's own frame is checked instead of the program frame.
+        auto centre = [&] {
+            const MediaSource *src = app.compositor()->sourceLive();
+            const uint8_t *px = src ? src->frameData() : nullptr;
+            return px ? QColor(px[0], px[1], px[2]) : QColor();
+        };
+        QTRY_VERIFY_WITH_TIMEOUT(centre().isValid() && centre().red() < 50 && centre().green() > 200, 4000);
+
+        app.setSceneProps(live->id(), {{"excludeFromPost", true}});
+        QTRY_VERIFY_WITH_TIMEOUT(centre().isValid() && centre().red() > 200 && centre().green() < 50, 4000);
     }
 
     void residentSceneIsPreloadedAndHandedToStaging() {

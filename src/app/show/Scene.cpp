@@ -54,6 +54,7 @@ PRISM_SCENE_SETTER(EndAction, m_endAction, EndAction)
 PRISM_SCENE_SETTER(int, m_autoAdvanceMs, AutoAdvanceMs)
 PRISM_SCENE_SETTER(bool, m_advanceOnMediaEnd, AdvanceOnMediaEnd)
 PRISM_SCENE_SETTER(bool, m_keepResident, KeepResident)
+PRISM_SCENE_SETTER(bool, m_excludeFromPost, ExcludeFromPost)
 
 #undef PRISM_SCENE_SETTER
 
@@ -67,7 +68,7 @@ void Scene::setThumbnail(const QString &path)
 SceneMeta Scene::meta() const
 {
     return {m_name, m_color, m_notes, m_incoming, int(m_endAction), m_autoAdvanceMs, m_advanceOnMediaEnd,
-            m_keepResident};
+            m_keepResident, m_excludeFromPost};
 }
 
 void Scene::setMeta(const SceneMeta &m)
@@ -80,6 +81,7 @@ void Scene::setMeta(const SceneMeta &m)
     setAutoAdvanceMs(m.autoAdvanceMs);
     setAdvanceOnMediaEnd(m.advanceOnMediaEnd);
     setKeepResident(m.keepResident);
+    setExcludeFromPost(m.excludeFromPost);
 }
 
 void Scene::setIncoming(const std::optional<TransitionSpec> &spec)
@@ -123,6 +125,7 @@ QJsonObject Scene::toJson() const
         {QStringLiteral("autoAdvanceMs"), m_autoAdvanceMs},
         {QStringLiteral("advanceOnMediaEnd"), m_advanceOnMediaEnd},
         {QStringLiteral("keepResident"), m_keepResident},
+        {QStringLiteral("excludeFromPost"), m_excludeFromPost},
         {QStringLiteral("graph"), m_graph->toJson()},
     };
     if (m_incoming)
@@ -140,6 +143,7 @@ bool Scene::loadJson(const QJsonObject &o)
     m_autoAdvanceMs = o.value(QStringLiteral("autoAdvanceMs")).toInt(0);
     m_advanceOnMediaEnd = o.value(QStringLiteral("advanceOnMediaEnd")).toBool(false);
     m_keepResident = o.value(QStringLiteral("keepResident")).toBool(false);
+    m_excludeFromPost = o.value(QStringLiteral("excludeFromPost")).toBool(false);
     m_incoming.reset();
     if (o.contains(QStringLiteral("transition")))
         m_incoming = TransitionSpec::fromJson(o.value(QStringLiteral("transition")).toObject());

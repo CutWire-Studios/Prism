@@ -12,7 +12,8 @@
 class ShowManager;
 
 struct PreflightIssue {
-    enum class Kind { MissingFile, MissingDevice, MissingScene, SceneCycle, HistoryMemory, ResidentMemory };
+    enum class Kind { MissingFile, MissingDevice, MissingScene, SceneCycle, HistoryMemory, ResidentMemory, MissingPostScene,
+                      PostWithoutInput };
 
     Kind kind = Kind::MissingFile;
     QString sceneId;
@@ -26,7 +27,8 @@ struct PreflightIssue {
 /// Walks every scene's input nodes and reports media files that cannot be found, capture
 /// devices that are not present, Scene sources whose scene was deleted or loops back, and scenes whose
 /// feedback/time effects need more frame-history memory than the budget allows, and
-/// scenes kept resident beyond kMaxResidentScenes.
+/// scenes kept resident beyond kMaxResidentScenes, and a post-processing scene that is missing
+/// or has no Scene input node (so it replaces every scene's picture).
 namespace Preflight {
 
 constexpr int kMaxResidentScenes = 4;

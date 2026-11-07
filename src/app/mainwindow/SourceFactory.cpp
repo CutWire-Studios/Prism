@@ -30,6 +30,10 @@ namespace {
 SourceFactory::SceneResolver g_sceneResolver;
 SourceFactory::SceneParamUpdater g_sceneParamUpdater;
 int g_sceneDepth = 0;
+SourceFactory::SceneInputBuilder g_boundInputBuilder;
+SourceFactory::SceneInputUpdater g_boundInputUpdater;
+SourceFactory::SceneInputBuilder g_fallbackInputBuilder;
+SourceFactory::SceneInputUpdater g_fallbackInputUpdater;
 
 std::unique_ptr<MediaSource> screenView(MediaSource::Type type, const std::shared_ptr<ScreenSource> &backend,
                                         const QString &name) {
@@ -68,6 +72,25 @@ std::unique_ptr<MediaSource> sharedScreen(const QString &captureId, const QStrin
 void SourceFactory::setSceneResolver(SceneResolver resolver)
 {
     g_sceneResolver = std::move(resolver);
+}
+
+void SourceFactory::setSceneInputFallback(SceneInputBuilder builder, SceneInputUpdater updater)
+{
+    g_fallbackInputBuilder = std::move(builder);
+    g_fallbackInputUpdater = std::move(updater);
+}
+
+SourceFactory::SceneInputScope::SceneInputScope(SceneInputBuilder builder, SceneInputUpdater updater)
+    : m_prevBuilder(std::move(g_boundInputBuilder)), m_prevUpdater(std::move(g_boundInputUpdater))
+{
+    g_boundInputBuilder = std::move(builder);
+    g_boundInputUpdater = std::move(updater);
+}
+
+SourceFactory::SceneInputScope::~SceneInputScope()
+{
+    g_boundInputBuilder = std::move(m_prevBuilder);
+    g_boundInputUpdater = std::move(m_prevUpdater);
 }
 
 std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc) {
@@ -202,6 +225,30 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
         }
         return std::make_unique<SceneSource>(std::move(content), desc.displayName);
     }
+    case Kind::SceneInput: {
+        std::unique_ptr<MediaSource> content;
+        bool bound = false;
+        if (g_sceneDepth < kMaxSceneDepth) {
+            ++g_sceneDepth;
+            if (g_boundInputBuilder) {
+                // The bound chain's own Scene input nodes must not resolve to the same chain again.
+                const SceneInputBuilder builder = g_boundInputBuilder;
+                const SceneInputUpdater updater = g_boundInputUpdater;
+                g_boundInputBuilder = nullptr;
+                g_boundInputUpdater = nullptr;
+                content = builder();
+                g_boundInputBuilder = builder;
+                g_boundInputUpdater = updater;
+                bound = content != nullptr;
+            } else if (g_fallbackInputBuilder) {
+                content = g_fallbackInputBuilder();
+            }
+            --g_sceneDepth;
+        }
+        if (bound)
+            return content;
+        return std::make_unique<SceneSource>(std::move(content), desc.displayName);
+    }
     case Kind::Ndi: {
         const QString path = SharedSourcePool::instance().resolve(desc.path);
         const QString name = desc.displayName.isEmpty() ? path : desc.displayName;
@@ -264,6 +311,26 @@ bool SourceFactory::updateLayerParams(MediaSource *top, const ClipGraph::Resolve
     if (desc.kind == SourceDescriptor::Kind::Shader && !desc.preset.isEmpty()) {
         auto *shader = dynamic_cast<ShaderSource *>(base);
         return shader && shader->updateParams(graph->sourceParams(layer.inputNodeId));
+    }
+    if (desc.kind == SourceDescriptor::Kind::SceneInput) {
+        if (g_boundInputUpdater) {
+            if (g_sceneDepth >= kMaxSceneDepth) return false;
+            const SceneInputUpdater updater = g_boundInputUpdater;
+            g_boundInputUpdater = nullptr;
+            ++g_sceneDepth;
+            const bool ok = updater(base);
+            --g_sceneDepth;
+            g_boundInputUpdater = updater;
+            return ok;
+        }
+        auto *input = dynamic_cast<SceneSource *>(base);
+        if (!input) return false;
+        if (!input->content()) return true;
+        if (!g_fallbackInputUpdater || g_sceneDepth >= kMaxSceneDepth) return false;
+        ++g_sceneDepth;
+        const bool ok = g_fallbackInputUpdater(input->content());
+        --g_sceneDepth;
+        return ok;
     }
     if (desc.kind != SourceDescriptor::Kind::Scene) return true;
     auto *scene = dynamic_cast<SceneSource *>(base);

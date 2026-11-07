@@ -26,6 +26,28 @@ public:
     /// Scene sources nested deeper than this render empty.
     static constexpr int kMaxSceneDepth = 4;
 
+    /// What a Scene input node (see SourceDescriptor::Kind::SceneInput) shows when no deck binds it:
+    /// the app installs a builder for the Live scene's output and a matching in-place param updater.
+    /// With no content the node presents a transparent frame.
+    using SceneInputBuilder = std::function<std::unique_ptr<MediaSource>()>;
+    using SceneInputUpdater = std::function<bool(MediaSource *content)>;
+    static void setSceneInputFallback(SceneInputBuilder builder, SceneInputUpdater updater);
+
+    /// While alive, Scene input nodes built through create() take the builder's source directly as
+    /// their output (the deck then paces it, so transport still reaches the wrapped chain), and
+    /// updateLayerParams() hands the updater that source to refresh. Scopes nest; the inner one wins.
+    class SceneInputScope {
+    public:
+        SceneInputScope(SceneInputBuilder builder, SceneInputUpdater updater);
+        ~SceneInputScope();
+        SceneInputScope(const SceneInputScope &) = delete;
+        SceneInputScope &operator=(const SceneInputScope &) = delete;
+
+    private:
+        SceneInputBuilder m_prevBuilder;
+        SceneInputUpdater m_prevUpdater;
+    };
+
     /// Create a ready-to-play MediaSource from a descriptor.
     /// Returns nullptr if the descriptor cannot produce a source
     /// (e.g. transparent canvas, bad file path).

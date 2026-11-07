@@ -55,6 +55,8 @@ ThemedDialog {
                                : issue.modelData.kind === "scene_cycle" ? qsTr("Scene loops back into itself")
                                : issue.modelData.kind === "history_memory" ? qsTr("Frame history memory")
                                : issue.modelData.kind === "resident_memory" ? qsTr("Too many resident scenes")
+                               : issue.modelData.kind === "missing_post_scene" ? qsTr("Missing post-processing scene")
+                               : issue.modelData.kind === "post_without_input" ? qsTr("Post-processing scene without Scene input")
                                : qsTr("Missing device"))
                               + " - " + issue.modelData.scene + " / " + issue.modelData.source + "\n" + issue.modelData.detail
                     }

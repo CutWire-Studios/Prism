@@ -23,6 +23,8 @@ QJsonObject PreflightIssue::toJson() const
     case Kind::SceneCycle: kindName = QStringLiteral("scene_cycle"); break;
     case Kind::HistoryMemory: kindName = QStringLiteral("history_memory"); break;
     case Kind::ResidentMemory: kindName = QStringLiteral("resident_memory"); break;
+    case Kind::MissingPostScene: kindName = QStringLiteral("missing_post_scene"); break;
+    case Kind::PostWithoutInput: kindName = QStringLiteral("post_without_input"); break;
     }
     return {{QStringLiteral("kind"), kindName},
             {QStringLiteral("sceneId"), sceneId},
@@ -54,8 +56,30 @@ QList<PreflightIssue> Preflight::run(const ShowManager &show, const QDir &sessio
     QList<PreflightIssue> issues;
     const int residentCount = int(std::count_if(show.scenes().cbegin(), show.scenes().cend(),
                                                 [](const Scene *s) { return s->keepResident(); }));
+    if (!show.postSceneId().isEmpty() && !show.postScene()) {
+        PreflightIssue issue;
+        issue.kind = PreflightIssue::Kind::MissingPostScene;
+        issue.source = QObject::tr("Post-processing scene");
+        issue.detail = QObject::tr("The post-processing scene no longer exists");
+        issues.append(issue);
+    }
     for (const Scene *scene : show.scenes()) {
         const ClipGraph *g = scene->graph();
+        if (scene->id() == show.postSceneId()) {
+            const auto inputs = g->nodeIdsOfType(ClipGraph::NodeType::Input);
+            const bool hasSceneInput = std::any_of(inputs.cbegin(), inputs.cend(), [g](NodeId id) {
+                return g->sourceDescriptor(id).kind == SourceDescriptor::Kind::SceneInput;
+            });
+            if (!hasSceneInput) {
+                PreflightIssue issue;
+                issue.kind = PreflightIssue::Kind::PostWithoutInput;
+                issue.sceneId = scene->id();
+                issue.sceneName = scene->name();
+                issue.source = QObject::tr("Post-processing scene");
+                issue.detail = QObject::tr("Has no Scene input node, so it replaces every scene's picture instead of processing it");
+                issues.append(issue);
+            }
+        }
         if (scene->keepResident() && residentCount > kMaxResidentScenes) {
             PreflightIssue issue;
             issue.kind = PreflightIssue::Kind::ResidentMemory;

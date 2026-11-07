@@ -52,6 +52,7 @@ QVariant SceneListModel::data(const QModelIndex &index, int role) const
     case HotkeyRole: return m_hotkey ? m_hotkey(scene->id()) : QString();
     case WarningRole: return m_warning ? m_warning(scene->id()) : QString();
     case ResidentRole: return scene->keepResident();
+    case PostRole: return scene->id() == m_show->postSceneId();
     }
     return {};
 }
@@ -63,5 +64,5 @@ QHash<int, QByteArray> SceneListModel::roleNames() const
             {EndActionRole, "endAction"}, {HasTransitionRole, "hasTransition"},
             {TransitionModeRole, "transitionMode"}, {TransitionMsRole, "transitionMs"},
             {ThumbnailRole, "thumbnail"}, {HotkeyRole, "hotkey"}, {WarningRole, "warning"},
-            {ResidentRole, "keepResident"}};
+            {ResidentRole, "keepResident"}, {PostRole, "isPost"}};
 }

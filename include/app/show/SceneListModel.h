@@ -24,6 +24,7 @@ public:
         HotkeyRole,
         WarningRole,
         ResidentRole,
+        PostRole,
     };
 
     explicit SceneListModel(ShowManager *show);

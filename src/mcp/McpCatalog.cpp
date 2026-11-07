@@ -9,7 +9,7 @@ const QStringList kSourceKinds = {
     QStringLiteral("slideshow"), QStringLiteral("camera"), QStringLiteral("canvas"),
     QStringLiteral("shader"),    QStringLiteral("text"),   QStringLiteral("shape"),
     QStringLiteral("svg_template"), QStringLiteral("ndi"),
-    QStringLiteral("scene")};
+    QStringLiteral("scene"), QStringLiteral("scene_input")};
 
 const QStringList kPanicModes = {QStringLiteral("none"), QStringLiteral("blackout"),
                                  QStringLiteral("freeze"), QStringLiteral("stay_tuned")};
@@ -151,7 +151,8 @@ const QList<Op> &ops()
 
         {"list_scenes", "decks", "See the scene list",
          "List the show's scenes. Returns {scenes:[{id, index, name, live, staging, edited, endAction, "
-         "transition:{mode,durationMs}|null, autoAdvanceMs, advanceOnMediaEnd, keepResident, hotkey, warning}]}.",
+         "transition:{mode,durationMs}|null, autoAdvanceMs, advanceOnMediaEnd, keepResident, excludeFromPost, "
+         "post, hotkey, warning}], postSceneId: id|null}. post marks the post-processing scene.",
          objectSchema({}), true, false, true},
         {"stage_scene", "decks", "Put a scene on Staging (next up)",
          "Load a scene onto the Staging deck (the next-up deck, shown on the left). It does not go on "
@@ -201,10 +202,18 @@ const QList<Op> &ops()
                                    boolProp(QStringLiteral("Advance when the media ends"))},
                                   {QStringLiteral("keepResident"),
                                    boolProp(QStringLiteral("Keep the scene loaded so switching to it is instant (uses more memory)"))},
+                                  {QStringLiteral("excludeFromPost"),
+                                   boolProp(QStringLiteral("Do not apply the post-processing scene to this scene"))},
                                   {QStringLiteral("transition"),
                                    objectProp(QStringLiteral("{mode, durationMs} or null to clear"))},
                                   {QStringLiteral("hotkey"), stringProp(QStringLiteral("Key chord"))}}),
                       {QStringLiteral("scene")})},
+        {"set_post_scene", "decks", "Set the post-processing scene",
+         "Make a scene the show's post-processing scene: every other scene's picture is run through its "
+         "graph, with the scene_input source node standing for the scene being processed. Omit scene or "
+         "pass null to clear it. The post scene itself is never post-processed; set_scene_props "
+         "excludeFromPost opts a scene out. Returns {postSceneId: id|null}.",
+         objectSchema(sceneRefProps())},
         {"set_default_transition", "decks", "Show-wide default transition",
          "Set the transition used for scenes without their own override.",
          objectSchema({{QStringLiteral("mode"),
@@ -212,7 +221,7 @@ const QList<Op> &ops()
                        {QStringLiteral("durationMs"), integerProp(QStringLiteral("Duration in milliseconds"))}},
                       {QStringLiteral("mode"), QStringLiteral("durationMs")})},
         {"preflight", "decks", "Check the show for missing media",
-         "Scan every scene for missing files, devices and scene references. Returns {issues:[{kind: missing_file|missing_device|missing_scene|scene_cycle|history_memory|resident_memory, "
+         "Scan every scene for missing files, devices and scene references. Returns {issues:[{kind: missing_file|missing_device|missing_scene|scene_cycle|history_memory|resident_memory|missing_post_scene|post_without_input, "
          "sceneId, scene, source, detail}]}.",
          objectSchema({}), true, false, true},
         {"play", "decks", "Play a deck", "Start playback on the Live or Staging deck.",

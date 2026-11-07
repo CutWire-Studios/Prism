@@ -163,6 +163,19 @@ ColumnLayout {
         HoverHandler { id: residentHelpHover }
     }
 
+    ThemedSwitch {
+        visible: !root.info.post
+        text: qsTr("Exclude from post-processing")
+        checked: !!root.info.excludeFromPost
+        onToggled: root.setProps({ excludeFromPost: checked })
+    }
+    ThemedLabel {
+        visible: !root.info.post
+        Layout.fillWidth: true
+        wrapMode: Text.WordWrap
+        text: qsTr("Skip the project's post-processing scene for this scene")
+    }
+
     StyleFieldRow {
         Layout.fillWidth: true
         label: qsTr("Hotkey")

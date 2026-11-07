@@ -35,6 +35,8 @@ Popup {
             return false
         if (pendingKind >= 0 && entry.source)
             return false
+        if (entry.source === "sceneInput")
+            return AppController.postSceneId.length > 0 && AppController.editedSceneId === AppController.postSceneId
         if (entry.source === "ndi")
             return SourcePrompts.ndiAvailable
         if (entry.source === "webrtc")

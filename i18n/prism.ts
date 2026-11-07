@@ -119,6 +119,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Scene input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Sources: Generate</source>
         <translation type="unfinished"></translation>
     </message>
@@ -491,6 +495,10 @@ Another application may already be using the virtual camera, or softcam.dll may 
     </message>
     <message>
         <source>Scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Scene input</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1841,6 +1849,14 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Exclude from post-processing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip the project&apos;s post-processing scene for this scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Hotkey</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2630,6 +2646,14 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Show another scene&apos;s finished picture inside this one.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Scene input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The scene a post-processing scene is processing. Only meaningful in the post-processing scene.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3501,6 +3525,14 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Missing post-processing scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Post-processing scene without Scene input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Missing device</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3767,7 +3799,23 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Set post-processing scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Edit scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Post-processing scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The post-processing scene no longer exists</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Has no Scene input node, so it replaces every scene&apos;s picture instead of processing it</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3987,6 +4035,14 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Post-processing scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>POST</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>LIVE</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4023,6 +4079,14 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
     </message>
     <message>
         <source>Keep resident</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stop using as post-processing scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use as post-processing scene</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4089,7 +4153,23 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Post-processing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Kept resident</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Post-processing scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>POST</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

@@ -30,11 +30,13 @@ struct SceneMeta {
     int autoAdvanceMs = 0;
     bool advanceOnMediaEnd = false;
     bool keepResident = false;
+    bool excludeFromPost = false;
 
     bool operator==(const SceneMeta &o) const {
         return name == o.name && color == o.color && notes == o.notes && incoming == o.incoming
             && endAction == o.endAction && autoAdvanceMs == o.autoAdvanceMs
-            && advanceOnMediaEnd == o.advanceOnMediaEnd && keepResident == o.keepResident;
+            && advanceOnMediaEnd == o.advanceOnMediaEnd && keepResident == o.keepResident
+            && excludeFromPost == o.excludeFromPost;
     }
 };
 
@@ -65,6 +67,7 @@ public:
     int autoAdvanceMs() const { return m_autoAdvanceMs; }
     bool advanceOnMediaEnd() const { return m_advanceOnMediaEnd; }
     bool keepResident() const { return m_keepResident; }
+    bool excludeFromPost() const { return m_excludeFromPost; }
 
     /// Bumps on every setThumbnail so image URLs can be cache-busted.
     int thumbnailRev() const { return m_thumbRev; }
@@ -83,6 +86,7 @@ public:
     void setAutoAdvanceMs(int ms);
     void setAdvanceOnMediaEnd(bool on);
     void setKeepResident(bool on);
+    void setExcludeFromPost(bool on);
 
     QJsonObject toJson() const;
     /// False when the stored graph is older than ClipGraph::kGraphVersion.
@@ -113,5 +117,6 @@ private:
     int m_autoAdvanceMs = 0;
     bool m_advanceOnMediaEnd = false;
     bool m_keepResident = false;
+    bool m_excludeFromPost = false;
     int m_thumbRev = 0;
 };

@@ -18,6 +18,7 @@ Rectangle {
     required property bool isEdited
     required property string hotkey
     required property bool keepResident
+    required property bool isPost
 
     property bool canClose: true
     property bool dragging: false
@@ -134,6 +135,21 @@ Rectangle {
             ToolTip.visible: residentHover.hovered
             ToolTip.text: qsTr("Kept resident")
             HoverHandler { id: residentHover }
+        }
+        Rectangle {
+            visible: root.isPost
+            implicitWidth: postText.implicitWidth + Theme.spacingSm
+            implicitHeight: postText.implicitHeight + 2
+            radius: Theme.radiusSm
+            color: Theme.primary
+            ToolTip.visible: postHover.hovered
+            ToolTip.text: qsTr("Post-processing scene")
+            HoverHandler { id: postHover }
+            ThemedLabel {
+                id: postText
+                anchors.centerIn: parent
+                text: qsTr("POST")
+            }
         }
         ThemedLabel {
             visible: root.hotkey.length > 0

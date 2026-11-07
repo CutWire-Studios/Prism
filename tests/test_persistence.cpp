@@ -343,6 +343,29 @@ private slots:
         QVERIFY(loaded.scene(b->id())->keepResident());
     }
 
+    void postSceneAndExcludeRoundTrip() {
+        ShowManager show;
+        Scene *a = show.liveScene();
+        Scene *b = show.addScene(QStringLiteral("B"));
+        Scene *c = show.addScene(QStringLiteral("C"));
+        QVERIFY(!show.toJson().value(QStringLiteral("show")).toObject().contains(QStringLiteral("postSceneId")));
+        show.setPostSceneId(b->id());
+        c->setExcludeFromPost(true);
+
+        ShowManager loaded;
+        QVERIFY(loaded.fromJson(show.toJson()));
+        QCOMPARE(loaded.postSceneId(), b->id());
+        QVERIFY(!loaded.scene(a->id())->excludeFromPost());
+        QVERIFY(loaded.scene(c->id())->excludeFromPost());
+
+        QJsonObject stale = show.toJson();
+        QJsonObject showObj = stale.value(QStringLiteral("show")).toObject();
+        showObj[QStringLiteral("postSceneId")] = QStringLiteral("gone");
+        stale[QStringLiteral("show")] = showObj;
+        QVERIFY(loaded.fromJson(stale));
+        QVERIFY(loaded.postSceneId().isEmpty());
+    }
+
     void sceneSourceNodeRoundTrips() {
         ShowManager show;
         Scene *outer = show.liveScene();

@@ -96,6 +96,7 @@ QString mcpKindName(SourceDescriptor::Kind kind)
     case K::AudioFile: return QStringLiteral("audio");
     case K::SvgTemplate: return QStringLiteral("svg_template");
     case K::Scene:     return QStringLiteral("scene");
+    case K::SceneInput: return QStringLiteral("scene_input");
     default: break;
     }
     return QStringLiteral("unknown");
@@ -165,7 +166,7 @@ AppController::AppController(QObject *parent)
     connect(m_oscServer, &OscServer::learnTimedOut, this, &AppController::oscLearnTimedOut);
     m_mcp = new prism::mcp::McpServer(this, this);
 
-    SourceFactory::setSceneResolver([this](const QString &sceneId) -> std::unique_ptr<MediaSource> {
+    const auto buildSceneOutput = [this](const QString &sceneId) -> std::unique_ptr<MediaSource> {
         const Scene *target = m_show->scene(sceneId);
         if (!target)
             return nullptr;
@@ -177,8 +178,8 @@ AppController::AppController(QObject *parent)
         if (stream.layers.isEmpty())
             return nullptr;
         return SourceFactory::buildLayerSource(stream.layers.first(), graph, target->runtime());
-    });
-    SourceFactory::setSceneParamUpdater([this](const QString &sceneId, MediaSource *content) {
+    };
+    const auto updateSceneOutput = [this](const QString &sceneId, MediaSource *content) {
         const Scene *target = m_show->scene(sceneId);
         if (!target)
             return false;
@@ -190,7 +191,19 @@ AppController::AppController(QObject *parent)
         if (stream.layers.isEmpty())
             return false;
         return SourceFactory::updateLayerParams(content, stream.layers.first(), graph);
-    });
+    };
+    SourceFactory::setSceneResolver(buildSceneOutput);
+    SourceFactory::setSceneParamUpdater(updateSceneOutput);
+    // Outside a post-processed deck a Scene input shows the Live scene, except when Live is the post
+    // scene itself (it would only show itself).
+    SourceFactory::setSceneInputFallback(
+        [this, buildSceneOutput]() -> std::unique_ptr<MediaSource> {
+            const QString live = m_show->liveSceneId();
+            return live == m_show->postSceneId() ? nullptr : buildSceneOutput(live);
+        },
+        [this, updateSceneOutput](MediaSource *content) {
+            return updateSceneOutput(m_show->liveSceneId(), content);
+        });
 
     m_pushTimer = new QTimer(this);
     m_pushTimer->setSingleShot(true);
@@ -228,6 +241,7 @@ AppController::~AppController()
     delete m_outputHub;
     SourceFactory::setSceneResolver({});
     SourceFactory::setSceneParamUpdater({});
+    SourceFactory::setSceneInputFallback({}, {});
     delete m_show;
     GraphRuntime::waitForRetiredScripts(2000);
     m_compositor.reset();
@@ -266,8 +280,12 @@ void AppController::connectSignals()
     connect(m_show, &ShowManager::sceneMetaChanged, this, &AppController::scenesEdited);
     connect(m_show, &ShowManager::scenesReset, this, &AppController::selectedSceneChanged);
     connect(m_hotkeyManager, &HotkeyManager::bindingsChanged, this, &AppController::scenesEdited);
+    connect(m_show, &ShowManager::postSceneChanged, this, [this]() {
+        m_pushTimer->start();
+        emit showChanged();
+    });
     connect(m_show, &ShowManager::sceneMetaChanged, this, [this](Scene *scene) {
-        if (scene->keepResident() || m_preloads.count(scene->id()))
+        if (scene->keepResident() || m_preloads.count(scene->id()) || !m_show->postSceneId().isEmpty())
             m_pushTimer->start();
         if (scene == m_show->liveScene()) {
             applyLiveEndAction();
@@ -537,6 +555,7 @@ void AppController::pollAudioLevels()
 QString AppController::liveSceneId() const { return m_show->liveSceneId(); }
 QString AppController::stagingSceneId() const { return m_show->stagingSceneId(); }
 QString AppController::editedSceneId() const { return m_show->editedSceneId(); }
+QString AppController::postSceneId() const { return m_show->postSceneId(); }
 bool AppController::inScene() const { return m_show->inScene(); }
 QString AppController::selectedSceneId() const
 {
@@ -952,6 +971,8 @@ void AppController::refreshSceneWarnings()
         case PreflightIssue::Kind::SceneCycle: text = tr("Scene loops back into itself: %1"); break;
         case PreflightIssue::Kind::HistoryMemory: text = tr("%1"); break;
         case PreflightIssue::Kind::ResidentMemory: text = tr("%1"); break;
+        case PreflightIssue::Kind::MissingPostScene: text = tr("%1"); break;
+        case PreflightIssue::Kind::PostWithoutInput: text = tr("%1"); break;
         }
         w += (w.isEmpty() ? QString() : QStringLiteral("\n")) + text.arg(i.detail.isEmpty() ? i.source : i.detail);
     }
@@ -1014,6 +1035,8 @@ QVariantMap AppController::sceneInfo(const QString &id) const
                      {"autoAdvanceMs", scene->autoAdvanceMs()},
                      {"advanceOnMediaEnd", scene->advanceOnMediaEnd()},
                      {"keepResident", scene->keepResident()},
+                     {"excludeFromPost", scene->excludeFromPost()},
+                     {"post", id == m_show->postSceneId()},
                      {"hotkey", sceneHotkey(id)}, {"warning", m_sceneWarnings.value(id)},
                      {"live", id == m_show->liveSceneId()},
                      {"thumbnail", scene->thumbnail().isEmpty()
@@ -1046,6 +1069,8 @@ void AppController::setSceneProps(const QString &id, const QVariantMap &props)
         m.advanceOnMediaEnd = props.value("advanceOnMediaEnd").toBool();
     if (props.contains("keepResident"))
         m.keepResident = props.value("keepResident").toBool();
+    if (props.contains("excludeFromPost"))
+        m.excludeFromPost = props.value("excludeFromPost").toBool();
     if (props.contains("transition")) {
         const QVariantMap t = props.value("transition").toMap();
         if (t.isEmpty())
@@ -1056,6 +1081,12 @@ void AppController::setSceneProps(const QString &id, const QVariantMap &props)
     m_show->setSceneMeta(id, m);
     if (props.contains("hotkey"))
         setSceneHotkey(id, props.value("hotkey").toString());
+    mcpBumpRevision();
+}
+
+void AppController::setPostSceneId(const QString &id)
+{
+    m_show->setPostSceneId(id);
     mcpBumpRevision();
 }
 
@@ -1332,6 +1363,10 @@ void AppController::pushDecks()
     using Stream = ClipGraph::ResolvedStream;
 
     int sceneKeyDepth = 0;
+    // What a Scene input node receives, as keys: the scene it is bound to on a post-processed deck,
+    // else the Live scene's.
+    struct InputKey { QString base, params; };
+    std::optional<InputKey> sceneInputKey;
     // Structural key only; param values are appended to `pk` so a param-only edit can reuse the sources.
     std::function<QString(const ClipGraph *, const Layer &, QString &)> layerKey =
         [&](const ClipGraph *g, const Layer &l, QString &pk) -> QString {
@@ -1379,6 +1414,10 @@ void AppController::pushDecks()
                 }
             }
         }
+        if (d.kind == SourceDescriptor::Kind::SceneInput && sceneInputKey) {
+            nested = sceneInputKey->base;
+            pk += sceneInputKey->params + QLatin1Char('|');
+        }
         return QStringLiteral("%1:%2:%3:%4:%5:%6:%7:%8")
             .arg(l.inputNodeId).arg(int(d.kind)).arg(d.path)
             .arg(cs.startTime).arg(cs.endTime).arg(d.captureId)
@@ -1411,8 +1450,11 @@ void AppController::pushDecks()
     QStringList dOv[2];
     QString dBaseP[2];
     QStringList dOvP[2];
+    const Scene *postScene = m_show->postScene();
     for (int i = 0; i < 2; ++i) {
         const Deck deck = static_cast<Deck>(i);
+        if (i == 1 && scenes[0] && scenes[0] != postScene && !dBase[0].isEmpty())
+            sceneInputKey = InputKey{dBase[0], dBaseP[0]};
         graphs[i] = scenes[i] ? scenes[i]->graph() : nullptr;
         m_deckController->setDeckGraph(deck, graphs[i], scenes[i] ? scenes[i]->runtime() : nullptr);
         if (!graphs[i] || (i == 0 && m_liveBlack))
@@ -1421,6 +1463,40 @@ void AppController::pushDecks()
             streams[i] = graphs[i]->evaluateVideoInput(producer);
         keysOf(graphs[i], streams[i], dBase[i], dOv[i], dBaseP[i], dOvP[i]);
     }
+
+    // A deck whose scene is post-processed plays the post scene's graph, with its Scene input node
+    // bound to the chain the deck would otherwise play. Only the first layer of either stream is used,
+    // as with Scene sources.
+    struct PostWrap {
+        bool on = false;
+        QString base, baseP;
+        Stream inner;
+        QString innerBase, innerBaseP;
+        QStringList innerOv, innerOvP;
+    };
+    PostWrap wraps[2];
+    ClipGraph *postGraph = postScene ? postScene->graph() : nullptr;
+    Stream postStream;
+    if (postGraph) {
+        if (const NodeId producer = postGraph->outputSingleProducer())
+            postStream = postGraph->evaluateVideoInput(producer);
+    }
+    for (int i = 0; i < 2; ++i) {
+        if (postStream.layers.isEmpty() || !scenes[i] || streams[i].layers.isEmpty()
+            || !m_show->postAppliesTo(scenes[i]->id()))
+            continue;
+        sceneInputKey = InputKey{dBase[i], dBaseP[i]};
+        QString pp;
+        const QString pk = layerKey(postGraph, postStream.layers.first(), pp);
+        PostWrap &w = wraps[i];
+        w.on = true;
+        w.base = QStringLiteral("post:%1|%2|%3").arg(postScene->id(), pk, dBase[i]);
+        w.baseP = pp + QLatin1Char('|') + dBaseP[i];
+        w.inner = streams[i];
+        w.innerBase = dBase[i]; w.innerBaseP = dBaseP[i];
+        w.innerOv = dOv[i]; w.innerOvP = dOvP[i];
+    }
+    sceneInputKey.reset();
 
     // What a layer tree needs from the outside world: devices and streams are never preloaded, and a
     // video source must not be primed because that would consume its first decoded frame.
@@ -1444,6 +1520,9 @@ void AppController::pushDecks()
         using Kind = SourceDescriptor::Kind;
         switch (d.kind) {
         case Kind::Camera: case Kind::Screen: case Kind::Window: case Kind::Ndi: case Kind::WebRtc:
+            t.device = true;
+            break;
+        case Kind::SceneInput:
             t.device = true;
             break;
         case Kind::VideoFile:
@@ -1507,7 +1586,7 @@ void AppController::pushDecks()
     };
 
     auto pushDeck = [&](Deck deck, const Stream &stream, const QString &dBase, const QStringList &dOv,
-                        const QString &dBaseP, const QStringList &dOvP) {
+                        const QString &dBaseP, const QStringList &dOvP, const PostWrap *post) {
         const int di = static_cast<int>(deck);
         ClipGraph *graph = graphs[di];
         GraphRuntime *runtime = scenes[di] ? scenes[di]->runtime() : nullptr;
@@ -1544,6 +1623,65 @@ void AppController::pushDecks()
                 out->setCanvasSizeStaging(stream.canvasWidth, stream.canvasHeight);
             }
         };
+
+        if (post) {
+            const Layer innerLayer = post->inner.layers.first();
+            const NodeId primaryId = innerLayer.composite
+                ? (innerLayer.composite->layers.isEmpty() ? 0 : innerLayer.composite->layers.first().inputNodeId)
+                : innerLayer.inputNodeId;
+            if (primaryId && graph->hasNode(primaryId)) {
+                const auto st = DeckController::deckUiState(graph->sourceDescriptor(primaryId),
+                                                            graph->sourceName(primaryId));
+                ui.name = st.name; ui.hasTransport = st.hasTransport;
+            } else {
+                ui = DeckUi{};
+            }
+            if (sameStream(dBase, dOv, curBase, curOv)) {
+                if (dBaseP == curBaseP && dOvP == curOvP) {
+                    applyBaseFor(base, true);
+                    return;
+                }
+                bool updated;
+                {
+                    SourceFactory::SceneInputScope scope({}, [&](MediaSource *content) {
+                        return SourceFactory::updateLayerParams(content, innerLayer, graph);
+                    });
+                    updated = SourceFactory::updateLayerParams(
+                        isLive(deck) ? out->sourceLive() : out->sourceStaging(), base, postGraph);
+                }
+                if (updated) {
+                    curBaseP = dBaseP; curOvP = dOvP;
+                    out->refreshDeckFrame(deck);
+                    applyBaseFor(base, true);
+                    return;
+                }
+            }
+            std::unique_ptr<MediaSource> src;
+            {
+                std::optional<Preload> pre = takePreload(scenes[di], post->inner, post->innerBase, post->innerOv,
+                                                         post->innerBaseP, post->innerOvP);
+                std::unique_ptr<MediaSource> innerSource = pre ? std::move(pre->source) : nullptr;
+                SourceFactory::SceneInputScope scope([&]() -> std::unique_ptr<MediaSource> {
+                    if (innerSource)
+                        return std::move(innerSource);
+                    return SourceFactory::buildLayerSource(innerLayer, graph, runtime);
+                }, {});
+                src = SourceFactory::buildLayerSource(base, postGraph, postScene->runtime());
+            }
+            if (!src) {
+                clearDeck(deck);
+                curBase.clear(); curOv.clear();
+                curBaseP.clear(); curOvP.clear();
+                return;
+            }
+            m_deckController->assignCompositeToDeck(std::move(src), primaryId, deck, startPlayback);
+            applyBaseFor(base, true);
+            if (isLive(deck)) out->setNodeChainLive({});
+            else       out->setNodeChainStaging({});
+            curBase = dBase; curOv = dOv;
+            curBaseP = dBaseP; curOvP = dOvP;
+            return;
+        }
 
         if (base.composite) {
             const NodeId primaryId = base.composite->layers.isEmpty()
@@ -1659,8 +1797,14 @@ void AppController::pushDecks()
         }
     };
 
-    pushDeck(Deck::Live, streams[0], dBase[0], dOv[0], dBaseP[0], dOvP[0]);
-    pushDeck(Deck::Staging, streams[1], dBase[1], dOv[1], dBaseP[1], dOvP[1]);
+    for (const Deck deck : {Deck::Live, Deck::Staging}) {
+        const int di = static_cast<int>(deck);
+        const PostWrap &w = wraps[di];
+        if (w.on)
+            pushDeck(deck, postStream, w.base, {}, w.baseP, {}, &w);
+        else
+            pushDeck(deck, streams[di], dBase[di], dOv[di], dBaseP[di], dOvP[di], nullptr);
+    }
 
     // Keep a built source ready for every resident scene that is not on a deck. Structural changes
     // rebuild it, param-only changes update it in place.
@@ -2486,6 +2630,13 @@ void AppController::requestAddSource(const QString &kind, qreal x, qreal y)
         SourceDescriptor desc;
         desc.kind = SourceDescriptor::Kind::Scene;
         desc.displayName = tr("Scene");
+        addSourceFromDescriptor(desc, {});
+        return;
+    }
+    if (kind == QLatin1String("sceneInput")) {
+        SourceDescriptor desc;
+        desc.kind = SourceDescriptor::Kind::SceneInput;
+        desc.displayName = tr("Scene input");
         addSourceFromDescriptor(desc, {});
         return;
     }

@@ -45,6 +45,10 @@ Rectangle {
             text: tabMenu.tab && tabMenu.tab.keepResident ? qsTr("Stop keeping resident") : qsTr("Keep resident")
             onTriggered: AppController.setSceneProps(tabMenu.sceneId, { keepResident: !tabMenu.tab.keepResident })
         }
+        ThemedMenuItem {
+            text: tabMenu.tab && tabMenu.tab.isPost ? qsTr("Stop using as post-processing scene") : qsTr("Use as post-processing scene")
+            onTriggered: AppController.setPostSceneId(tabMenu.tab.isPost ? "" : tabMenu.sceneId)
+        }
         ThemedMenuSeparator { }
         ThemedMenuItem {
             text: qsTr("Stage")

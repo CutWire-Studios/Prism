@@ -107,6 +107,7 @@ QString kindName(SourceDescriptor::Kind kind)
     case K::AudioFile:  return QStringLiteral("audio");
     case K::SvgTemplate: return QStringLiteral("svg_template");
     case K::Scene:      return QStringLiteral("scene");
+    case K::SceneInput: return QStringLiteral("scene_input");
     }
     return QStringLiteral("unknown");
 }
@@ -139,6 +140,8 @@ bool parseKind(const QString &name, SourceDescriptor::Kind *out)
         *out = K::Ndi;
     else if (k == QLatin1String("scene"))
         *out = K::Scene;
+    else if (k == QLatin1String("scene_input"))
+        *out = K::SceneInput;
     else
         return false;
     return true;
@@ -304,6 +307,8 @@ QJsonObject McpDispatcher::applyOne(const QString &tool, const QJsonObject &args
         return opExitScene();
     if (tool == QLatin1String("set_scene_props"))
         return opSetSceneProps(args);
+    if (tool == QLatin1String("set_post_scene"))
+        return opSetPostScene(args);
     if (tool == QLatin1String("set_default_transition"))
         return opSetDefaultTransition(args);
     if (tool == QLatin1String("preflight"))
@@ -680,6 +685,10 @@ QJsonObject McpDispatcher::opAddSource(const QJsonObject &args)
             desc.displayName = target->name();
         break;
     }
+    case SourceDescriptor::Kind::SceneInput:
+        if (desc.displayName.isEmpty())
+            desc.displayName = QStringLiteral("Scene input");
+        break;
     default:
         return err("bad_args", QStringLiteral("Unsupported kind: %1").arg(kindStr));
     }
@@ -846,6 +855,8 @@ QJsonObject sceneJson(const AppController *w, const Scene *scene)
             {QStringLiteral("autoAdvanceMs"), scene->autoAdvanceMs()},
             {QStringLiteral("advanceOnMediaEnd"), scene->advanceOnMediaEnd()},
             {QStringLiteral("keepResident"), scene->keepResident()},
+            {QStringLiteral("excludeFromPost"), scene->excludeFromPost()},
+            {QStringLiteral("post"), scene->id() == show->postSceneId()},
             {QStringLiteral("hotkey"), info.value(QStringLiteral("hotkey")).toString()},
             {QStringLiteral("warning"), info.value(QStringLiteral("warning")).toString()}};
 }
@@ -870,7 +881,9 @@ QJsonObject McpDispatcher::opListScenes() const
     QJsonArray scenes;
     for (const Scene *scene : m_window->showManager()->scenes())
         scenes.append(sceneJson(m_window, scene));
-    return ok({{QStringLiteral("scenes"), scenes}});
+    const QString post = m_window->showManager()->postSceneId();
+    return ok({{QStringLiteral("scenes"), scenes},
+               {QStringLiteral("postSceneId"), post.isEmpty() ? QJsonValue(QJsonValue::Null) : QJsonValue(post)}});
 }
 
 QJsonObject McpDispatcher::opStageScene(const QJsonObject &args)
@@ -971,7 +984,7 @@ QJsonObject McpDispatcher::opSetSceneProps(const QJsonObject &args)
     if (!scene)
         return error;
     QVariantMap props;
-    for (const char *key : {"name", "color", "notes", "endAction", "autoAdvanceMs", "advanceOnMediaEnd", "keepResident", "hotkey"}) {
+    for (const char *key : {"name", "color", "notes", "endAction", "autoAdvanceMs", "advanceOnMediaEnd", "keepResident", "excludeFromPost", "hotkey"}) {
         const QString k = QString::fromLatin1(key);
         if (args.contains(k))
             props.insert(k, args.value(k).toVariant());
@@ -994,6 +1007,21 @@ QJsonObject McpDispatcher::opSetSceneProps(const QJsonObject &args)
     m_window->setSceneProps(scene->id(), props);
     m_window->mcpBumpRevision();
     return ok(sceneJson(m_window, scene));
+}
+
+QJsonObject McpDispatcher::opSetPostScene(const QJsonObject &args)
+{
+    const QJsonValue v = args.value(QStringLiteral("scene"));
+    QString id;
+    if (!v.isNull() && !v.isUndefined() && v != QJsonValue(QString())) {
+        QJsonObject error;
+        const Scene *scene = resolveScene(m_window, args, &error);
+        if (!scene)
+            return error;
+        id = scene->id();
+    }
+    m_window->setPostSceneId(id);
+    return ok({{QStringLiteral("postSceneId"), id.isEmpty() ? QJsonValue(QJsonValue::Null) : QJsonValue(id)}});
 }
 
 QJsonObject McpDispatcher::opSetDefaultTransition(const QJsonObject &args)

@@ -307,6 +307,9 @@ QList<QuickAddEntry> buildCatalogue()
     src(QStringLiteral("scene"), NodeCatalog::tr("Scene"),
         NodeCatalog::tr("Show another scene's finished picture inside this one."),
         QStringLiteral("nested embed picture in picture"));
+    src(QStringLiteral("sceneInput"), NodeCatalog::tr("Scene input"),
+        NodeCatalog::tr("The scene a post-processing scene is processing. Only meaningful in the post-processing scene."),
+        QStringLiteral("post processing input wrap filter"));
     src(QStringLiteral("url"), NodeCatalog::tr("Video URL"),
         NodeCatalog::tr("Play a stream or video from a web address."),
         QStringLiteral("stream http rtmp hls rtsp link network"));
