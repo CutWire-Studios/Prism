@@ -343,6 +343,208 @@
         { "name": "amount", "type": "float", "label": "Strength", "min": 0, "max": 0.1, "default": 0.01, "step": 0.001 },
         { "name": "speed", "type": "float", "label": "Speed", "min": 0, "max": 60, "default": 8, "step": 0.1 }
       ]
+    },
+    {
+      "id": 39,
+      "slug": "directional_blur",
+      "name": "Directional blur",
+      "category": "Blur",
+      "description": "Streak the picture in one direction, like fast movement.",
+      "frag": "directional_blur.frag",
+      "params": [
+        { "name": "angle", "type": "float", "label": "Angle (degrees)", "min": 0, "max": 360, "default": 0, "step": 1 },
+        { "name": "length", "type": "float", "label": "Length (px)", "min": 0, "max": 300, "default": 30, "step": 1 }
+      ]
+    },
+    {
+      "id": 40,
+      "slug": "zoom_blur",
+      "name": "Zoom blur",
+      "category": "Blur",
+      "description": "Streaks rushing out from a point, like zooming the lens mid-shot.",
+      "frag": "zoom_blur.frag",
+      "params": [
+        { "name": "strength", "type": "float", "label": "Strength", "min": 0, "max": 1, "default": 0.15, "step": 0.01 },
+        { "name": "center", "type": "point", "label": "Centre", "min": 0, "max": 1, "default": [0.5, 0.5], "step": 0.01 }
+      ]
+    },
+    {
+      "id": 41,
+      "slug": "spin_blur",
+      "name": "Spin blur",
+      "category": "Blur",
+      "description": "Blur in a circle around a point, like the camera spinning.",
+      "frag": "spin_blur.frag",
+      "params": [
+        { "name": "angle", "type": "float", "label": "Spin (degrees)", "min": 0, "max": 90, "default": 10, "step": 0.1 },
+        { "name": "center", "type": "point", "label": "Centre", "min": 0, "max": 1, "default": [0.5, 0.5], "step": 0.01 }
+      ]
+    },
+    {
+      "id": 42,
+      "slug": "bloom",
+      "name": "Bloom",
+      "category": "Light",
+      "description": "Bright parts of the picture bleed soft light around them.",
+      "frag": "bloom.frag",
+      "params": [
+        { "name": "threshold", "type": "float", "label": "Threshold", "min": 0, "max": 1, "default": 0.6, "step": 0.01 },
+        { "name": "intensity", "type": "float", "label": "Intensity", "min": 0, "max": 3, "default": 0.8, "step": 0.01 },
+        { "name": "radius", "type": "float", "label": "Radius (px)", "min": 1, "max": 64, "default": 16, "step": 1 }
+      ]
+    },
+    {
+      "id": 43,
+      "slug": "rgb_split",
+      "name": "RGB split",
+      "category": "Stylize",
+      "description": "Pull the red, green and blue channels apart, like a cheap lens or a glitch.",
+      "frag": "rgb_split.frag",
+      "params": [
+        { "name": "amount", "type": "float", "label": "Distance (px)", "min": 0, "max": 40, "default": 6, "step": 0.5 },
+        { "name": "angle", "type": "float", "label": "Angle (degrees)", "min": 0, "max": 360, "default": 0, "step": 1 }
+      ]
+    },
+    {
+      "id": 44,
+      "slug": "edge_detect",
+      "name": "Edge detect",
+      "category": "Stylize",
+      "description": "Find the outlines in the picture, over the image or on their own.",
+      "frag": "edge_detect.frag",
+      "params": [
+        { "name": "strength", "type": "float", "label": "Strength", "min": 0, "max": 10, "default": 1, "step": 0.01 },
+        { "name": "mode", "type": "choice", "label": "Mode", "choices": ["Overlay", "Edges only"], "default": 0 }
+      ]
+    },
+    {
+      "id": 45,
+      "slug": "emboss",
+      "name": "Emboss",
+      "category": "Stylize",
+      "description": "Raised, stamped-metal look from the picture's edges.",
+      "frag": "emboss.frag",
+      "params": [
+        { "name": "strength", "type": "float", "label": "Strength", "min": 0, "max": 5, "default": 1, "step": 0.01 },
+        { "name": "angle", "type": "float", "label": "Light angle (degrees)", "min": 0, "max": 360, "default": 135, "step": 1 }
+      ]
+    },
+    {
+      "id": 46,
+      "slug": "vignette",
+      "name": "Vignette",
+      "category": "Light",
+      "description": "Darken the corners to pull focus to the middle.",
+      "frag": "vignette.frag",
+      "params": [
+        { "name": "amount", "type": "float", "label": "Amount", "min": 0, "max": 1, "default": 0.6, "step": 0.01 },
+        { "name": "softness", "type": "float", "label": "Softness", "min": 0.01, "max": 1, "default": 0.45, "step": 0.01 },
+        { "name": "roundness", "type": "float", "label": "Roundness", "min": 0, "max": 1, "default": 1, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 47,
+      "slug": "film_grain",
+      "name": "Film grain",
+      "category": "Stylize",
+      "description": "Fine moving noise, like film stock.",
+      "frag": "film_grain.frag",
+      "params": [
+        { "name": "amount", "type": "float", "label": "Amount", "min": 0, "max": 1, "default": 0.12, "step": 0.01 },
+        { "name": "size", "type": "float", "label": "Grain size (px)", "min": 1, "max": 8, "default": 1.5, "step": 0.1 }
+      ]
+    },
+    {
+      "id": 48,
+      "slug": "scanlines",
+      "name": "Scanlines",
+      "category": "Stylize",
+      "description": "Horizontal lines like an old TV or monitor.",
+      "frag": "scanlines.frag",
+      "params": [
+        { "name": "density", "type": "float", "label": "Lines", "min": 20, "max": 600, "default": 240, "step": 1 },
+        { "name": "intensity", "type": "float", "label": "Darkness", "min": 0, "max": 1, "default": 0.35, "step": 0.01 },
+        { "name": "speed", "type": "float", "label": "Roll speed", "min": -5, "max": 5, "default": 0.5, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 49,
+      "slug": "halftone",
+      "name": "Halftone",
+      "category": "Stylize",
+      "description": "Comic-book printed dots, in black or in CMY-style colour.",
+      "frag": "halftone.frag",
+      "params": [
+        { "name": "size", "type": "float", "label": "Dot spacing (px)", "min": 3, "max": 60, "default": 10, "step": 0.5 },
+        { "name": "angle", "type": "float", "label": "Angle (degrees)", "min": 0, "max": 90, "default": 45, "step": 1 },
+        { "name": "mode", "type": "choice", "label": "Style", "choices": ["Mono", "CMYK-ish"], "default": 0 }
+      ]
+    },
+    {
+      "id": 50,
+      "slug": "glitch_blocks",
+      "name": "Glitch blocks",
+      "category": "Stylize",
+      "description": "Random blocks of the frame jump sideways and split colour, like a broken signal.",
+      "frag": "glitch_blocks.frag",
+      "params": [
+        { "name": "amount", "type": "float", "label": "Strength", "min": 0, "max": 1, "default": 0.5, "step": 0.01 },
+        { "name": "size", "type": "float", "label": "Block size (px)", "min": 4, "max": 200, "default": 32, "step": 1 },
+        { "name": "speed", "type": "float", "label": "Changes per second", "min": 0, "max": 30, "default": 8, "step": 0.1 }
+      ]
+    },
+    {
+      "id": 51,
+      "slug": "vhs",
+      "name": "VHS",
+      "category": "Stylize",
+      "description": "Tape wobble, colour bleed and noise bands.",
+      "frag": "vhs.frag",
+      "params": [
+        { "name": "wobble", "type": "float", "label": "Wobble", "min": 0, "max": 1, "default": 0.4, "step": 0.01 },
+        { "name": "bleed", "type": "float", "label": "Chroma bleed", "min": 0, "max": 1, "default": 0.5, "step": 0.01 },
+        { "name": "noise", "type": "float", "label": "Noise", "min": 0, "max": 1, "default": 0.3, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 52,
+      "slug": "old_film",
+      "name": "Old film",
+      "category": "Stylize",
+      "description": "Sepia tone, scratches, flicker and dark corners, like worn projector film.",
+      "frag": "old_film.frag",
+      "params": [
+        { "name": "sepia", "type": "float", "label": "Sepia", "min": 0, "max": 1, "default": 0.5, "step": 0.01 },
+        { "name": "scratches", "type": "float", "label": "Scratches", "min": 0, "max": 1, "default": 0.4, "step": 0.01 },
+        { "name": "flicker", "type": "float", "label": "Flicker", "min": 0, "max": 1, "default": 0.3, "step": 0.01 },
+        { "name": "vignette", "type": "float", "label": "Vignette", "min": 0, "max": 1, "default": 0.4, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 53,
+      "slug": "oil_paint",
+      "name": "Oil paint",
+      "category": "Stylize",
+      "description": "Smooth flat areas with crisp edges, like brush strokes.",
+      "frag": "oil_paint.frag",
+      "params": [
+        { "name": "radius", "type": "float", "label": "Brush size (px)", "min": 1, "max": 6, "default": 4, "step": 0.1 },
+        { "name": "quality", "type": "choice", "label": "Quality", "choices": ["Fast", "Quality"], "default": 1 }
+      ]
+    },
+    {
+      "id": 54,
+      "slug": "star_streaks",
+      "name": "Star streaks",
+      "category": "Light",
+      "description": "Bright points flare into star-shaped spikes, like a star filter.",
+      "frag": "star_streaks.frag",
+      "params": [
+        { "name": "threshold", "type": "float", "label": "Threshold", "min": 0, "max": 1, "default": 0.7, "step": 0.01 },
+        { "name": "length", "type": "float", "label": "Length (px)", "min": 1, "max": 300, "default": 60, "step": 1 },
+        { "name": "intensity", "type": "float", "label": "Intensity", "min": 0, "max": 3, "default": 1, "step": 0.01 },
+        { "name": "spikes", "type": "choice", "label": "Spikes", "choices": ["4", "6", "8"], "default": 0 }
+      ]
     }
   ]
 }

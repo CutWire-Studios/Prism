@@ -104,5 +104,47 @@
       {"uv": [1.0, 0.5], "rgba": [255, 255, 255, 255], "tol": 4},
       {"uv": [0.5, 0.5], "rgba": [128, 128, 128, 255], "tol": 4}
     ]
+  },
+  {
+    "_comment": "directional_blur with length 0 is the identity (every tap lands on the same pixel).",
+    "slug": "directional_blur",
+    "input": {"type": "hgradient", "from": "#000000ff", "to": "#ffffffff"},
+    "params": {"length": 0},
+    "samples": [
+      {"uv": [0.0, 0.5], "rgba": [0, 0, 0, 255], "tol": 4},
+      {"uv": [0.5, 0.5], "rgba": [128, 128, 128, 255], "tol": 4},
+      {"uv": [1.0, 0.5], "rgba": [255, 255, 255, 255], "tol": 4}
+    ]
+  },
+  {
+    "_comment": "rgb_split with distance 0 is the identity.",
+    "slug": "rgb_split",
+    "input": {"type": "hgradient", "from": "#000000ff", "to": "#ffffffff"},
+    "params": {"amount": 0},
+    "samples": [
+      {"uv": [0.0, 0.5], "rgba": [0, 0, 0, 255], "tol": 4},
+      {"uv": [0.5, 0.5], "rgba": [128, 128, 128, 255], "tol": 4},
+      {"uv": [1.0, 0.5], "rgba": [255, 255, 255, 255], "tol": 4}
+    ]
+  },
+  {
+    "_comment": "vignette with amount 0 leaves a solid colour unchanged (#336699 = 51,102,153).",
+    "slug": "vignette",
+    "input": {"type": "solid", "color": "#336699ff"},
+    "params": {"amount": 0},
+    "samples": [
+      {"uv": [0.5, 0.5], "rgba": [51, 102, 153, 255], "tol": 3},
+      {"uv": [0.1, 0.9], "rgba": [51, 102, 153, 255], "tol": 3}
+    ]
+  },
+  {
+    "_comment": "edge_detect 'edges only' on a flat image: Sobel gradients are zero, so the edge strength is 0 and the output is black. Alpha is kept.",
+    "slug": "edge_detect",
+    "input": {"type": "solid", "color": "#808080ff"},
+    "params": {"mode": 1},
+    "samples": [
+      {"uv": [0.5, 0.5], "rgba": [0, 0, 0, 255], "tol": 3},
+      {"uv": [0.1, 0.9], "rgba": [0, 0, 0, 255], "tol": 3}
+    ]
   }
 ]

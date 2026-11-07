@@ -287,6 +287,22 @@
         <file>shaders/effects/corner_pin.frag</file>
         <file>shaders/effects/displace_noise.frag</file>
         <file>shaders/effects/camera_shake.frag</file>
+        <file>shaders/effects/directional_blur.frag</file>
+        <file>shaders/effects/zoom_blur.frag</file>
+        <file>shaders/effects/spin_blur.frag</file>
+        <file>shaders/effects/bloom.frag</file>
+        <file>shaders/effects/rgb_split.frag</file>
+        <file>shaders/effects/edge_detect.frag</file>
+        <file>shaders/effects/emboss.frag</file>
+        <file>shaders/effects/vignette.frag</file>
+        <file>shaders/effects/film_grain.frag</file>
+        <file>shaders/effects/scanlines.frag</file>
+        <file>shaders/effects/halftone.frag</file>
+        <file>shaders/effects/glitch_blocks.frag</file>
+        <file>shaders/effects/vhs.frag</file>
+        <file>shaders/effects/old_film.frag</file>
+        <file>shaders/effects/oil_paint.frag</file>
+        <file>shaders/effects/star_streaks.frag</file>
         <file>shaders/slideshow/cube.glsl</file>
         <file>shaders/slideshow/flip.glsl</file>
         <file>shaders/slideshow/pagecurl.glsl</file>
