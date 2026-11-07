@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QJsonObject>
 #include <QSize>
 #include <QString>
 #include <cstdint>
@@ -76,6 +77,11 @@ public:
         while (MediaSource *i = s->inner()) s = i;
         return s;
     }
+
+    // Applies new effect parameters to this decorator without rebuilding it. Returns false when
+    // the source cannot (then the caller rebuilds the tree). GUI thread only: sources are advanced
+    // by the compositor on the GUI thread, so no locking is needed.
+    virtual bool updateParams(const QJsonObject &) { return false; }
 
     // True if frameData() is RGBA32 rather than RGB24.
     // Affects GL texture format selection in VideoWidget.

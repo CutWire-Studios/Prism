@@ -990,6 +990,11 @@ void Compositor::reorderChain(Deck deck, const std::vector<int> &perm) {
     markDirty();
 }
 
+void Compositor::refreshDeckFrame(Deck deck) {
+    (isLive(deck) ? m_pendingFrameLive : m_pendingFrameStaging) = true;
+    markDirty();
+}
+
 void Compositor::setChainVisibility(Deck deck, int chainIndex, bool visible) {
     auto &chain = isLive(deck) ? m_chainLive : m_chainStaging;
     if (chainIndex < 0 || chainIndex >= (int)chain.size()) return;

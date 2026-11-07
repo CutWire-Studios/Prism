@@ -98,6 +98,10 @@ public:
 
     // In-place layer edits that avoid rebuilding/re-decoding MediaSources.
     void reorderChain(Deck deck, const std::vector<int> &perm);
+
+    // Re-renders a deck's primary source after its effect params changed in place, even if the
+    // deck is paused (a paused deck is otherwise not advanced).
+    void refreshDeckFrame(Deck deck);
     void setChainVisibility(Deck deck, int chainIndex, bool visible);
     void setChainPlacement(Deck deck, int chainIndex,
                            float cropX, float cropY, float cropW, float cropH,

@@ -33,6 +33,7 @@ public:
     double  requestOut()        override { return m_content ? m_content->requestOut() : 0.0; }
 
     bool hasContent() const { return m_content != nullptr; }
+    MediaSource *content() const { return m_content.get(); }
 
 private:
     std::unique_ptr<MediaSource> m_content;

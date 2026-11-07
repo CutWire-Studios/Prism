@@ -538,6 +538,8 @@ private:
     // Source identity of each deck's loaded stream (see pushDecks()).
     QString m_deckBase[2];
     QStringList m_deckOverlays[2];
+    QString m_deckBaseParams[2];
+    QStringList m_deckOverlayParams[2];
     DeckUi m_deckUi[2];
 
     QString m_panic = QStringLiteral("none");

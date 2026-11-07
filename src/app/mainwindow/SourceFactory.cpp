@@ -27,6 +27,7 @@
 namespace {
 
 SourceFactory::SceneResolver g_sceneResolver;
+SourceFactory::SceneParamUpdater g_sceneParamUpdater;
 int g_sceneDepth = 0;
 
 std::unique_ptr<MediaSource> screenView(MediaSource::Type type, const std::shared_ptr<ScreenSource> &backend,
@@ -224,6 +225,30 @@ std::unique_ptr<MediaSource> SourceFactory::create(const SourceDescriptor &desc)
     }
     }
     return nullptr;
+}
+
+void SourceFactory::setSceneParamUpdater(SceneParamUpdater updater)
+{
+    g_sceneParamUpdater = std::move(updater);
+}
+
+bool SourceFactory::updateLayerParams(MediaSource *top, const ClipGraph::ResolvedLayer &layer,
+                                      ClipGraph *graph)
+{
+    // Sub-layer sources of a flattened composite are not addressable one-to-one.
+    if (layer.composite) return false;
+    MediaSource *base = ProcessEffects::updateSourceEffects(top, layer.sourceEffects);
+    if (!base || !graph->hasNode(layer.inputNodeId)) return false;
+    const SourceDescriptor desc = graph->sourceDescriptor(layer.inputNodeId);
+    if (desc.kind != SourceDescriptor::Kind::Scene) return true;
+    auto *scene = dynamic_cast<SceneSource *>(base);
+    if (!scene) return false;
+    if (!scene->content()) return true;
+    if (!g_sceneParamUpdater || g_sceneDepth >= kMaxSceneDepth) return false;
+    ++g_sceneDepth;
+    const bool ok = g_sceneParamUpdater(desc.sceneId, scene->content());
+    --g_sceneDepth;
+    return ok;
 }
 
 std::unique_ptr<MediaSource> SourceFactory::buildLayerSource(const ClipGraph::ResolvedLayer &layer,

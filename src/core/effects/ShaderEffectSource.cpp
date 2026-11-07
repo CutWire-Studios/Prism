@@ -63,10 +63,13 @@ void ShaderEffectSource::applyUniforms(QOpenGLShaderProgram *p, QSize size) cons
 bool ShaderEffectSource::nextFrame() {
     if (!m_inner) return false;
 
-    const bool innerNew = m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
+    const bool reprocess = m_dirty && m_outTex != 0;
+    const bool innerNew = reprocess ? false
+                        : m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
                                              : m_inner->nextFrame();
-    if (!innerNew && m_outTex != 0) return false;
+    if (!innerNew && !reprocess && m_outTex != 0) return false;
     if (!m_inner->isReady()) return false;
+    m_dirty = false;
 
     const QSize sz = m_inner->frameSize();
     if (sz.isEmpty() || m_fragment.isEmpty()) return false;

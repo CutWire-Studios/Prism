@@ -1,5 +1,7 @@
 #include "core/effects/ShaderEffects.h"
 #include "core/graph/ProcessEffects.h"
+#include "core/effects/ShaderEffectSource.h"
+#include "core/sources/MediaSource.h"
 
 #include <QDir>
 #include <QFile>
@@ -10,10 +12,63 @@
 #include <QSet>
 #include <QtTest>
 
+namespace {
+class StubSource : public MediaSource {
+public:
+    Type type() const override { return Type::Canvas; }
+    bool isReady() const override { return false; }
+    QSize frameSize() const override { return {}; }
+    const uint8_t *frameData() const override { return nullptr; }
+    bool nextFrame() override { return false; }
+};
+} // namespace
+
 class TestShaderEffects : public QObject {
     Q_OBJECT
 
 private slots:
+    void paramChange_updatesDecoratorInPlace() {
+        const ShaderEffectSpec *spec = nullptr;
+        const ShaderParam *param = nullptr;
+        for (const ShaderEffectSpec &s : ShaderEffects::all())
+            for (const ShaderParam &p : s.params)
+                if (!spec && p.type == ShaderParam::Float) { spec = &s; param = &p; }
+        QVERIFY(spec);
+
+        QJsonObject before = spec->defaultParams();
+        QJsonObject after = before;
+        after[param->name] = param->def + 0.5;
+
+        auto inner = std::make_unique<StubSource>();
+        MediaSource *innerPtr = inner.get();
+        QVector<SourceEffectRef> effects{{spec->id, before}};
+        std::unique_ptr<MediaSource> top =
+            ProcessEffects::applySourceEffects(std::move(inner), effects);
+        auto *decorator = dynamic_cast<ShaderEffectSource *>(top.get());
+        QVERIFY(decorator);
+        QCOMPARE(decorator->inner(), innerPtr);
+        QCOMPARE(decorator->params(), before);
+
+        const QVector<SourceEffectRef> edited{{spec->id, after}};
+        QCOMPARE(ProcessEffects::sourceEffectsKey(edited), ProcessEffects::sourceEffectsKey(effects));
+        QVERIFY(ProcessEffects::sourceEffectsParamsKey(edited) != ProcessEffects::sourceEffectsParamsKey(effects));
+
+        QCOMPARE(ProcessEffects::updateSourceEffects(top.get(), edited), innerPtr);
+        QCOMPARE(decorator->params(), after);
+        QCOMPARE(dynamic_cast<ShaderEffectSource *>(top.get()), decorator);
+    }
+
+    void structureChange_changesKeyAndUnsupportedDecoratorsRebuild() {
+        const int shaderId = ShaderEffects::all().first().id;
+        const QVector<SourceEffectRef> ab{{shaderId, {}}, {4, {{"direction", 1}}}};
+        const QVector<SourceEffectRef> ba{{4, {{"direction", 1}}}, {shaderId, {}}};
+        QVERIFY(ProcessEffects::sourceEffectsKey(ab) != ProcessEffects::sourceEffectsKey(ba));
+
+        std::unique_ptr<MediaSource> top =
+            ProcessEffects::applySourceEffects(std::make_unique<StubSource>(), ab);
+        QCOMPARE(ProcessEffects::updateSourceEffects(top.get(), ab), nullptr);
+    }
+
     void manifest_hasFragResourceForEveryEntry() {
         QVERIFY(!ShaderEffects::all().isEmpty());
         for (const ShaderEffectSpec &s : ShaderEffects::all()) {

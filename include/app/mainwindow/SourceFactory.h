@@ -19,6 +19,10 @@ public:
     /// The app installs it so Scene sources can reach the show without core depending on it.
     using SceneResolver = std::function<std::unique_ptr<MediaSource>(const QString &sceneId)>;
     static void setSceneResolver(SceneResolver resolver);
+    /// Pushes changed effect params into an already-built scene content tree (the one the resolver
+    /// returned for `sceneId`). False means it cannot be done in place.
+    using SceneParamUpdater = std::function<bool(const QString &sceneId, MediaSource *content)>;
+    static void setSceneParamUpdater(SceneParamUpdater updater);
     /// Scene sources nested deeper than this render empty.
     static constexpr int kMaxSceneDepth = 4;
 
@@ -36,6 +40,11 @@ public:
     /// (recursively). Returns nullptr if the source cannot be produced.
     static std::unique_ptr<MediaSource> buildLayerSource(const ClipGraph::ResolvedLayer &layer,
                                                          ClipGraph *graph, GraphRuntime *runtime);
+
+    /// Pushes a layer's current effect params (and those of any nested scene) into `top`, the
+    /// source buildLayerSource produced for the same layer structure. False means rebuild.
+    static bool updateLayerParams(MediaSource *top, const ClipGraph::ResolvedLayer &layer,
+                                  ClipGraph *graph);
 
     /// Build the full deck stream (index 0 = bottom/deck-primary, 1..N = overlays).
     static std::vector<Compositor::NodeChainSource>

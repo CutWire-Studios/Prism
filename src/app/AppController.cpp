@@ -169,6 +169,19 @@ AppController::AppController(QObject *parent)
             return nullptr;
         return SourceFactory::buildLayerSource(stream.layers.first(), graph, target->runtime());
     });
+    SourceFactory::setSceneParamUpdater([this](const QString &sceneId, MediaSource *content) {
+        const Scene *target = m_show->scene(sceneId);
+        if (!target)
+            return false;
+        ClipGraph *graph = target->graph();
+        const NodeId producer = graph->outputSingleProducer();
+        if (!producer)
+            return false;
+        const ClipGraph::ResolvedStream stream = graph->evaluateVideoInput(producer);
+        if (stream.layers.isEmpty())
+            return false;
+        return SourceFactory::updateLayerParams(content, stream.layers.first(), graph);
+    });
 
     m_pushTimer = new QTimer(this);
     m_pushTimer->setSingleShot(true);
@@ -205,6 +218,7 @@ AppController::~AppController()
     delete m_deckController;
     delete m_outputHub;
     SourceFactory::setSceneResolver({});
+    SourceFactory::setSceneParamUpdater({});
     delete m_show;
     GraphRuntime::waitForRetiredScripts(2000);
     m_compositor.reset();
@@ -983,6 +997,8 @@ void AppController::swapDeckState()
     m_deckController->swapDeckAudio();
     std::swap(m_deckBase[0], m_deckBase[1]);
     std::swap(m_deckOverlays[0], m_deckOverlays[1]);
+    std::swap(m_deckBaseParams[0], m_deckBaseParams[1]);
+    std::swap(m_deckOverlayParams[0], m_deckOverlayParams[1]);
     std::swap(m_deckUi[0], m_deckUi[1]);
 }
 
@@ -1230,13 +1246,15 @@ void AppController::pushDecks()
     using Stream = ClipGraph::ResolvedStream;
 
     int sceneKeyDepth = 0;
-    std::function<QString(const ClipGraph *, const Layer &)> layerKey =
-        [&](const ClipGraph *g, const Layer &l) -> QString {
+    // Structural key only; param values are appended to `pk` so a param-only edit can reuse the sources.
+    std::function<QString(const ClipGraph *, const Layer &, QString &)> layerKey =
+        [&](const ClipGraph *g, const Layer &l, QString &pk) -> QString {
+        pk += ProcessEffects::sourceEffectsParamsKey(l.sourceEffects) + QLatin1Char('|');
         if (l.composite) {
             QString k = QStringLiteral("L%1:%2x%3{")
                 .arg(l.layerNodeId).arg(l.composite->canvasWidth).arg(l.composite->canvasHeight);
             for (const Layer &sl : l.composite->layers) {
-                k += layerKey(g, sl)
+                k += layerKey(g, sl, pk)
                    + QStringLiteral("@%1,%2,%3,%4,%5;")
                        .arg(sl.baseX).arg(sl.baseY).arg(sl.baseW).arg(sl.baseH)
                        .arg(sl.visible ? 1 : 0);
@@ -1255,7 +1273,7 @@ void AppController::pushDecks()
                     const Stream ts = tg->evaluateVideoInput(producer);
                     if (!ts.layers.isEmpty()) {
                         ++sceneKeyDepth;
-                        nested = layerKey(tg, ts.layers.first());
+                        nested = layerKey(tg, ts.layers.first(), pk);
                         --sceneKeyDepth;
                     }
                 }
@@ -1268,11 +1286,16 @@ void AppController::pushDecks()
             .arg(qHash(d.contentKey()))
             + (nested.isEmpty() ? QString() : QStringLiteral("<") + nested + QStringLiteral(">"));
     };
-    auto keysOf = [&](const ClipGraph *g, const Stream &s, QString &base, QStringList &ov) {
-        base.clear(); ov.clear();
+    auto keysOf = [&](const ClipGraph *g, const Stream &s, QString &base, QStringList &ov,
+                      QString &baseP, QStringList &ovP) {
+        base.clear(); ov.clear(); baseP.clear(); ovP.clear();
         if (s.layers.isEmpty()) return;
-        base = layerKey(g, s.layers.first());
-        for (int i = 1; i < s.layers.size(); ++i) ov << layerKey(g, s.layers[i]);
+        base = layerKey(g, s.layers.first(), baseP);
+        for (int i = 1; i < s.layers.size(); ++i) {
+            QString p;
+            ov << layerKey(g, s.layers[i], p);
+            ovP << p;
+        }
     };
     auto sameStream = [](const QString &b1, const QStringList &o1, const QString &b2, const QStringList &o2) {
         return b1 == b2 && o1 == o2;
@@ -1286,6 +1309,8 @@ void AppController::pushDecks()
     Stream streams[2];
     QString dBase[2];
     QStringList dOv[2];
+    QString dBaseP[2];
+    QStringList dOvP[2];
     for (int i = 0; i < 2; ++i) {
         const Deck deck = static_cast<Deck>(i);
         graphs[i] = scenes[i] ? scenes[i]->graph() : nullptr;
@@ -1294,7 +1319,7 @@ void AppController::pushDecks()
             continue;
         if (const NodeId producer = graphs[i]->outputSingleProducer())
             streams[i] = graphs[i]->evaluateVideoInput(producer);
-        keysOf(graphs[i], streams[i], dBase[i], dOv[i]);
+        keysOf(graphs[i], streams[i], dBase[i], dOv[i], dBaseP[i], dOvP[i]);
     }
 
     auto clearDeck = [&](Deck deck) {
@@ -1303,13 +1328,16 @@ void AppController::pushDecks()
         m_deckController->setActiveNode(deck, 0);
     };
 
-    auto pushDeck = [&](Deck deck, const Stream &stream, const QString &dBase, const QStringList &dOv) {
+    auto pushDeck = [&](Deck deck, const Stream &stream, const QString &dBase, const QStringList &dOv,
+                        const QString &dBaseP, const QStringList &dOvP) {
         const int di = static_cast<int>(deck);
         ClipGraph *graph = graphs[di];
         GraphRuntime *runtime = scenes[di] ? scenes[di]->runtime() : nullptr;
         const bool startPlayback = isLive(deck);
         QString &curBase = m_deckBase[di];
         QStringList &curOv = m_deckOverlays[di];
+        QString &curBaseP = m_deckBaseParams[di];
+        QStringList &curOvP = m_deckOverlayParams[di];
         DeckUi &ui = m_deckUi[di];
 
         if (stream.layers.isEmpty()) {
@@ -1317,6 +1345,7 @@ void AppController::pushDecks()
             m_deckController->stopDeckAudio(deck);
             ui = DeckUi{};
             curBase.clear(); curOv.clear();
+            curBaseP.clear(); curOvP.clear();
             return;
         }
         const Layer base = stream.layers.first();
@@ -1348,7 +1377,7 @@ void AppController::pushDecks()
             } else {
                 ui = DeckUi{};
             }
-            if (sameStream(dBase, dOv, curBase, curOv)) {
+            if (sameStream(dBase, dOv, curBase, curOv) && dBaseP == curBaseP && dOvP == curOvP) {
                 applyBaseFor(base, true);
             } else {
                 auto src = SourceFactory::buildLayerSource(base, graph, runtime);
@@ -1362,6 +1391,7 @@ void AppController::pushDecks()
                 if (isLive(deck)) out->setNodeChainLive({});
                 else       out->setNodeChainStaging({});
                 curBase = dBase; curOv = dOv;
+                curBaseP = dBaseP; curOvP = dOvP;
             }
             return;
         }
@@ -1381,19 +1411,48 @@ void AppController::pushDecks()
             }
         };
 
-        if (sameStream(dBase, dOv, curBase, curOv)) {
-            applyBaseFor(base, false);
-            applyOverlayPlacements();
-        } else if (dBase == curBase && !curBase.isEmpty() && isPermutation(dOv, curOv)) {
-            std::vector<int> perm(dOv.size(), 0);
+        // Same structure, different param values: push them into the live decorators. If any
+        // decorator cannot take them, fall through to a full rebuild.
+        bool forceRebuild = false;
+        const bool sameStructure = sameStream(dBase, dOv, curBase, curOv);
+        if (sameStructure && (dBaseP != curBaseP || dOvP != curOvP)) {
+            bool ok = SourceFactory::updateLayerParams(
+                isLive(deck) ? out->sourceLive() : out->sourceStaging(), base, graph);
+            const auto &chain = isLive(deck) ? out->chainSourcesLive() : out->chainSourcesStaging();
+            ok = ok && chain.size() == size_t(stream.layers.size() - 1);
+            for (int i = 1; ok && i < stream.layers.size(); ++i)
+                ok = SourceFactory::updateLayerParams(chain[i - 1].source.get(), stream.layers[i], graph);
+            if (ok) {
+                curBaseP = dBaseP; curOvP = dOvP;
+                out->refreshDeckFrame(deck);
+            } else {
+                forceRebuild = true;
+            }
+        }
+
+        std::vector<int> perm(dOv.size(), 0);
+        bool permutable = false;
+        if (!sameStructure && dBase == curBase && !curBase.isEmpty() && isPermutation(dOv, curOv)) {
             QVector<bool> used(curOv.size(), false);
+            permutable = dBaseP == curBaseP;
             for (int i = 0; i < dOv.size(); ++i)
                 for (int j = 0; j < curOv.size(); ++j)
-                    if (!used[j] && curOv[j] == dOv[i]) { perm[i] = j; used[j] = true; break; }
+                    if (!used[j] && curOv[j] == dOv[i]) {
+                        perm[i] = j; used[j] = true;
+                        permutable = permutable && curOvP.value(j) == dOvP.value(i);
+                        break;
+                    }
+        }
+
+        if (sameStructure && !forceRebuild) {
+            applyBaseFor(base, false);
+            applyOverlayPlacements();
+        } else if (permutable) {
             out->reorderChain(deck, perm);
             applyBaseFor(base, false);
             applyOverlayPlacements();
             curOv = dOv;
+            curOvP = dOvP;
         } else {
             m_deckController->assignNodeToDeck(base.inputNodeId, deck, base.sourceEffects, startPlayback);
             applyBaseFor(base, false);
@@ -1407,11 +1466,12 @@ void AppController::pushDecks()
             else       out->setNodeChainStaging(std::move(chain));
             m_obsIntegration->onClipTriggered(desc);
             curBase = dBase; curOv = dOv;
+            curBaseP = dBaseP; curOvP = dOvP;
         }
     };
 
-    pushDeck(Deck::Live, streams[0], dBase[0], dOv[0]);
-    pushDeck(Deck::Staging, streams[1], dBase[1], dOv[1]);
+    pushDeck(Deck::Live, streams[0], dBase[0], dOv[0], dBaseP[0], dOvP[0]);
+    pushDeck(Deck::Staging, streams[1], dBase[1], dOv[1], dBaseP[1], dOvP[1]);
     applyLiveEndAction();
 
     m_outputHub->setActiveDeckNodes(m_deckController->activeNode(Deck::Live), m_deckController->activeNode(Deck::Staging));

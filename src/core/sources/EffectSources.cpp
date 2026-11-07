@@ -26,13 +26,28 @@ QImage wrapInner(MediaSource *inner) {
 
 } // namespace
 
+QVector<QPointF> effectPointsFromJson(const QJsonArray &arr) {
+    QVector<QPointF> pts;
+    for (const QJsonValue &v : arr) {
+        const QJsonArray pair = v.toArray();
+        if (pair.size() == 2)
+            pts << QPointF(pair.at(0).toDouble(), pair.at(1).toDouble());
+    }
+    return pts;
+}
+
 bool FrameEffectSource::nextFrame() {
     if (!m_inner) return false;
 
-    const bool innerNew = m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
+    // After a param change, re-render the frame already held by the inner source instead of
+    // advancing it, so a paused deck neither steps nor drops a frame.
+    const bool reprocess = m_dirty && !m_output.isNull();
+    const bool innerNew = reprocess ? false
+                        : m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
                                              : m_inner->nextFrame();
-    if (!innerNew && !m_output.isNull()) return false;
+    if (!innerNew && !reprocess && !m_output.isNull()) return false;
     if (!m_inner->isReady()) return false;
+    m_dirty = false;
 
     const QImage wrapped = wrapInner(m_inner.get());
     if (wrapped.isNull()) return false;
@@ -297,10 +312,13 @@ const char *kBlurFragment =
 bool GpuBlurSource::nextFrame() {
     if (!m_inner) return false;
 
-    const bool innerNew = m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
+    const bool reprocess = m_dirty && m_outTex != 0;
+    const bool innerNew = reprocess ? false
+                        : m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
                                              : m_inner->nextFrame();
-    if (!innerNew && m_outTex != 0) return false;
+    if (!innerNew && !reprocess && m_outTex != 0) return false;
     if (!m_inner->isReady()) return false;
+    m_dirty = false;
 
     const QSize sz = m_inner->frameSize();
     if (sz.isEmpty()) return false;
@@ -350,4 +368,48 @@ const uint8_t *GpuBlurSource::frameData() const {
     }
     return m_cpu.isNull() ? nullptr
                           : reinterpret_cast<const uint8_t *>(m_cpu.constBits());
+}
+
+// ── In-place parameter updates (mirror the ProcessEffects wrapSource parsing) ──
+bool CropSource::applyParams(const QJsonObject &p) {
+    m_x = (float)p["x"].toDouble(0.0);
+    m_y = (float)p["y"].toDouble(0.0);
+    m_w = (float)p["w"].toDouble(1.0);
+    m_h = (float)p["h"].toDouble(1.0);
+    return true;
+}
+
+bool RotateSource::applyParams(const QJsonObject &p) {
+    m_angle = ((p["angle"].toInt(90) % 360) + 360) % 360;
+    return true;
+}
+
+bool KeystoneSource::applyParams(const QJsonObject &p) {
+    QVector<QPointF> c = effectPointsFromJson(p["corners"].toArray());
+    if (c.size() != 4) c = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+    m_corners = c;
+    return true;
+}
+
+bool ChromaKeySource::applyParams(const QJsonObject &p) {
+    m_key = QColor(p["r"].toInt(0), p["g"].toInt(255), p["b"].toInt(0));
+    m_threshold = p["threshold"].toDouble(0.25);
+    m_smoothness = p["smoothness"].toDouble(0.10);
+    return true;
+}
+
+bool SharpenSource::applyParams(const QJsonObject &p) {
+    m_amount = p["amount"].toDouble(1.0);
+    return true;
+}
+
+bool PolygonMaskSource::applyParams(const QJsonObject &p) {
+    m_points = effectPointsFromJson(p["points"].toArray());
+    m_invert = p["invert"].toBool(false);
+    return true;
+}
+
+bool OpacitySource::applyParams(const QJsonObject &p) {
+    m_opacity = p["opacity"].toDouble(1.0);
+    return true;
 }

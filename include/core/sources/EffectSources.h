@@ -4,10 +4,14 @@
 #include "core/effects/EffectPassRunner.h"
 
 #include <QColor>
+#include <QJsonArray>
 #include <QImage>
 #include <QPointF>
 #include <QVector>
 #include <memory>
+
+/// Normalised [x, y] pairs from a JSON array; malformed entries are skipped.
+QVector<QPointF> effectPointsFromJson(const QJsonArray &arr);
 
 // ── CPU frame-processing effect decorators ──────────────────────────────────
 // Each class wraps an inner MediaSource, pulls its RGB(A) frames, applies a
@@ -47,13 +51,22 @@ public:
 
     MediaSource *inner() const override { return m_inner.get(); }
 
+    bool updateParams(const QJsonObject &p) override {
+        if (!applyParams(p)) return false;
+        m_dirty = true;
+        return true;
+    }
+
 protected:
     /// Transform one RGBA8888 input frame into the RGBA8888 output frame.
     virtual QImage process(const QImage &in) = 0;
+    /// Store new parameter values; false when the effect cannot take them in place.
+    virtual bool applyParams(const QJsonObject &) { return false; }
 
     std::unique_ptr<MediaSource> m_inner;
     QImage m_output;
     double m_presentAt = -1.0;
+    bool m_dirty = false;   // params changed: re-run process() on the current inner frame
 };
 
 /// Crops the frame to a normalised [0,1] sub-rectangle, changing the output size.
@@ -66,6 +79,7 @@ public:
 
 protected:
     QImage process(const QImage &in) override;
+    bool applyParams(const QJsonObject &p) override;
 
 private:
     float m_x = 0.f, m_y = 0.f, m_w = 1.f, m_h = 1.f;
@@ -93,6 +107,7 @@ public:
 
 protected:
     QImage process(const QImage &in) override;
+    bool applyParams(const QJsonObject &p) override;
 
 private:
     int m_angle = 0;
@@ -107,6 +122,7 @@ public:
 
 protected:
     QImage process(const QImage &in) override;
+    bool applyParams(const QJsonObject &p) override;
 
 private:
     QVector<QPointF> m_corners;   // 4 points, normalised
@@ -122,6 +138,7 @@ public:
 
 protected:
     QImage process(const QImage &in) override;
+    bool applyParams(const QJsonObject &p) override;
 
 private:
     QColor m_key;
@@ -150,6 +167,7 @@ public:
 
 protected:
     QImage process(const QImage &in) override;
+    bool applyParams(const QJsonObject &p) override;
 
 private:
     double m_amount = 1.0;
@@ -165,6 +183,7 @@ public:
 
 protected:
     QImage process(const QImage &in) override;
+    bool applyParams(const QJsonObject &p) override;
 
 private:
     QVector<QPointF> m_points;   // normalised polygon vertices
@@ -199,9 +218,17 @@ public:
     double  requestOut()       override { return m_inner ? m_inner->requestOut() : 0.0; }
     QString displayName() const override { return m_inner ? m_inner->displayName() : QString(); }
 
+    MediaSource *inner() const override { return m_inner.get(); }
+    bool updateParams(const QJsonObject &p) override {
+        m_radius = p["radius"].toInt(6);
+        m_dirty = true;
+        return true;
+    }
+
 private:
     std::unique_ptr<MediaSource> m_inner;
     int          m_radius = 6;
+    bool         m_dirty = false;
     double       m_presentAt = -1.0;
     mutable EffectPassRunner m_runner;   // readback() in const frameData()
     unsigned int m_outTex = 0;
@@ -217,6 +244,7 @@ public:
 
 protected:
     QImage process(const QImage &in) override;
+    bool applyParams(const QJsonObject &p) override;
 
 private:
     double m_opacity = 1.0;

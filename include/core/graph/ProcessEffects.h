@@ -60,7 +60,16 @@ const ProcessEffectDescriptor *byName(const QString &name);
 std::unique_ptr<MediaSource> applySourceEffects(std::unique_ptr<MediaSource> source,
                                                 const QVector<SourceEffectRef> &effects);
 
-/// Identity string for deck-reuse keys: same effects + params ⇒ same key.
+/// Structure-only identity for deck-reuse keys: the ordered effect ids, no param values.
 QString sourceEffectsKey(const QVector<SourceEffectRef> &effects);
+
+/// The param values of the same effects. Equal structure keys with different param keys
+/// can be reconciled with updateSourceEffects instead of a rebuild.
+QString sourceEffectsParamsKey(const QVector<SourceEffectRef> &effects);
+
+/// Pushes each effect's params into the decorator chain built by applySourceEffects (`top` is the
+/// outermost decorator). Returns the source below the chain, or null when any decorator cannot
+/// take the update in place (caller must rebuild; some decorators may already have been updated).
+MediaSource *updateSourceEffects(MediaSource *top, const QVector<SourceEffectRef> &effects);
 
 } // namespace ProcessEffects

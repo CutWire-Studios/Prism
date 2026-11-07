@@ -18,7 +18,10 @@ public:
                        const QJsonObject &params);
 
     /// Update parameter values; takes effect on the next frame without recompiling.
-    void setParams(const QJsonObject &params) { m_params = params; }
+    void setParams(const QJsonObject &params) { m_params = params; m_dirty = true; }
+    const QJsonObject &params() const { return m_params; }
+    bool updateParams(const QJsonObject &params) override { setParams(params); return true; }
+    MediaSource *inner() const override { return m_inner.get(); }
 
     Type    type()        const override { return m_inner ? m_inner->type() : Type::Canvas; }
     bool    isReady()     const override { return m_inner && m_inner->isReady() && m_outTex != 0; }
@@ -47,6 +50,7 @@ private:
     QJsonObject  m_params;
     QElapsedTimer m_clock;
     double       m_presentAt = -1.0;
+    bool         m_dirty = false;
     mutable EffectPassRunner m_runner;
     unsigned int m_outTex = 0;
     mutable QImage m_cpu;

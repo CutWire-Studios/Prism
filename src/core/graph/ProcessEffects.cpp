@@ -15,15 +15,7 @@
 namespace {
 
 // ── JSON helpers for polygon / corner params ────────────────────────────────
-QVector<QPointF> pointsFromArray(const QJsonArray &arr) {
-    QVector<QPointF> pts;
-    for (const QJsonValue &v : arr) {
-        const QJsonArray pair = v.toArray();
-        if (pair.size() == 2)
-            pts << QPointF(pair.at(0).toDouble(), pair.at(1).toDouble());
-    }
-    return pts;
-}
+QVector<QPointF> pointsFromArray(const QJsonArray &arr) { return effectPointsFromJson(arr); }
 
 QVector<QPointF> cornersFromParams(const QJsonObject &p) {
     QVector<QPointF> c = pointsFromArray(p["corners"].toArray());
@@ -335,9 +327,27 @@ std::unique_ptr<MediaSource> applySourceEffects(std::unique_ptr<MediaSource> sou
 QString sourceEffectsKey(const QVector<SourceEffectRef> &effects) {
     QString key;
     for (const SourceEffectRef &ref : effects)
-        key += QStringLiteral("%1{%2}").arg(ref.effectId)
-                   .arg(QString::fromUtf8(QJsonDocument(ref.params).toJson(QJsonDocument::Compact)));
+        key += QStringLiteral("%1;").arg(ref.effectId);
     return key;
+}
+
+QString sourceEffectsParamsKey(const QVector<SourceEffectRef> &effects) {
+    QString key;
+    for (const SourceEffectRef &ref : effects)
+        key += QString::fromUtf8(QJsonDocument(ref.params).toJson(QJsonDocument::Compact))
+               + QLatin1Char(';');
+    return key;
+}
+
+MediaSource *updateSourceEffects(MediaSource *top, const QVector<SourceEffectRef> &effects) {
+    MediaSource *s = top;
+    for (int i = effects.size() - 1; i >= 0; --i) {
+        const ProcessEffectDescriptor *d = byId(effects[i].effectId);
+        if (!d || !d->wrapSource) continue;
+        if (!s || !s->updateParams(effects[i].params)) return nullptr;
+        s = s->inner();
+    }
+    return s;
 }
 
 } // namespace ProcessEffects
