@@ -126,6 +126,9 @@ public:
     bool   isPlayingStaging()      const { return m_playingStaging; }
     MediaSource *sourceLive()   const { return m_sourceLive.get(); }
     MediaSource *sourceStaging()   const { return m_sourceStaging.get(); }
+    /// Pulls the first frame of a source built ahead of a deck (compiles shaders, decodes stills) in
+    /// the compositor's GL context, as setSourceLive/Staging would on assignment.
+    void primeSource(MediaSource *source);
     double getCurrentTimeLive() const;
     double getDurationLive()    const;
     double getCurrentTimeStaging() const;

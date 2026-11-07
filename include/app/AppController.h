@@ -16,6 +16,9 @@
 #include <QtQml/qqmlregistration.h>
 #include <functional>
 #include <memory>
+#include <optional>
+#include <unordered_map>
+#include <vector>
 
 #include "app/BpmClock.h"
 #include "app/show/Preflight.h"
@@ -450,6 +453,8 @@ public:
 
     /// Rebuilds the compositor decks from the Live and Staging scenes.
     void pushDecks();
+    /// The deck-primary source built ahead for a resident scene that is not on a deck; null if none.
+    const MediaSource *preloadedSource(const QString &sceneId) const;
     /// Applies resolution, scaling and outputs; @p persist stores it as this machine's default.
     void applyVenue(const VenueProfile &venue, bool persist);
     const VenueProfile &venue() const;
@@ -591,6 +596,20 @@ private:
     QString m_deckBaseParams[2];
     QStringList m_deckOverlayParams[2];
     DeckUi m_deckUi[2];
+
+    // Deck sources built ahead for resident scenes that are not on a deck. pushDecks() hands them
+    // to a deck when the scene is staged or taken; a null source marks a build that failed.
+    struct Preload {
+        const Scene *scene = nullptr;
+        QString base;
+        QStringList overlays;
+        QString baseParams;
+        QStringList overlayParams;
+        bool composite = false;
+        std::unique_ptr<MediaSource> source;
+        std::vector<Compositor::NodeChainSource> chain;
+    };
+    std::unordered_map<QString, Preload> m_preloads;
 
     QString m_panic = QStringLiteral("none");
     bool m_liveBlack = false;

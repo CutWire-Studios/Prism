@@ -56,6 +56,8 @@
 #include <algorithm>
 #include <cstring>
 #include <functional>
+#include <optional>
+#include <unordered_set>
 
 AppController *AppController::s_instance = nullptr;
 
@@ -265,6 +267,8 @@ void AppController::connectSignals()
     connect(m_show, &ShowManager::scenesReset, this, &AppController::selectedSceneChanged);
     connect(m_hotkeyManager, &HotkeyManager::bindingsChanged, this, &AppController::scenesEdited);
     connect(m_show, &ShowManager::sceneMetaChanged, this, [this](Scene *scene) {
+        if (scene->keepResident() || m_preloads.count(scene->id()))
+            m_pushTimer->start();
         if (scene == m_show->liveScene()) {
             applyLiveEndAction();
             m_show->rearmEndTimer();
@@ -296,12 +300,14 @@ void AppController::connectSignals()
             emit editedGraphChanged();
         }
     });
-    connect(m_show, &ShowManager::sceneAboutToBeRemoved, this, [this]() {
+    connect(m_show, &ShowManager::sceneAboutToBeRemoved, this, [this](Scene *scene) {
+        m_preloads.erase(scene->id());
         clearNodePreview();
         m_pushTimer->start();
     });
     connect(m_show, &ShowManager::sceneAdded, this, [this]() { m_pushTimer->start(); });
     connect(m_show, &ShowManager::scenesReset, this, [this]() {
+        m_preloads.clear();
         clearNodePreview();
         m_pushTimer->start();
         emit showChanged();
@@ -453,6 +459,7 @@ void AppController::shutdown(bool saveAndMarkClean)
     m_outputHub->closeMirrorOutputs();
     m_outputHub->setProgramSource(nullptr);
 
+    m_preloads.clear();
     m_compositor->shutdownPlayback();
     m_obsIntegration->disconnectFromObs();
 
@@ -1270,6 +1277,8 @@ void AppController::onSceneGraphChanged(Scene *scene)
     if (m_shuttingDown)
         return;
     m_show->updateRuntimeActivity();
+    if (m_show->residentSceneIds().contains(scene->id()))
+        m_pushTimer->start();
     if (!m_show->activeSceneIds(false).contains(scene->id()))
         return;
     m_pushTimer->start();
@@ -1413,6 +1422,84 @@ void AppController::pushDecks()
         keysOf(graphs[i], streams[i], dBase[i], dOv[i], dBaseP[i], dOvP[i]);
     }
 
+    // What a layer tree needs from the outside world: devices and streams are never preloaded, and a
+    // video source must not be primed because that would consume its first decoded frame.
+    struct TreeTraits { bool device = false; bool video = false; };
+    std::function<void(const ClipGraph *, const Layer &, int, TreeTraits &)> scanLayer =
+        [&](const ClipGraph *g, const Layer &l, int depth, TreeTraits &t) {
+        for (const SourceEffectRef &ref : l.sourceEffects) {
+            for (const auto &aux : ref.aux) {
+                if (aux && !aux->stream.layers.isEmpty())
+                    scanLayer(g, aux->stream.layers.first(), depth, t);
+            }
+        }
+        if (l.composite) {
+            for (const Layer &sl : l.composite->layers)
+                scanLayer(g, sl, depth, t);
+            return;
+        }
+        if (!g->hasNode(l.inputNodeId))
+            return;
+        const SourceDescriptor d = g->sourceDescriptor(l.inputNodeId);
+        using Kind = SourceDescriptor::Kind;
+        switch (d.kind) {
+        case Kind::Camera: case Kind::Screen: case Kind::Window: case Kind::Ndi: case Kind::WebRtc:
+            t.device = true;
+            break;
+        case Kind::VideoFile:
+            t.video = true;
+            break;
+        case Kind::Scene:
+            if (depth < SourceFactory::kMaxSceneDepth) {
+                if (const Scene *target = m_show->scene(d.sceneId)) {
+                    const ClipGraph *tg = target->graph();
+                    if (const NodeId producer = tg->outputSingleProducer()) {
+                        const Stream ts = tg->evaluateVideoInput(producer);
+                        if (!ts.layers.isEmpty())
+                            scanLayer(tg, ts.layers.first(), depth + 1, t);
+                    }
+                }
+            }
+            break;
+        default:
+            break;
+        }
+    };
+
+    // Pushes changed effect params into a preloaded stream; false means it has to be rebuilt.
+    auto updatePreloadParams = [&](Preload &p, const Stream &stream, ClipGraph *graph,
+                                   const QString &baseP, const QStringList &ovP) {
+        if (p.composite || !p.source || p.chain.size() != size_t(stream.layers.size() - 1))
+            return false;
+        if (!SourceFactory::updateLayerParams(p.source.get(), stream.layers.first(), graph))
+            return false;
+        for (int i = 1; i < stream.layers.size(); ++i) {
+            if (!SourceFactory::updateLayerParams(p.chain[i - 1].source.get(), stream.layers[i], graph))
+                return false;
+        }
+        p.baseParams = baseP;
+        p.overlayParams = ovP;
+        return true;
+    };
+
+    // The preload for `scene` if it matches what the deck wants, removed from the pool.
+    auto takePreload = [&](const Scene *scene, const Stream &stream, const QString &dBase,
+                           const QStringList &dOv, const QString &dBaseP,
+                           const QStringList &dOvP) -> std::optional<Preload> {
+        auto it = m_preloads.find(scene->id());
+        if (it == m_preloads.end())
+            return std::nullopt;
+        Preload &p = it->second;
+        bool match = p.scene == scene && p.source && sameStream(dBase, dOv, p.base, p.overlays);
+        if (match && (dBaseP != p.baseParams || dOvP != p.overlayParams))
+            match = updatePreloadParams(p, stream, scene->graph(), dBaseP, dOvP);
+        if (!match)
+            return std::nullopt;
+        std::optional<Preload> taken(std::move(p));
+        m_preloads.erase(it);
+        return taken;
+    };
+
     auto clearDeck = [&](Deck deck) {
         if (isLive(deck)) out->clearDeckLive();
         else              out->clearDeckStaging();
@@ -1471,7 +1558,11 @@ void AppController::pushDecks()
             if (sameStream(dBase, dOv, curBase, curOv) && dBaseP == curBaseP && dOvP == curOvP) {
                 applyBaseFor(base, true);
             } else {
-                auto src = SourceFactory::buildLayerSource(base, graph, runtime);
+                std::unique_ptr<MediaSource> src;
+                if (auto pre = takePreload(scenes[di], stream, dBase, dOv, dBaseP, dOvP))
+                    src = std::move(pre->source);
+                else
+                    src = SourceFactory::buildLayerSource(base, graph, runtime);
                 if (!src) {
                     clearDeck(deck);
                     curBase.clear(); curOv.clear();
@@ -1545,14 +1636,21 @@ void AppController::pushDecks()
             curOv = dOv;
             curOvP = dOvP;
         } else {
-            m_deckController->assignNodeToDeck(base.inputNodeId, deck, base.sourceEffects, startPlayback);
+            std::optional<Preload> pre = takePreload(scenes[di], stream, dBase, dOv, dBaseP, dOvP);
+            m_deckController->assignNodeToDeck(base.inputNodeId, deck, base.sourceEffects, startPlayback,
+                                               pre ? std::move(pre->source) : nullptr);
             applyBaseFor(base, false);
-            Stream overlay;
-            overlay.canvasWidth = stream.canvasWidth;
-            overlay.canvasHeight = stream.canvasHeight;
-            for (int i = 1; i < stream.layers.size(); ++i)
-                overlay.layers.push_back(stream.layers[i]);
-            auto chain = SourceFactory::buildStream(overlay, graph, runtime);
+            std::vector<Compositor::NodeChainSource> chain;
+            if (pre) {
+                chain = std::move(pre->chain);
+            } else {
+                Stream overlay;
+                overlay.canvasWidth = stream.canvasWidth;
+                overlay.canvasHeight = stream.canvasHeight;
+                for (int i = 1; i < stream.layers.size(); ++i)
+                    overlay.layers.push_back(stream.layers[i]);
+                chain = SourceFactory::buildStream(overlay, graph, runtime);
+            }
             if (isLive(deck)) out->setNodeChainLive(std::move(chain));
             else       out->setNodeChainStaging(std::move(chain));
             m_obsIntegration->onClipTriggered(desc);
@@ -1563,11 +1661,90 @@ void AppController::pushDecks()
 
     pushDeck(Deck::Live, streams[0], dBase[0], dOv[0], dBaseP[0], dOvP[0]);
     pushDeck(Deck::Staging, streams[1], dBase[1], dOv[1], dBaseP[1], dOvP[1]);
+
+    // Keep a built source ready for every resident scene that is not on a deck. Structural changes
+    // rebuild it, param-only changes update it in place.
+    std::unordered_set<QString> preloadWanted;
+    for (Scene *sc : m_show->scenes()) {
+        if (!sc->keepResident() || sc == scenes[0] || sc == scenes[1])
+            continue;
+        ClipGraph *g = sc->graph();
+        Stream st;
+        if (const NodeId producer = g->outputSingleProducer())
+            st = g->evaluateVideoInput(producer);
+        if (st.layers.isEmpty())
+            continue;
+        QString base, baseP;
+        QStringList ov, ovP;
+        keysOf(g, st, base, ov, baseP, ovP);
+        TreeTraits all;
+        TreeTraits baseTraits;
+        scanLayer(g, st.layers.first(), 0, baseTraits);
+        all = baseTraits;
+        std::vector<bool> primeOverlay;
+        for (int i = 1; i < st.layers.size(); ++i) {
+            TreeTraits t;
+            scanLayer(g, st.layers[i], 0, t);
+            all.device = all.device || t.device;
+            primeOverlay.push_back(!t.video);
+        }
+        if (all.device)
+            continue;
+        preloadWanted.insert(sc->id());
+
+        auto it = m_preloads.find(sc->id());
+        if (it != m_preloads.end() && it->second.scene == sc
+            && sameStream(base, ov, it->second.base, it->second.overlays)) {
+            Preload &p = it->second;
+            if ((baseP == p.baseParams && ovP == p.overlayParams)
+                || updatePreloadParams(p, st, g, baseP, ovP))
+                continue;
+        }
+
+        Preload p;
+        p.scene = sc;
+        p.base = base; p.overlays = ov;
+        p.baseParams = baseP; p.overlayParams = ovP;
+        const Layer baseLayer = st.layers.first();
+        if (baseLayer.composite) {
+            p.composite = true;
+            p.source = SourceFactory::buildLayerSource(baseLayer, g, sc->runtime());
+        } else if (g->hasNode(baseLayer.inputNodeId)) {
+            p.source = DeckController::buildNodeSource(g, sc->runtime(), baseLayer.inputNodeId,
+                                                       baseLayer.sourceEffects);
+            Stream overlay;
+            overlay.canvasWidth = st.canvasWidth;
+            overlay.canvasHeight = st.canvasHeight;
+            for (int i = 1; i < st.layers.size(); ++i)
+                overlay.layers.push_back(st.layers[i]);
+            p.chain = SourceFactory::buildStream(overlay, g, sc->runtime());
+        }
+        if (p.source && !baseTraits.video)
+            out->primeSource(p.source.get());
+        for (size_t i = 0; i < p.chain.size(); ++i) {
+            if (p.chain[i].source && primeOverlay[i])
+                out->primeSource(p.chain[i].source.get());
+        }
+        m_preloads[sc->id()] = std::move(p);
+    }
+    for (auto it = m_preloads.begin(); it != m_preloads.end();) {
+        if (preloadWanted.count(it->first))
+            ++it;
+        else
+            it = m_preloads.erase(it);
+    }
+
     applyLiveEndAction();
 
     m_outputHub->setActiveDeckNodes(m_deckController->activeNode(Deck::Live), m_deckController->activeNode(Deck::Staging));
     m_pushing = false;
     emit decksChanged();
+}
+
+const MediaSource *AppController::preloadedSource(const QString &sceneId) const
+{
+    const auto it = m_preloads.find(sceneId);
+    return it == m_preloads.end() ? nullptr : it->second.source.get();
 }
 
 // ── Sources / media ───────────────────────────────────────────────────────────

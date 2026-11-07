@@ -1837,6 +1837,10 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Cameras, screen and window capture, NDI and phone inputs still start when the scene is staged</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Hotkey</source>
         <translation type="unfinished"></translation>
     </message>

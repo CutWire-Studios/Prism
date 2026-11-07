@@ -684,10 +684,9 @@ QSet<QString> ShowManager::activeSceneIds(bool includeEdited) const
     return active;
 }
 
-void ShowManager::updateRuntimeActivity()
+QSet<QString> ShowManager::residentSceneIds() const
 {
-    QSet<QString> active = activeSceneIds();
-    QSet<QString> visited;
+    QSet<QString> resident;
     QStringList stack;
     for (const Scene *c : std::as_const(m_scenes)) {
         if (c->keepResident())
@@ -696,12 +695,17 @@ void ShowManager::updateRuntimeActivity()
     while (!stack.isEmpty()) {
         const QString id = stack.takeLast();
         const Scene *c = scene(id);
-        if (!c || visited.contains(id))
+        if (!c || resident.contains(id))
             continue;
-        visited.insert(id);
-        active.insert(id);
+        resident.insert(id);
         stack.append(sceneRefsOf(c));
     }
+    return resident;
+}
+
+void ShowManager::updateRuntimeActivity()
+{
+    const QSet<QString> active = activeSceneIds() | residentSceneIds();
     for (Scene *c : std::as_const(m_scenes))
         c->runtime()->setActive(active.contains(c->id()));
 }

@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Prism
 
@@ -157,6 +158,9 @@ ColumnLayout {
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
         text: qsTr("Keep this scene loaded so switching to it is instant (uses more memory)")
+        ToolTip.visible: residentHelpHover.hovered
+        ToolTip.text: qsTr("Cameras, screen and window capture, NDI and phone inputs still start when the scene is staged")
+        HoverHandler { id: residentHelpHover }
     }
 
     StyleFieldRow {

@@ -38,9 +38,17 @@ public:
     /// Assign a node to a deck and start playback. With @p startPlayback false (Staging deck),
     /// file sources load paused at their first frame / trim-in; live and generated sources still run
     /// so the staging preview stays live.
+    /// A @p preloaded source (from buildNodeSource for the same node and effects) is used instead of
+    /// building a new one.
     void assignNodeToDeck(NodeId nodeId, Deck deck,
                           const QVector<SourceEffectRef> &sourceEffects = {},
-                          bool startPlayback = true);
+                          bool startPlayback = true,
+                          std::unique_ptr<MediaSource> preloaded = nullptr);
+
+    /// The deck-primary source assignNodeToDeck would put on a deck for this node: effects applied,
+    /// trim-in seeked, nothing playing. Null when the node has no video source.
+    static std::unique_ptr<MediaSource> buildNodeSource(ClipGraph *g, GraphRuntime *rt, NodeId nodeId,
+                                                        const QVector<SourceEffectRef> &sourceEffects);
 
     /// Assign a ready-made source to the Live deck.
     void assignSourceToLiveDeck(std::unique_ptr<MediaSource> src, const QString &name);

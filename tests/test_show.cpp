@@ -541,6 +541,45 @@ private slots:
         QVERIFY(!c->runtime()->isActive());
     }
 
+    void residentSceneIsPreloadedAndHandedToStaging() {
+        QTemporaryDir dir;
+        AppController app(nullptr);
+        const QString scene = addClipScene(app, dir.filePath(QStringLiteral("r.png")), Qt::red);
+        QVERIFY(!scene.isEmpty());
+        QVERIFY(!app.preloadedSource(scene));
+
+        app.setSceneProps(scene, {{"keepResident", true}});
+        QTRY_VERIFY(app.preloadedSource(scene));
+        const MediaSource *preloaded = app.preloadedSource(scene);
+
+        QVERIFY(app.stageScene(scene));
+        QTRY_VERIFY(app.compositor()->sourceStaging());
+        QCOMPARE(static_cast<const MediaSource *>(app.compositor()->sourceStaging()), preloaded);
+        QVERIFY(!app.preloadedSource(scene));
+    }
+
+    void clearingResidentFreesPreload() {
+        QTemporaryDir dir;
+        AppController app(nullptr);
+        const QString scene = addClipScene(app, dir.filePath(QStringLiteral("f.png")), Qt::red);
+        QVERIFY(!scene.isEmpty());
+        app.setSceneProps(scene, {{"keepResident", true}});
+        QTRY_VERIFY(app.preloadedSource(scene));
+        app.setSceneProps(scene, {{"keepResident", false}});
+        QTRY_VERIFY(!app.preloadedSource(scene));
+    }
+
+    void residentCameraSceneIsNotPreloaded() {
+        AppController app(nullptr);
+        const QString scene = app.addScene();
+        app.enterScene(scene);
+        const quint64 cam = app.addSourceFromMap({{QStringLiteral("kind"), int(SourceDescriptor::Kind::Camera)}});
+        QVERIFY(cam && app.clipGraph()->connectNodes(cam, app.clipGraph()->outputNodeId()));
+        app.setSceneProps(scene, {{"keepResident", true}});
+        QTest::qWait(50);
+        QVERIFY(!app.preloadedSource(scene));
+    }
+
     void loadClearsCyclicSceneRef() {
         ShowManager show;
         Scene *a = show.liveScene();

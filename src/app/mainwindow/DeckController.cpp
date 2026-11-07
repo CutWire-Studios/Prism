@@ -1,6 +1,8 @@
 #include "app/mainwindow/DeckController.h"
 #include "app/mainwindow/SourceFactory.h"
 #include "core/sources/SlideshowSource.h"
+#include "core/sources/ImageSource.h"
+#include "core/sources/VideoFileSource.h"
 #include "core/sources/CameraSource.h"
 #include "core/sources/ScreenSource.h"
 #include "core/sources/CanvasSource.h"
@@ -385,9 +387,49 @@ DeckController::DeckUiState DeckController::deckUiState(const SourceDescriptor &
     return st;
 }
 
+std::unique_ptr<MediaSource> DeckController::buildNodeSource(ClipGraph *g, GraphRuntime *rt, NodeId nodeId,
+                                                             const QVector<SourceEffectRef> &sourceEffects) {
+    using Kind = SourceDescriptor::Kind;
+    const SourceDescriptor desc = g->sourceDescriptor(nodeId);
+    const ClipSettings clip = g->clipSettings(nodeId);
+
+    // Mirrors Compositor::loadSourceInternal, which loads plain files without effects.
+    if (sourceEffects.isEmpty() && (desc.kind == Kind::VideoFile || desc.kind == Kind::Image)) {
+        if (ImageSource::isStaticImageFile(desc.path)) {
+            auto img = std::make_unique<ImageSource>();
+            if (!img->load(desc.path)) return nullptr;
+            return img;
+        }
+        auto vid = std::make_unique<VideoFileSource>();
+        vid->setAsync(true);
+        if (!vid->open(desc.path)) return nullptr;
+        if (clip.startTime > 0) vid->seek(clip.startTime);
+        return vid;
+    }
+
+    auto src = SourceFactory::create(desc);
+    if (!src) return nullptr;
+    if (desc.kind == Kind::Shader) {
+        auto *shader = static_cast<ShaderSource *>(src.get());
+        shader->setDataSource(rt->scriptOutputForDataNode(nodeId));
+        shader->updateParams(g->sourceParams(nodeId));
+    } else if (desc.kind == Kind::Text) {
+        if (auto data = rt->scriptOutputForDataNode(nodeId))
+            static_cast<TextSource *>(src.get())->setDataSource(data);
+    } else if (desc.kind == Kind::SvgTemplate) {
+        if (auto data = rt->scriptOutputForDataNode(nodeId))
+            static_cast<SvgTemplateSource *>(src.get())->setDataSource(data);
+    } else if (desc.kind == Kind::VideoFile && clip.startTime > 0) {
+        src->seek(clip.startTime);
+    }
+    if (sourceEffects.isEmpty()) return src;
+    return ProcessEffects::applySourceEffects(std::move(src), sourceEffects, SourceFactory::auxBuilder(g, rt));
+}
+
 void DeckController::assignNodeToDeck(NodeId nodeId, Deck deck,
                                        const QVector<SourceEffectRef> &sourceEffects,
-                                       bool startPlayback) {
+                                       bool startPlayback,
+                                       std::unique_ptr<MediaSource> preloaded) {
     ClipGraph *g = graphOf(deck);
     GraphRuntime *rt = runtimeOf(deck);
     if (!g || !g->hasNode(nodeId)) return;
@@ -413,24 +455,7 @@ void DeckController::assignNodeToDeck(NodeId nodeId, Deck deck,
     // MediaSource, so route every kind (including VideoFile/Image, which
     // normally take the loadVideo fast path) through SourceFactory and wrap it.
     if (!sourceEffects.isEmpty()) {
-        auto src = SourceFactory::create(desc);
-        if (src) {
-            if (desc.kind == Kind::Shader) {
-                auto *shader = static_cast<ShaderSource *>(src.get());
-                shader->setDataSource(rt->scriptOutputForDataNode(nodeId));
-                shader->updateParams(g->sourceParams(nodeId));
-            } else if (desc.kind == Kind::Text) {
-                if (auto data = rt->scriptOutputForDataNode(nodeId))
-                    static_cast<TextSource *>(src.get())->setDataSource(data);
-            } else if (desc.kind == Kind::SvgTemplate) {
-                if (auto data = rt->scriptOutputForDataNode(nodeId))
-                    static_cast<SvgTemplateSource *>(src.get())->setDataSource(data);
-            } else if (desc.kind == Kind::VideoFile && clip.startTime > 0) {
-                src->seek(clip.startTime);
-            }
-            src = ProcessEffects::applySourceEffects(std::move(src), sourceEffects,
-                                                  SourceFactory::auxBuilder(g, rt));
-        }
+        auto src = preloaded ? std::move(preloaded) : buildNodeSource(g, rt, nodeId, sourceEffects);
         if (isLive(deck)) {
             out->setRepeatLive(repeat);
             out->setTrimPointsLive(clip.startTime, clip.endTime);
@@ -448,17 +473,26 @@ void DeckController::assignNodeToDeck(NodeId nodeId, Deck deck,
 
     case Kind::VideoFile:
     case Kind::Image: {
+        // A preloaded source is already seeked to the trim-in; seeking again would flush its decoded frames.
         if (isLive(deck)) {
             out->setRepeatLive(repeat);
             out->setTrimPointsLive(clip.startTime, clip.endTime);
-            out->loadVideoLive(desc.path);
-            if (clip.startTime > 0) out->seekLive(clip.startTime);
+            if (preloaded) {
+                out->setSourceLive(std::move(preloaded));
+            } else {
+                out->loadVideoLive(desc.path);
+                if (clip.startTime > 0) out->seekLive(clip.startTime);
+            }
             if (play) out->playLive();
         } else {
             out->setRepeatStaging(repeat);
             out->setTrimPointsStaging(clip.startTime, clip.endTime);
-            out->loadVideoStaging(desc.path);
-            if (clip.startTime > 0) out->seekStaging(clip.startTime);
+            if (preloaded) {
+                out->setSourceStaging(std::move(preloaded));
+            } else {
+                out->loadVideoStaging(desc.path);
+                if (clip.startTime > 0) out->seekStaging(clip.startTime);
+            }
             if (play) out->playStaging();
         }
         updateDeckAudio(deck, nodeId, clip.startTime, true);
@@ -466,21 +500,7 @@ void DeckController::assignNodeToDeck(NodeId nodeId, Deck deck,
     }
 
     default: {
-        // All other source kinds: use SourceFactory.
-        auto src = SourceFactory::create(desc);
-        if (desc.kind == Kind::Shader) {
-            auto *shader = static_cast<ShaderSource *>(src.get());
-            shader->setDataSource(rt->scriptOutputForDataNode(nodeId));
-            shader->updateParams(g->sourceParams(nodeId));
-        }
-        if (desc.kind == Kind::Text) {
-            if (auto data = rt->scriptOutputForDataNode(nodeId))
-                static_cast<TextSource *>(src.get())->setDataSource(data);
-        }
-        if (desc.kind == Kind::SvgTemplate && src) {
-            if (auto data = rt->scriptOutputForDataNode(nodeId))
-                static_cast<SvgTemplateSource *>(src.get())->setDataSource(data);
-        }
+        auto src = preloaded ? std::move(preloaded) : buildNodeSource(g, rt, nodeId, {});
         if (isLive(deck)) {
             out->setSourceLive(std::move(src));
             if (desc.kind != Kind::Canvas && play) out->playLive();

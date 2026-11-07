@@ -102,6 +102,8 @@ public:
     /// Live, Staging and (with @p includeEdited) the edited scene, plus every scene reachable from
     /// them through Scene nodes.
     QSet<QString> activeSceneIds(bool includeEdited = true) const;
+    /// Scenes kept resident plus everything they nest through Scene nodes.
+    QSet<QString> residentSceneIds() const;
 
     // ── Editing ──────────────────────────────────────────────────────────────
     /// Makes @p id the edited scene and enters it.

@@ -771,6 +771,13 @@ void Compositor::setSourceStaging(std::unique_ptr<MediaSource> source) {
     markDirty();
 }
 
+void Compositor::primeSource(MediaSource *source) {
+    if (!source || source->isReady() || !isValid()) return;
+    makeCurrent();
+    source->nextFrame();
+    doneCurrent();
+}
+
 void Compositor::clearDeckLive() {
     setSourceLive(nullptr);
     setNodeChainLive({});
