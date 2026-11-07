@@ -603,6 +603,63 @@ private slots:
         QTRY_COMPARE_WITH_TIMEOUT(app.liveSceneId(), b, 5000);
         QCOMPARE(app.stagingSceneId(), a);
     }
+
+    void globalsRejectBadDuplicateAndBuiltinNames() {
+        ShowManager show;
+        QCOMPARE(show.addGlobal(QStringLiteral("speed")), QStringLiteral("speed"));
+        QCOMPARE(show.addGlobal(QStringLiteral("_x1")), QStringLiteral("_x1"));
+        QCOMPARE(show.addGlobal(), QStringLiteral("global3"));
+        for (const char *bad : {"1a", "a b", "a-b", "a.b", "caf\u00e9", "speed", "bpm", "beat", "t", "audio",
+                                "param", "mod", "globals", "end", "nil"})
+            QVERIFY2(show.addGlobal(QString::fromUtf8(bad)).isEmpty(), bad);
+        QVERIFY(show.addGlobal(QStringLiteral("ok"), 0, 1, 1).isEmpty());
+        QCOMPARE(show.globals().size(), 3);
+
+        QVERIFY(show.renameGlobal(QStringLiteral("speed"), QStringLiteral("rate")));
+        QCOMPARE(show.globals().first().name, QStringLiteral("rate"));
+        QVERIFY(!show.renameGlobal(QStringLiteral("rate"), QStringLiteral("_x1")));
+        QVERIFY(!show.renameGlobal(QStringLiteral("rate"), QStringLiteral("bpm")));
+        QVERIFY(!show.renameGlobal(QStringLiteral("rate"), QStringLiteral("2x")));
+        QVERIFY(!show.renameGlobal(QStringLiteral("nope"), QStringLiteral("zzz")));
+        QVERIFY(show.renameGlobal(QStringLiteral("rate"), QStringLiteral("rate")));
+    }
+
+    void globalsClampUndoAndRemove() {
+        ShowManager show;
+        show.addGlobal(QStringLiteral("g"), 5.0, 0.0, 2.0);
+        QCOMPARE(show.globals().first().value, 2.0);
+        QVERIFY(show.setGlobalValue(QStringLiteral("g"), -4.0));
+        QCOMPARE(show.globals().first().value, 0.0);
+        QVERIFY(show.setGlobalValue(QStringLiteral("g"), 1.5));
+        QVERIFY(show.setGlobalValue(QStringLiteral("g"), 1.25));
+        QCOMPARE(show.globals().first().value, 1.25);
+        show.undoStack()->undo();
+        QCOMPARE(show.globals().first().value, 2.0);
+
+        QVERIFY(show.setGlobalValue(QStringLiteral("g"), 1.0));
+        QVERIFY(!show.setGlobalRange(QStringLiteral("g"), 3.0, 3.0));
+        QVERIFY(show.setGlobalRange(QStringLiteral("g"), 0.0, 0.5));
+        QCOMPARE(show.globals().first().value, 0.5);
+
+        QVERIFY(show.removeGlobal(QStringLiteral("g")));
+        QVERIFY(show.globals().isEmpty());
+        show.undoStack()->undo();
+        QCOMPARE(show.globals().size(), 1);
+        QCOMPARE(show.globals().first().max, 0.5);
+    }
+
+    void expressionsReadGlobalsWithoutRebuild() {
+        ShowManager show;
+        ClipGraph *g = show.liveScene()->graph();
+        const NodeId fx = g->addNode(NT::Process, {}, {{"effect", 6}, {"params", QVariantMap{{"opacity", 0.5}}}});
+        g->setParams(fx, {{"expressions", QVariantMap{{"params.opacity", QStringLiteral("globals.speed")}}}});
+        auto opacity = [&] { return g->node(fx)->params.value("params").toMap().value("opacity").toDouble(); };
+
+        show.addGlobal(QStringLiteral("speed"), 0.25);
+        QTRY_VERIFY(std::abs(opacity() - 0.25) < 1e-9);
+        show.setGlobalValue(QStringLiteral("speed"), 0.75);
+        QTRY_VERIFY(std::abs(opacity() - 0.75) < 1e-9);
+    }
 };
 
 QTEST_MAIN(TestShow)

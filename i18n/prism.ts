@@ -970,6 +970,25 @@ low/mid/high · beat</source>
     </message>
 </context>
 <context>
+    <name>GlobalsPanel</name>
+    <message>
+        <source>No globals</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Globals are project-wide numbers that any expression reads as globals.name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete global</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add global</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>GroupItem</name>
     <message numerus="yes">
         <source>%n node(s)</source>
@@ -5127,6 +5146,26 @@ Technical detail: %1</source>
         <source>Remove scene</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Add global</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove global</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Rename global</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Set global</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit global range</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>SourcePrompts</name>
@@ -6581,6 +6620,10 @@ Continue anyway? Your phone may not be able to connect.</source>
     </message>
     <message>
         <source>Scenes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Globals</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

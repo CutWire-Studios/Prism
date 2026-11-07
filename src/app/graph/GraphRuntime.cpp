@@ -167,6 +167,7 @@ struct RuntimeShared {
     QHash<NodeId, double> modulators;
     double bpm = 120.0;
     double beat = 0.0;
+    QVariantMap globals;
     QVector<PendingWrite> pending;
 };
 
@@ -950,6 +951,10 @@ GraphRuntime::GraphRuntime(ClipGraph *graph, QObject *parent, std::shared_ptr<No
             QMutexLocker lock(&sh->mutex);
             return QVariantMap{{QStringLiteral("bpm"), sh->bpm}, {QStringLiteral("beat"), sh->beat}};
         };
+        d->host->globals = [sh] {
+            QMutexLocker lock(&sh->mutex);
+            return sh->globals;
+        };
         d->host->modulatorValue = [sh](quint64 id) {
             QMutexLocker lock(&sh->mutex);
             return sh->modulators.value(id);
@@ -1211,6 +1216,11 @@ QQuickImageProvider *GraphRuntime::createImageProvider(std::shared_ptr<NodeThumb
 
 void GraphRuntime::setBpmClock(BpmClock *clock) {
     d->bpmClock = clock;
+}
+
+void GraphRuntime::setGlobals(const QVariantMap &globals) {
+    QMutexLocker lock(&d->shared->mutex);
+    d->shared->globals = globals;
 }
 
 void GraphRuntime::setControlSource(std::function<double(const QString &address)> source) {

@@ -202,6 +202,7 @@ QJsonObject SessionManager::buildJson(int transitionProgress, const QJsonArray &
     root["hotkeys"] = hotkeys;
     const QJsonObject showJson = m_show->toJson();
     root["show"] = showJson["show"];
+    root["globals"] = showJson["globals"];
     QJsonArray scenes = showJson["scenes"].toArray();
     if (sessionDir.isAbsolute()) {
         for (int i = 0; i < scenes.size(); ++i) {

@@ -1,6 +1,7 @@
 #include "app/show/ShowManager.h"
 
 #include "app/graph/GraphRuntime.h"
+#include "app/show/GlobalsModel.h"
 #include "app/show/SceneListModel.h"
 #include "core/graph/ClipGraph.h"
 #include "core/graph/ClipGraphModels.h"
@@ -13,6 +14,7 @@
 #include <QUuid>
 
 #include <algorithm>
+#include <cmath>
 
 namespace {
 
@@ -158,6 +160,31 @@ private:
     int m_from, m_to;
 };
 
+/// One undo step over the whole globals list. Consecutive value edits of the same global merge so a
+/// slider drag is a single step.
+class GlobalsCommand : public QUndoCommand {
+public:
+    GlobalsCommand(ShowManager *show, const QList<ShowGlobal> &before, const QList<ShowGlobal> &after,
+                   const QString &text, const QString &mergeKey)
+        : QUndoCommand(text), m_show(show), m_before(before), m_after(after), m_key(mergeKey) {}
+    void redo() override { m_show->applyGlobals(m_after); }
+    void undo() override { m_show->applyGlobals(m_before); }
+    int id() const override { return m_key.isEmpty() ? -1 : 0x474c42; }
+    bool mergeWith(const QUndoCommand *other) override
+    {
+        const auto *o = static_cast<const GlobalsCommand *>(other);
+        if (o->m_key != m_key)
+            return false;
+        m_after = o->m_after;
+        return true;
+    }
+
+private:
+    ShowManager *m_show;
+    QList<ShowGlobal> m_before, m_after;
+    QString m_key;
+};
+
 namespace {
 
 class SceneMetaCommand : public QUndoCommand {
@@ -182,6 +209,7 @@ private:
 
 ShowManager::ShowManager(QObject *parent)
     : QObject(parent)
+    , m_globalsModel(new GlobalsModel(this))
     , m_model(new SceneListModel(this))
     , m_thumbs(GraphRuntime::createThumbStore())
     , m_endTimer(new QTimer(this))
@@ -238,6 +266,7 @@ Scene *ShowManager::makeScene(const QString &id, int serial, bool withDefaults)
     connect(c, &Scene::metaChanged, this, [this, c] { emit sceneMetaChanged(c); });
     connect(c, &Scene::thumbnailChanged, this, &ShowManager::thumbnailChanged);
     connect(c->graph(), &ClipGraph::changed, this, &ShowManager::changed);
+    c->runtime()->setGlobals(globalValues());
     m_nextSerial = std::max(m_nextSerial, serial + 1);
     return c;
 }
@@ -331,6 +360,153 @@ void ShowManager::setSceneMeta(const QString &id, const SceneMeta &meta)
     m_undo->push(new SceneMetaCommand(this, id, c->meta(), meta));
 }
 
+bool ShowManager::isValidGlobalName(const QString &name)
+{
+    // Expression built-ins and Lua keywords: `globals.<name>` cannot shadow the former, but a clash would still
+    // read as ambiguous, and a keyword is not a valid field name.
+    static const QSet<QString> reserved = {
+        "t", "bpm", "beat", "audio", "param", "mod", "globals",
+        "and", "break", "do", "else", "elseif", "end", "false", "for", "function", "goto", "if", "in",
+        "local", "nil", "not", "or", "repeat", "return", "then", "true", "until", "while"};
+    if (name.isEmpty() || reserved.contains(name))
+        return false;
+    for (qsizetype i = 0; i < name.size(); ++i) {
+        const char16_t ch = name.at(i).unicode();
+        const bool alpha = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_';
+        const bool digit = ch >= '0' && ch <= '9';
+        if (!alpha && !(digit && i > 0))
+            return false;
+    }
+    return true;
+}
+
+int ShowManager::globalIndex(const QString &name) const
+{
+    for (int i = 0; i < m_globals.size(); ++i) {
+        if (m_globals.at(i).name == name)
+            return i;
+    }
+    return -1;
+}
+
+QVariantMap ShowManager::globalValues() const
+{
+    QVariantMap out;
+    for (const ShowGlobal &g : m_globals)
+        out.insert(g.name, g.value);
+    return out;
+}
+
+void ShowManager::pushGlobals()
+{
+    const QVariantMap values = globalValues();
+    for (Scene *c : std::as_const(m_scenes))
+        c->runtime()->setGlobals(values);
+}
+
+void ShowManager::applyGlobals(const QList<ShowGlobal> &list)
+{
+    const int oldSize = m_globals.size(), newSize = list.size();
+    int first = 0;
+    while (first < std::min(oldSize, newSize) && m_globals.at(first) == list.at(first))
+        ++first;
+    auto tailEqual = [&](int oldFrom, int newFrom) {
+        return std::equal(m_globals.cbegin() + oldFrom, m_globals.cend(), list.cbegin() + newFrom, list.cend());
+    };
+    if (oldSize == newSize) {
+        const QList<ShowGlobal> before = m_globals;
+        m_globals = list;
+        for (int i = 0; i < newSize; ++i) {
+            if (!(before.at(i) == list.at(i)))
+                emit globalUpdated(i);
+        }
+    } else if (newSize == oldSize + 1 && tailEqual(first, first + 1)) {
+        emit globalAboutToBeInserted(first);
+        m_globals = list;
+        emit globalInserted();
+    } else if (newSize == oldSize - 1 && tailEqual(first + 1, first)) {
+        emit globalAboutToBeRemoved(first);
+        m_globals = list;
+        emit globalRemoved();
+    } else {
+        m_globals = list;
+        emit globalsReset();
+    }
+    pushGlobals();
+    emit changed();
+}
+
+void ShowManager::editGlobals(const QList<ShowGlobal> &after, const QString &text, const QString &mergeKey)
+{
+    if (after == m_globals)
+        return;
+    m_undo->push(new GlobalsCommand(this, m_globals, after, text, mergeKey));
+}
+
+QString ShowManager::addGlobal(const QString &name, double value, double min, double max)
+{
+    QString use = name;
+    if (use.isEmpty()) {
+        int n = m_globals.size() + 1;
+        while (globalIndex(QStringLiteral("global%1").arg(n)) >= 0)
+            ++n;
+        use = QStringLiteral("global%1").arg(n);
+    }
+    if (!isValidGlobalName(use) || globalIndex(use) >= 0 || !std::isfinite(min) || !std::isfinite(max)
+        || !std::isfinite(value) || !(min < max))
+        return {};
+    QList<ShowGlobal> after = m_globals;
+    after.append({use, std::clamp(value, min, max), min, max});
+    editGlobals(after, tr("Add global"));
+    return use;
+}
+
+bool ShowManager::removeGlobal(const QString &name)
+{
+    const int i = globalIndex(name);
+    if (i < 0)
+        return false;
+    QList<ShowGlobal> after = m_globals;
+    after.removeAt(i);
+    editGlobals(after, tr("Remove global"));
+    return true;
+}
+
+bool ShowManager::renameGlobal(const QString &name, const QString &newName)
+{
+    const int i = globalIndex(name);
+    if (i < 0 || !isValidGlobalName(newName) || (newName != name && globalIndex(newName) >= 0))
+        return false;
+    QList<ShowGlobal> after = m_globals;
+    after[i].name = newName;
+    editGlobals(after, tr("Rename global"));
+    return true;
+}
+
+bool ShowManager::setGlobalValue(const QString &name, double value)
+{
+    const int i = globalIndex(name);
+    if (i < 0 || !std::isfinite(value))
+        return false;
+    QList<ShowGlobal> after = m_globals;
+    after[i].value = std::clamp(value, after[i].min, after[i].max);
+    editGlobals(after, tr("Set global"), name);
+    return true;
+}
+
+bool ShowManager::setGlobalRange(const QString &name, double min, double max)
+{
+    const int i = globalIndex(name);
+    if (i < 0 || !std::isfinite(min) || !std::isfinite(max) || !(min < max))
+        return false;
+    QList<ShowGlobal> after = m_globals;
+    after[i].min = min;
+    after[i].max = max;
+    after[i].value = std::clamp(after[i].value, min, max);
+    editGlobals(after, tr("Edit global range"));
+    return true;
+}
+
 bool ShowManager::moveSceneRaw(int from, int to)
 {
     if (from < 0 || from >= m_scenes.size() || to < 0 || to >= m_scenes.size() || from == to)
@@ -350,6 +526,8 @@ void ShowManager::reset()
     m_scenes.clear();
     m_nextSerial = 1;
     m_default = {};
+    m_globals.clear();
+    emit globalsReset();
     Scene *c = makeScene(QUuid::createUuid().toString(QUuid::WithoutBraces), m_nextSerial, true);
     c->setName(tr("Scene %1").arg(c->serial()));
     m_scenes.append(c);
@@ -517,6 +695,11 @@ QJsonObject ShowManager::toJson() const
     QJsonArray scenes;
     for (const Scene *c : m_scenes)
         scenes.append(c->toJson());
+    QJsonArray globals;
+    for (const ShowGlobal &g : m_globals) {
+        globals.append(QJsonObject{{QStringLiteral("name"), g.name}, {QStringLiteral("value"), g.value},
+                                   {QStringLiteral("min"), g.min}, {QStringLiteral("max"), g.max}});
+    }
     return {
         {QStringLiteral("show"), QJsonObject{
             {QStringLiteral("defaultTransition"), m_default.toJson()},
@@ -527,6 +710,7 @@ QJsonObject ShowManager::toJson() const
             }},
         }},
         {QStringLiteral("scenes"), scenes},
+        {QStringLiteral("globals"), globals},
     };
 }
 
@@ -580,6 +764,23 @@ bool ShowManager::fromJson(const QJsonObject &root)
     m_editedId = state.value(QStringLiteral("editedSceneId")).toString();
     m_inScene = true;
     fixRoles();
+
+    m_globals.clear();
+    for (const QJsonValue &v : root.value(QStringLiteral("globals")).toArray()) {
+        const QJsonObject o = v.toObject();
+        const QString name = o.value(QStringLiteral("name")).toString();
+        double min = o.value(QStringLiteral("min")).toDouble(0.0);
+        double max = o.value(QStringLiteral("max")).toDouble(1.0);
+        if (!isValidGlobalName(name) || globalIndex(name) >= 0)
+            continue;
+        if (!(min < max)) {
+            min = 0.0;
+            max = 1.0;
+        }
+        m_globals.append({name, std::clamp(o.value(QStringLiteral("value")).toDouble(min), min, max), min, max});
+    }
+    emit globalsReset();
+    pushGlobals();
 
     emit scenesReset();
     for (Scene *c : std::as_const(m_scenes))

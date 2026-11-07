@@ -10,6 +10,7 @@
 #include "app/output/OutputHub.h"
 #include "app/session/SessionManager.h"
 #include "app/show/Scene.h"
+#include "app/show/GlobalsModel.h"
 #include "app/show/SceneListModel.h"
 #include "app/show/SceneThumbnails.h"
 #include "app/show/ShowManager.h"
@@ -465,6 +466,12 @@ ClipGraph *AppController::clipGraph() const { return m_show->editedScene()->grap
 ClipGraphController *AppController::graphController() const { return m_show->editedScene()->controller(); }
 GraphRuntime *AppController::graphRuntime() const { return m_show->editedScene()->runtime(); }
 QAbstractItemModel *AppController::sceneModel() const { return m_show->model(); }
+QAbstractItemModel *AppController::globalsModel() const { return m_show->globalsModel(); }
+QString AppController::addGlobal(const QString &name) { return m_show->addGlobal(name); }
+bool AppController::removeGlobal(const QString &name) { return m_show->removeGlobal(name); }
+bool AppController::renameGlobal(const QString &name, const QString &newName) { return m_show->renameGlobal(name, newName); }
+bool AppController::setGlobalValue(const QString &name, double value) { return m_show->setGlobalValue(name, value); }
+bool AppController::setGlobalRange(const QString &name, double min, double max) { return m_show->setGlobalRange(name, min, max); }
 QString AppController::audioDeviceFor(const QString &logical) const
 {
     return m_venue->deviceMap.value(logical);

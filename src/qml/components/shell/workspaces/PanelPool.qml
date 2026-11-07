@@ -20,6 +20,7 @@ Item {
     Component { id: mixerC; MixerPanel {} }
     Component { id: outputsC; OutputsPanel {} }
     Component { id: scenesC; ScenesPanel {} }
+    Component { id: globalsC; GlobalsPanel {} }
 
     function componentFor(type) {
         switch (type) {
@@ -32,6 +33,7 @@ Item {
         case "mixer": return mixerC
         case "outputs": return outputsC
         case "scenes": return scenesC
+        case "globals": return globalsC
         }
         return null
     }

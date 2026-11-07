@@ -5,17 +5,28 @@
 #include <QObject>
 #include <QSet>
 #include <QSize>
+#include <QVariantMap>
 #include <QString>
 #include <QStringList>
 #include <memory>
 
 #include "app/show/Scene.h"
 
+class GlobalsModel;
 class SceneListModel;
 class QQuickImageProvider;
 class QTimer;
 class QUndoStack;
 struct NodeThumbStore;
+
+/// A project-wide named number that every scene's expressions read as `globals.<name>`.
+struct ShowGlobal {
+    QString name;
+    double value = 0.0;
+    double min = 0.0;
+    double max = 1.0;
+    bool operator==(const ShowGlobal &o) const = default;
+};
 
 /// The ordered scenes of a show and which of them is Live, Staging and being edited. Owns every
 /// scene; it knows nothing about the compositor, so taking is the caller's job: it resolves the
@@ -44,6 +55,24 @@ public:
     void setSceneMeta(const QString &id, const SceneMeta &meta);
     /// Drops every scene and starts over with one empty Live scene.
     void reset();
+
+    // ── Globals ──────────────────────────────────────────────────────────────
+    /// True for a letter/digit/underscore identifier not starting with a digit that is neither a
+    /// built-in expression variable nor a Lua keyword.
+    static bool isValidGlobalName(const QString &name);
+    const QList<ShowGlobal> &globals() const { return m_globals; }
+    GlobalsModel *globalsModel() const { return m_globalsModel; }
+    /// Appends a global; an empty @p name picks the next free "globalN". Returns the name, or an
+    /// empty string when it is invalid, taken or collides with a built-in. All edits are undoable.
+    QString addGlobal(const QString &name = {}, double value = 0.0, double min = 0.0, double max = 1.0);
+    bool removeGlobal(const QString &name);
+    bool renameGlobal(const QString &name, const QString &newName);
+    /// Clamps to the global's min..max.
+    bool setGlobalValue(const QString &name, double value);
+    /// Needs min < max; re-clamps the value.
+    bool setGlobalRange(const QString &name, double min, double max);
+    /// name -> value, the form expressions see.
+    QVariantMap globalValues() const;
 
     // ── Roles ────────────────────────────────────────────────────────────────
     Scene *liveScene() const { return scene(m_liveId); }
@@ -103,13 +132,20 @@ public:
     void updateRuntimeActivity();
 
     // ── Persistence ──────────────────────────────────────────────────────────
-    /// {show:{defaultTransition, state:{liveSceneId, stagingSceneId, editedSceneId}}, scenes:[...]}.
+    /// {show:{defaultTransition, state:{liveSceneId, stagingSceneId, editedSceneId}}, scenes:[...],
+    /// globals:[{name, value, min, max}]}.
     QJsonObject toJson() const;
     /// Replaces the show. False (leaving a fresh single-scene show) when it is missing, empty or
     /// holds a scene graph older than ClipGraph::kGraphVersion.
     bool fromJson(const QJsonObject &root);
 
 signals:
+    void globalAboutToBeInserted(int row);
+    void globalInserted();
+    void globalAboutToBeRemoved(int row);
+    void globalRemoved();
+    void globalUpdated(int row);
+    void globalsReset();
     void sceneAdded(Scene *scene);
     void sceneAboutToBeRemoved(Scene *scene);
     void scenesReset();
@@ -134,7 +170,17 @@ private:
     bool eraseScene(const QString &id);
     bool moveSceneRaw(int from, int to);
 
+    friend class GlobalsCommand;
+    int globalIndex(const QString &name) const;
+    /// Replaces the list in place: rows are inserted/removed/updated when the change is that
+    /// simple, else the model resets. Pushes values to every runtime.
+    void applyGlobals(const QList<ShowGlobal> &list);
+    void pushGlobals();
+    void editGlobals(const QList<ShowGlobal> &after, const QString &text, const QString &mergeKey = {});
+
     QList<Scene *> m_scenes;
+    QList<ShowGlobal> m_globals;
+    GlobalsModel *m_globalsModel;
     SceneListModel *m_model;
     std::shared_ptr<NodeThumbStore> m_thumbs;
     QTimer *m_endTimer;

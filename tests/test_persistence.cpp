@@ -305,6 +305,32 @@ private slots:
         QCOMPARE(nodeSource["path"].toString(), QStringLiteral("media/pic.png"));
     }
 
+    void globalsRoundTripAndOldFilesLoadEmpty() {
+        ShowManager show;
+        show.addGlobal(QStringLiteral("speed"), 0.25, -1.0, 4.0);
+        show.addGlobal(QStringLiteral("size"), 3.0, 0.0, 10.0);
+        ClipManager clips;
+        SessionManager session(&show, nullptr, &clips);
+        const QJsonObject root = session.buildJson(0, {}, {});
+        QCOMPARE(root["version"].toInt(), SessionManager::kFormatVersion);
+        QCOMPARE(root["globals"].toArray().size(), 2);
+
+        ShowManager loaded;
+        loaded.addGlobal(QStringLiteral("stale"));
+        QVERIFY(loaded.fromJson(root));
+        QCOMPARE(loaded.globals().size(), 2);
+        QCOMPARE(loaded.globals().at(0).name, QStringLiteral("speed"));
+        QCOMPARE(loaded.globals().at(0).value, 0.25);
+        QCOMPARE(loaded.globals().at(0).min, -1.0);
+        QCOMPARE(loaded.globals().at(0).max, 4.0);
+        QCOMPARE(loaded.globals().at(1).name, QStringLiteral("size"));
+
+        QJsonObject old = root;
+        old.remove(QStringLiteral("globals"));
+        QVERIFY(loaded.fromJson(old));
+        QVERIFY(loaded.globals().isEmpty());
+    }
+
     void sceneSourceNodeRoundTrips() {
         ShowManager show;
         Scene *outer = show.liveScene();

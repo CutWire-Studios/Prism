@@ -460,6 +460,15 @@ void ScriptRuntime::evaluateExpressions(const QVariantList &jobs, double t) {
         env["beat"] = clockInfo.value(QStringLiteral("beat"), 0.0).toDouble();
     }
     env["audio"] = bandsToLua(lua, m_host && m_host->audioBands ? m_host->audioBands(0) : QVariantMap{});
+    {
+        sol::table globals = lua.create_table();
+        if (m_host && m_host->globals) {
+            const QVariantMap g = m_host->globals();
+            for (auto it = g.cbegin(); it != g.cend(); ++it)
+                globals[it.key().toStdString()] = it.value().toDouble();
+        }
+        env["globals"] = globals;
+    }
 
     QVariantList results;
     for (const QVariant &jv : jobs) {

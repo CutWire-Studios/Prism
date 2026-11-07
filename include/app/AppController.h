@@ -67,6 +67,8 @@ class AppController : public QObject {
 
     // ── Show / scenes ───────────────────────────────────────────────────────────
     Q_PROPERTY(QAbstractItemModel *scenes READ sceneModel CONSTANT)
+    /// Project globals {name, value, min, max}; expressions read them as globals.<name>.
+    Q_PROPERTY(QAbstractItemModel *globals READ globalsModel CONSTANT)
     Q_PROPERTY(QString liveSceneId READ liveSceneId NOTIFY showChanged)
     /// Node of the edited scene shown in the staging preview instead of the Staging deck (0 = none).
     /// Preview only: never reaches the decks, Take or any output.
@@ -211,6 +213,7 @@ public:
     double transitionDuration() const;
     bool transitionRunning() const;
     QAbstractItemModel *sceneModel() const;
+    QAbstractItemModel *globalsModel() const;
     QString liveSceneId() const;
     QString stagingSceneId() const;
     QString editedSceneId() const;
@@ -271,6 +274,12 @@ public:
     Q_INVOKABLE QString setSceneHotkey(const QString &id, const QString &chord);
     /// Missing media and devices across all scenes: [{kind, sceneId, scene, source, detail}].
     Q_INVOKABLE QVariantList preflight() const;
+    /// Returns the new global's name, or an empty string when @p name is invalid, taken or a built-in.
+    Q_INVOKABLE QString addGlobal(const QString &name = {});
+    Q_INVOKABLE bool removeGlobal(const QString &name);
+    Q_INVOKABLE bool renameGlobal(const QString &name, const QString &newName);
+    Q_INVOKABLE bool setGlobalValue(const QString &name, double value);
+    Q_INVOKABLE bool setGlobalRange(const QString &name, double min, double max);
     /// Adds a scene after the edited one and returns its id.
     Q_INVOKABLE QString addScene(const QString &name = {});
     Q_INVOKABLE QString duplicateScene(const QString &id);

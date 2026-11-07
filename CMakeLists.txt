@@ -381,6 +381,7 @@ set(SOURCES
     src/app/graph/ModulatorEngine.cpp
     src/app/BpmClock.cpp
     src/app/show/Scene.cpp
+    src/app/show/GlobalsModel.cpp
     src/app/show/SceneListModel.cpp
     src/app/show/SceneThumbnails.cpp
     src/app/show/Preflight.cpp
@@ -520,6 +521,7 @@ set(HEADERS
     include/app/graph/ThumbScheduler.h
     include/app/BpmClock.h
     include/app/show/Scene.h
+    include/app/show/GlobalsModel.h
     include/app/show/SceneListModel.h
     include/app/show/SceneThumbnails.h
     include/app/show/Preflight.h

@@ -99,6 +99,8 @@ public:
     // ── Modulators ────────────────────────────────────────────────────────────
     /// The global tempo clock; its bpm and beat position feed Modulator nodes, expressions and Lua.
     void setBpmClock(BpmClock *clock);
+    /// Project globals (name -> number) that expressions read as `globals.<name>`; takes effect on the next tick.
+    void setGlobals(const QVariantMap &globals);
     /// Resolves `osc:<address>` modulator inputs to the latest received control value.
     void setControlSource(std::function<double(const QString &address)> source);
     /// Last value of a Modulator node (0 when unknown); refreshed by pollDataConsumers.
