@@ -3,13 +3,13 @@ import QtQuick
 import QtQuick.Controls.Basic
 import Prism
 
-// Searchable palette of everything that can be added to the graph: source kinds and node types,
-// grouped by category, with fuzzy search over names and aliases and a Recent section. Used by the
+// Everything that can be added to the graph (source kinds and node types) as a cascading menu
+// grouped by category, with fuzzy search over names and aliases and a Recent submenu. Used by the
 // node editor (canvas set) and, restricted to sources, by the Assets panel and the File menu.
 // Opened from a connection dropped on empty space, pendingKind is the dragged port's PortKind and
 // only types with a compatible port on the opposite side are listed. Opened over a wire, edgeId
 // is set and only types that fit between the wire's two ends are listed; the pick is spliced in.
-Popup {
+CascadeMenu {
     id: root
 
     property var canvas: null
@@ -18,19 +18,25 @@ Popup {
     property bool pendingIsOutput: false
     // Where the node is created, in world coordinates. NaN lets the graph place it.
     property point worldPos: Qt.point(NaN, NaN)
-    property bool wasPicked: false
+    readonly property bool wasPicked: triggered
     property bool sourcesOnly: false
     property var edgeId: 0
 
-    function openAt(sx, sy) {
-        wasPicked = false
-        search.text = ""
-        rebuild()
+    property var eligible: []
+    property var categoryIcons: ({})
+
+    searchable: true
+    searchPlaceholder: pendingKind >= 0 ? qsTr("Add and connect…") : qsTr("Search nodes…")
+    searchFn: (q) => root.search(q)
+
+    // x/y are in `item`'s coordinates.
+    function openAt(item, x, y) {
+        eligible = allEntries().filter(e => !(e.unique && canvas && canvas.hasNodeOfType(e.type))
+                                            && compatible(e))
+        model = buildTree()
         if (canvas && edgeId)
             canvas.spliceEdgeId = edgeId
-        x = Math.max(8, Math.min(sx, (parent ? parent.width : sx) - width - 8))
-        y = Math.max(8, Math.min(sy, (parent ? parent.height : sy) - height - 8))
-        open()
+        popupAt(item, x, y)
     }
 
     function openSourcesBelow(item) {
@@ -38,12 +44,8 @@ Popup {
         pendingKind = -1
         edgeId = 0
         worldPos = Qt.point(NaN, NaN)
-        const p = item.mapToItem(parent, 0, item.height)
-        openAt(p.x, p.y)
+        openAt(item, 0, item.height)
     }
-
-    property var rows: []
-    property int highlighted: -1
 
     readonly property var aliases: ({
         "file": ["mp4", "clip", "movie", "video", "mov", "image", "photo", "picture", "audio", "mp3", "wav", "file", "import"],
@@ -87,57 +89,148 @@ Popup {
         "Modulator": ["lfo", "envelope", "random", "bpm", "tempo", "counter", "toggle", "math", "smooth", "link"]
     })
 
+    // Each entry's path is the chain of submenus it sits in; section groups top-level menus
+    // between separators.
     function allEntries() {
         const T = NodePalette.nodeType
         const list = []
-        function src(group, kind, label, avail) {
+        const icons = {}
+        function cat(name, icon) {
+            icons[name] = icon
+            return name
+        }
+        const fileCat = cat(qsTr("File"), "file")
+        const liveCat = cat(qsTr("Live"), "radio")
+        const genCat = cat(qsTr("Generated"), "sparkles")
+        const procCat = cat(qsTr("Generators"), "wand-sparkles")
+        const netCat = cat(qsTr("Network"), "globe")
+        function src(path, kind, label, icon, avail) {
             if (avail !== false)
-                list.push({ key: "src:" + kind, alias: kind, label: label,
-                            category: qsTr("Sources: %1").arg(group), source: kind })
+                list.push({ key: "src:" + kind, alias: kind, label: label, icon: icon, path: path,
+                            section: 0, source: kind })
         }
-        function node(category, key, label, type, params, unique) {
-            list.push({ key: key, alias: Object.keys(T).find(k => T[k] === type), label: label,
-                        category: category, type: type, params: params, unique: unique })
+        function node(path, section, key, label, icon, type, params, unique) {
+            list.push({ key: key, alias: Object.keys(T).find(k => T[k] === type), label: label, icon: icon,
+                        path: path, section: section, type: type, params: params, unique: unique })
         }
-        src(qsTr("File"), "file", qsTr("Media File"))
-        src(qsTr("File"), "slideshow", qsTr("Slideshow"))
-        src(qsTr("File"), "svgTemplate", qsTr("SVG Template"))
-        src(qsTr("Live"), "camera", qsTr("Camera"))
-        node(qsTr("Sources: Live"), "type:" + T.MasterAudioInput, qsTr("Mic Input"), T.MasterAudioInput)
-        node(qsTr("Sources: Live"), "type:" + T.MasterAudioCapture, qsTr("Audio Capture"), T.MasterAudioCapture)
-        src(qsTr("Live"), "screen", qsTr("Screen Capture"))
-        src(qsTr("Live"), "window", qsTr("Window Capture"))
-        src(qsTr("Generated"), "canvas", qsTr("Canvas"))
-        src(qsTr("Generated"), "shader", qsTr("Shader"))
-        src(qsTr("Generated"), "text", qsTr("Text"))
-        src(qsTr("Generated"), "shape", qsTr("Shape"))
-        src(qsTr("Generated"), "scene", qsTr("Scene"))
-        src(qsTr("Generated"), "sceneInput", qsTr("Scene input"), AppController.postSceneId.length > 0 && AppController.editedSceneId === AppController.postSceneId)
+        src([fileCat], "file", qsTr("Media File"), "file-play")
+        src([fileCat], "slideshow", qsTr("Slideshow"), "images")
+        src([fileCat], "svgTemplate", qsTr("SVG Template"), "file-code")
+        src([liveCat], "camera", qsTr("Camera"), "camera")
+        node([liveCat], 0, "type:" + T.MasterAudioInput, qsTr("Mic Input"), "mic", T.MasterAudioInput)
+        node([liveCat], 0, "type:" + T.MasterAudioCapture, qsTr("Audio Capture"), "audio-lines", T.MasterAudioCapture)
+        src([liveCat], "screen", qsTr("Screen Capture"), "monitor")
+        src([liveCat], "window", qsTr("Window Capture"), "app-window")
+        src([genCat], "canvas", qsTr("Canvas"), "square")
+        src([genCat], "shader", qsTr("Shader"), "code-xml")
+        src([genCat], "text", qsTr("Text"), "type")
+        src([genCat], "shape", qsTr("Shape"), "shapes")
+        src([genCat], "scene", qsTr("Scene"), "clapperboard")
+        src([genCat], "sceneInput", qsTr("Scene input"), "log-in",
+            AppController.postSceneId.length > 0 && AppController.editedSceneId === AppController.postSceneId)
         for (const g of NodeCatalog.generators())
             list.push({ key: "src:generator:" + g.slug, alias: "generator", label: g.name,
-                        category: qsTr("Sources: Generate"), source: "generator:" + g.slug })
-        src(qsTr("Network"), "url", qsTr("Video URL"))
-        src(qsTr("Network"), "ndi", qsTr("NDI Source"), SourcePrompts.ndiAvailable)
-        src(qsTr("Network"), "webrtc", qsTr("Phone Camera (WebRTC)"), SourcePrompts.webrtcAvailable)
-        if (sourcesOnly)
-            return list
-        for (const fx of NodeCatalog.processEffects())
-            list.push({ key: "fx:" + fx.id, alias: fx.name.toLowerCase(), label: fx.menuLabel,
-                        category: qsTr("Video FX"), type: T.Process, params: { effect: fx.id } })
-        node(qsTr("Compositing"), "type:" + T.Layer, qsTr("Layer"), T.Layer)
-        for (const fx of NodeCatalog.audioEffects())
-            list.push({ key: "afx:" + fx.id, alias: "audio fx", label: fx.menuLabel,
-                        category: qsTr("Audio"), type: T.AudioEffect, params: { effect: fx.id } })
-        node(qsTr("Audio"), "type:" + T.AudioMixer, qsTr("Mixer"), T.AudioMixer)
-        node(qsTr("Audio"), "type:" + T.MasterAudioOutput, qsTr("Audio Output"), T.MasterAudioOutput, undefined, true)
-        node(qsTr("Utility"), "type:" + T.Reroute, qsTr("Reroute"), T.Reroute)
-        list.push({ key: "frame", alias: "Frame", label: qsTr("Frame"), category: qsTr("Utility"), frame: true })
-        if (NodeCatalog.scriptingAvailable()) {
-            node(qsTr("Logic"), "type:" + T.Script, qsTr("Script"), T.Script)
-            node(qsTr("Logic"), "type:" + T.AudioAnalyzer, qsTr("Audio Analyzer"), T.AudioAnalyzer)
-            node(qsTr("Logic"), "type:" + T.Modulator, qsTr("Modulator"), T.Modulator)
+                        path: [genCat, procCat], section: 0, source: "generator:" + g.slug })
+        src([netCat], "url", qsTr("Video URL"), "link")
+        src([netCat], "ndi", qsTr("NDI Source"), "cast", SourcePrompts.ndiAvailable)
+        src([netCat], "webrtc", qsTr("Phone Camera (WebRTC)"), "smartphone", SourcePrompts.webrtcAvailable)
+        if (!sourcesOnly) {
+            const fxCat = cat(qsTr("Video FX"), "blend")
+            const audioCat = cat(qsTr("Audio"), "audio-waveform")
+            const logicCat = cat(qsTr("Logic"), "binary")
+            const utilCat = cat(qsTr("Utility"), "wrench")
+            const fxIcons = { "Transform": "move", "Keying": "pipette", "Color": "palette", "Blur": "droplet",
+                              "Distort": "waves-horizontal", "Composite": "layers", "Light": "sun",
+                              "Stylize": "brush", "Time": "clock" }
+            const fxGroup = {}
+            for (const e of NodeCatalog.quickAddEntries("", -1, false)) {
+                if (e.nodeType === T.Process)
+                    fxGroup[e.params.effect] = e.category
+            }
+            for (const fx of NodeCatalog.processEffects()) {
+                const group = fxGroup[fx.id] || qsTr("Other")
+                if (fxIcons[group])
+                    icons[group] = fxIcons[group]
+                list.push({ key: "fx:" + fx.id, alias: fx.name.toLowerCase(), label: fx.menuLabel,
+                            path: [fxCat, group], section: 1, type: T.Process, params: { effect: fx.id } })
+            }
+            node([], 1, "type:" + T.Layer, qsTr("Layer"), "layers", T.Layer)
+            for (const fx of NodeCatalog.audioEffects())
+                list.push({ key: "afx:" + fx.id, alias: "audio fx", label: fx.menuLabel, icon: "sliders-vertical",
+                            path: [audioCat], section: 1, type: T.AudioEffect, params: { effect: fx.id } })
+            node([audioCat], 1, "type:" + T.AudioMixer, qsTr("Mixer"), "sliders-horizontal", T.AudioMixer)
+            node([audioCat], 1, "type:" + T.MasterAudioOutput, qsTr("Audio Output"), "speaker",
+                 T.MasterAudioOutput, undefined, true)
+            if (NodeCatalog.scriptingAvailable()) {
+                node([logicCat], 2, "type:" + T.Script, qsTr("Script"), "code-xml", T.Script)
+                node([logicCat], 2, "type:" + T.AudioAnalyzer, qsTr("Audio Analyzer"), "activity", T.AudioAnalyzer)
+                node([logicCat], 2, "type:" + T.Modulator, qsTr("Modulator"), "spline", T.Modulator)
+            }
+            node([utilCat], 2, "type:" + T.Reroute, qsTr("Reroute"), "dot", T.Reroute)
+            list.push({ key: "frame", alias: "Frame", label: qsTr("Frame"), icon: "frame", path: [utilCat],
+                        section: 2, frame: true })
         }
+        categoryIcons = icons
         return list
+    }
+
+    function item(entry, hint) {
+        return { text: entry.label, icon: entry.icon, hint: hint, action: () => root.pick(entry) }
+    }
+
+    function buildTree() {
+        const top = []
+        const branches = {}
+        let lastSection = -1
+        function addTop(n, section) {
+            if (top.length > 0 && section !== lastSection)
+                top.push({ separator: true })
+            lastSection = section
+            top.push(n)
+        }
+        for (const e of eligible) {
+            let list = null
+            let key = ""
+            for (const name of e.path) {
+                key += "\u0001" + name
+                let b = branches[key]
+                if (!b) {
+                    b = { text: name, icon: categoryIcons[name] || "", children: [] }
+                    branches[key] = b
+                    if (list)
+                        list.push(b)
+                    else
+                        addTop(b, e.section)
+                }
+                list = b.children
+            }
+            if (list)
+                list.push(item(e))
+            else
+                addTop(item(e), e.section)
+        }
+        const byKey = {}
+        for (const e of eligible)
+            byKey[e.key] = e
+        const recent = NodeCatalog.recentNodeKeys().filter(k => byKey[k]).map(k => item(byKey[k]))
+        if (recent.length > 0)
+            top.unshift({ text: qsTr("Recent"), icon: "history", children: recent }, { separator: true })
+        if (top.length === 0)
+            top.push({ header: true, text: qsTr("No matching nodes") })
+        return top
+    }
+
+    function search(q) {
+        q = q.toLowerCase()
+        const scored = []
+        for (const e of eligible) {
+            const sc = score(q, e)
+            if (sc >= 0)
+                scored.push({ e: e, sc: sc, i: scored.length })
+        }
+        scored.sort((a, b) => b.sc - a.sc || a.i - b.i)
+        const out = scored.map(r => item(r.e, r.e.path.join(" › ")))
+        return out.length > 0 ? out : [{ header: true, text: qsTr("No matching nodes") }]
     }
 
     function compatible(entry) {
@@ -189,71 +282,12 @@ Popup {
             if (s >= 0)
                 best = Math.max(best, i === 0 ? s : s - 10)
         }
-        if (best < 0 && entry.category.toLowerCase().indexOf(q) >= 0)
+        if (best < 0 && entry.path.join(" ").toLowerCase().indexOf(q) >= 0)
             best = 5
         return best
     }
 
-    function rebuild() {
-        const q = search.text.trim().toLowerCase()
-        const eligible = allEntries().filter(e => !(e.unique && canvas && canvas.hasNodeOfType(e.type))
-                                                  && compatible(e))
-        const out = []
-        if (q.length > 0) {
-            const scored = []
-            for (const e of eligible) {
-                const sc = score(q, e)
-                if (sc >= 0)
-                    scored.push({ e: e, sc: sc, i: scored.length })
-            }
-            scored.sort((a, b) => b.sc - a.sc || a.i - b.i)
-            for (const r of scored)
-                out.push(Object.assign({ hint: r.e.category }, r.e))
-        } else {
-            const byKey = {}
-            for (const e of eligible)
-                byKey[e.key] = e
-            const recent = NodeCatalog.recentNodeKeys().filter(k => byKey[k]).map(k => byKey[k])
-            if (recent.length > 0) {
-                out.push({ header: true, label: qsTr("Recent") })
-                for (const e of recent)
-                    out.push(Object.assign({ hint: e.category }, e))
-            }
-            let lastCategory = ""
-            for (const e of eligible) {
-                if (e.category !== lastCategory) {
-                    out.push({ header: true, label: e.category })
-                    lastCategory = e.category
-                }
-                out.push(e)
-            }
-        }
-        rows = out
-        highlighted = -1
-        for (let i = 0; i < out.length; ++i) {
-            if (!out[i].header) {
-                highlighted = i
-                break
-            }
-        }
-    }
-
-    function step(delta) {
-        let i = highlighted
-        for (;;) {
-            i += delta
-            if (i < 0 || i >= rows.length)
-                return
-            if (!rows[i].header)
-                break
-        }
-        highlighted = i
-        list.positionViewAtIndex(i, ListView.Contain)
-    }
-
     function pick(entry) {
-        wasPicked = true
-        close()
         NodeCatalog.noteNodeAdded(entry.key)
         const x = worldPos.x
         const y = worldPos.y - 28
@@ -274,121 +308,9 @@ Popup {
         }
     }
 
-    width: 280
-    height: Math.min(360, spacer.height + list.contentHeight + padding * 2 + Theme.spacingSm)
-    padding: Theme.spacingSm
-    modal: false
-    focus: true
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-    onOpened: search.forceActiveFocus()
     onClosed: {
         if (canvas)
             canvas.spliceEdgeId = 0
         sourcesOnly = false
-    }
-
-    background: Rectangle {
-        radius: Theme.c.themedContextMenu.radius
-        color: Theme.c.themedContextMenu.background
-        border.width: Theme.c.themedContextMenu.borderWidth
-        border.color: Theme.c.themedContextMenu.border
-    }
-
-    contentItem: Item {
-        ThemedTextField {
-            id: search
-            width: parent.width
-            placeholderText: root.pendingKind >= 0 ? qsTr("Add and connect…") : qsTr("Search nodes…")
-            onTextChanged: root.rebuild()
-            Keys.onDownPressed: root.step(1)
-            Keys.onUpPressed: root.step(-1)
-            Keys.onTabPressed: (event) => event.accepted = true
-            Keys.onReturnPressed: {
-                if (root.highlighted >= 0)
-                    root.pick(root.rows[root.highlighted])
-            }
-            Keys.onEnterPressed: {
-                if (root.highlighted >= 0)
-                    root.pick(root.rows[root.highlighted])
-            }
-        }
-
-        Item {
-            id: spacer
-            width: parent.width
-            height: search.height + Theme.spacingSm
-        }
-
-        NodeLabel {
-            x: Theme.spacingLg
-            y: spacer.height + Theme.spacingSm
-            visible: root.rows.length === 0
-            muted: true
-            text: qsTr("No matching nodes")
-        }
-
-        ListView {
-            id: list
-            y: spacer.height
-            width: parent.width
-            height: parent.height - spacer.height
-            clip: true
-            model: root.rows
-            boundsBehavior: Flickable.StopAtBounds
-
-            delegate: Item {
-                id: row
-
-                required property var modelData
-                required property int index
-
-                width: ListView.view.width
-                height: row.modelData.header ? Theme.controlHeightSm : Theme.controlHeightSm + Theme.spacingSm
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: Theme.c.themedMenuItem.radius
-                    color: !row.modelData.header && (area.containsMouse || root.highlighted === row.index)
-                           ? Theme.c.themedMenuItem.backgroundHighlighted : "transparent"
-                }
-
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    x: Theme.spacingLg
-                    width: parent.width - 2 * Theme.spacingLg - hint.width
-                    text: row.modelData.label
-                    elide: Text.ElideRight
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSizeXs
-                    font.weight: row.modelData.header ? Font.DemiBold : Font.Normal
-                    color: row.modelData.header ? Theme.c.themedMenuItem.sectionForeground
-                                                : Theme.c.themedMenuItem.foreground
-                }
-
-                Text {
-                    id: hint
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.right: parent.right
-                    anchors.rightMargin: Theme.spacingLg
-                    visible: !!row.modelData.hint
-                    width: visible ? implicitWidth : 0
-                    text: row.modelData.hint || ""
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSizeXs
-                    color: Theme.c.themedMenuItem.sectionForeground
-                }
-
-                MouseArea {
-                    id: area
-                    anchors.fill: parent
-                    enabled: !row.modelData.header
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onEntered: root.highlighted = row.index
-                    onClicked: root.pick(row.modelData)
-                }
-            }
-        }
     }
 }

@@ -15,57 +15,28 @@ Rectangle {
     implicitHeight: 32
     color: Theme.panelSecondaryBg
 
-    ThemedContextMenu {
+    CascadeMenu {
         id: tabMenu
 
-        property string sceneId: ""
-        property Item tab: null
-        readonly property bool isLive: tab ? tab.isLive : false
-
-        ThemedMenuItem {
-            text: qsTr("Rename")
-            onTriggered: tabMenu.tab.startRename()
-        }
-        ThemedMenuItem {
-            text: qsTr("Duplicate")
-            onTriggered: AppController.duplicateScene(tabMenu.sceneId)
-        }
-        ThemedContextMenu {
-            title: qsTr("Colour")
-            Repeater {
-                model: root.colors
-                ThemedMenuItem {
-                    required property string modelData
-                    text: modelData.length > 0 ? modelData : qsTr("None")
-                    onTriggered: AppController.setSceneProps(tabMenu.sceneId, { color: modelData })
-                }
-            }
-        }
-        ThemedMenuItem {
-            text: tabMenu.tab && tabMenu.tab.keepResident ? qsTr("Stop keeping resident") : qsTr("Keep resident")
-            onTriggered: AppController.setSceneProps(tabMenu.sceneId, { keepResident: !tabMenu.tab.keepResident })
-        }
-        ThemedMenuItem {
-            text: tabMenu.tab && tabMenu.tab.isPost ? qsTr("Stop using as post-processing scene") : qsTr("Use as post-processing scene")
-            onTriggered: AppController.setPostSceneId(tabMenu.tab.isPost ? "" : tabMenu.sceneId)
-        }
-        ThemedMenuSeparator { }
-        ThemedMenuItem {
-            text: qsTr("Stage")
-            enabled: !tabMenu.isLive
-            onTriggered: AppController.stageScene(tabMenu.sceneId)
-        }
-        ThemedMenuItem {
-            text: qsTr("Go Live")
-            enabled: !tabMenu.isLive
-            onTriggered: AppController.stageAndTake(tabMenu.sceneId)
-        }
-        ThemedMenuSeparator { }
-        ThemedMenuItem {
-            text: qsTr("Delete")
-            icon.name: "trash-2"
-            enabled: tabMenu.tab ? tabMenu.tab.canClose : false
-            onTriggered: AppController.deleteScene(tabMenu.sceneId)
+        function show(sceneId, tab, x, y) {
+            model = [
+                { text: qsTr("Rename"), action: () => tab.startRename() },
+                { text: qsTr("Duplicate"), action: () => AppController.duplicateScene(sceneId) },
+                { text: qsTr("Colour"), children: root.colors.map(c => ({
+                      text: c.length > 0 ? c : qsTr("None"),
+                      action: () => AppController.setSceneProps(sceneId, { color: c }) })) },
+                { text: tab.keepResident ? qsTr("Stop keeping resident") : qsTr("Keep resident"),
+                  action: () => AppController.setSceneProps(sceneId, { keepResident: !tab.keepResident }) },
+                { text: tab.isPost ? qsTr("Stop using as post-processing scene") : qsTr("Use as post-processing scene"),
+                  action: () => AppController.setPostSceneId(tab.isPost ? "" : sceneId) },
+                { separator: true },
+                { text: qsTr("Stage"), enabled: !tab.isLive, action: () => AppController.stageScene(sceneId) },
+                { text: qsTr("Go Live"), enabled: !tab.isLive, action: () => AppController.stageAndTake(sceneId) },
+                { separator: true },
+                { text: qsTr("Delete"), icon: "trash-2", enabled: tab.canClose,
+                  action: () => AppController.deleteScene(sceneId) }
+            ]
+            popupAt(tab, x, y)
         }
     }
 
@@ -93,11 +64,7 @@ Rectangle {
                 height: ListView.view.height
                 canClose: !isLive && tabs.count > 1
 
-                onMenuRequested: (item, x, y) => {
-                    tabMenu.sceneId = sceneId
-                    tabMenu.tab = item
-                    tabMenu.popup(item, x, y)
-                }
+                onMenuRequested: (item, x, y) => tabMenu.show(sceneId, item, x, y)
                 onDragMoved: sceneX => {
                     root.dragFrom = index
                     const p = tabs.contentItem.mapFromItem(null, sceneX, 0)

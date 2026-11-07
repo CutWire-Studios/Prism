@@ -35,7 +35,7 @@ Item {
             addMenu.pendingKind = -1
             addMenu.edgeId = graphCanvas.selectedEdge || graphCanvas.hoverEdge
             addMenu.worldPos = worldPos
-            addMenu.openAt(screenPos.x, screenPos.y)
+            addMenu.openAt(graphCanvas, screenPos.x, screenPos.y)
         }
         onConnectionDropped: (screenPos, worldPos, kind, fromOutput) => {
             quickAdd.pendingKind = kind
@@ -56,14 +56,8 @@ Item {
             edgeMenu.edgeId = edgeId
             edgeMenu.popup(graphCanvas, screenPos.x, screenPos.y)
         }
-        onFrameMenuRequested: (frameId, screenPos) => {
-            frameMenu.frameId = frameId
-            frameMenu.popup(graphCanvas, screenPos.x, screenPos.y)
-        }
-        onGroupMenuRequested: (groupId, screenPos) => {
-            groupMenu.groupId = groupId
-            groupMenu.popup(graphCanvas, screenPos.x, screenPos.y)
-        }
+        onFrameMenuRequested: (frameId, screenPos) => frameMenu.show(frameId, screenPos)
+        onGroupMenuRequested: (groupId, screenPos) => groupMenu.show(groupId, screenPos)
     }
 
     DropArea {
@@ -129,7 +123,7 @@ Item {
                     addMenu.edgeId = graphCanvas.selectedEdge
                     const c = graphCanvas.toWorld(graphCanvas.width / 2, graphCanvas.height / 2)
                     addMenu.worldPos = Qt.point(c.x - 60, c.y - 40)
-                    addMenu.openAt(Theme.spacingLg, 52)
+                    addMenu.openAt(graphCanvas, Theme.spacingLg, 52)
                 }
             }
             IconButton {
@@ -282,85 +276,53 @@ Item {
         onClosed: graphCanvas.forceActiveFocus()
     }
 
-    ThemedContextMenu {
+    CascadeMenu {
         id: groupMenu
 
-        property var groupId: 0
-        readonly property var item: graphCanvas.groupItem(groupId)
+        function show(groupId, pos) {
+            const item = graphCanvas.groupItem(groupId)
+            model = [
+                { text: qsTr("Rename"), action: () => { if (item) item.beginNameEdit() } },
+                { text: item && item.collapsed ? qsTr("Expand (Tab)") : qsTr("Collapse (Tab)"),
+                  action: () => root.controller.toggleGroupCollapsed(groupId) },
+                { text: qsTr("Colour"), children: NodePalette.frameColors.map(c => ({
+                      text: c.length > 0 ? c : qsTr("None"),
+                      action: () => root.controller.setGroupProps(groupId, { color: c }) })) },
+                { text: qsTr("Ungroup (Ctrl+Shift+G)"), action: () => root.controller.ungroup(groupId) },
+                { separator: true },
+                { text: qsTr("Delete group and its nodes"), icon: "trash-2",
+                  action: () => root.controller.removeNodes(root.controller.groupMembers(groupId).map(m => m.id)) }
+            ]
+            popupAt(graphCanvas, pos.x, pos.y)
+        }
 
-        ThemedMenuItem {
-            text: qsTr("Rename")
-            onTriggered: {
-                if (groupMenu.item)
-                    groupMenu.item.beginNameEdit()
-            }
-        }
-        ThemedMenuItem {
-            text: groupMenu.item && groupMenu.item.collapsed ? qsTr("Expand (Tab)") : qsTr("Collapse (Tab)")
-            onTriggered: root.controller.toggleGroupCollapsed(groupMenu.groupId)
-        }
-        ThemedContextMenu {
-            title: qsTr("Colour")
-            Repeater {
-                model: NodePalette.frameColors
-                ThemedMenuItem {
-                    required property string modelData
-                    text: modelData.length > 0 ? modelData : qsTr("None")
-                    onTriggered: root.controller.setGroupProps(groupMenu.groupId, { color: modelData })
-                }
-            }
-        }
-        ThemedMenuItem {
-            text: qsTr("Ungroup (Ctrl+Shift+G)")
-            onTriggered: root.controller.ungroup(groupMenu.groupId)
-        }
-        ThemedMenuSeparator { }
-        ThemedMenuItem {
-            text: qsTr("Delete group and its nodes")
-            icon.name: "trash-2"
-            onTriggered: root.controller.removeNodes(root.controller.groupMembers(groupMenu.groupId).map(m => m.id))
-        }
         onClosed: graphCanvas.forceActiveFocus()
     }
 
-    ThemedContextMenu {
+    CascadeMenu {
         id: frameMenu
 
-        property var frameId: 0
+        function show(frameId, pos) {
+            model = [
+                { text: qsTr("Rename"), action: () => {
+                      const item = graphCanvas.frameItem(frameId)
+                      if (item)
+                          item.beginTitleEdit()
+                  } },
+                { text: qsTr("Edit comment"), action: () => {
+                      const item = graphCanvas.frameItem(frameId)
+                      if (item)
+                          item.beginCommentEdit()
+                  } },
+                { text: qsTr("Colour"), children: NodePalette.frameColors.map(c => ({
+                      text: c.length > 0 ? c : qsTr("None"),
+                      action: () => root.controller.setFrameProps(frameId, { color: c }) })) },
+                { separator: true },
+                { text: qsTr("Delete frame"), icon: "trash-2", action: () => root.controller.removeFrame(frameId) }
+            ]
+            popupAt(graphCanvas, pos.x, pos.y)
+        }
 
-        ThemedMenuItem {
-            text: qsTr("Rename")
-            onTriggered: {
-                const item = graphCanvas.frameItem(frameMenu.frameId)
-                if (item)
-                    item.beginTitleEdit()
-            }
-        }
-        ThemedMenuItem {
-            text: qsTr("Edit comment")
-            onTriggered: {
-                const item = graphCanvas.frameItem(frameMenu.frameId)
-                if (item)
-                    item.beginCommentEdit()
-            }
-        }
-        ThemedContextMenu {
-            title: qsTr("Colour")
-            Repeater {
-                model: NodePalette.frameColors
-                ThemedMenuItem {
-                    required property string modelData
-                    text: modelData.length > 0 ? modelData : qsTr("None")
-                    onTriggered: root.controller.setFrameProps(frameMenu.frameId, { color: modelData })
-                }
-            }
-        }
-        ThemedMenuSeparator { }
-        ThemedMenuItem {
-            text: qsTr("Delete frame")
-            icon.name: "trash-2"
-            onTriggered: root.controller.removeFrame(frameMenu.frameId)
-        }
         onClosed: graphCanvas.forceActiveFocus()
     }
 }

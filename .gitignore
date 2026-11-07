@@ -67,3 +67,6 @@ repo/
 # Prebuilt Skia (third_party/build-skia.sh)
 third_party/src/
 third_party/prebuilt/
+
+# Full Lucide icon set (copy needed icons into resources/icons/)
+/icons/
