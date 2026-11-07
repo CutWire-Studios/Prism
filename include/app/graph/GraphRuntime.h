@@ -56,6 +56,13 @@ public:
     int thumbnailRevision(NodeId id) const;
     /// Generates thumbnails on the thread pool for every Input node that lacks one.
     void generateMissingThumbnails();
+    /// The Input / Process nodes currently on screen in the node editor (empty when it is hidden).
+    /// While non-empty and the runtime is active, a timer re-renders them live through the shared
+    /// image provider, ThumbScheduler::kBudget nodes per ThumbScheduler::kTickMs, each from its own
+    /// standalone source tree so deck sources are never advanced.
+    void setVisibleNodes(const QVector<NodeId> &ids);
+    /// One scheduler tick; public for the timer.
+    void liveThumbTick();
     /// For image://nodethumb/<id>. Ownership passes to the caller (QQmlEngine::addImageProvider).
     /// The provider keeps working only while this GraphRuntime is alive and reads it thread-safely.
     static QQuickImageProvider *createImageProvider(std::shared_ptr<NodeThumbStore> thumbs);

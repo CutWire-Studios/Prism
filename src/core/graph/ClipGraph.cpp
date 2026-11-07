@@ -35,6 +35,7 @@ constexpr qreal kSmallW = 100.0;
 constexpr qreal kSmallH = 110.0;
 constexpr qreal kProcW = 116.0;
 constexpr qreal kProcH = 66.0;
+constexpr qreal kProcVideoH = 104.0;   // room for the live thumbnail (ProcessBody.qml)
 constexpr qreal kProcExtraRow = 22.0;
 constexpr qreal kLayerW = 158.0, kLayerHdr = 20.0, kLayerRow = 22.0, kLayerFoot = 26.0;
 constexpr qreal kOutW = 116.0, kOutH = 78.0, kOutBodyH = 52.0;
@@ -374,7 +375,7 @@ QSizeF ClipGraph::nodeSize(const Node &n) const {
         return {kCardW, kProxyY + kCardBodyH + (hasAudio ? kAudioStripH : 0.0) + kPortR + kPortR};
     }
     case NT::Process:
-        return {kProcW, kProcH + processExtraInputs(n) * kProcExtraRow};
+        return {kProcW, kProcVideoH + processExtraInputs(n) * kProcExtraRow};
     case NT::AudioEffect:
         return {kProcW, kProcH};
     case NT::Layer:
@@ -424,13 +425,13 @@ void ClipGraph::buildPorts(const Node &n, QVector<Port> &in, QVector<Port> &out)
         break;
     }
     case NT::Process: {
-        add(in, PK::ChainIn, PD::In, QStringLiteral("in"), true, {0.0, kProcH / 2});
+        add(in, PK::ChainIn, PD::In, QStringLiteral("in"), true, {0.0, kProcVideoH / 2});
         if (const ShaderEffectSpec *spec = ShaderEffects::byId(n.params.value("effect").toInt())) {
             for (int i = 0; i < spec->extraInputs; ++i)
                 add(in, PK::ChainIn, PD::In, spec->inputName(i), true,
-                    {0.0, kProcH + i * kProcExtraRow + kProcExtraRow / 2});
+                    {0.0, kProcVideoH + i * kProcExtraRow + kProcExtraRow / 2});
         }
-        add(out, PK::ChainOut, PD::Out, QStringLiteral("out"), false, {kProcW, kProcH / 2});
+        add(out, PK::ChainOut, PD::Out, QStringLiteral("out"), false, {kProcW, kProcVideoH / 2});
         break;
     }
     case NT::AudioEffect:

@@ -515,6 +515,7 @@ set(HEADERS
     include/core/graph/ClipGraphModels.h
     include/app/graph/GraphRuntime.h
     include/app/graph/ModulatorEngine.h
+    include/app/graph/ThumbScheduler.h
     include/app/BpmClock.h
     include/app/show/Scene.h
     include/app/show/SceneListModel.h

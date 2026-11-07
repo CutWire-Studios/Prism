@@ -176,6 +176,42 @@ FocusScope {
     onWidthChanged: if (!userMoved && nodeCount > 1) Qt.callLater(root.fitAll)
     onHeightChanged: if (!userMoved && nodeCount > 1) Qt.callLater(root.fitAll)
 
+    // ── Live thumbnails ────────────────────────────────────────────────────
+    // Tells the runtime which Input / Process nodes intersect the viewport so only those are
+    // re-rendered. Polled (4 Hz) rather than bound, so node drags and pans need no per-change work;
+    // a hidden editor reports none, which stops the runtime's thumbnail timer.
+    property string _reportedVisible: "-"
+
+    function reportVisibleNodes() {
+        const ids = []
+        if (root.visible && width > 0 && height > 0) {
+            const v = viewRect
+            for (let i = 0; i < nodeRepeater.count; ++i) {
+                const it = nodeRepeater.itemAt(i)
+                if (!it || (it.type !== NodePalette.nodeType.Input && it.type !== NodePalette.nodeType.Process))
+                    continue
+                if (it.x < v.x + v.width && it.x + it.width > v.x && it.y < v.y + v.height && it.y + it.height > v.y)
+                    ids.push(it.nodeId)
+            }
+        }
+        const key = ids.join(",")
+        if (key === _reportedVisible)
+            return
+        _reportedVisible = key
+        AppController.setVisibleNodeIds(ids)
+    }
+
+    Timer {
+        interval: 250
+        repeat: true
+        running: root.visible
+        triggeredOnStart: true
+        onTriggered: root.reportVisibleNodes()
+    }
+    onVisibleChanged: if (!visible) reportVisibleNodes()
+    onControllerChanged: _reportedVisible = "-"
+    Component.onDestruction: AppController.setVisibleNodeIds([])
+
     // ── Nodes ──────────────────────────────────────────────────────────────
 
     function nodeItem(id) {

@@ -1623,6 +1623,20 @@ void AppController::linkNodeObsScene(quint64 nodeId, const QString &sceneName)
 
 int AppController::nodeThumbnailRevision(quint64 nodeId) const { return graphRuntime()->thumbnailRevision(nodeId); }
 
+void AppController::setVisibleNodeIds(const QVariantList &ids)
+{
+    if (m_shuttingDown || !m_show->editedScene())
+        return;
+    GraphRuntime *rt = graphRuntime();
+    if (m_thumbRuntime && m_thumbRuntime != rt)
+        m_thumbRuntime->setVisibleNodes({});
+    m_thumbRuntime = rt;
+    QVector<NodeId> list;
+    for (const QVariant &v : ids)
+        list.append(v.toULongLong());
+    rt->setVisibleNodes(list);
+}
+
 double AppController::modulatorValue(quint64 nodeId) const { return graphRuntime()->modulatorValue(nodeId); }
 
 bool AppController::runScript(quint64 nodeId) { return graphRuntime()->runScript(nodeId); }

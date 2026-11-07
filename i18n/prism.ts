@@ -2929,10 +2929,6 @@ low/mid/high · beat</source>
 <context>
     <name>ProcessBody</name>
     <message>
-        <source>PROCESS</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>BYPASSED</source>
         <translation type="unfinished"></translation>
     </message>

@@ -334,6 +334,8 @@ public:
     Q_INVOKABLE QString expressionError(quint64 nodeId, const QString &name) const;
     /// 0 while the node has no thumbnail; otherwise a cache-buster for image://nodethumb/<id>?v=<rev>.
     Q_INVOKABLE int nodeThumbnailRevision(quint64 nodeId) const;
+    /// Node ids currently on screen in the node editor (empty when it is hidden); only these get live thumbnails.
+    Q_INVOKABLE void setVisibleNodeIds(const QVariantList &ids);
     /// Code, output and run hook of the script feeding a Text/Shader node's data input (empty when unconnected).
     ScriptBinding scriptBindingFor(NodeId dataNodeId) const;
 
@@ -523,6 +525,7 @@ private:
     ShowManager *m_show = nullptr;
     std::unique_ptr<VenueProfile> m_venue;
     QString m_lastEditedId;
+    QPointer<GraphRuntime> m_thumbRuntime;
     DeckController *m_deckController = nullptr;
     SessionManager *m_sessionManager = nullptr;
     TransitionController *m_transitionCtrl = nullptr;

@@ -2,6 +2,10 @@
 
 #include "app/BpmClock.h"
 #include "app/graph/ModulatorEngine.h"
+#include "app/graph/ThumbScheduler.h"
+#include "app/mainwindow/SourceFactory.h"
+#include "core/effects/EffectPassRunner.h"
+#include "core/sources/MediaSource.h"
 
 #include "core/media/AudioAnalyzer.h"
 #include "core/media/MediaProbe.h"
@@ -446,6 +450,81 @@ struct ScriptNode {
     }
 };
 
+constexpr int kLiveThumbW = 160;
+constexpr int kLiveThumbH = 90;
+
+const char *kBlitFragment =
+    "#ifdef GL_ES\n"
+    "precision mediump float;\n"
+    "#endif\n"
+    "varying vec2 v_uv;\n"
+    "uniform sampler2D u_input;\n"
+    "void main() { gl_FragColor = texture2D(u_input, v_uv); }\n";
+
+/// Input kinds a standalone thumbnail source may be built for. Devices and network feeds (camera,
+/// screen, NDI, phone) are excluded because a second consumer could contend with the deck's, and
+/// Scene / Slideshow sources are too heavy to run per node.
+bool liveThumbKind(SourceDescriptor::Kind k) {
+    using K = SourceDescriptor::Kind;
+    return k == K::VideoFile || k == K::Image || k == K::Canvas || k == K::Shader || k == K::Text
+        || k == K::Shape || k == K::SvgTemplate;
+}
+
+bool liveThumbCapable(const ClipGraph &g, const ClipGraph::ResolvedLayer &l);
+
+bool liveThumbCapable(const ClipGraph &g, const ClipGraph::ResolvedStream &s) {
+    for (const ClipGraph::ResolvedLayer &l : s.layers)
+        if (!liveThumbCapable(g, l))
+            return false;
+    return true;
+}
+
+bool liveThumbCapable(const ClipGraph &g, const ClipGraph::ResolvedLayer &l) {
+    if (l.composite) {
+        if (!liveThumbCapable(g, *l.composite))
+            return false;
+    } else if (!g.hasNode(l.inputNodeId) || !liveThumbKind(g.sourceDescriptor(l.inputNodeId).kind)) {
+        return false;
+    }
+    for (const SourceEffectRef &e : l.sourceEffects)
+        for (const auto &aux : e.aux)
+            if (aux && !liveThumbCapable(g, aux->stream))
+                return false;
+    return true;
+}
+
+/// Identity of a layer's source tree. Effect params are left out (they are pushed into the built
+/// tree) unless @p withParams: a flattened Layer composite cannot be updated in place.
+QString liveThumbKey(const ClipGraph &g, const ClipGraph::ResolvedLayer &l, bool withParams) {
+    QString k;
+    if (l.composite) {
+        k += QStringLiteral("C%1x%2(").arg(l.composite->canvasWidth).arg(l.composite->canvasHeight);
+        for (const ClipGraph::ResolvedLayer &sub : l.composite->layers) {
+            k += liveThumbKey(g, sub, withParams);
+            if (withParams)
+                k += QStringLiteral("@%1,%2,%3,%4,%5%6%7").arg(sub.baseX).arg(sub.baseY).arg(sub.baseW)
+                         .arg(sub.baseH).arg(sub.visible).arg(sub.flipH).arg(sub.flipV);
+            k += QLatin1Char(';');
+        }
+        k += QLatin1Char(')');
+    } else {
+        k += sourceKey(g.sourceDescriptor(l.inputNodeId));
+    }
+    for (const SourceEffectRef &e : l.sourceEffects) {
+        k += QStringLiteral("|%1").arg(e.effectId);
+        if (withParams)
+            k += QString::fromUtf8(QJsonDocument(e.params).toJson(QJsonDocument::Compact));
+        for (const auto &aux : e.aux) {
+            k += QLatin1Char('[');
+            if (aux)
+                for (const ClipGraph::ResolvedLayer &al : aux->stream.layers)
+                    k += liveThumbKey(g, al, withParams) + QLatin1Char(',');
+            k += QLatin1Char(']');
+        }
+    }
+    return k;
+}
+
 bool isScriptType(NT t) { return t == NT::Script || t == NT::AudioAnalyzer; }
 
 } // namespace
@@ -460,6 +539,80 @@ struct GraphRuntime::Impl {
     bool active = true;
     QHash<NodeId, QString> thumbKeys;
     QTimer *pollTimer = nullptr;
+
+    struct LiveThumb {
+        std::unique_ptr<MediaSource> source;
+        QString key;
+    };
+    ThumbScheduler thumbSched;
+    QTimer *thumbTimer = nullptr;
+    std::map<NodeId, LiveThumb> liveThumbs;
+    EffectPassRunner thumbScaler;
+
+    void updateThumbTimer() {
+        const bool run = active && !thumbSched.visible().isEmpty();
+        if (run && !thumbTimer->isActive()) {
+            thumbTimer->start(ThumbScheduler::kTickMs);
+            QTimer::singleShot(0, owner, [this] { owner->liveThumbTick(); });
+        } else if (!run) {
+            thumbTimer->stop();
+            if (thumbSched.visible().isEmpty())
+                liveThumbs.clear();
+        }
+    }
+
+    QImage grabThumb(MediaSource *s) {
+        const QSize sz = s->frameSize();
+        if (sz.isEmpty())
+            return {};
+        const QSize fit = sz.scaled(kLiveThumbW, kLiveThumbH, Qt::KeepAspectRatio);
+        if (s->glTexture() != 0) {
+            if (!thumbScaler.begin(fit))
+                return {};
+            QOpenGLShaderProgram *prog = thumbScaler.program(0, kBlitFragment);
+            const unsigned int tex = prog ? thumbScaler.runPass(prog, s->glTexture(), [](QOpenGLShaderProgram *) {}) : 0;
+            thumbScaler.end();
+            return tex ? thumbScaler.readback() : QImage();
+        }
+        const uint8_t *data = s->frameData();
+        if (!data)
+            return {};
+        const QImage wrapped(data, sz.width(), sz.height(), s->frameBytesPerLine(),
+                             s->hasAlpha() ? QImage::Format_RGBA8888 : QImage::Format_RGB888);
+        return wrapped.scaled(fit, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+    }
+
+    void refreshLiveThumb(NodeId id) {
+        ClipGraph *graph = owner->m_graph;
+        if (!graph->hasNode(id))
+            return;
+        const ClipGraph::ResolvedStream stream = graph->evaluateVideoInput(id);
+        if (stream.layers.size() != 1 || !liveThumbCapable(*graph, stream)) {
+            liveThumbs.erase(id);
+            return;
+        }
+        const ClipGraph::ResolvedLayer &layer = stream.layers.first();
+        const QString key = liveThumbKey(*graph, layer, layer.composite != nullptr);
+        auto it = liveThumbs.find(id);
+        bool fresh = false;
+        if (it == liveThumbs.end() || it->second.key != key
+            || (!layer.composite && !SourceFactory::updateLayerParams(it->second.source.get(), layer, graph))) {
+            std::unique_ptr<MediaSource> src = SourceFactory::buildLayerSource(layer, graph, owner);
+            if (!src) {
+                liveThumbs.erase(id);
+                return;
+            }
+            it = liveThumbs.insert_or_assign(id, LiveThumb{std::move(src), key}).first;
+            fresh = true;
+        }
+        MediaSource *top = it->second.source.get();
+        const bool advanced = top->nextFrame();
+        if ((!advanced && !fresh) || !top->isReady())
+            return;
+        const QImage image = grabThumb(top);
+        if (!image.isNull() && image != owner->thumbnail(id))
+            owner->setThumbnail(id, image);
+    }
 
     std::shared_ptr<RuntimeShared> shared = std::make_shared<RuntimeShared>();
     std::shared_ptr<ScriptHost> host = std::make_shared<ScriptHost>();
@@ -699,6 +852,7 @@ struct GraphRuntime::Impl {
         dataInputs.remove(id);
         thumbKeys.remove(id);
         thumbIds.remove(id);
+        liveThumbs.erase(id);
         QMutexLocker lock(&thumbs->mutex);
         thumbs->images.remove(id);
         thumbs->revisions.remove(id);
@@ -790,6 +944,7 @@ GraphRuntime::GraphRuntime(ClipGraph *graph, QObject *parent, std::shared_ptr<No
         }
         d->thumbIds.clear();
         d->thumbKeys.clear();
+        d->liveThumbs.clear();
         emit thumbnailChanged(0);
         d->rebuild(m_graph);
         generateMissingThumbnails();
@@ -798,6 +953,9 @@ GraphRuntime::GraphRuntime(ClipGraph *graph, QObject *parent, std::shared_ptr<No
     d->pollTimer = new QTimer(this);
     connect(d->pollTimer, &QTimer::timeout, this, &GraphRuntime::pollDataConsumers);
     d->pollTimer->start(kPollIntervalMs);
+
+    d->thumbTimer = new QTimer(this);
+    connect(d->thumbTimer, &QTimer::timeout, this, &GraphRuntime::liveThumbTick);
 }
 
 GraphRuntime::~GraphRuntime() {
@@ -935,6 +1093,32 @@ void GraphRuntime::requestThumbnail(NodeId id) {
     });
 }
 
+void GraphRuntime::setVisibleNodes(const QVector<NodeId> &ids) {
+    QVector<NodeId> keep;
+    for (NodeId id : ids) {
+        const ClipGraph::Node *n = m_graph->node(id);
+        if (n && (n->type == NT::Input || n->type == NT::Process))
+            keep.append(id);
+    }
+    if (keep == d->thumbSched.visible())
+        return;
+    d->thumbSched.setVisible(keep);
+    for (auto it = d->liveThumbs.begin(); it != d->liveThumbs.end();) {
+        if (keep.contains(it->first))
+            ++it;
+        else
+            it = d->liveThumbs.erase(it);
+    }
+    d->updateThumbTimer();
+}
+
+void GraphRuntime::liveThumbTick() {
+    if (!d->active)
+        return;
+    for (NodeId id : d->thumbSched.nextBatch())
+        d->refreshLiveThumb(id);
+}
+
 int GraphRuntime::thumbnailRevision(NodeId id) const {
     QMutexLocker lock(&d->thumbs->mutex);
     return d->thumbs->revisions.value(id, 0);
@@ -964,6 +1148,7 @@ void GraphRuntime::setActive(bool active) {
         d->pollTimer->start(kPollIntervalMs);
     else
         d->pollTimer->stop();
+    d->updateThumbTimer();
     for (auto &[id, sn] : d->scripts) {
         if (sn->runtime)
             QMetaObject::invokeMethod(sn->runtime, "setActive", Qt::QueuedConnection, Q_ARG(bool, active));
