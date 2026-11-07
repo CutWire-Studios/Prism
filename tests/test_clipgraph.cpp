@@ -1,6 +1,7 @@
 #include "core/graph/ClipGraph.h"
 #include "core/graph/ClipGraphModels.h"
 #include "core/graph/AudioEffects.h"
+#include "core/graph/ProcessEffects.h"
 
 #include <QtTest>
 #include <QJsonArray>
@@ -771,6 +772,31 @@ private slots:
         ClipGraph g2;
         QVERIFY(g2.fromJson(g.toJson()));
         QVERIFY(g2.node(p)->params.value("bypass").toBool());
+    }
+
+    void bypassChangesStructuralKeyAndTogglesAsOneUndoStep() {
+        ClipGraphController c;
+        const quint64 a = c.addNode(int(NT::Input), 0, 0, canvas("a"));
+        const quint64 p = c.addNode(int(NT::Process), 0, 0, {{"effect", 4}});
+        const quint64 q = c.addNode(int(NT::Process), 0, 0, {{"effect", 4}});
+        ClipGraph *g = c.graph();
+        QVERIFY(g->connectNodes(a, p));
+        QVERIFY(g->connectNodes(p, q));
+        const auto fx = [&] { return g->evaluateVideoInput(q).layers.first().sourceEffects; };
+        const QString before = ProcessEffects::sourceEffectsKey(fx());
+        QCOMPARE(fx().size(), 2);
+
+        c.clearHistory();
+        QVERIFY(c.toggleBypass({QVariant::fromValue<quint64>(p), QVariant::fromValue<quint64>(q)}));
+        QCOMPARE(fx().size(), 0);
+        QVERIFY(ProcessEffects::sourceEffectsKey(fx()) != before);
+        QVERIFY(g->node(p)->params.value("bypass").toBool());
+        QVERIFY(g->node(q)->params.value("bypass").toBool());
+
+        c.undo();
+        QVERIFY(!g->node(p)->params.value("bypass").toBool());
+        QVERIFY(!g->node(q)->params.value("bypass").toBool());
+        QCOMPARE(ProcessEffects::sourceEffectsKey(fx()), before);
     }
 
     void coalescedParamEditsShareOneUndoStep() {

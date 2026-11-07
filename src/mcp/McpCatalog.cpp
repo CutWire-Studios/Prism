@@ -355,11 +355,13 @@ const QList<Op> &ops()
                       {QStringLiteral("from"), QStringLiteral("to")})},
         {"set_process_params", "graph", "Change a process node's parameters",
          "Merge params onto a process node (e.g. Crop x/y/w/h). Decks rebuild. Fails type_mismatch "
-         "if node is not a process node.",
+         "if node is not a process node. Optional bypass:true/false skips the effect "
+         "(passes the main input through).",
          objectSchema({{QStringLiteral("node"), stringProp(QStringLiteral("Process node id"))},
                        {QStringLiteral("params"),
-                        objectProp(QStringLiteral("Keys to merge, e.g. {\"x\":0.1,\"w\":0.8}"))}},
-                      {QStringLiteral("node"), QStringLiteral("params")})},
+                        objectProp(QStringLiteral("Keys to merge, e.g. {\"x\":0.1,\"w\":0.8}"))},
+                       {QStringLiteral("bypass"), boolProp(QStringLiteral("Skip this effect"))}},
+                      {QStringLiteral("node")})},
         {"add_modulator_node", "graph", "Add an LFO, envelope, random or other modulator",
          "Place a Modulator node whose float output can drive any numeric parameter (see bind_param). "
          "kind is lfo (default), envelope, map_range, smooth, random, trigger, counter, toggle, "

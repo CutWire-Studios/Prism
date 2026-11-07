@@ -2040,6 +2040,8 @@ QJsonObject ClipGraph::snapshot(const std::function<double(NodeId)> &modulatorVa
                 QJsonObject extra{{QStringLiteral("effect"), n.params.value("effect").toInt()},
                                   {QStringLiteral("name"), d ? d->name : QString()},
                                   {QStringLiteral("params"), toJsonObject(n.params.value("params").toMap())}};
+                if (n.params.value("bypass").toBool())
+                    extra.insert(QStringLiteral("bypass"), true);
                 if (processExtraInputs(n) > 0) {
                     QJsonArray inputs;
                     for (const Port &p : inputPorts(id)) inputs.append(p.label);

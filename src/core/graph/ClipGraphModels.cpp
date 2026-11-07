@@ -414,6 +414,24 @@ bool ClipGraphController::setParams(quint64 id, const QVariantMap &params, bool 
     return true;
 }
 
+bool ClipGraphController::toggleBypass(const QVariantList &ids) {
+    QList<NodeId> targets;
+    bool allBypassed = true;
+    for (const QVariant &v : ids) {
+        const ClipGraph::Node *n = m_graph->node(v.toULongLong());
+        if (!n || (n->type != ClipGraph::NodeType::Process && n->type != ClipGraph::NodeType::AudioEffect))
+            continue;
+        targets.append(n->id);
+        allBypassed = allBypassed && n->params.value("bypass").toBool();
+    }
+    if (targets.isEmpty()) return false;
+    const QJsonObject before = m_graph->toJson();
+    for (NodeId id : std::as_const(targets))
+        m_graph->setParams(id, {{"bypass", !allBypassed}}, true);
+    pushSnapshot(QStringLiteral("Toggle bypass"), before);
+    return true;
+}
+
 bool ClipGraphController::setSource(quint64 id, const QVariantMap &descriptor) {
     const ClipGraph::Node *n = m_graph->node(id);
     if (!n || n->type != ClipGraph::NodeType::Input) return false;

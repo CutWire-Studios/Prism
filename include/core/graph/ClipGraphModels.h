@@ -120,6 +120,7 @@ public:
     /// coalesce: fold consecutive edits of the same keys into one undo step (slider drags).
     Q_INVOKABLE bool setParams(quint64 id, const QVariantMap &params, bool coalesce = false);
     /// Undoable replacement of an Input node's source; descriptor uses the .psm "source" keys.
+    Q_INVOKABLE bool toggleBypass(const QVariantList &ids);
     Q_INVOKABLE bool setSource(quint64 id, const QVariantMap &descriptor);
     bool setSourceDescriptor(quint64 id, const SourceDescriptor &desc);
     /// Decides whether a Scene source of this graph may point at the given scene id; setParams and

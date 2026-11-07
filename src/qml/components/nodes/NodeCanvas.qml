@@ -472,6 +472,9 @@ FocusScope {
         } else if (ctrl && event.key === Qt.Key_D) {
             controller.duplicateSelection()
             event.accepted = true
+        } else if (!ctrl && !shift && event.key === Qt.Key_M) {
+            controller.toggleBypass(controller.selection)
+            event.accepted = true
         } else if (!ctrl && event.key === Qt.Key_F) {
             frameSelection()
             event.accepted = true

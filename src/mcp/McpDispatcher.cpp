@@ -1390,10 +1390,14 @@ QJsonObject McpDispatcher::opSetProcessParams(const QJsonObject &args)
     if (!editor->hasNode(id))
         return err("not_found", QStringLiteral("No node %1").arg(id));
     const QJsonObject params = args.value(QStringLiteral("params")).toObject();
-    if (params.isEmpty())
-        return err("bad_args", QStringLiteral("params is required"));
-    if (editor->node(id)->type != ClipGraph::NodeType::Process
-        || !editor->setEffectParams(id, params.toVariantMap(), true))
+    const bool hasBypass = args.value(QStringLiteral("bypass")).isBool();
+    if (params.isEmpty() && !hasBypass)
+        return err("bad_args", QStringLiteral("params or bypass is required"));
+    if (editor->node(id)->type != ClipGraph::NodeType::Process)
+        return err("type_mismatch", QStringLiteral("Node is not a process node"));
+    if (hasBypass)
+        editor->setParams(id, {{QStringLiteral("bypass"), args.value(QStringLiteral("bypass")).toBool()}}, true);
+    if (!params.isEmpty() && !editor->setEffectParams(id, params.toVariantMap(), true))
         return err("type_mismatch", QStringLiteral("Node is not a process node"));
     m_window->mcpBumpRevision();
     return ok({{QStringLiteral("id"), QString::number(id)}, {QStringLiteral("params"), params}});

@@ -221,6 +221,20 @@ Item {
             onTriggered: root.runScriptRequested(nodeMenu.target.nodeId)
         }
         ThemedMenuItem {
+            id: bypassItem
+            visible: nodeMenu.type === nodeMenu.nodeTypes.Process || nodeMenu.type === nodeMenu.nodeTypes.AudioEffect
+            text: qsTr("Bypass")
+            checkable: true
+            onTriggered: root.controller.toggleBypass(root.controller.selection)
+
+            // A click overwrites a plain `checked:` binding; this keeps following the node.
+            Binding {
+                target: bypassItem
+                property: "checked"
+                value: nodeMenu.target ? !!nodeMenu.target.params.bypass : false
+            }
+        }
+        ThemedMenuItem {
             text: qsTr("Delete")
             icon.name: "trash-2"
             enabled: nodeMenu.type !== nodeMenu.nodeTypes.Output || graphCanvas.nodeCount <= 1
