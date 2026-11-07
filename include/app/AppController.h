@@ -323,6 +323,12 @@ public:
     BpmClock *bpmClock() { return &m_bpmClock; }
     Q_INVOKABLE void tap() { m_bpmClock.tap(); }
     Q_INVOKABLE void nudge(int dir) { m_bpmClock.nudge(dir); }
+    /// OSC learn: the next non-/prism/ OSC message within 10 s emits oscLearned(address); otherwise
+    /// oscLearnTimedOut(). Needs OSC enabled in the service settings.
+    Q_INVOKABLE void startOscLearn();
+    Q_INVOKABLE void cancelOscLearn();
+    /// Received OSC control addresses as [{address, value}], newest first.
+    QVariantList oscControls() const;
     /// Live output of a Modulator node of the edited scene.
     Q_INVOKABLE double modulatorValue(quint64 nodeId) const;
     /// "Run now" on a Script node; false when the node is not a running Script node.
@@ -460,6 +466,8 @@ signals:
     void obsChanged();
     void mcpEnabledChanged();
     void bpmChanged();
+    void oscLearned(const QString &address);
+    void oscLearnTimedOut();
 
     // Requests for the QML shell
     void confirmRequested(const QString &id, const QString &title, const QString &text);

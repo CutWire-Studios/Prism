@@ -18,7 +18,8 @@ struct ModulatorClock {
 /// the `mod(<nodeId>)` expression function. Input specs (params "in" and "b") are, in order: empty
 /// (0), a number literal, "mod:<nodeId>" (another modulator, one tick of lag when it is evaluated
 /// later), or anything else, which is passed to the InputResolver (audio band names such as "low",
-/// "mid", "high", "level", "beat", or "<analyzerId>:<band>").
+/// "mid", "high", "level", "beat", or "<analyzerId>:<band>"). The resolver also handles
+/// "osc:<address>", the latest value received on that OSC address.
 ///
 /// Params by kind (Kind enum order is persisted):
 ///   Lfo       shape, sync, rateHz, rateBeats, phase, width, seed, min, max
@@ -30,9 +31,10 @@ struct ModulatorClock {
 ///   Counter   in, threshold, steps   (output cycles 0..steps-1)
 ///   Toggle    in, threshold
 ///   Math      in (a), b, op
+///   ControlIn in, min, max, clamp   (in is read as 0..1 and scaled to min..max)
 class ModulatorEngine {
 public:
-    enum class Kind { Lfo, Envelope, MapRange, Smooth, Random, Trigger, Counter, Toggle, Math };
+    enum class Kind { Lfo, Envelope, MapRange, Smooth, Random, Trigger, Counter, Toggle, Math, ControlIn };
     enum class Shape { Sine, Triangle, Saw, Square, Pulse, Random };
     enum class MathOp { Add, Sub, Mul, Div, Min, Max, Pow, Abs };
 

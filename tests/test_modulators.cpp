@@ -26,6 +26,22 @@ double tickAt(ModulatorEngine &e, double t, double beat = 0.0, const ModulatorEn
 class TestModulators : public QObject {
     Q_OBJECT
 private slots:
+    void controlInScalesOscInputThroughResolver() {
+        ModulatorEngine e;
+        e.setNode(kId, {{"kind", int(Kind::ControlIn)}, {"in", QStringLiteral("osc:/fader/1")},
+                        {"min", 10.0}, {"max", 20.0}});
+        QString asked;
+        const auto resolver = [&](const QString &spec) {
+            asked = spec;
+            return 0.5;
+        };
+        QVERIFY(near(tickAt(e, 0.0, 0.0, resolver), 15.0));
+        QCOMPARE(asked, QStringLiteral("osc:/fader/1"));
+        const auto over = [](const QString &) { return 2.0; };
+        QVERIFY(near(tickAt(e, 0.1, 0.0, over), 20.0));
+        QVERIFY(near(tickAt(e, 0.2), 10.0));
+    }
+
     void lfoSineAtOneHertz() {
         ModulatorEngine e;
         e.setNode(kId, lfo(0));

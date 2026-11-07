@@ -5,10 +5,12 @@
 #include "app/transitions/TransitionController.h"
 
 #include <QHostInfo>
+#include <QMutexLocker>
 #include <QNetworkDatagram>
 #include <QSettings>
 #include <QTimer>
 #include <QUdpSocket>
+#include <algorithm>
 
 namespace {
 
@@ -33,6 +35,8 @@ bool isNumber(const QVariant &v)
     }
 }
 
+constexpr int kMaxControls = 512;
+
 bool isFloat(const QVariant &v)
 {
     return v.typeId() == QMetaType::Float || v.typeId() == QMetaType::Double;
@@ -46,6 +50,13 @@ OscServer::OscServer(AppController *mainWindow, QObject *parent)
     m_pollTimer = new QTimer(this);
     m_pollTimer->setInterval(kPollIntervalMs);
     connect(m_pollTimer, &QTimer::timeout, this, &OscServer::pollState);
+
+    m_learnTimer = new QTimer(this);
+    m_learnTimer->setSingleShot(true);
+    connect(m_learnTimer, &QTimer::timeout, this, [this] {
+        m_learning = false;
+        emit learnTimedOut();
+    });
 }
 
 OscServer::~OscServer()
@@ -111,13 +122,77 @@ void OscServer::onReadyRead()
     }
 }
 
-void OscServer::dispatch(const OscProtocol::OscMessage &msg)
+double OscServer::controlValue(const QString &address) const
 {
-    if (!m_mainWindow)
+    QMutexLocker lock(&m_controlMutex);
+    return m_controls.value(address).value;
+}
+
+QVariantList OscServer::recentControls() const
+{
+    QList<QPair<quint64, QVariantMap>> items;
+    {
+        QMutexLocker lock(&m_controlMutex);
+        for (auto it = m_controls.cbegin(); it != m_controls.cend(); ++it)
+            items.append({it->seq, QVariantMap{{QStringLiteral("address"), it.key()},
+                                               {QStringLiteral("value"), it->value}}});
+    }
+    std::sort(items.begin(), items.end(), [](const auto &a, const auto &b) { return a.first > b.first; });
+    QVariantList out;
+    for (const auto &item : items)
+        out.append(item.second);
+    return out;
+}
+
+void OscServer::startLearn(int timeoutMs)
+{
+    m_learning = true;
+    m_learnTimer->start(timeoutMs);
+}
+
+void OscServer::cancelLearn()
+{
+    m_learning = false;
+    m_learnTimer->stop();
+}
+
+void OscServer::recordControl(const OscProtocol::OscMessage &msg)
+{
+    bool found = false;
+    double value = 0.0;
+    for (const QVariant &arg : msg.args) {
+        if (arg.typeId() == QMetaType::Bool || isNumber(arg)) {
+            value = arg.toDouble();
+            found = true;
+            break;
+        }
+    }
+    if (!found)
         return;
 
+    {
+        QMutexLocker lock(&m_controlMutex);
+        if (!m_controls.contains(msg.address) && m_controls.size() >= kMaxControls)
+            return;
+        m_controls.insert(msg.address, {value, ++m_controlSeq});
+    }
+
+    if (m_learning) {
+        cancelLearn();
+        emit learned(msg.address);
+    }
+}
+
+void OscServer::dispatch(const OscProtocol::OscMessage &msg)
+{
     const QStringList parts = msg.address.split(QLatin1Char('/'), Qt::SkipEmptyParts);
-    if (parts.size() < 2 || parts.at(0) != QLatin1String("prism"))
+    if (parts.isEmpty())
+        return;
+    if (parts.at(0) != QLatin1String("prism")) {
+        recordControl(msg);
+        return;
+    }
+    if (!m_mainWindow || parts.size() < 2)
         return;
 
     const QString &cmd = parts.at(1);

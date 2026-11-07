@@ -10,6 +10,7 @@
 #include <QVariant>
 #include <QVector>
 #include <QtNumeric>
+#include <functional>
 #include <memory>
 
 #include "core/graph/ClipGraph.h"
@@ -89,6 +90,8 @@ public:
     // ── Modulators ────────────────────────────────────────────────────────────
     /// The global tempo clock; its bpm and beat position feed Modulator nodes, expressions and Lua.
     void setBpmClock(BpmClock *clock);
+    /// Resolves `osc:<address>` modulator inputs to the latest received control value.
+    void setControlSource(std::function<double(const QString &address)> source);
     /// Last value of a Modulator node (0 when unknown); refreshed by pollDataConsumers.
     double modulatorValue(NodeId id) const;
 

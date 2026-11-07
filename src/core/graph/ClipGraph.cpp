@@ -629,8 +629,8 @@ void ClipGraph::refreshNode(Node &n) {
     case NT::AudioAnalyzer:       n.title = QStringLiteral("Audio Analyzer"); break;
     case NT::Modulator: {
         static const char *const kTitles[] = {"LFO", "Envelope", "Map Range", "Smooth", "Random",
-                                              "Trigger", "Counter", "Toggle", "Math"};
-        n.title = QString::fromLatin1(kTitles[std::clamp(n.params.value("kind").toInt(), 0, 8)]);
+                                              "Trigger", "Counter", "Toggle", "Math", "Control In"};
+        n.title = QString::fromLatin1(kTitles[std::clamp(n.params.value("kind").toInt(), 0, 9)]);
         break;
     }
     }
@@ -2053,8 +2053,8 @@ QJsonObject ClipGraph::snapshot(const std::function<double(NodeId)> &modulatorVa
                 break;
             case NT::Modulator: {
                 static const char *const kKinds[] = {"lfo", "envelope", "map_range", "smooth", "random",
-                                                     "trigger", "counter", "toggle", "math"};
-                const int kind = std::clamp(n.params.value("kind").toInt(), 0, 8);
+                                                     "trigger", "counter", "toggle", "math", "control_in"};
+                const int kind = std::clamp(n.params.value("kind").toInt(), 0, 9);
                 QJsonObject params = toJsonObject(n.params);
                 params.remove(QStringLiteral("expressions"));
                 QJsonObject extra{{QStringLiteral("kind"), QString::fromLatin1(kKinds[kind])},

@@ -26,6 +26,9 @@ RowLayout {
         const m = /^mod\((\d+)\)$/.exec(expression)
         return m ? m[1] : ""
     }
+    // Id of the Control In modulator waiting for an OSC message to learn; 0 when idle.
+    property var learnId: 0
+    readonly property bool learning: learnId !== 0
     readonly property bool exprMode: expressionName.length > 0 && (expressionOpen || expression.length > 0)
 
     signal edited(real value)
@@ -116,7 +119,8 @@ RowLayout {
             anchors.verticalCenter: parent.verticalCenter
             elide: Text.ElideRight
             wrapMode: Text.NoWrap
-            text: root.linkForm && root.linkedId.length > 0 ? root.linkForm.modulatorLabel(root.linkedId) : ""
+            text: root.learning ? qsTr("Waiting for OSC\u2026")
+                                : (root.linkForm && root.linkedId.length > 0 ? root.linkForm.modulatorLabel(root.linkedId) : "")
         }
 
         IconButton {
@@ -124,9 +128,15 @@ RowLayout {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             glyph: "unlink-2"
-            tooltip: qsTr("Unlink from modulator")
+            tooltip: root.learning ? qsTr("Cancel OSC learn") : qsTr("Unlink from modulator")
             buttonSize: Theme.controlHeightSm
-            onClicked: root.expressionEdited("")
+            onClicked: {
+                if (root.learning) {
+                    AppController.cancelOscLearn()
+                    root.learnId = 0
+                }
+                root.expressionEdited("")
+            }
         }
     }
 
@@ -141,7 +151,34 @@ RowLayout {
             id: linkMenu
             onPicked: id => root.linkForm.bindModulator(root.expressionName, id,
                                                         root.from * root.exprScale, root.to * root.exprScale)
+            onLearnRequested: {
+                const id = root.linkForm.bindModulator(root.expressionName, 0,
+                                                       root.from * root.exprScale, root.to * root.exprScale, 9)
+                if (id) {
+                    root.learnId = id
+                    AppController.startOscLearn()
+                }
+            }
         }
+    }
+
+    Connections {
+        target: AppController
+        enabled: root.learning
+
+        function onOscLearned(address) {
+            root.linkForm.setModulatorInput(root.learnId, "osc:" + address)
+            root.learnId = 0
+        }
+
+        function onOscLearnTimedOut() {
+            root.learnId = 0
+        }
+    }
+
+    Component.onDestruction: {
+        if (root.learning)
+            AppController.cancelOscLearn()
     }
 
     ThemedToggleButton {

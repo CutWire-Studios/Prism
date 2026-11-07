@@ -193,6 +193,13 @@ double ModulatorEngine::evaluate(Node &n, const ModulatorClock &clk, double dt,
         }
         return 0.0;
     }
+    case Kind::ControlIn: {
+        double t = in();
+        if (flag(p, "clamp", true))
+            t = std::clamp(t, 0.0, 1.0);
+        const double lo = num(p, "min", 0.0), hi = num(p, "max", 1.0);
+        return lo + (hi - lo) * t;
+    }
     }
     return 0.0;
 }

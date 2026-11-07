@@ -31,8 +31,12 @@ ColumnLayout {
         set({ expressions: next })
     }
 
-    function bindModulator(name, modulatorId, lo, hi) {
-        return graph.bindParam(nodeId, name, modulatorId, lo, hi)
+    function bindModulator(name, modulatorId, lo, hi, newKind) {
+        return graph.bindParam(nodeId, name, modulatorId, lo, hi, newKind || 0)
+    }
+
+    function setModulatorInput(modulatorId, spec) {
+        graph.setParams(modulatorId, { "in": spec })
     }
 
     function modulatorLabel(id) {

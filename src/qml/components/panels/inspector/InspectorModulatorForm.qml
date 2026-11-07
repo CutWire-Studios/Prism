@@ -4,13 +4,15 @@ import QtQuick.Layouts
 import Prism
 
 // Modulator node: a kind choice and only the parameters that kind uses.
-// Kinds: 0 LFO, 1 Envelope, 2 Map range, 3 Smooth, 4 Random, 5 Trigger, 6 Counter, 7 Toggle, 8 Math.
+// Kinds: 0 LFO, 1 Envelope, 2 Map range, 3 Smooth, 4 Random, 5 Trigger, 6 Counter, 7 Toggle, 8 Math, 9 Control In.
 InspectorForm {
     id: root
 
     readonly property int kind: params.kind !== undefined ? params.kind : 0
     readonly property bool hasInput: kind !== 0 && kind !== 4
     readonly property bool timed: kind === 0 || kind === 4
+    // Param key ("in" or "b") waiting for an OSC message to learn, "" when idle.
+    property string learningKey: ""
     readonly property bool synced: !!params.sync
     readonly property var beatValues: [0.25, 0.5, 1, 2, 4, 8, 16, 32]
     readonly property var beatLabels: ["1/16", "1/8", "1/4", "1/2", qsTr("1 bar"), qsTr("2 bars"), qsTr("4 bars"), qsTr("8 bars")]
@@ -28,6 +30,11 @@ InspectorForm {
         }
         for (const c of ["0", "0.5", "1", "2"])
             opts.push({ text: qsTr("Constant %1").arg(c), value: c })
+        for (const k of ["in", "b"]) {
+            const cur = String(params[k] === undefined ? "" : params[k])
+            if (cur.startsWith("osc:") && !opts.some(o => o.value === cur))
+                opts.push({ text: qsTr("OSC %1").arg(cur.substring(4)), value: cur })
+        }
         return opts
     }
 
@@ -45,6 +52,26 @@ InspectorForm {
     function optionIndex(key) {
         const cur = String(params[key] === undefined ? "" : params[key])
         return inputOptions.findIndex(o => o.value === cur)
+    }
+
+    Connections {
+        target: AppController
+
+        function onOscLearned(address) {
+            if (root.learningKey.length === 0)
+                return
+            root.set(root.patch(root.learningKey, "osc:" + address))
+            root.learningKey = ""
+        }
+
+        function onOscLearnTimedOut() {
+            root.learningKey = ""
+        }
+    }
+
+    Component.onDestruction: {
+        if (root.learningKey.length > 0)
+            AppController.cancelOscLearn()
     }
 
     component NumRow: StyleSliderRow {
@@ -72,6 +99,19 @@ InspectorForm {
             currentIndex: form.optionIndex(key)
             onActivated: index => form.set(form.patch(key, form.inputOptions[index].value))
         }
+        ThemedButton {
+            text: form.learningKey === key ? qsTr("Waiting for OSC\u2026") : qsTr("Learn")
+            tooltip: qsTr("Use the next incoming OSC message as the input")
+            onClicked: {
+                if (form.learningKey === key) {
+                    AppController.cancelOscLearn()
+                    form.learningKey = ""
+                } else {
+                    form.learningKey = key
+                    AppController.startOscLearn()
+                }
+            }
+        }
     }
 
     StyleFieldRow {
@@ -80,7 +120,7 @@ InspectorForm {
         ThemedComboBox {
             Layout.fillWidth: true
             model: [qsTr("LFO"), qsTr("Envelope follower"), qsTr("Map range"), qsTr("Smooth / Lag"),
-                    qsTr("Random"), qsTr("Trigger"), qsTr("Counter"), qsTr("Toggle"), qsTr("Math")]
+                    qsTr("Random"), qsTr("Trigger"), qsTr("Counter"), qsTr("Toggle"), qsTr("Math"), qsTr("Control In")]
             currentIndex: root.kind
             onActivated: index => root.set({ kind: index })
         }
@@ -175,7 +215,7 @@ InspectorForm {
     NumRow {
         form: root
         key: "min"
-        visible: root.timed
+        visible: root.timed || root.kind === 9
         label: qsTr("Min")
         from: -1000
         to: 1000
@@ -187,7 +227,7 @@ InspectorForm {
         form: root
         key: "max"
         fallback: 1
-        visible: root.timed
+        visible: root.timed || root.kind === 9
         label: qsTr("Max")
         from: -1000
         to: 1000
@@ -308,7 +348,7 @@ InspectorForm {
     }
 
     ThemedSwitch {
-        visible: root.kind === 2
+        visible: root.kind === 2 || root.kind === 9
         text: qsTr("Clamp")
         checked: root.params.clamp !== false
         onToggled: root.set({ clamp: checked })

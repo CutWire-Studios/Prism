@@ -348,6 +348,8 @@ QJsonObject McpDispatcher::applyOne(const QString &tool, const QJsonObject &args
         return opListProcessEffects();
     if (tool == QLatin1String("list_nodes"))
         return opListNodes();
+    if (tool == QLatin1String("list_osc_controls"))
+        return opListOscControls();
     if (tool == QLatin1String("add_process_node"))
         return opAddProcessNode(args);
     if (tool == QLatin1String("add_layer_node"))
@@ -1243,6 +1245,17 @@ QJsonObject McpDispatcher::opListProcessEffects() const
     return ok({{QStringLiteral("effects"), effects}});
 }
 
+QJsonObject McpDispatcher::opListOscControls() const
+{
+    QJsonArray controls;
+    for (const QVariant &c : m_window->oscControls()) {
+        const QVariantMap m = c.toMap();
+        controls.append(QJsonObject{{QStringLiteral("address"), m.value(QStringLiteral("address")).toString()},
+                                    {QStringLiteral("value"), m.value(QStringLiteral("value")).toDouble()}});
+    }
+    return ok({{QStringLiteral("controls"), controls}});
+}
+
 QJsonObject McpDispatcher::opListNodes() const
 {
     auto *editor = m_window->clipGraph();
@@ -1391,7 +1404,8 @@ namespace {
 const QStringList kModulatorKinds = {
     QStringLiteral("lfo"),     QStringLiteral("envelope"), QStringLiteral("map_range"),
     QStringLiteral("smooth"),  QStringLiteral("random"),   QStringLiteral("trigger"),
-    QStringLiteral("counter"), QStringLiteral("toggle"),   QStringLiteral("math")};
+    QStringLiteral("counter"), QStringLiteral("toggle"),   QStringLiteral("math"),
+    QStringLiteral("control_in")};
 
 // -1 when the value is neither a kind name nor an index.
 int modulatorKindIndex(const QJsonValue &v)

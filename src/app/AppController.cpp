@@ -157,6 +157,8 @@ AppController::AppController(QObject *parent)
     m_transitionCtrl = new TransitionController(m_compositor.get(), this);
     m_remoteServer = new RemoteControlServer(this, this);
     m_oscServer = new OscServer(this, this);
+    connect(m_oscServer, &OscServer::learned, this, &AppController::oscLearned);
+    connect(m_oscServer, &OscServer::learnTimedOut, this, &AppController::oscLearnTimedOut);
     m_mcp = new prism::mcp::McpServer(this, this);
 
     SourceFactory::setSceneResolver([this](const QString &sceneId) -> std::unique_ptr<MediaSource> {
@@ -1185,6 +1187,9 @@ void AppController::attachScene(Scene *scene)
 {
     ClipGraph *graph = scene->graph();
     scene->runtime()->setBpmClock(&m_bpmClock);
+    scene->runtime()->setControlSource([osc = QPointer<OscServer>(m_oscServer)](const QString &address) {
+        return osc ? osc->controlValue(address) : 0.0;
+    });
     connect(graph, &ClipGraph::changed, this, [this, scene]() { onSceneGraphChanged(scene); });
     connect(graph, &ClipGraph::graphReset, this, [this]() { m_pushTimer->start(); });
     connect(graph, &ClipGraph::nodeChanged, this, [this, scene](NodeId id) { onNodeChanged(scene, id); });
@@ -1636,6 +1641,12 @@ void AppController::setVisibleNodeIds(const QVariantList &ids)
         list.append(v.toULongLong());
     rt->setVisibleNodes(list);
 }
+
+void AppController::startOscLearn() { m_oscServer->startLearn(); }
+
+void AppController::cancelOscLearn() { m_oscServer->cancelLearn(); }
+
+QVariantList AppController::oscControls() const { return m_oscServer->recentControls(); }
 
 double AppController::modulatorValue(quint64 nodeId) const { return graphRuntime()->modulatorValue(nodeId); }
 

@@ -625,10 +625,13 @@ struct GraphRuntime::Impl {
     QElapsedTimer clock;
     ModulatorEngine modulators;
     BpmClock *bpmClock = nullptr;
+    std::function<double(const QString &)> controlSource;
 
     void tickModulators() {
         const ModulatorClock mc{clock.elapsed() / 1000.0, bpmClock ? bpmClock->beats() : 0.0};
         modulators.tick(mc, [this](const QString &spec) {
+            if (spec.startsWith(QLatin1String("osc:")))
+                return controlSource ? controlSource(spec.mid(4)) : 0.0;
             QMutexLocker lock(&shared->mutex);
             const int colon = spec.indexOf(QLatin1Char(':'));
             const NodeId analyzer = colon > 0 ? spec.left(colon).toULongLong() : shared->latestBands;
@@ -1130,6 +1133,10 @@ QQuickImageProvider *GraphRuntime::createImageProvider(std::shared_ptr<NodeThumb
 
 void GraphRuntime::setBpmClock(BpmClock *clock) {
     d->bpmClock = clock;
+}
+
+void GraphRuntime::setControlSource(std::function<double(const QString &address)> source) {
+    d->controlSource = std::move(source);
 }
 
 double GraphRuntime::modulatorValue(NodeId id) const {

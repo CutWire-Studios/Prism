@@ -70,3 +70,17 @@ Expressions are evaluated at about 30 Hz while the scene's runtime is active. Av
 The result is written as the stored parameter value (for example opacity 0..1 even though the
 inspector shows percent) and is not clamped. A syntax or runtime error, a non-numeric result
 or an instruction overrun is shown under the field and leaves the last value in place.
+
+## OSC control input
+
+When the OSC server is enabled (service settings), every incoming message whose address is not under
+`/prism/` stores its first numeric (or boolean) argument as that address's latest value; `/prism/...`
+stays show control and is never stored. A Modulator input spec `osc:<address>` (for example
+`osc:/fader/1`) reads that value, 0 until something arrives, so any modulator kind can take it as
+`in`. The **Control In** modulator kind outputs `in` (read as 0..1, clamped by default) scaled to
+`min`..`max`, which is the usual one-node setup for a fader or knob.
+
+Learn fills the address in for you. In a modulator's inspector, **Learn** next to the input waits up
+to 10 seconds for the next control message and writes `osc:<address>`. On a parameter's link
+button, **Learn OSC...** creates a Control In modulator bound to that parameter (one undo step), shows
+"Waiting for OSC...", and fills in its input when a message arrives; the unlink button cancels.

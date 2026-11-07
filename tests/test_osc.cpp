@@ -1,5 +1,9 @@
 #include "app/remote/OscProtocol.h"
+#include "app/remote/OscServer.h"
 
+#include <QSettings>
+#include <QSignalSpy>
+#include <QUdpSocket>
 #include <QtEndian>
 #include <cstring>
 #include <QtTest>
@@ -30,6 +34,29 @@ QByteArray bundle(const QList<QByteArray> &elements)
         out += be32(quint32(e.size())) + e;
     return out;
 }
+
+constexpr quint16 kTestPort = 39231;
+
+struct ListeningServer {
+    ListeningServer() {
+        QSettings settings;
+        settings.setValue(QStringLiteral("osc/enabled"), true);
+        settings.setValue(QStringLiteral("osc/port"), kTestPort);
+        settings.setValue(QStringLiteral("osc/feedbackHost"), QString());
+        ok = server.applySettings();
+    }
+    ~ListeningServer() {
+        server.stop();
+        QSettings().setValue(QStringLiteral("osc/enabled"), false);
+    }
+    void fire(const QString &address, const QVariantList &args = {}) {
+        sock.writeDatagram(OscProtocol::encode({address, args}), QHostAddress::LocalHost, kTestPort);
+    }
+
+    OscServer server{nullptr};
+    QUdpSocket sock;
+    bool ok = false;
+};
 
 } // namespace
 
@@ -107,6 +134,58 @@ private slots:
     void decode_rejectsMalformed() {
         QFETCH(QByteArray, packet);
         QVERIFY(OscProtocol::decode(packet).isEmpty());
+    }
+
+    void controlValueUpdatesFromFloatIntAndBool() {
+        ListeningServer s;
+        QVERIFY(s.ok);
+        QCOMPARE(s.server.controlValue(QStringLiteral("/fader/1")), 0.0);
+        s.fire(QStringLiteral("/fader/1"), {0.5f});
+        QTRY_COMPARE(s.server.controlValue(QStringLiteral("/fader/1")), 0.5);
+        s.fire(QStringLiteral("/fader/1"), {3});
+        QTRY_COMPARE(s.server.controlValue(QStringLiteral("/fader/1")), 3.0);
+        s.fire(QStringLiteral("/fader/1"), {true});
+        QTRY_COMPARE(s.server.controlValue(QStringLiteral("/fader/1")), 1.0);
+        const QVariantList recent = s.server.recentControls();
+        QCOMPARE(recent.size(), 1);
+        QCOMPARE(recent.first().toMap().value(QStringLiteral("address")).toString(), QStringLiteral("/fader/1"));
+    }
+
+    void showControlAddressesAreNotControlValues() {
+        ListeningServer s;
+        QVERIFY(s.ok);
+        s.fire(QStringLiteral("/prism/fader"), {0.5f});
+        s.fire(QStringLiteral("/other"), {0.25f});
+        QTRY_COMPARE(s.server.controlValue(QStringLiteral("/other")), 0.25);
+        QCOMPARE(s.server.controlValue(QStringLiteral("/prism/fader")), 0.0);
+        QCOMPARE(s.server.recentControls().size(), 1);
+    }
+
+    void learnCapturesNextControlAddressNotShowControl() {
+        ListeningServer s;
+        QVERIFY(s.ok);
+        QSignalSpy learned(&s.server, &OscServer::learned);
+        s.server.startLearn();
+        QVERIFY(s.server.isLearning());
+        s.fire(QStringLiteral("/prism/fader"), {0.5f});
+        s.fire(QStringLiteral("/prism/scene/next"));
+        s.fire(QStringLiteral("/knob/7"), {0.1f});
+        QTRY_COMPARE(learned.size(), 1);
+        QCOMPARE(learned.first().first().toString(), QStringLiteral("/knob/7"));
+        QVERIFY(!s.server.isLearning());
+    }
+
+    void learnTimesOut() {
+        ListeningServer s;
+        QVERIFY(s.ok);
+        QSignalSpy learned(&s.server, &OscServer::learned);
+        QSignalSpy timedOut(&s.server, &OscServer::learnTimedOut);
+        s.server.startLearn(50);
+        QTRY_COMPARE(timedOut.size(), 1);
+        QVERIFY(!s.server.isLearning());
+        s.fire(QStringLiteral("/late"), {1.0f});
+        QTRY_COMPARE(s.server.controlValue(QStringLiteral("/late")), 1.0);
+        QCOMPARE(learned.size(), 0);
     }
 
     void decode_badBundleElementDropsAll() {

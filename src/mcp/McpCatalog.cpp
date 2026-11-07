@@ -305,6 +305,11 @@ const QList<Op> &ops()
          "List every node of the edited scene (input, process, layer, output, …) and connections. "
          "Same payload as inspect({graph:true}).graph. Returns {output, nodes, connections}.",
          objectSchema({}), true, false, true},
+        {"list_osc_controls", "graph", "See received OSC control addresses",
+         "List the OSC control addresses (anything not under /prism/) the OSC server has received, "
+         "newest first, with their latest value. Use an address as a modulator input \"osc:<address>\". "
+         "Requires OSC enabled in the service settings. Returns {controls:[{address, value}]}.",
+         objectSchema({}), true, false, true},
         {"add_process_node", "graph", "Add a video effect on the blue chain",
          "Place a process node (Crop, Flip, Blur, …). effect is required (name, slug, or id from "
          "list_process_effects). Optional params merge over defaults. Optional x/y are scene "
@@ -357,15 +362,15 @@ const QList<Op> &ops()
                       {QStringLiteral("node"), QStringLiteral("params")})},
         {"add_modulator_node", "graph", "Add an LFO, envelope, random or other modulator",
          "Place a Modulator node whose float output can drive any numeric parameter (see bind_param). "
-         "kind is lfo (default), envelope, map_range, smooth, random, trigger, counter, toggle or "
-         "math. params merge over the defaults: shape (0 sine, 1 triangle, 2 saw, 3 square, 4 pulse, "
+         "kind is lfo (default), envelope, map_range, smooth, random, trigger, counter, toggle, "
+         "math or control_in (in scaled to min..max). params merge over the defaults: shape (0 sine, 1 triangle, 2 saw, 3 square, 4 pulse, "
          "5 random), sync, rateHz, rateBeats, phase, width, seed, min, max; in / b (input: \"low\", "
-         "\"mid\", \"high\", \"level\", \"beat\", \"mod:<id>\" or a number), attackMs, releaseMs, "
+         "\"mid\", \"high\", \"level\", \"beat\", \"mod:<id>\", \"osc:<address>\" or a number), attackMs, releaseMs, "
          "inMin, inMax, outMin, outMax, clamp, curve, timeMs, smooth, threshold, durationMs, steps, op. "
          "Returns {id, type, kind}; list_nodes shows each modulator's live value.",
          objectSchema({{QStringLiteral("kind"),
                         stringProp(QStringLiteral("lfo, envelope, map_range, smooth, random, trigger, "
-                                                  "counter, toggle or math"))},
+                                                  "counter, toggle, math or control_in"))},
                        {QStringLiteral("params"),
                         objectProp(QStringLiteral("Parameter overlay, e.g. {\"rateHz\":0.5,\"max\":100}"))},
                        {QStringLiteral("x"), numberProp(QStringLiteral("Scene X (auto if omitted)"))},

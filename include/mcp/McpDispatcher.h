@@ -64,6 +64,7 @@ private:
     QJsonObject opLoadSession(const QJsonObject &args);
     QJsonObject opListProcessEffects() const;
     QJsonObject opListNodes() const;
+    QJsonObject opListOscControls() const;
     QJsonObject opAddProcessNode(const QJsonObject &args);
     QJsonObject opAddLayerNode(const QJsonObject &args);
     QJsonObject opConnect(const QJsonObject &args);

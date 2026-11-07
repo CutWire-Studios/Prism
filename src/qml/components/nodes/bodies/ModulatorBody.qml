@@ -8,7 +8,7 @@ Item {
     required property var node
     readonly property var p: node.params
     readonly property var kindNames: [qsTr("LFO"), qsTr("Envelope"), qsTr("Map range"), qsTr("Smooth"),
-                                      qsTr("Random"), qsTr("Trigger"), qsTr("Counter"), qsTr("Toggle"), qsTr("Math")]
+                                      qsTr("Random"), qsTr("Trigger"), qsTr("Counter"), qsTr("Toggle"), qsTr("Math"), qsTr("Control In")]
     property real value: 0
 
     Timer {
@@ -36,8 +36,8 @@ Item {
         color: Theme.sliderTrack
 
         Rectangle {
-            readonly property real lo: root.p.kind === 0 || root.p.kind === 4 ? root.p.min : (root.p.kind === 2 ? root.p.outMin : 0)
-            readonly property real hi: root.p.kind === 0 || root.p.kind === 4 ? root.p.max : (root.p.kind === 2 ? root.p.outMax : 1)
+            readonly property real lo: root.p.kind === 0 || root.p.kind === 4 || root.p.kind === 9 ? root.p.min : (root.p.kind === 2 ? root.p.outMin : 0)
+            readonly property real hi: root.p.kind === 0 || root.p.kind === 4 || root.p.kind === 9 ? root.p.max : (root.p.kind === 2 ? root.p.outMax : 1)
             height: parent.height
             radius: parent.radius
             color: NodePalette.scriptHue
