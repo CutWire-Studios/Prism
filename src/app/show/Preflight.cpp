@@ -1,6 +1,8 @@
 #include "app/show/Preflight.h"
 
 #include "app/show/ShowManager.h"
+#include "core/effects/EffectPassRunner.h"
+#include "core/effects/ShaderEffects.h"
 #include "core/graph/ClipGraph.h"
 #include "core/project/AssetPathResolver.h"
 #include "core/sources/SharedSourcePool.h"
@@ -18,6 +20,7 @@ QJsonObject PreflightIssue::toJson() const
     case Kind::MissingDevice: kindName = QStringLiteral("missing_device"); break;
     case Kind::MissingScene: kindName = QStringLiteral("missing_scene"); break;
     case Kind::SceneCycle: kindName = QStringLiteral("scene_cycle"); break;
+    case Kind::HistoryMemory: kindName = QStringLiteral("history_memory"); break;
     }
     return {{QStringLiteral("kind"), kindName},
             {QStringLiteral("sceneId"), sceneId},
@@ -49,6 +52,35 @@ QList<PreflightIssue> Preflight::run(const ShowManager &show, const QDir &sessio
     QList<PreflightIssue> issues;
     for (const Scene *scene : show.scenes()) {
         const ClipGraph *g = scene->graph();
+        qint64 historyBytes = 0;
+        bool historyReduced = false;
+        QStringList historyEffects;
+        for (const NodeId id : g->nodeIdsOfType(ClipGraph::NodeType::Process)) {
+            const ClipGraph::Node *node = g->node(id);
+            const ShaderEffectSpec *spec = node ? ShaderEffects::byId(node->params.value(QStringLiteral("effect")).toInt()) : nullptr;
+            if (!spec || (!spec->needsPrevFrame && spec->historyFrames <= 0))
+                continue;
+            const auto plan = EffectPassRunner::planHistory(show.canvasSize(), spec->historyFrames,
+                                                            spec->needsPrevFrame,
+                                                            EffectPassRunner::kHistorySourceBytes);
+            historyBytes += plan.bytes;
+            historyReduced |= !plan.ok || (plan.frames > 0 && plan.tile != show.canvasSize());
+            if (!historyEffects.contains(spec->name))
+                historyEffects.append(spec->name);
+        }
+        if (historyReduced || historyBytes > EffectPassRunner::kHistoryCapBytes / 2) {
+            PreflightIssue issue;
+            issue.kind = PreflightIssue::Kind::HistoryMemory;
+            issue.sceneId = scene->id();
+            issue.sceneName = scene->name();
+            issue.source = historyEffects.join(QStringLiteral(", "));
+            issue.detail = QObject::tr("Frame history needs about %1 MB at %2x%3 (cap %4 MB across the app); %5")
+                               .arg(historyBytes >> 20).arg(show.canvasSize().width()).arg(show.canvasSize().height())
+                               .arg(EffectPassRunner::kHistoryCapBytes >> 20)
+                               .arg(historyReduced ? QObject::tr("history frames will be reduced in resolution or skipped")
+                                                   : QObject::tr("consider a smaller canvas or fewer time effects"));
+            issues.append(issue);
+        }
         for (const NodeId id : g->nodeIdsOfType(ClipGraph::NodeType::Input)) {
             const SourceDescriptor desc = g->sourceDescriptor(id);
             PreflightIssue issue;

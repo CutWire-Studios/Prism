@@ -9,6 +9,7 @@
 #include <QVector2D>
 #include <QVector4D>
 #include <QDebug>
+#include <atomic>
 
 // Full-screen quad. Matches SlideshowSource's convention: the vertex shader flips
 // Y in clip space so the FBO's texel row 0 holds the image's top row, which is what
@@ -20,6 +21,54 @@ static const char *kVertexShader =
     "  v_uv = vec2(position.x * 0.5 + 0.5, 1.0 - (position.y * 0.5 + 0.5));\n"
     "  gl_Position = vec4(position.x, -position.y, 0.0, 1.0);\n"
     "}\n";
+
+static std::atomic<qint64> g_historyBytes{0};
+constexpr int kBlitKey = -1000;
+static const char *kBlitFragment =
+    "#ifdef GL_ES\n"
+    "precision mediump float;\n"
+    "#endif\n"
+    "varying vec2 v_uv;\n"
+    "uniform sampler2D u_input;\n"
+    "void main() { gl_FragColor = texture2D(u_input, v_uv); }\n";
+
+qint64 EffectPassRunner::historyBytesInUse() { return g_historyBytes.load(); }
+
+EffectPassRunner::HistoryPlan EffectPassRunner::planHistory(QSize frame, int frames, bool prev,
+                                                            qint64 budget, int maxTex) {
+    HistoryPlan p;
+    p.frames = qMax(0, frames);
+    if (frame.isEmpty()) return p;
+    const qint64 prevBytes = prev ? qint64(frame.width()) * frame.height() * 4 : 0;
+    if (prevBytes > budget) return p;
+    if (p.frames == 0) {
+        p.ok = true;
+        p.bytes = prevBytes;
+        return p;
+    }
+    int tw = frame.width(), th = frame.height();
+    for (;;) {
+        if (tw <= maxTex && th <= maxTex) {
+            const int cols = qMin(p.frames, maxTex / tw);
+            const int rows = (p.frames + cols - 1) / cols;
+            if (rows * th <= maxTex) {
+                const qint64 b = qint64(cols) * tw * rows * th * 4 + prevBytes;
+                if (b <= budget) {
+                    p.ok = true;
+                    p.tile = {tw, th};
+                    p.cols = cols;
+                    p.rows = rows;
+                    p.atlas = {cols * tw, rows * th};
+                    p.bytes = b;
+                    return p;
+                }
+            }
+        }
+        tw = int(tw * 0.7);
+        th = int(th * 0.7);
+        if (tw < 16 || th < 16) return p;
+    }
+}
 
 EffectPassRunner::~EffectPassRunner() {
     destroyGL();
@@ -73,6 +122,7 @@ void EffectPassRunner::destroyGL() {
         return;
     }
     m_context->makeCurrent(m_surface);
+    releaseHistory();
     auto *f = m_context->functions();
     if (m_vbo)      { f->glDeleteBuffers(1, &m_vbo); m_vbo = 0; }
     if (m_inputTex) { f->glDeleteTextures(1, &m_inputTex); m_inputTex = 0; }
@@ -360,4 +410,139 @@ QImage EffectPassRunner::readback() {
     // framebuffer bottom-first, which under this convention is the top row — the
     // resulting QImage is already top-first (matching the glTexture() path).
     return img;
+}
+
+// ── History (feedback / time effects) ───────────────────────────────────────
+
+void EffectPassRunner::releaseHistory() {
+    if (m_glInit && m_context) {
+        auto *f = m_context->functions();
+        if (m_hist.atlas)   f->glDeleteTextures(1, &m_hist.atlas);
+        if (m_hist.prevTex) f->glDeleteTextures(1, &m_hist.prevTex);
+        if (m_hist.fbo)     f->glDeleteFramebuffers(1, &m_hist.fbo);
+    }
+    g_historyBytes -= m_hist.charged;
+    m_hist.atlas = m_hist.prevTex = m_hist.fbo = 0;
+    m_hist.charged = 0;
+    m_hist.head = 0;
+    m_hist.plan = {};
+    m_hist.frame = {};
+}
+
+void EffectPassRunner::clearTexture(unsigned int tex, QSize size) {
+    auto *f = m_context->functions();
+    f->glBindFramebuffer(GL_FRAMEBUFFER, m_hist.fbo);
+    f->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+    f->glViewport(0, 0, size.width(), size.height());
+    f->glClearColor(0.f, 0.f, 0.f, 0.f);
+    f->glClear(GL_COLOR_BUFFER_BIT);
+    f->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+static unsigned int allocHistoryTexture(QOpenGLFunctions *f, QSize size) {
+    unsigned int t = 0;
+    f->glGenTextures(1, &t);
+    f->glBindTexture(GL_TEXTURE_2D, t);
+    f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    f->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size.width(), size.height(), 0,
+                    GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    return t;
+}
+
+bool EffectPassRunner::configureHistory(QSize frame, int frames, bool prev) {
+    if (m_hist.plan.ok && m_hist.frame == frame && m_hist.reqFrames == frames && m_hist.reqPrev == prev)
+        return true;
+    const bool warned = m_hist.warned;
+    releaseHistory();
+    m_hist.warned = warned;
+    m_hist.frame = frame;
+    m_hist.reqFrames = frames;
+    m_hist.reqPrev = prev;
+
+    const qint64 avail = qMin(kHistorySourceBytes, kHistoryCapBytes - g_historyBytes.load());
+    int maxTex = 4096;
+    auto *f = m_context->functions();
+    GLint hw = 0;
+    f->glGetIntegerv(GL_MAX_TEXTURE_SIZE, &hw);
+    if (hw > 0) maxTex = qMin(maxTex, int(hw));
+    const HistoryPlan plan = planHistory(frame, frames, prev, qMax<qint64>(0, avail), maxTex);
+    if (!plan.ok) {
+        if (!m_hist.warned)
+            qWarning() << "EffectPassRunner: history buffers do not fit the memory cap; passing through";
+        m_hist.warned = true;
+        m_hist.frame = {};
+        return false;
+    }
+    m_hist.warned = false;
+    m_hist.plan = plan;
+    m_hist.charged = plan.bytes;
+    g_historyBytes += plan.bytes;
+    f->glGenFramebuffers(1, &m_hist.fbo);
+    if (prev) {
+        m_hist.prevTex = allocHistoryTexture(f, frame);
+        clearTexture(m_hist.prevTex, frame);
+    }
+    if (plan.frames > 0) {
+        m_hist.atlas = allocHistoryTexture(f, plan.atlas);
+        clearTexture(m_hist.atlas, plan.atlas);
+    }
+    f->glBindTexture(GL_TEXTURE_2D, 0);
+    return true;
+}
+
+void EffectPassRunner::resetHistory() {
+    if (!m_glInit || !m_hist.plan.ok) return;
+    m_context->makeCurrent(m_surface);
+    if (m_hist.prevTex) clearTexture(m_hist.prevTex, m_hist.frame);
+    if (m_hist.atlas) clearTexture(m_hist.atlas, m_hist.plan.atlas);
+    m_hist.head = 0;
+    m_context->doneCurrent();
+}
+
+void EffectPassRunner::commitHistory(unsigned int inputTex) {
+    if (!m_hist.plan.ok) return;
+    auto *f = m_context->functions();
+    if (m_hist.prevTex && m_lastFbo) {
+        m_lastFbo->bind();
+        f->glBindTexture(GL_TEXTURE_2D, m_hist.prevTex);
+        f->glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, m_size.width(), m_size.height());
+        f->glBindTexture(GL_TEXTURE_2D, 0);
+        m_lastFbo->release();
+    }
+    if (m_hist.plan.frames <= 0 || inputTex == 0) return;
+    QOpenGLShaderProgram *blit = program(kBlitKey, kBlitFragment);
+    if (!blit) return;
+
+    const HistoryPlan &pl = m_hist.plan;
+    const int col = m_hist.head % pl.cols;
+    const int row = m_hist.head / pl.cols;
+    f->glBindFramebuffer(GL_FRAMEBUFFER, m_hist.fbo);
+    f->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_hist.atlas, 0);
+    f->glViewport(col * pl.tile.width(), row * pl.tile.height(), pl.tile.width(), pl.tile.height());
+    f->glDisable(GL_BLEND);
+    blit->bind();
+    f->glActiveTexture(GL_TEXTURE0);
+    f->glBindTexture(GL_TEXTURE_2D, inputTex);
+    blit->setUniformValue("u_input", 0);
+    f->glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+    const int posLoc = blit->attributeLocation("position");
+    if (posLoc >= 0) {
+        f->glEnableVertexAttribArray(static_cast<unsigned int>(posLoc));
+        f->glVertexAttribPointer(static_cast<unsigned int>(posLoc), 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+    }
+    f->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    if (posLoc >= 0)
+        f->glDisableVertexAttribArray(static_cast<unsigned int>(posLoc));
+    f->glBindBuffer(GL_ARRAY_BUFFER, 0);
+    blit->release();
+    f->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    m_hist.head = (m_hist.head + 1) % pl.frames;
+}
+
+unsigned int EffectPassRunner::passThrough(unsigned int inTex) {
+    QOpenGLShaderProgram *blit = program(kBlitKey, kBlitFragment);
+    return blit ? runPass(blit, inTex, {}) : inTex;
 }

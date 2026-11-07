@@ -899,6 +899,7 @@ void AppController::refreshSceneWarnings()
         case PreflightIssue::Kind::MissingDevice: text = tr("Missing device: %1"); break;
         case PreflightIssue::Kind::MissingScene: text = tr("Missing scene: %1"); break;
         case PreflightIssue::Kind::SceneCycle: text = tr("Scene loops back into itself: %1"); break;
+        case PreflightIssue::Kind::HistoryMemory: text = tr("%1"); break;
         }
         w += (w.isEmpty() ? QString() : QStringLiteral("\n")) + text.arg(i.detail.isEmpty() ? i.source : i.detail);
     }

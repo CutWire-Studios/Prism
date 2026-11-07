@@ -35,7 +35,41 @@ public:
         unsigned int tex = 0;
     };
 
+    /// Layout of the per-source history buffers: a full-size copy of the previous output (u_prev)
+    /// and an atlas of the last `frames` input frames (u_history), one tile per frame.
+    struct HistoryPlan {
+        bool   ok = false;
+        int    frames = 0;
+        QSize  tile;          // per-frame size inside the atlas; shrinks below the frame size under the cap
+        int    cols = 0, rows = 0;
+        QSize  atlas;
+        qint64 bytes = 0;     // atlas plus the previous-output copy
+    };
+
+    static constexpr qint64 kHistoryCapBytes    = 256ll * 1024 * 1024;   // all sources together
+    static constexpr qint64 kHistorySourceBytes = 128ll * 1024 * 1024;   // one source
+
+    /// Pure sizing: shrinks the tiles (x0.7 steps) until the atlas fits @p maxTex and @p budget.
+    /// ok is false when even the smallest tile (16 px) or the previous-output copy does not fit.
+    static HistoryPlan planHistory(QSize frame, int frames, bool prev, qint64 budget, int maxTex = 4096);
+    static qint64 historyBytesInUse();
+
     ~EffectPassRunner();
+
+    /// Between begin() and end(): (re)allocate history for @p frame. A size or request change
+    /// reallocates and clears. False when the cap leaves no room; the caller should pass through.
+    bool configureHistory(QSize frame, int frames, bool prev);
+    const HistoryPlan &historyPlan() const { return m_hist.plan; }
+    unsigned int prevTexture() const { return m_hist.prevTex; }
+    unsigned int historyAtlas() const { return m_hist.atlas; }
+    /// Next atlas slot to be written; age 1 is the slot before it.
+    int historyHead() const { return m_hist.head; }
+    /// After the pass, before end(): stores the output as u_prev and pushes @p inputTex into the ring.
+    void commitHistory(unsigned int inputTex);
+    /// Clears both buffers (makes the context current itself; not for use between begin() and end()).
+    void resetHistory();
+    /// Copies @p inTex to the output FBO unchanged.
+    unsigned int passThrough(unsigned int inTex);
 
     /// Make the offscreen context current and ensure both ping-pong FBOs match
     /// @p size. Returns false if GL could not be initialised (e.g. no global share
@@ -99,6 +133,8 @@ private:
     bool initGL();
     void destroyGL();
     bool ensureFbos(QSize size);
+    void releaseHistory();
+    void clearTexture(unsigned int tex, QSize size);
 
     QOffscreenSurface        *m_surface = nullptr;
     QOpenGLContext           *m_context = nullptr;
@@ -114,4 +150,15 @@ private:
     unsigned int             m_transparentTex = 0;
     QHash<int, QOpenGLShaderProgram *> m_programs;
     QOpenGLShaderProgram     *m_compositeProg = nullptr;
+
+    struct History {
+        QSize frame;
+        int   reqFrames = 0;
+        bool  reqPrev = false;
+        bool  warned = false;
+        HistoryPlan  plan;
+        unsigned int atlas = 0, prevTex = 0, fbo = 0;
+        int   head = 0;
+        qint64 charged = 0;
+    } m_hist;
 };

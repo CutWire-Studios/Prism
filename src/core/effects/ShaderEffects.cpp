@@ -80,6 +80,7 @@ QList<ShaderEffectSpec> load() {
         s.fragFile = o.value("frag").toString(s.slug + QStringLiteral(".frag"));
         s.multiPass = o.value("multiPass").toBool(false);
         s.needsPrevFrame = o.value("needsPrevFrame").toBool(false);
+        s.historyFrames = qBound(0, o.value("history").toInt(0), 32);
         for (const QJsonValue &nv : o.value("inputs").toArray())
             s.inputNames << nv.toString();
         s.extraInputs = o.value("extraInputs").toInt(s.inputNames.size());
@@ -188,6 +189,24 @@ QByteArray fragmentSource(const ShaderEffectSpec &spec) {
         src += "uniform sampler2D u_input" + QByteArray::number(i) + ";\n";
     for (const ShaderParam &p : spec.params)
         src += QByteArray("uniform ") + glslType(p.type) + " " + uniformName(p) + ";\n";
+    if (spec.needsPrevFrame)
+        src += "uniform sampler2D u_prev;\n";
+    if (spec.historyFrames > 0)
+        src +=
+            "uniform sampler2D u_history;\n"
+            "uniform vec4 u_historyInfo;\n"    // cols, rows, ring size, next slot to write
+            "uniform vec2 u_historyAtlas;\n"   // atlas size in px
+            "uniform vec2 u_historyTile;\n"    // tile size in px
+            // Input frame @p age ticks ago (1 = the previous tick), age clamped to the ring size.
+            "vec4 historyFrame(float age, vec2 uv) {\n"
+            "    float n = u_historyInfo.z;\n"
+            "    float slot = mod(u_historyInfo.w + n - clamp(floor(age + 0.5), 1.0, n), n);\n"
+            "    float row = floor((slot + 0.5) / u_historyInfo.x);\n"
+            "    float col = slot - row * u_historyInfo.x;\n"
+            "    vec2 px = vec2(col, row) * u_historyTile\n"
+            "            + clamp(uv * u_historyTile, vec2(0.5), u_historyTile - 0.5);\n"
+            "    return texture2D(u_history, px / u_historyAtlas);\n"
+            "}\n";
     src += readResource(QStringLiteral("prelude.glsl"));
     src += "\n";
     src += body;

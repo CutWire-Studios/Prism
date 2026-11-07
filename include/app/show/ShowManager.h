@@ -4,6 +4,7 @@
 #include <QList>
 #include <QObject>
 #include <QSet>
+#include <QSize>
 #include <QString>
 #include <QStringList>
 #include <memory>
@@ -96,6 +97,7 @@ public:
     // ── Shared state ─────────────────────────────────────────────────────────
     /// Output canvas every scene graph lays out against.
     void setCanvasSize(int w, int h);
+    QSize canvasSize() const { return {m_canvasW, m_canvasH}; }
     QQuickImageProvider *createImageProvider() const;
     /// Live, Staging and the edited scene run their scripts; the rest are paused.
     void updateRuntimeActivity();

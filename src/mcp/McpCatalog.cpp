@@ -210,7 +210,7 @@ const QList<Op> &ops()
                        {QStringLiteral("durationMs"), integerProp(QStringLiteral("Duration in milliseconds"))}},
                       {QStringLiteral("mode"), QStringLiteral("durationMs")})},
         {"preflight", "decks", "Check the show for missing media",
-         "Scan every scene for missing files, devices and scene references. Returns {issues:[{kind: missing_file|missing_device|missing_scene|scene_cycle, "
+         "Scan every scene for missing files, devices and scene references. Returns {issues:[{kind: missing_file|missing_device|missing_scene|scene_cycle|history_memory, "
          "sceneId, scene, source, detail}]}.",
          objectSchema({}), true, false, true},
         {"play", "decks", "Play a deck", "Start playback on the Live or Staging deck.",

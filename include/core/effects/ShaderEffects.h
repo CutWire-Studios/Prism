@@ -27,7 +27,8 @@ struct ShaderEffectSpec {
     QList<ShaderParam> params;
     QString fragFile;
     bool    multiPass = false;
-    bool    needsPrevFrame = false;
+    bool    needsPrevFrame = false;   // binds the previous output as u_prev
+    int     historyFrames = 0;        // > 0 binds the last N input frames as u_history (see historyFrame())
     int     extraInputs = 0;
     QStringList inputNames;   // names of the extra input ports; defaults to in1..inN
 

@@ -85,7 +85,8 @@ bool ShaderEffectSource::nextFrame() {
     const bool innerNew = reprocess ? false
                         : m_presentAt >= 0.0 ? m_inner->presentAt(m_presentAt)
                                              : m_inner->nextFrame();
-    if (!innerNew && !anyAuxNew && !reprocess && m_outTex != 0) return false;
+    const bool timeBased = m_spec->needsPrevFrame || m_spec->historyFrames > 0;
+    if (!innerNew && !anyAuxNew && !reprocess && !timeBased && m_outTex != 0) return false;
     if (!m_inner->isReady()) return false;
     m_dirty = false;
 
@@ -102,6 +103,13 @@ bool ShaderEffectSource::nextFrame() {
                              m_inner->hasAlpha() ? QImage::Format_RGBA8888
                                                  : QImage::Format_RGB888);
         inTex = m_runner.uploadInput(wrapped.convertToFormat(QImage::Format_RGBA8888));
+    }
+
+    if (timeBased && !m_runner.configureHistory(sz, m_spec->historyFrames, m_spec->needsPrevFrame)) {
+        m_outTex = m_runner.passThrough(inTex);
+        m_runner.end();
+        m_cpuValid = false;
+        return true;
     }
 
     QOpenGLShaderProgram *prog = m_runner.program(m_spec->id, m_fragment.constData());
@@ -144,9 +152,20 @@ bool ShaderEffectSource::nextFrame() {
                           ft.tex != 0 ? ft.tex : m_runner.transparentTexture()});
     }
 
-    m_outTex = m_runner.runPass(prog, inTex, [this, sz](QOpenGLShaderProgram *p) {
+    const EffectPassRunner::HistoryPlan &hp = m_runner.historyPlan();
+    if (m_spec->needsPrevFrame)
+        extras.push_back({"u_prev", m_runner.prevTexture()});
+    if (m_spec->historyFrames > 0)
+        extras.push_back({"u_history", m_runner.historyAtlas()});
+    m_outTex = m_runner.runPass(prog, inTex, [this, sz, &hp](QOpenGLShaderProgram *p) {
         applyUniforms(p, sz);
+        if (m_spec->historyFrames > 0) {
+            p->setUniformValue("u_historyInfo", QVector4D(hp.cols, hp.rows, hp.frames, m_runner.historyHead()));
+            p->setUniformValue("u_historyAtlas", QVector2D(hp.atlas.width(), hp.atlas.height()));
+            p->setUniformValue("u_historyTile", QVector2D(hp.tile.width(), hp.tile.height()));
+        }
     }, extras);
+    if (timeBased) m_runner.commitHistory(inTex);
     m_runner.end();
     m_cpuValid = false;
     return true;

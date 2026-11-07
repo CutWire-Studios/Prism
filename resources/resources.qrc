@@ -310,6 +310,11 @@
         <file>shaders/effects/displace_image.frag</file>
         <file>shaders/effects/switch.frag</file>
         <file>shaders/effects/lut.frag</file>
+        <file>shaders/effects/feedback.frag</file>
+        <file>shaders/effects/trails.frag</file>
+        <file>shaders/effects/time_echo.frag</file>
+        <file>shaders/effects/frame_delay.frag</file>
+        <file>shaders/effects/slit_scan.frag</file>
         <file>shaders/slideshow/cube.glsl</file>
         <file>shaders/slideshow/flip.glsl</file>
         <file>shaders/slideshow/pagecurl.glsl</file>

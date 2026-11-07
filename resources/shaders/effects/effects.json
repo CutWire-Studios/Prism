@@ -633,6 +633,75 @@
         { "name": "lut", "type": "file", "label": "LUT file", "filter": "*.cube *.png" },
         { "name": "amount", "type": "float", "label": "Amount", "min": 0, "max": 1, "default": 1, "step": 0.01 }
       ]
+    },
+    {
+      "id": 62,
+      "slug": "feedback",
+      "name": "Feedback",
+      "category": "Time",
+      "description": "Feed the previous output back into the picture, zooming, turning or shifting it a little each frame to make tunnels and echoes. Decay sets how fast the loop fades.",
+      "frag": "feedback.frag",
+      "needsPrevFrame": true,
+      "params": [
+        { "name": "zoom", "type": "float", "label": "Zoom", "min": 0.8, "max": 1.2, "default": 1.02, "step": 0.005 },
+        { "name": "rotation", "type": "float", "label": "Rotation (degrees)", "min": -15, "max": 15, "default": 1, "step": 0.1 },
+        { "name": "offsetX", "type": "float", "label": "Offset X", "min": -0.1, "max": 0.1, "default": 0, "step": 0.001 },
+        { "name": "offsetY", "type": "float", "label": "Offset Y", "min": -0.1, "max": 0.1, "default": 0, "step": 0.001 },
+        { "name": "decay", "type": "float", "label": "Decay", "min": 0, "max": 1, "default": 0.9, "step": 0.01 },
+        { "name": "mix", "type": "float", "label": "Mix", "min": 0, "max": 1, "default": 1, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 63,
+      "slug": "trails",
+      "name": "Trails",
+      "category": "Time",
+      "description": "Leave fading trails behind moving things. Decay sets how long a trail lasts; Max keeps the brightest, Add piles light up, Mix blurs frames together.",
+      "frag": "trails.frag",
+      "needsPrevFrame": true,
+      "params": [
+        { "name": "decay", "type": "float", "label": "Decay", "min": 0, "max": 1, "default": 0.9, "step": 0.01 },
+        { "name": "blend", "type": "choice", "label": "Blend", "choices": ["Max", "Add", "Mix"], "default": 0 }
+      ]
+    },
+    {
+      "id": 64,
+      "slug": "time_echo",
+      "name": "Time echo",
+      "category": "Time",
+      "description": "Layer fainter copies of earlier frames over the live picture. Spacing is how many frames apart the echoes are.",
+      "frag": "time_echo.frag",
+      "history": 32,
+      "params": [
+        { "name": "echoes", "type": "int", "label": "Echoes", "min": 1, "max": 8, "default": 3, "step": 1 },
+        { "name": "spacing", "type": "int", "label": "Spacing (frames)", "min": 1, "max": 4, "default": 4, "step": 1 },
+        { "name": "decay", "type": "float", "label": "Decay", "min": 0, "max": 1, "default": 0.6, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 65,
+      "slug": "frame_delay",
+      "name": "Frame delay",
+      "category": "Time",
+      "description": "Show the picture from a number of frames ago. Up to 32 frames; it is blank until enough frames have arrived.",
+      "frag": "frame_delay.frag",
+      "history": 32,
+      "params": [
+        { "name": "delay", "type": "int", "label": "Delay (frames)", "min": 0, "max": 32, "default": 8, "step": 1 }
+      ]
+    },
+    {
+      "id": 66,
+      "slug": "slit_scan",
+      "name": "Slit scan",
+      "category": "Time",
+      "description": "Each column (or row) shows a different moment in time, so motion smears into waves. Uses up to 32 past frames.",
+      "frag": "slit_scan.frag",
+      "history": 32,
+      "params": [
+        { "name": "direction", "type": "choice", "label": "Direction", "choices": ["Horizontal", "Vertical"], "default": 0 },
+        { "name": "frames", "type": "int", "label": "Frames used", "min": 2, "max": 32, "default": 32, "step": 1 }
+      ]
     }
   ]
 }

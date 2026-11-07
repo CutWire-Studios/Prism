@@ -12,7 +12,7 @@
 class ShowManager;
 
 struct PreflightIssue {
-    enum class Kind { MissingFile, MissingDevice, MissingScene, SceneCycle };
+    enum class Kind { MissingFile, MissingDevice, MissingScene, SceneCycle, HistoryMemory };
 
     Kind kind = Kind::MissingFile;
     QString sceneId;
@@ -24,7 +24,8 @@ struct PreflightIssue {
 };
 
 /// Walks every scene's input nodes and reports media files that cannot be found, capture
-/// devices that are not present, and Scene sources whose scene was deleted or loops back.
+/// devices that are not present, Scene sources whose scene was deleted or loops back, and scenes whose
+/// feedback/time effects need more frame-history memory than the budget allows.
 namespace Preflight {
 
 using DeviceProbe = std::function<bool(const SourceDescriptor &)>;

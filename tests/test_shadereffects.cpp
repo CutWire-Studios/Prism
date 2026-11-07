@@ -1,3 +1,4 @@
+#include "core/effects/EffectPassRunner.h"
 #include "core/effects/ShaderEffects.h"
 #include "core/graph/ProcessEffects.h"
 #include "core/effects/ShaderEffectSource.h"
@@ -17,6 +18,7 @@
 #include <QSet>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <cmath>
 
 namespace {
 class StubSource : public MediaSource {
@@ -27,6 +29,43 @@ public:
     const uint8_t *frameData() const override { return nullptr; }
     bool nextFrame() override { return false; }
 };
+
+struct HistoryRig {
+    ImageSource *img = nullptr;
+    std::unique_ptr<ShaderEffectSource> src;
+
+    bool init(const QString &slug, const QJsonObject &over) {
+        const ShaderEffectSpec *spec = ShaderEffects::bySlug(slug);
+        if (!spec) return false;
+        QJsonObject params = spec->defaultParams();
+        for (auto it = over.begin(); it != over.end(); ++it) params[it.key()] = it.value();
+        auto image = std::make_unique<ImageSource>();
+        img = image.get();
+        src = std::make_unique<ShaderEffectSource>(std::move(image), *spec, params);
+        return true;
+    }
+
+    // Feeds one frame and reads back the centre pixel as RGBA.
+    bool feed(const QColor &c, QRgb &out) {
+        QImage frame(64, 64, QImage::Format_RGBA8888);
+        frame.fill(c);
+        if (!img->setImage(frame) || !src->nextFrame()) return false;
+        const uint8_t *data = src->frameData();
+        if (!data) return false;
+        const QImage o(data, 64, 64, 64 * 4, QImage::Format_RGBA8888);
+        out = o.pixel(32, 32);
+        return true;
+    }
+};
+
+bool haveGL() {
+    QOffscreenSurface surface;
+    surface.create();
+    QOpenGLContext ctx;
+    const bool ok = surface.isValid() && ctx.create() && ctx.makeCurrent(&surface);
+    if (ok) ctx.doneCurrent();
+    return ok;
+}
 } // namespace
 
 class TestShaderEffects : public QObject {
@@ -330,6 +369,97 @@ private slots:
                                         .arg(uv.at(0).toDouble()).arg(uv.at(1).toDouble()).arg(x).arg(y).arg(ch)
                                         .arg(p[ch]).arg(exp.at(ch).toInt()).arg(p[0]).arg(p[1]).arg(p[2]).arg(p[3])));
         }
+    }
+
+    void historyPlan_shrinksUnderTheCapAndFailsGracefully() {
+        using R = EffectPassRunner;
+        const auto small = R::planHistory({64, 64}, 32, true, R::kHistorySourceBytes);
+        QVERIFY(small.ok);
+        QCOMPARE(small.tile, QSize(64, 64));
+
+        const auto hd = R::planHistory({1920, 1080}, 32, true, R::kHistorySourceBytes);
+        QVERIFY(hd.ok);
+        QVERIFY(hd.tile.width() < 1920);
+        QVERIFY(hd.bytes <= R::kHistorySourceBytes);
+        QVERIFY(hd.atlas.width() <= 4096 && hd.atlas.height() <= 4096);
+        QVERIFY(hd.cols * hd.rows >= 32);
+
+        QVERIFY(!R::planHistory({16384, 16384}, 0, true, R::kHistorySourceBytes).ok);
+        QVERIFY(!R::planHistory({1920, 1080}, 32, false, 1024).ok);
+    }
+
+    void historyEffects_decayLikePowers_data() {
+        QTest::addColumn<QString>("slug");
+        QTest::addColumn<QJsonObject>("params");
+        QTest::newRow("trails max") << "trails" << QJsonObject{{"decay", 0.5}, {"blend", 0}};
+        QTest::newRow("trails add") << "trails" << QJsonObject{{"decay", 0.5}, {"blend", 1}};
+        QTest::newRow("trails mix") << "trails" << QJsonObject{{"decay", 0.5}, {"blend", 2}};
+        QTest::newRow("feedback") << "feedback"
+            << QJsonObject{{"decay", 0.5}, {"zoom", 1.0}, {"rotation", 0.0}, {"mix", 1.0}};
+    }
+
+    void historyEffects_decayLikePowers() {
+        QFETCH(QString, slug);
+        QFETCH(QJsonObject, params);
+        if (!haveGL()) QSKIP("No OpenGL context available in this environment");
+
+        HistoryRig rig;
+        QVERIFY(rig.init(slug, params));
+        QRgb px = 0;
+        QVERIFY(rig.feed(Qt::white, px));
+        QVERIFY(qAbs(qRed(px) - 255) <= 2);
+        for (int k = 1; k <= 3; ++k) {
+            QVERIFY(rig.feed(Qt::black, px));
+            const int expected = qRound(255.0 * std::pow(0.5, k));
+            QVERIFY2(qAbs(qRed(px) - expected) <= 3,
+                     qPrintable(QStringLiteral("k=%1 got %2 expected %3").arg(k).arg(qRed(px)).arg(expected)));
+            QCOMPARE(qAlpha(px), 255);
+        }
+    }
+
+    void frameDelay_outputsTheFrameFromNFramesAgo() {
+        if (!haveGL()) QSKIP("No OpenGL context available in this environment");
+        const int delay = 3;
+        HistoryRig rig;
+        QVERIFY(rig.init("frame_delay", {{"delay", delay}}));
+        const int levels[] = {10, 60, 110, 160, 210, 250, 30};
+        for (int t = 0; t < 7; ++t) {
+            QRgb px = 0;
+            QVERIFY(rig.feed(QColor(levels[t], levels[t], levels[t]), px));
+            if (t < delay) {
+                QCOMPARE(qAlpha(px), 0);
+            } else {
+                QVERIFY2(qAbs(qRed(px) - levels[t - delay]) <= 2,
+                         qPrintable(QStringLiteral("t=%1 got %2 expected %3").arg(t).arg(qRed(px)).arg(levels[t - delay])));
+                QCOMPARE(qAlpha(px), 255);
+            }
+        }
+    }
+
+    void history_resetsWhenSourceIsResetAndFreesBudget() {
+        if (!haveGL()) QSKIP("No OpenGL context available in this environment");
+        const qint64 base = EffectPassRunner::historyBytesInUse();
+        {
+            HistoryRig rig;
+            QVERIFY(rig.init("frame_delay", {{"delay", 1}}));
+            QRgb px = 0;
+            rig.src->setOnAir(true);
+            QVERIFY(rig.feed(Qt::white, px));
+            QVERIFY(rig.feed(QColor(128, 128, 128), px));
+            QVERIFY(qRed(px) > 250);
+            QVERIFY(EffectPassRunner::historyBytesInUse() > base);
+
+            rig.src->setOnAir(false);
+            QVERIFY(rig.feed(Qt::black, px));
+            QCOMPARE(qAlpha(px), 0);
+
+            QVERIFY(rig.feed(Qt::white, px));
+            QVERIFY(qRed(px) < 5 && qAlpha(px) == 255);
+            rig.src->resetHistory();
+            QVERIFY(rig.feed(Qt::white, px));
+            QCOMPARE(qAlpha(px), 0);
+        }
+        QCOMPARE(EffectPassRunner::historyBytesInUse(), base);
     }
 
     // Used by the glslangValidator CTest: PRISM_DUMP_SHADERS=<dir> test_shadereffects dumpSources

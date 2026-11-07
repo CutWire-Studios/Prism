@@ -53,6 +53,7 @@ ThemedDialog {
                         text: (issue.modelData.kind === "missing_file" ? qsTr("Missing file")
                                : issue.modelData.kind === "missing_scene" ? qsTr("Missing scene")
                                : issue.modelData.kind === "scene_cycle" ? qsTr("Scene loops back into itself")
+                               : issue.modelData.kind === "history_memory" ? qsTr("Frame history memory")
                                : qsTr("Missing device"))
                               + " - " + issue.modelData.scene + " / " + issue.modelData.source + "\n" + issue.modelData.detail
                     }

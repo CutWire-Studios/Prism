@@ -15,7 +15,9 @@
 /// compiled once per source (cached in the runner) and params only touch uniforms.
 /// Extra input ports (spec.extraInputs) are bound as u_input1..N from the aux sources handed in
 /// through setAux(); an unset or not-yet-ready one reads as transparent. `file` params are
-/// loaded as textures and bound as p_<name>. needsPrevFrame is not honoured yet.
+/// loaded as textures and bound as p_<name>. Effects with needsPrevFrame / history
+/// keep per-source GPU history (u_prev, u_history), run every tick, and clear it when taken off air;
+/// the history dies with the source, so a structural rebuild starts fresh.
 class ShaderEffectSource : public MediaSource {
 public:
     ShaderEffectSource(std::unique_ptr<MediaSource> inner, const ShaderEffectSpec &spec,
@@ -47,7 +49,13 @@ public:
     void    seek(double s)      override { if (m_inner) m_inner->seek(s); }
     void    play()             override { if (m_inner) m_inner->play(); }
     void    pause()            override { if (m_inner) m_inner->pause(); }
-    void    setOnAir(bool on)  override { if (m_inner) m_inner->setOnAir(on); }
+    void    setOnAir(bool on)  override {
+        if (m_onAir && !on) m_runner.resetHistory();
+        m_onAir = on;
+        if (m_inner) m_inner->setOnAir(on);
+    }
+    /// Drops all remembered frames.
+    void    resetHistory()     { m_runner.resetHistory(); }
     double  requestOut()       override { return m_inner ? m_inner->requestOut() : 0.0; }
     QString displayName() const override { return m_inner ? m_inner->displayName() : QString(); }
 
@@ -61,6 +69,7 @@ private:
     QElapsedTimer m_clock;
     double       m_presentAt = -1.0;
     bool         m_dirty = false;
+    bool         m_onAir = false;
     struct FileTex { QString path; unsigned int tex = 0; bool loaded = false; };
     std::vector<std::unique_ptr<MediaSource>> m_aux;
     std::vector<unsigned int> m_auxTex;   // slot texture last uploaded for a CPU-only aux frame
