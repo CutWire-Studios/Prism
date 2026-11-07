@@ -10,6 +10,165 @@
       "params": [
         { "name": "amount", "type": "float", "label": "Amount", "min": 0, "max": 1, "default": 1, "step": 0.01 }
       ]
+    },
+    {
+      "id": 13,
+      "slug": "levels",
+      "name": "Levels",
+      "category": "Color",
+      "description": "Set the input black and white points, the gamma and the output range.",
+      "frag": "levels.frag",
+      "params": [
+        { "name": "in_black", "type": "float", "label": "Input black", "min": 0, "max": 1, "default": 0, "step": 0.01 },
+        { "name": "in_white", "type": "float", "label": "Input white", "min": 0, "max": 1, "default": 1, "step": 0.01 },
+        { "name": "gamma", "type": "float", "label": "Gamma", "min": 0.1, "max": 4, "default": 1, "step": 0.01 },
+        { "name": "out_black", "type": "float", "label": "Output black", "min": 0, "max": 1, "default": 0, "step": 0.01 },
+        { "name": "out_white", "type": "float", "label": "Output white", "min": 0, "max": 1, "default": 1, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 14,
+      "slug": "brightness_contrast",
+      "name": "Brightness / Contrast",
+      "category": "Color",
+      "description": "Make the picture lighter, darker, flatter or punchier.",
+      "frag": "brightness_contrast.frag",
+      "params": [
+        { "name": "brightness", "type": "float", "label": "Brightness", "min": -1, "max": 1, "default": 0, "step": 0.01 },
+        { "name": "contrast", "type": "float", "label": "Contrast", "min": 0, "max": 3, "default": 1, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 15,
+      "slug": "exposure",
+      "name": "Exposure",
+      "category": "Color",
+      "description": "Brighten or darken the picture in photographic stops.",
+      "frag": "exposure.frag",
+      "params": [
+        { "name": "stops", "type": "float", "label": "Stops", "min": -5, "max": 5, "default": 0, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 16,
+      "slug": "hue_shift",
+      "name": "Hue shift",
+      "category": "Color",
+      "description": "Rotate every colour around the colour wheel.",
+      "frag": "hue_shift.frag",
+      "params": [
+        { "name": "degrees", "type": "float", "label": "Shift (degrees)", "min": -180, "max": 180, "default": 0, "step": 1 }
+      ]
+    },
+    {
+      "id": 17,
+      "slug": "saturation_vibrance",
+      "name": "Saturation / Vibrance",
+      "category": "Color",
+      "description": "Turn colour up or down, with extra lift for muted colours.",
+      "frag": "saturation_vibrance.frag",
+      "params": [
+        { "name": "saturation", "type": "float", "label": "Saturation", "min": 0, "max": 3, "default": 1, "step": 0.01 },
+        { "name": "vibrance", "type": "float", "label": "Vibrance", "min": -1, "max": 1, "default": 0, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 18,
+      "slug": "posterize",
+      "name": "Posterize",
+      "category": "Color",
+      "description": "Reduce the number of colours for a flat, poster look.",
+      "frag": "posterize.frag",
+      "params": [
+        { "name": "levels", "type": "int", "label": "Levels", "min": 2, "max": 32, "default": 5, "step": 1 }
+      ]
+    },
+    {
+      "id": 19,
+      "slug": "threshold",
+      "name": "Threshold",
+      "category": "Color",
+      "description": "Pure black and white: everything brighter than the level turns white.",
+      "frag": "threshold.frag",
+      "params": [
+        { "name": "threshold", "type": "float", "label": "Threshold", "min": 0, "max": 1, "default": 0.5, "step": 0.01 },
+        { "name": "softness", "type": "float", "label": "Softness", "min": 0, "max": 0.5, "default": 0.02, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 20,
+      "slug": "tint",
+      "name": "Tint",
+      "category": "Color",
+      "description": "Wash the picture with a colour.",
+      "frag": "tint.frag",
+      "params": [
+        { "name": "color", "type": "color", "label": "Color", "default": "#ff8c33" },
+        { "name": "amount", "type": "float", "label": "Amount", "min": 0, "max": 1, "default": 0.4, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 21,
+      "slug": "duotone",
+      "name": "Duotone",
+      "category": "Color",
+      "description": "Map the shadows to one colour and the highlights to another.",
+      "frag": "duotone.frag",
+      "params": [
+        { "name": "shadow", "type": "color", "label": "Shadow color", "default": "#0a1729" },
+        { "name": "highlight", "type": "color", "label": "Highlight color", "default": "#ffc208" }
+      ]
+    },
+    {
+      "id": 22,
+      "slug": "gradient_map",
+      "name": "Gradient map",
+      "category": "Color",
+      "description": "Map shadows, mid-tones and highlights to three chosen colours.",
+      "frag": "gradient_map.frag",
+      "params": [
+        { "name": "shadows", "type": "color", "label": "Shadows", "default": "#000000" },
+        { "name": "mids", "type": "color", "label": "Mid-tones", "default": "#808080" },
+        { "name": "highlights", "type": "color", "label": "Highlights", "default": "#ffffff" }
+      ]
+    },
+    {
+      "id": 23,
+      "slug": "channel_mixer",
+      "name": "Channel mixer",
+      "category": "Color",
+      "description": "Rebuild each output channel as a mix of the input red, green and blue.",
+      "frag": "channel_mixer.frag",
+      "params": [
+        { "name": "rr", "type": "float", "label": "Red from red", "min": -2, "max": 2, "default": 1, "step": 0.01 },
+        { "name": "rg", "type": "float", "label": "Red from green", "min": -2, "max": 2, "default": 0, "step": 0.01 },
+        { "name": "rb", "type": "float", "label": "Red from blue", "min": -2, "max": 2, "default": 0, "step": 0.01 },
+        { "name": "gr", "type": "float", "label": "Green from red", "min": -2, "max": 2, "default": 0, "step": 0.01 },
+        { "name": "gg", "type": "float", "label": "Green from green", "min": -2, "max": 2, "default": 1, "step": 0.01 },
+        { "name": "gb", "type": "float", "label": "Green from blue", "min": -2, "max": 2, "default": 0, "step": 0.01 },
+        { "name": "br", "type": "float", "label": "Blue from red", "min": -2, "max": 2, "default": 0, "step": 0.01 },
+        { "name": "bg", "type": "float", "label": "Blue from green", "min": -2, "max": 2, "default": 0, "step": 0.01 },
+        { "name": "bb", "type": "float", "label": "Blue from blue", "min": -2, "max": 2, "default": 1, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 24,
+      "slug": "lift_gamma_gain",
+      "name": "Lift / Gamma / Gain",
+      "category": "Color",
+      "description": "Adjust shadows (lift), mid-tones (gamma) and highlights (gain) per channel.",
+      "frag": "lift_gamma_gain.frag",
+      "params": [
+        { "name": "lift_r", "type": "float", "label": "Lift red", "min": -1, "max": 1, "default": 0, "step": 0.01 },
+        { "name": "lift_g", "type": "float", "label": "Lift green", "min": -1, "max": 1, "default": 0, "step": 0.01 },
+        { "name": "lift_b", "type": "float", "label": "Lift blue", "min": -1, "max": 1, "default": 0, "step": 0.01 },
+        { "name": "gamma_r", "type": "float", "label": "Gamma red", "min": 0.1, "max": 4, "default": 1, "step": 0.01 },
+        { "name": "gamma_g", "type": "float", "label": "Gamma green", "min": 0.1, "max": 4, "default": 1, "step": 0.01 },
+        { "name": "gamma_b", "type": "float", "label": "Gamma blue", "min": 0.1, "max": 4, "default": 1, "step": 0.01 },
+        { "name": "gain_r", "type": "float", "label": "Gain red", "min": 0, "max": 2, "default": 1, "step": 0.01 },
+        { "name": "gain_g", "type": "float", "label": "Gain green", "min": 0, "max": 2, "default": 1, "step": 0.01 },
+        { "name": "gain_b", "type": "float", "label": "Gain blue", "min": 0, "max": 2, "default": 1, "step": 0.01 }
+      ]
     }
   ]
 }

@@ -261,6 +261,18 @@
         <file>shaders/effects/effects.json</file>
         <file>shaders/effects/prelude.glsl</file>
         <file>shaders/effects/invert.frag</file>
+        <file>shaders/effects/levels.frag</file>
+        <file>shaders/effects/brightness_contrast.frag</file>
+        <file>shaders/effects/exposure.frag</file>
+        <file>shaders/effects/hue_shift.frag</file>
+        <file>shaders/effects/saturation_vibrance.frag</file>
+        <file>shaders/effects/posterize.frag</file>
+        <file>shaders/effects/threshold.frag</file>
+        <file>shaders/effects/tint.frag</file>
+        <file>shaders/effects/duotone.frag</file>
+        <file>shaders/effects/gradient_map.frag</file>
+        <file>shaders/effects/channel_mixer.frag</file>
+        <file>shaders/effects/lift_gamma_gain.frag</file>
         <file>shaders/slideshow/cube.glsl</file>
         <file>shaders/slideshow/flip.glsl</file>
         <file>shaders/slideshow/pagecurl.glsl</file>
