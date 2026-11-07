@@ -15,6 +15,7 @@
 #include <QCameraDevice>
 #include <QSet>
 #include <algorithm>
+#include <cmath>
 
 DeckController::DeckController(Compositor *compositor,
                                OutputHub  *outputHub,
@@ -327,7 +328,16 @@ void DeckController::refreshShaderAudioForActiveDecks() {
         ClipGraph *g = graphOf(deck);
         if (!rt || !g) continue;
         const NodeId node = activeNode(deck);
-        const double time = isLive(deck) ? out->getCurrentTimeLive() : out->getCurrentTimeStaging();
+        double time = isLive(deck) ? out->getCurrentTimeLive() : out->getCurrentTimeStaging();
+        // Follow what is coming out of the speakers when this deck's audio plays; the video clock
+        // runs ahead of it by the sink buffer.
+        const auto &player = isLive(deck) ? m_audioPlayerLive : m_audioPlayerStaging;
+        if (node && player && !player->currentFilePath().isEmpty()
+            && player->currentFilePath() == g->sourceDescriptor(node).path) {
+            const double heard = player->heardPosition();
+            if (std::isfinite(heard))
+                time = std::max(0.0, heard);
+        }
         const bool playing = isLive(deck) ? out->isPlayingLive() : out->isPlayingStaging();
         if (isLive(deck))
             rt->syncAllAudioAnalyzers(node, time, playing, g->clipSettings(node).speed, 0, 0.0, false, 1.0);

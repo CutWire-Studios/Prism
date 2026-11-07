@@ -196,6 +196,25 @@ if(NOT kissfft_FOUND)
     FetchContent_MakeAvailable(kissfft)
 endif()
 
+# Beat and Tempo Tracking (vendored, MIT): tempo-tracked beats for AudioAnalyzer.
+add_library(prism_btt STATIC
+    third_party/btt/src/BTT.c
+    third_party/btt/src/DFT.c
+    third_party/btt/src/STFT.c
+    third_party/btt/src/Filter.c
+    third_party/btt/src/Statistics.c
+    third_party/btt/src/fastsin.c
+)
+target_include_directories(prism_btt PUBLIC third_party/btt)
+target_compile_definitions(prism_btt PRIVATE _USE_MATH_DEFINES)
+set_target_properties(prism_btt PROPERTIES C_STANDARD 99 POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    target_compile_options(prism_btt PRIVATE /w)
+else()
+    target_compile_options(prism_btt PRIVATE -w)
+    target_link_libraries(prism_btt PRIVATE m)
+endif()
+
 # Lua + sol2 (optional — Script node; Text source works without Lua)
 option(PRISM_WITH_LUA "Enable Lua script nodes" ON)
 if(PRISM_WITH_LUA)
@@ -696,6 +715,7 @@ target_link_libraries(prism_core PUBLIC
     re2::re2
     ${FFMPEG_LIBRARIES}
     kissfft::kissfft
+    prism_btt
     prismaudiodsp
     prism_juce_headers
 )

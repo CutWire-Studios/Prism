@@ -5,7 +5,8 @@ import Prism
 // Label, slider and editable number on one row: the widget editors' SliderSpinRow.
 // Setting expressionName adds a small "f" toggle that swaps the slider for a chip showing the
 // expression's source and result; clicking it opens the expression editor popup. The owner
-// stores the text from expressionEdited ("" removes the expression and its node socket).
+// stores the text from expressionEdited ("" removes the expression and its node socket) and
+// whether results must be whole numbers.
 RowLayout {
     id: root
 
@@ -28,7 +29,11 @@ RowLayout {
     readonly property bool exprMode: expressionName.length > 0 && expression.length > 0
 
     signal edited(real value)
-    signal expressionEdited(string expression)
+    // Whole-numbered raw values: no decimals shown and no display scale (percent sliders show
+    // whole numbers but store 0..1).
+    readonly property bool integerValue: decimals === 0 && exprScale === 1
+
+    signal expressionEdited(string expression, bool integer)
 
     readonly property var paramSource: {
         if (!linkForm || expressionName.length === 0 || expression.length === 0)
@@ -116,7 +121,7 @@ RowLayout {
             onClicked: {
                 AppController.cancelOscLearn()
                 root.learnId = 0
-                root.expressionEdited("")
+                root.expressionEdited("", root.integerValue)
             }
         }
     }
@@ -186,10 +191,12 @@ RowLayout {
     ModulatorLinkMenu {
         id: linkMenu
         onPicked: id => root.linkForm.bindModulator(root.expressionName, id,
-                                                    root.from * root.exprScale, root.to * root.exprScale)
+                                                    root.from * root.exprScale, root.to * root.exprScale,
+                                                    0, root.integerValue)
         onLearnRequested: {
             const id = root.linkForm.bindModulator(root.expressionName, 0,
-                                                   root.from * root.exprScale, root.to * root.exprScale, 9)
+                                                   root.from * root.exprScale, root.to * root.exprScale, 9,
+                                                   root.integerValue)
             if (id) {
                 root.learnId = id
                 AppController.startOscLearn()
@@ -210,9 +217,10 @@ RowLayout {
         from: root.from
         to: root.to
         exprScale: root.exprScale
+        integer: root.integerValue
         unit: root.unit
         linkForm: root.linkForm
-        onApplied: text => root.expressionEdited(text)
+        onApplied: text => root.expressionEdited(text, root.integerValue)
         onLinkRequested: {
             close()
             linkMenu.popup()
@@ -247,9 +255,9 @@ RowLayout {
         checked: root.exprMode
         onClicked: {
             if (root.exprMode) {
-                root.expressionEdited("")
+                root.expressionEdited("", root.integerValue)
             } else {
-                root.expressionEdited("input")
+                root.expressionEdited("input", root.integerValue)
                 editorPopup.open()
             }
         }

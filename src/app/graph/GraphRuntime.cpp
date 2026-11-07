@@ -179,22 +179,26 @@ QVariant valueAtPath(const QVariantMap &map, const QString &path) {
     return valueAtPath(map.value(path.left(dot)).toMap(), path.mid(dot + 1));
 }
 
-QVariantMap withValueAtPath(QVariantMap map, const QString &path, const QVariant &value) {
+// @p value converted to the type @p old already has (int, qint64, bool), else unchanged.
+QVariant typedLike(const QVariant &old, const QVariant &value) {
+    if (old.typeId() == QMetaType::Int)
+        return int(qRound64(value.toDouble()));
+    if (old.typeId() == QMetaType::LongLong)
+        return qRound64(value.toDouble());
+    if (old.typeId() == QMetaType::Bool)
+        return value.toBool();
+    return value;
+}
+
+// @p keepType converts @p value to the stored value's type; false stores it as given.
+QVariantMap withValueAtPath(QVariantMap map, const QString &path, const QVariant &value, bool keepType = true) {
     const int dot = path.indexOf(QLatin1Char('.'));
     if (dot < 0) {
-        const QVariant old = map.value(path);
-        if (old.typeId() == QMetaType::Int)
-            map.insert(path, int(qRound64(value.toDouble())));
-        else if (old.typeId() == QMetaType::LongLong)
-            map.insert(path, qRound64(value.toDouble()));
-        else if (old.typeId() == QMetaType::Bool)
-            map.insert(path, value.toBool());
-        else
-            map.insert(path, value);
+        map.insert(path, keepType ? typedLike(map.value(path), value) : value);
         return map;
     }
     const QString head = path.left(dot);
-    map.insert(head, withValueAtPath(map.value(head).toMap(), path.mid(dot + 1), value));
+    map.insert(head, withValueAtPath(map.value(head).toMap(), path.mid(dot + 1), value, keepType));
     return map;
 }
 
@@ -251,6 +255,12 @@ struct ScriptNode {
     bool hasAudio = false;
     bool liveSource = false;
     bool filePlaying = false;
+    // Smoothed media clock the file analyzer follows: clockAnchor seconds at clockAnchorMs.
+    bool hasClock = false;
+    double clockAnchor = 0.0;
+    qint64 clockAnchorMs = 0;
+    double fileSpeed = 1.0;
+    double offsetMs = 0.0;   // + analyses ahead of the heard audio, - behind
     QElapsedTimer clock;
     qint64 lastMs = 0;
     qint64 lastSignalMs = 0;
@@ -312,6 +322,8 @@ struct ScriptNode {
         obj["high"] = analyzer->highBand();
         obj["level"] = analyzer->level();
         obj["beat"] = analyzer->beatPulse();
+        obj["kick"] = analyzer->kickPulse();
+        obj["tempo"] = analyzer->tempo();
         obj["hasAudio"] = analyzer->hasData();
         QJsonArray spectrum;
         for (float v : analyzer->spectrum())
@@ -323,7 +335,7 @@ struct ScriptNode {
 
     void publishBands(const QJsonObject &obj) {
         QVariantMap b;
-        for (const char *k : {"low", "mid", "high", "level", "beat", "hasAudio"})
+        for (const char *k : {"low", "mid", "high", "level", "beat", "kick", "tempo", "hasAudio"})
             b.insert(QLatin1String(k), obj.value(QLatin1String(k)).toVariant());
         QMutexLocker lock(&shared->mutex);
         shared->bands.insert(id, b);
@@ -337,6 +349,8 @@ struct ScriptNode {
         obj["high"] = 0.0;
         obj["level"] = 0.0;
         obj["beat"] = 0.0;
+        obj["kick"] = 0.0;
+        obj["tempo"] = 0.0;
         obj["hasAudio"] = false;
         QJsonArray spectrum;
         for (int i = 0; i < config.binCount; ++i)
@@ -361,6 +375,7 @@ struct ScriptNode {
         if (analyzer && analyzer->open(audioPath)) {
             hasAudio = true;
             filePlaying = false;
+            hasClock = false;
             lastMs = clock.elapsed();
         } else {
             hasAudio = false;
@@ -384,26 +399,39 @@ struct ScriptNode {
         if (!hasAudio || !analyzer)
             return;
         analyzer->setPlaybackSpeed(speed);
-        tickFile();
+        // The deck position arrives every 100 ms in steps (sink writes, frame times). Keep a clock
+        // that runs on between syncs and is pulled gently toward each sample; jumps snap it.
+        const qint64 nowMs = clock.elapsed();
+        const double predicted = clockAnchor + (filePlaying ? (nowMs - clockAnchorMs) * 0.001 * fileSpeed : 0.0);
+        const double error = playbackTime - predicted;
+        if (!hasClock || playing != filePlaying || std::abs(error) > 0.25)
+            clockAnchor = playbackTime;
+        else
+            clockAnchor = predicted + error * 0.2;
+        clockAnchorMs = nowMs;
+        hasClock = true;
         filePlaying = playing;
-        const double drift = std::abs(analyzer->currentTime() - playbackTime);
-        if (drift > 0.08)
-            analyzer->seek(playbackTime);
+        fileSpeed = speed;
+        tickFile();
     }
 
-    // Deck sync arrives at the 100 ms UI tick; this also runs on every graph poll so the outputs
-    // keep pace with the audio between syncs.
+    // Also runs on every graph poll, so the outputs keep pace with the audio between syncs.
     void tickFile() {
-        if (liveSource || !hasAudio || !analyzer)
+        if (liveSource || !hasAudio || !analyzer || !hasClock)
             return;
         const qint64 nowMs = clock.elapsed();
         const double dt = (lastMs > 0) ? (nowMs - lastMs) * 0.001 : 0.0;
         lastMs = nowMs;
-        if (dt > 0.0) {
-            if (filePlaying)
-                analyzer->advance(dt);
-            else
-                analyzer->decay(dt);
+        if (filePlaying) {
+            const double target = std::max(0.0, clockAnchor + (nowMs - clockAnchorMs) * 0.001 * fileSpeed
+                                                     + offsetMs * 0.001);
+            const double ahead = target - analyzer->currentTime();
+            if (std::abs(ahead) > 0.25)
+                analyzer->seek(target);
+            else if (ahead > 0.0)
+                analyzer->advance(ahead / fileSpeed);
+        } else if (dt > 0.0) {
+            analyzer->decay(dt);
         }
         publishOutput();
     }
@@ -795,9 +823,15 @@ struct GraphRuntime::Impl {
                 const ClipGraph::Node *n = owner->m_graph->node(id);
                 const double v = r.value("value").toDouble();
                 if (n) {
+                    // The inspector slider records whether the param is whole-numbered; expressions
+                    // saved before that keep following the stored value's type.
                     const QVariant cur = valueAtPath(n->params, name);
-                    if (!cur.isValid() || std::abs(cur.toDouble() - v) > 1e-9)
-                        owner->writeParam(id, name, v);
+                    const QVariant integer = n->params.value("expressionInts").toMap().value(name);
+                    const QVariant typed = !integer.isValid() ? typedLike(cur, v)
+                                         : integer.toBool() ? QVariant(int(qRound64(v))) : QVariant(v);
+                    if (!cur.isValid() || cur.typeId() != typed.typeId()
+                        || std::abs(cur.toDouble() - typed.toDouble()) > 1e-9)
+                        owner->writeParam(id, name, typed, true);
                 }
             }
             setExpressionError(id, name, error);
@@ -969,6 +1003,7 @@ struct GraphRuntime::Impl {
             const AudioAnalyzerConfig c = analyzerConfigFrom(p);
             if (!sameConfig(c, sn->config))
                 sn->setAnalyzerConfig(c);
+            sn->offsetMs = std::clamp(p.value("offsetMs", 0.0).toDouble(), -500.0, 500.0);
             break;
         }
         default:
@@ -1155,13 +1190,16 @@ bool GraphRuntime::waitForRetiredScripts(int timeoutMs) {
     return true;
 }
 
-void GraphRuntime::writeParam(NodeId id, const QString &name, const QVariant &value) {
+void GraphRuntime::writeParam(NodeId id, const QString &name, const QVariant &value, bool driven) {
     const ClipGraph::Node *n = m_graph->node(id);
     if (!n)
         return;
     const QString top = name.section(QLatin1Char('.'), 0, 0);
-    const QVariantMap next = withValueAtPath(n->params, name, value);
-    m_graph->setParams(id, {{top, next.value(top)}});
+    const QVariantMap next = withValueAtPath(n->params, name, value, !driven);
+    if (driven)
+        m_graph->setDrivenParams(id, {{top, next.value(top)}});
+    else
+        m_graph->setParams(id, {{top, next.value(top)}});
 }
 
 void GraphRuntime::applyScriptWrites() {
@@ -1354,8 +1392,9 @@ QVariantMap GraphRuntime::expressionInputRange(NodeId id, const QString &param) 
     }
     if (p->type == NT::AudioAnalyzer) {
         QVariantMap fields;
-        for (const char *k : {"low", "mid", "high", "level", "beat", "hasAudio"})
+        for (const char *k : {"low", "mid", "high", "level", "beat", "kick", "hasAudio"})
             fields.insert(QLatin1String(k), QVariantMap{{"min", 0.0}, {"max", 1.0}});
+        fields.insert(QStringLiteral("tempo"), QVariantMap{{"min", 0.0}, {"max", 200.0}});
         return {{"fields", fields}};
     }
     return {};

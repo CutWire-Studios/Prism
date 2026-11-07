@@ -22,17 +22,22 @@ ColumnLayout {
         return statusRev >= 0 ? AppController.expressionError(nodeId, name) : ""
     }
 
-    function setExpr(name, text) {
+    // integer: the slider only takes whole numbers, so results are rounded; else they stay floats.
+    function setExpr(name, text, integer) {
         const next = Object.assign({}, expressions)
-        if (text.length > 0)
+        const ints = Object.assign({}, params.expressionInts || {})
+        if (text.length > 0) {
             next[name] = text
-        else
+            ints[name] = integer === true
+        } else {
             delete next[name]
-        set({ expressions: next })
+            delete ints[name]
+        }
+        set({ expressions: next, expressionInts: ints })
     }
 
-    function bindModulator(name, modulatorId, lo, hi, newKind) {
-        return graph.bindParam(nodeId, name, modulatorId, lo, hi, newKind || 0)
+    function bindModulator(name, modulatorId, lo, hi, newKind, integer) {
+        return graph.bindParam(nodeId, name, modulatorId, lo, hi, newKind || 0, integer === true)
     }
 
     function setModulatorInput(modulatorId, spec) {

@@ -818,8 +818,8 @@ Another application may already be using the virtual camera, or softcam.dll may 
 <context>
     <name>AudioAnalyzerBody</name>
     <message>
-        <source>level · low · mid · high · beat
-each 0 to 1</source>
+        <source>level · low · mid · high
+beat · kick · tempo</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1102,7 +1102,15 @@ each 0 to 1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Jumps up on a bass hit, falls back to 0 in about ⅓ s</source>
+        <source>Jumps to 1 on each beat of the song&apos;s tempo, falls back to 0 in about ⅓ s</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Jumps to 1 on each kick drum hit, falls back to 0 in about ⅓ s</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Song tempo in BPM, 0 until locked on</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1131,6 +1139,10 @@ each 0 to 1</source>
     </message>
     <message>
         <source> (shown as %1 to %2%3)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>, rounded to whole numbers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1413,7 +1425,27 @@ each 0 to 1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Beat</source>
+        <source>Kick</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Every value runs from 0 to 1 except tempo. Wire this node into a parameter&apos;s socket and read them in its expression as input.low, input.beat and so on.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No audio yet. Connect a clip or audio input and play it. Every value runs from 0 to 1 except tempo.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Jumps to 1 on every beat of the song&apos;s steady pulse, then falls back to 0 in about ⅓ s. It follows the tempo, so it keeps time through a quiet bar. Needs a few seconds of drums to lock on and stays off without drums.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Jumps to 1 on each kick drum hit (40 to 150 Hz), then falls back to 0 in about ⅓ s. Follows the actual drum, including fills and skipped hits; raise Kick to catch softer hits.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tempo of the song in beats per minute; 0 until it has locked on.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1425,15 +1457,15 @@ each 0 to 1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Offset</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Analysis follows the audio leaving the speakers. If effects still land late (for example on a slow projector), raise Offset to react earlier; lower it to react later. Clip audio only.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Outputs</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Every value runs from 0 to 1. Wire this node into a parameter&apos;s socket and read them in its expression as input.low, input.beat and so on.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No audio yet. Connect a clip or audio input and play it. Every value runs from 0 to 1.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1453,11 +1485,7 @@ each 0 to 1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Jumps up on a bass hit, then falls back to 0 in about ⅓ s. Good for flashes and pulses; raise Beat to catch softer hits.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>low, mid and high are measured against the loudest frequency at that moment, so they show the balance of the sound rather than its volume; use level for volume. Scripts and shaders also get spectrum: %1 values from lowest to highest pitch, each 0 to 1. Smoothing steadies the values but makes them react later.</source>
+        <source>low, mid and high follow how loud each range is: 0 is quieter than -60 dB, 1 is full scale, so a loud mix sits around 0.6 to 0.9. Scripts and shaders also get spectrum: %1 values from lowest to highest pitch, each 0 to 1 relative to the loudest one. Smoothing steadies the values but makes them react later.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1671,6 +1699,10 @@ each 0 to 1</source>
     </message>
     <message>
         <source>Beat</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Kick</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

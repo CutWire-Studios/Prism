@@ -19,6 +19,7 @@ Popup {
     property string unit: ""
     // Raw parameter units per displayed unit: the expression must return outFrom..outTo.
     property real exprScale: 1
+    property bool integer: false
     property var linkForm: null
     property var input: null
     property var inputRange: ({})
@@ -49,7 +50,9 @@ Popup {
         mid: qsTr("Mids: vocals, guitars, snares"),
         high: qsTr("Treble: hi-hats, cymbals"),
         level: qsTr("Overall loudness"),
-        beat: qsTr("Jumps up on a bass hit, falls back to 0 in about ⅓ s"),
+        beat: qsTr("Jumps to 1 on each beat of the song's tempo, falls back to 0 in about ⅓ s"),
+        kick: qsTr("Jumps to 1 on each kick drum hit, falls back to 0 in about ⅓ s"),
+        tempo: qsTr("Song tempo in BPM, 0 until locked on"),
         hasAudio: qsTr("true while audio is playing")
     })
 
@@ -227,6 +230,7 @@ Popup {
                      ? qsTr(" (shown as %1 to %2%3)").arg(root.fmt(root.from)).arg(root.fmt(root.to))
                        .arg(root.unit.length > 0 ? " " + root.unit : "")
                      : "")
+                  + (root.integer ? qsTr(", rounded to whole numbers") : "")
                   + qsTr(". Values outside are not clamped.")
         }
 

@@ -41,7 +41,7 @@ the run is aborted with an `instruction limit exceeded` error; the app keeps run
 | --- | --- |
 | `prism.param(nodeId, name)` | Reads a parameter of a node in this scene. `name` may be dotted for nested values, for example `"params.opacity"`. |
 | `prism.param(nodeId, name, value)` | Sets it. The write is applied on the GUI thread without an undo entry. |
-| `prism.audio.bands([analyzerId])` | `{low, mid, high, level, beat, hasAudio}` of an Audio Analyzer node (the most recently updated one without an id). Zeros when there is no audio. |
+| `prism.audio.bands([analyzerId])` | `{low, mid, high, level, beat, kick, tempo, hasAudio}` of an Audio Analyzer node (the most recently updated one without an id). Zeros when there is no audio. |
 | `prism.bpm` | Tempo of the global BPM clock (default 120; set with the transport Tap button or saved in the session). |
 | `prism.beat` | Beat position of the BPM clock as a float: beat count plus phase (`12.25` is a quarter of the way through beat 12). Read it at the moment you need it; it is not updated while a script runs. |
 | `prism.log(...)` | Same as `print`. |
@@ -61,7 +61,7 @@ Clicking "f" again removes the expression and the socket. Expressions are stored
 Expressions are evaluated at about 30 Hz while the scene's runtime is active. Available names:
 
 - `input`: whatever is wired into the parameter's socket: a Modulator's number, an Audio
-  Analyzer's `{low, mid, high, level, beat, hasAudio}` or a Script's output table. `nil` when
+  Analyzer's `{low, mid, high, level, beat, kick, tempo, hasAudio}` or a Script's output table. `nil` when
   nothing is connected. The editor lists each field with its live value and range
 - `t`: seconds since the scene's runtime was created
 - `bpm`, `beat`: the BPM clock's tempo and beat position, as `prism.bpm` / `prism.beat`

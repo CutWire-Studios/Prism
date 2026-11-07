@@ -1289,6 +1289,20 @@ void AppController::attachScene(Scene *scene)
         return osc ? osc->controlValue(address) : 0.0;
     });
     connect(graph, &ClipGraph::changed, this, [this, scene]() { onSceneGraphChanged(scene); });
+    // Expression-driven values: push them into the running sources and the deck audio, without
+    // the session-edit work of onSceneGraphChanged.
+    connect(graph, &ClipGraph::paramsDriven, this, [this, scene]() {
+        if (m_shuttingDown)
+            return;
+        const bool active = m_show->activeSceneIds(false).contains(scene->id());
+        if (active || m_show->residentSceneIds().contains(scene->id()))
+            m_pushTimer->start();
+        if (!active)
+            return;
+        for (const Deck deck : {Deck::Live, Deck::Staging})
+            if (const NodeId node = m_deckController->activeNode(deck))
+                m_deckController->applyAudioControllerToDeck(deck, node, false);
+    });
     connect(graph, &ClipGraph::graphReset, this, [this, scene]() {
         if (m_previewRuntime == scene->runtime())
             clearNodePreview();

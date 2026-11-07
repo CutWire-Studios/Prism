@@ -19,7 +19,7 @@ InspectorForm {
     readonly property var audioFields: [
         { text: qsTr("Level"), value: "level" }, { text: qsTr("Low"), value: "low" },
         { text: qsTr("Mid"), value: "mid" }, { text: qsTr("High"), value: "high" },
-        { text: qsTr("Beat"), value: "beat" }]
+        { text: qsTr("Beat"), value: "beat" }, { text: qsTr("Kick"), value: "kick" }]
     readonly property var nt: NodePalette.nodeType
 
     function num(key, def) {
@@ -64,7 +64,7 @@ InspectorForm {
         expression: form.expr(key)
         expressionError: form.exprError(key)
         onEdited: v => form.set(form.patch(key, v), true)
-        onExpressionEdited: text => form.setExpr(key, text)
+        onExpressionEdited: (text, integer) => form.setExpr(key, text, integer)
     }
 
     component InputRow: ColumnLayout {

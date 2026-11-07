@@ -26,6 +26,8 @@ InspectorForm {
 
         property string key
         property string hint
+        // Value at a full bar; 1 for the 0..1 outputs.
+        property real fullScale: 1
 
         readonly property real value: Number(root.bands[key] ?? 0)
 
@@ -55,7 +57,7 @@ InspectorForm {
                     color: Theme.c.themedProgressBar.trackBackground
 
                     Rectangle {
-                        width: parent.width * Math.max(0, Math.min(1, outRow.value))
+                        width: parent.width * Math.max(0, Math.min(1, outRow.value / outRow.fullScale))
                         height: parent.height
                         radius: parent.radius
                         color: Theme.c.themedProgressBar.fillBackground
@@ -67,7 +69,7 @@ InspectorForm {
                     horizontalAlignment: Text.AlignRight
                     font.family: Theme.monoFontFamily
                     wrapMode: Text.NoWrap
-                    text: outRow.value.toFixed(2)
+                    text: outRow.value.toFixed(outRow.fullScale > 1 ? 0 : 2)
                 }
             }
 
@@ -142,13 +144,13 @@ InspectorForm {
         expressionName: "smoothing"
         expression: root.expr(expressionName)
         expressionError: root.exprError(expressionName)
-        onExpressionEdited: text => root.setExpr(expressionName, text)
+        onExpressionEdited: (text, integer) => root.setExpr(expressionName, text, integer)
     }
 
     StyleSliderRow {
         Layout.fillWidth: true
         visible: root.isAnalyzer
-        label: qsTr("Beat")
+        label: qsTr("Kick")
         from: 0.1
         to: 5
         step: 0.1
@@ -158,7 +160,7 @@ InspectorForm {
         expressionName: "beatSensitivity"
         expression: root.expr(expressionName)
         expressionError: root.exprError(expressionName)
-        onExpressionEdited: text => root.setExpr(expressionName, text)
+        onExpressionEdited: (text, integer) => root.setExpr(expressionName, text, integer)
     }
 
     StyleFieldRow {
@@ -191,6 +193,29 @@ InspectorForm {
         }
     }
 
+    StyleFieldRow {
+        Layout.fillWidth: true
+        visible: root.isAnalyzer
+        label: qsTr("Offset")
+        ThemedNumberField {
+            Layout.fillWidth: true
+            from: -500
+            to: 500
+            step: 5
+            unit: "ms"
+            value: root.params.offsetMs ?? 0
+            onEdited: v => root.set({ offsetMs: Math.round(v) })
+        }
+    }
+
+    ThemedLabel {
+        Layout.fillWidth: true
+        visible: root.isAnalyzer
+        wrapMode: Text.WordWrap
+        color: Theme.mutedForeground
+        text: qsTr("Analysis follows the audio leaving the speakers. If effects still land late (for example on a slow projector), raise Offset to react earlier; lower it to react later. Clip audio only.")
+    }
+
     ThemedLabel {
         Layout.fillWidth: true
         Layout.topMargin: Theme.spacingMd
@@ -205,8 +230,8 @@ InspectorForm {
         wrapMode: Text.WordWrap
         color: Theme.mutedForeground
         text: root.bands.hasAudio === true
-              ? qsTr("Every value runs from 0 to 1. Wire this node into a parameter's socket and read them in its expression as input.low, input.beat and so on.")
-              : qsTr("No audio yet. Connect a clip or audio input and play it. Every value runs from 0 to 1.")
+              ? qsTr("Every value runs from 0 to 1 except tempo. Wire this node into a parameter's socket and read them in its expression as input.low, input.beat and so on.")
+              : qsTr("No audio yet. Connect a clip or audio input and play it. Every value runs from 0 to 1 except tempo.")
     }
 
     OutputRow {
@@ -232,7 +257,18 @@ InspectorForm {
     OutputRow {
         visible: root.isAnalyzer
         key: "beat"
-        hint: qsTr("Jumps up on a bass hit, then falls back to 0 in about ⅓ s. Good for flashes and pulses; raise Beat to catch softer hits.")
+        hint: qsTr("Jumps to 1 on every beat of the song's steady pulse, then falls back to 0 in about ⅓ s. It follows the tempo, so it keeps time through a quiet bar. Needs a few seconds of drums to lock on and stays off without drums.")
+    }
+    OutputRow {
+        visible: root.isAnalyzer
+        key: "kick"
+        hint: qsTr("Jumps to 1 on each kick drum hit (40 to 150 Hz), then falls back to 0 in about ⅓ s. Follows the actual drum, including fills and skipped hits; raise Kick to catch softer hits.")
+    }
+    OutputRow {
+        visible: root.isAnalyzer
+        key: "tempo"
+        fullScale: 200
+        hint: qsTr("Tempo of the song in beats per minute; 0 until it has locked on.")
     }
 
     ThemedLabel {
@@ -240,6 +276,6 @@ InspectorForm {
         visible: root.isAnalyzer
         wrapMode: Text.WordWrap
         color: Theme.mutedForeground
-        text: qsTr("low, mid and high are measured against the loudest frequency at that moment, so they show the balance of the sound rather than its volume; use level for volume. Scripts and shaders also get spectrum: %1 values from lowest to highest pitch, each 0 to 1. Smoothing steadies the values but makes them react later.").arg(root.params.binCount ?? 64)
+        text: qsTr("low, mid and high follow how loud each range is: 0 is quieter than -60 dB, 1 is full scale, so a loud mix sits around 0.6 to 0.9. Scripts and shaders also get spectrum: %1 values from lowest to highest pitch, each 0 to 1 relative to the loudest one. Smoothing steadies the values but makes them react later.").arg(root.params.binCount ?? 64)
     }
 }

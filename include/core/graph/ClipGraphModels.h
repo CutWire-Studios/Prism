@@ -198,9 +198,10 @@ public:
     /// Drives param @p param (a name in the node's params.expressions, e.g. "params.opacity") with
     /// the output of Modulator @p modulator as one undo step. A modulator of 0 first creates an LFO
     /// next to the node, scaled to [min, max]; newKind picks that modulator's kind (default LFO,
-    /// 9 = Control In). Returns the modulator id, 0 on failure.
+    /// 9 = Control In). @p integer records that results are rounded (whole-numbered slider).
+    /// Returns the modulator id, 0 on failure.
     Q_INVOKABLE quint64 bindParam(quint64 node, const QString &param, quint64 modulator = 0,
-                                  qreal min = 0.0, qreal max = 1.0, int newKind = 0);
+                                  qreal min = 0.0, qreal max = 1.0, int newKind = 0, bool integer = false);
     /// Consecutive moves of one node collapse into a single undo step until endMove().
     Q_INVOKABLE void moveNode(quint64 id, qreal x, qreal y);
     Q_INVOKABLE void endMove();

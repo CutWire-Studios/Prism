@@ -32,7 +32,9 @@ regardless of its FFT configuration.
 | `u_bass` | `float` | 0..1 | Same as `u_bands.x` |
 | `u_mid` | `float` | 0..1 | Same as `u_bands.y` |
 | `u_treble` | `float` | 0..1 | Same as `u_bands.z` |
-| `u_beat` | `float` | 0..1 | Onset pulse; spikes on a beat then decays |
+| `u_beat` | `float` | 0..1 | Tempo-tracked beat: 1 on each beat of the song's pulse, then decays; off without drums |
+| `u_kick` | `float` | 0..1 | Kick drum hit (40-150 Hz): 1 on each hit, then decays |
+| `u_tempo` | `float` | BPM | Tracked tempo; 0 until locked on |
 | `u_spectrum` | `sampler2D` | 0..1 | FFT magnitude; sample `x∈[0,1]` = low→high, read `.r` |
 | `u_spectrumSize` | `int` | — | Number of valid spectrum bins |
 

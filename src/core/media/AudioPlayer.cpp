@@ -9,6 +9,7 @@
 #include <QIODevice>
 #include <QDebug>
 #include <algorithm>
+#include <limits>
 
 AudioPlayer::AudioPlayer(QObject *parent)
     : QObject(parent) {
@@ -28,6 +29,7 @@ bool AudioPlayer::start(const QString &filePath, double startTimeSeconds, bool s
     if (!m_decoder.open(filePath)) return false;
 
     const double targetAudioTime = startTimeSeconds - (m_delayMs / 1000.0);
+    m_queuedEndSeconds = targetAudioTime;
     if (targetAudioTime < 0.0) {
         m_silenceBytesPending = static_cast<qint64>(-targetAudioTime * AudioDecoder::kOutputSampleRate * AudioDecoder::kOutputChannels * sizeof(float));
         m_decoder.seek(0.0);
@@ -134,6 +136,7 @@ bool AudioPlayer::seek(double seconds) {
                                      m_outputFormat.sampleRate(), m_outputFormat.channelCount(), m_outputFormat.sampleFormat());
     }
     const double targetAudioTime = seconds - (m_delayMs / 1000.0);
+    m_queuedEndSeconds = targetAudioTime;
     if (targetAudioTime < 0.0) {
         m_silenceBytesPending = static_cast<qint64>(-targetAudioTime * AudioDecoder::kOutputSampleRate * AudioDecoder::kOutputChannels * sizeof(float));
         return m_decoder.seek(0.0);
@@ -153,6 +156,15 @@ void AudioPlayer::setMuted(bool muted) {
 
 void AudioPlayer::setEffectChain(const QVector<AudioEffectRef> &effects) {
     m_effectChain.setEffects(effects);
+}
+
+double AudioPlayer::heardPosition() const {
+    if (!m_sink || !m_outputDevice)
+        return std::numeric_limits<double>::quiet_NaN();
+    const qint64 sinkQueued = std::max<qint64>(0, m_sink->bufferSize() - m_sink->bytesFree());
+    const double bytesPerSecond = double(m_outputFormat.sampleRate()) * m_outputFormat.bytesPerFrame();
+    const double queuedSeconds = bytesPerSecond > 0.0 ? double(sinkQueued + m_residualBuffer.size()) / bytesPerSecond : 0.0;
+    return m_queuedEndSeconds - queuedSeconds * m_decoder.playbackSpeed();
 }
 
 bool AudioPlayer::isPlaying() const {
@@ -180,7 +192,8 @@ void AudioPlayer::pushAudio() {
            && m_sink->bytesFree() >= bytesPerFrame
            && m_residualBuffer.size() < m_sink->bufferSize()) {
         QByteArray chunk;
-        if (m_silenceBytesPending > 0) {
+        const bool silence = m_silenceBytesPending > 0;
+        if (silence) {
             const int sizeToPush = static_cast<int>(std::min<qint64>(m_silenceBytesPending, 4096));
             chunk.fill(0, sizeToPush);
             m_silenceBytesPending -= sizeToPush;
@@ -204,6 +217,10 @@ void AudioPlayer::pushAudio() {
 
             applyGain(chunk, m_muted ? 0.0f : static_cast<float>(m_volumePercent) / 100.0f);
         }
+
+        const double chunkSeconds = double(chunk.size())
+            / (double(sizeof(float)) * AudioDecoder::kOutputChannels * AudioDecoder::kOutputSampleRate);
+        m_queuedEndSeconds += chunkSeconds * (silence ? 1.0 : m_decoder.playbackSpeed());
 
         if (m_isoPcmTap)
             m_isoPcmTap(chunk);

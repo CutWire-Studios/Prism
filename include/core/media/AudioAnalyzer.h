@@ -1,9 +1,11 @@
 #pragma once
 
 #include <QString>
+#include <deque>
 #include <vector>
 
 class AudioDecoder;
+struct Opaque_BTT_Struct;
 
 /// Streams a file's audio in lock-step with playback and produces a smoothed
 /// FFT magnitude spectrum + overall level, consumed by audio-reactive shaders.
@@ -49,7 +51,13 @@ public:
     float lowBand() const { return m_lowBand; }
     float midBand() const { return m_midBand; }
     float highBand() const { return m_highBand; }
+    /// Tempo-tracked beat: jumps to 1 on each beat of the song's pulse (predicted, so it keeps
+    /// going through a quiet bar) while drums were heard in the last few seconds; falls by 3/s.
     float beatPulse() const { return m_beatPulse; }
+    /// Raw kick-drum hit: jumps to 1 on each detected kick (40 to 150 Hz); falls by 3/s.
+    float kickPulse() const { return m_kickPulse; }
+    /// Tracked tempo in BPM; 0 until the tracker has locked on.
+    float tempo() const { return m_tempo; }
     bool hasData() const { return m_hasData; }
 
     /// Real-time PCM from live capture/mic nodes (float32 stereo interleaved).
@@ -59,6 +67,9 @@ public:
 
 private:
     void appendMonoSample(float sample);
+    void feedTracker();
+    void resetTracker(bool keepTempo);
+    static void onTrackedBeat(void *self, unsigned long long sampleTime);
     void computeSpectrum();
     int hopSize() const;
     void allocateBuffers();   // (re)size buffers + FFT cfg from m_config
@@ -81,9 +92,22 @@ private:
     float m_midBand = 0.f;
     float m_highBand = 0.f;
     float m_beatPulse = 0.f;
-    float m_prevLowEnergy = 0.f;   // recent average of the raw low band, for beat onsets
+    float m_kickPulse = 0.f;
+    float m_tempo = 0.f;
     int   m_sinceHop = 0;
-    bool  m_beatArmed = true;
+    // Tempo and beat tracker (BTT) and the mono samples waiting for it.
+    Opaque_BTT_Struct *m_tracker = nullptr;
+    std::vector<float> m_trackerInput;
+    bool  m_trackerBeat = false;
+    double m_trackerSeconds = 0.0;            // audio fed to the tracker so far
+    std::deque<float> m_tempoHistory;          // recent tempo estimates, for the median
+    std::deque<double> m_tempoHistorySeconds;
+    // Kick detection: last hop's log bass magnitudes and the running flux statistics.
+    std::vector<float> m_prevLowLog;
+    float m_fluxMean = 0.f;
+    float m_fluxVar = 0.f;
+    bool  m_fluxPrimed = false;
+    float m_sinceKick = 1e9f;
     double m_playheadSeconds = 0.0;
     double m_playbackSpeed = 1.0;
     bool  m_hasData = false;

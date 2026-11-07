@@ -243,6 +243,44 @@ private slots:
         QTRY_VERIFY(std::abs(opacityOf(g, fx) - 0.9) < 1e-9);
     }
 
+    void expressionWritesDoNotEmitStructuralChange()
+    {
+        ClipGraph g;
+        GraphRuntime rt(&g);
+        const NodeId fx = addOpacity(g, 0.5);
+        g.setParams(fx, {{"expressions", QVariantMap{{"params.opacity", "0.3"}}}});
+        QSignalSpy changed(&g, &ClipGraph::changed);
+        QSignalSpy driven(&g, &ClipGraph::paramsDriven);
+        QTRY_VERIFY(std::abs(opacityOf(g, fx) - 0.3) < 1e-9);
+        QVERIFY(driven.count() > 0);
+        QCOMPARE(changed.count(), 0);
+    }
+
+    void expressionResultTypeFollowsSlider()
+    {
+        ClipGraph g;
+        GraphRuntime rt(&g);
+        const NodeId fx = addOpacity(g, 0.5);
+        const auto stored = [&] { return g.node(fx)->params.value("params").toMap().value("opacity"); };
+
+        // A slider at 1 stores an int; a float slider must still get fractions.
+        g.setParams(fx, {{"params", QVariantMap{{"opacity", 1}}}});
+        g.setParams(fx, {{"expressions", QVariantMap{{"params.opacity", "0.25"}}},
+                         {"expressionInts", QVariantMap{{"params.opacity", false}}}});
+        QTRY_VERIFY(std::abs(stored().toDouble() - 0.25) < 1e-9);
+        QCOMPARE(stored().typeId(), int(QMetaType::Double));
+
+        g.setParams(fx, {{"expressions", QVariantMap{{"params.opacity", "2.6"}}},
+                         {"expressionInts", QVariantMap{{"params.opacity", true}}}});
+        QTRY_COMPARE(stored().toInt(), 3);
+        QCOMPARE(stored().typeId(), int(QMetaType::Int));
+
+        // Expressions saved without the flag keep following the stored type.
+        g.setParams(fx, {{"expressions", QVariantMap{{"params.opacity", "4.4"}}}, {"expressionInts", QVariantMap{}}});
+        QTRY_COMPARE(stored().toInt(), 4);
+        QCOMPARE(stored().typeId(), int(QMetaType::Int));
+    }
+
     void expressionHelpersMapAndClamp()
     {
         ClipGraph g;

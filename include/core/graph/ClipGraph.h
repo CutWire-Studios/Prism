@@ -274,6 +274,10 @@ public:
     bool moveNode(NodeId id, const QPointF &pos);
     /// Top-level keys of the node's params. merge=false replaces the whole map.
     bool setParams(NodeId id, const QVariantMap &params, bool merge = true);
+    /// Merges values written by the runtime (expressions, scripts) many times a second. Emits
+    /// nodeChanged and paramsDriven but not changed: nothing structural moved and the session
+    /// is not edited.
+    bool setDrivenParams(NodeId id, const QVariantMap &params);
     /// Process / Audio FX nodes: the nested effect params.
     bool setEffectParams(NodeId id, const QVariantMap &params, bool merge = true);
 
@@ -393,6 +397,8 @@ signals:
     void graphReset();
     /// Anything that affects compositing or audio routing changed.
     void changed();
+    /// Param values of @p id were written by setDrivenParams.
+    void paramsDriven(NodeId id);
 
 private:
     struct ConnectPlan;

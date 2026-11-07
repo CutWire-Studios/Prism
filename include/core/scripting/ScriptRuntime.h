@@ -26,7 +26,7 @@ struct ScriptHost {
     std::function<bool(quint64 node, const QString &name, QVariant *out)> getParam;
     /// Queues the write for the GUI thread. False when the node is not reachable.
     std::function<bool(quint64 node, const QString &name, const QVariant &value)> setParam;
-    /// low/mid/high/level/beat/hasAudio of one analyzer node, or of the most recent one for id 0.
+    /// low/mid/high/level/beat/kick/tempo/hasAudio of one analyzer node, or of the most recent one for id 0.
     std::function<QVariantMap(quint64 node)> audioBands;
     /// {bpm, beat}: tempo and beat position (beat count plus phase) of the global BPM clock.
     std::function<QVariantMap()> clockInfo;

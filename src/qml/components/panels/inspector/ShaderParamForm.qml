@@ -56,7 +56,7 @@ InspectorForm {
                 expressionName: "params." + row.spec.name
                 expression: root.expr(expressionName)
                 expressionError: root.exprError(expressionName)
-                onExpressionEdited: text => root.setExpr(expressionName, text)
+                onExpressionEdited: (text, integer) => root.setExpr(expressionName, text, integer)
             }
 
             ThemedSwitch {

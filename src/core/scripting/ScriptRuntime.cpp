@@ -184,7 +184,7 @@ QVariant luaToVariant(const sol::object &o) {
 
 sol::table bandsToLua(sol::state_view lua, const QVariantMap &b) {
     sol::table t = lua.create_table();
-    for (const char *k : {"low", "mid", "high", "level", "beat"})
+    for (const char *k : {"low", "mid", "high", "level", "beat", "kick", "tempo"})
         t[k] = 0.0;
     t["hasAudio"] = false;
     for (auto it = b.begin(); it != b.end(); ++it)

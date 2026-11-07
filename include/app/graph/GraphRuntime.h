@@ -113,7 +113,7 @@ public:
     QVariantMap expressionInputRange(NodeId id, const QString &param) const;
 
     // ── Audio analyzers ─────────────────────────────────────────────────────────
-    /// Latest {low, mid, high, level, beat, hasAudio} of an Audio Analyzer node; empty when unknown.
+    /// Latest {low, mid, high, level, beat, kick, tempo, hasAudio} of an Audio Analyzer node; empty when unknown.
     QVariantMap analyzerBands(NodeId id) const;
     void feedLiveAudioForProducer(NodeId producerId, const QByteArray &pcm);
     void syncAudioAnalyzerNode(NodeId scriptNodeId, double playbackTime, bool playing, double speed);
@@ -128,7 +128,9 @@ signals:
 
 private:
     void requestThumbnail(NodeId id);
-    void writeParam(NodeId id, const QString &name, const QVariant &value);
+    /// @p driven: an already typed expression result, stored as given through
+    /// ClipGraph::setDrivenParams. Otherwise @p value takes the stored value's type.
+    void writeParam(NodeId id, const QString &name, const QVariant &value, bool driven = false);
     void applyScriptWrites();
     struct Impl;
     std::unique_ptr<Impl> d;

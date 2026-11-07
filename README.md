@@ -148,7 +148,7 @@ Program output opens in a separate window (mirror, NDI, virtual camera, or recor
 | Camera / Screen | Qt Multimedia; Linux screen capture uses PipeWire portal + GStreamer; Windows/macOS use `QScreenCapture` / `QWindowCapture` |
 | Text / SVG Rendering | Skia (CPU raster) |
 | Scripting | Lua 5.4 + sol2 (optional) |
-| Audio Analysis | kissfft (FFT spectrum for shaders) |
+| Audio Analysis | kissfft (FFT spectrum for shaders), vendored BTT beat and tempo tracking (`third_party/`) |
 | Background Removal | ONNX Runtime + MediaPipe selfie-segmentation model (optional) |
 | Pattern Matching | RE2 |
 | Session Bundles | libzip (portable `.prism` packages) |
@@ -197,6 +197,7 @@ src/
 include/                  # Public headers, mirroring the src/ subtree
 forms/                    # Qt Designer .ui files
 third_party/qrcodegen/    # Vendored QR code generator (WebRTC pairing)
+third_party/btt/          # Vendored Beat and Tempo Tracking (Audio Analyzer beat/tempo)
 third_party/softcam/      # Windows virtual-camera backend (fetched + built)
 scripts/                  # webrtc_signaling_server.py (relay), build-windows.ps1
 tests/                    # Qt Test unit tests (linked against prism_core)

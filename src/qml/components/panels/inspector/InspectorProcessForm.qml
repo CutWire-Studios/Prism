@@ -58,7 +58,7 @@ InspectorForm {
         expressionName: "params.opacity"
         expression: root.expr(expressionName)
         expressionError: root.exprError(expressionName)
-        onExpressionEdited: text => root.setExpr(expressionName, text)
+        onExpressionEdited: (text, integer) => root.setExpr(expressionName, text, integer)
     }
 
     StyleFieldRow {
@@ -89,7 +89,7 @@ InspectorForm {
         expressionName: "params.threshold"
         expression: root.expr(expressionName)
         expressionError: root.exprError(expressionName)
-        onExpressionEdited: text => root.setExpr(expressionName, text)
+        onExpressionEdited: (text, integer) => root.setExpr(expressionName, text, integer)
     }
 
     StyleSliderRow {
@@ -106,7 +106,7 @@ InspectorForm {
         expressionName: "params.smoothness"
         expression: root.expr(expressionName)
         expressionError: root.exprError(expressionName)
-        onExpressionEdited: text => root.setExpr(expressionName, text)
+        onExpressionEdited: (text, integer) => root.setExpr(expressionName, text, integer)
     }
 
     StyleSliderRow {
@@ -123,7 +123,7 @@ InspectorForm {
         expressionName: "params.radius"
         expression: root.expr(expressionName)
         expressionError: root.exprError(expressionName)
-        onExpressionEdited: text => root.setExpr(expressionName, text)
+        onExpressionEdited: (text, integer) => root.setExpr(expressionName, text, integer)
     }
 
     StyleSliderRow {
@@ -139,6 +139,6 @@ InspectorForm {
         expressionName: "params.amount"
         expression: root.expr(expressionName)
         expressionError: root.exprError(expressionName)
-        onExpressionEdited: text => root.setExpr(expressionName, text)
+        onExpressionEdited: (text, integer) => root.setExpr(expressionName, text, integer)
     }
 }

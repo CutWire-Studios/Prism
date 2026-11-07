@@ -704,7 +704,7 @@ QVariantList ClipGraphController::modulators() const {
 }
 
 quint64 ClipGraphController::bindParam(quint64 node, const QString &param, quint64 modulator,
-                                       qreal min, qreal max, int newKind) {
+                                       qreal min, qreal max, int newKind, bool integer) {
     const ClipGraph::Node *target = m_graph->node(node);
     if (!target || param.isEmpty()) return 0;
     const ClipGraph::Node *existing = modulator ? m_graph->node(modulator) : nullptr;
@@ -719,7 +719,9 @@ quint64 ClipGraphController::bindParam(quint64 node, const QString &param, quint
     QVariantMap exprs = m_graph->node(node)->params.value("expressions").toMap();
     if (exprs.value(param).toString().trimmed().isEmpty())
         exprs.insert(param, QStringLiteral("input"));
-    m_graph->setParams(node, {{"expressions", exprs}}, true);
+    QVariantMap ints = m_graph->node(node)->params.value("expressionInts").toMap();
+    ints.insert(param, integer);
+    m_graph->setParams(node, {{"expressions", exprs}, {"expressionInts", ints}}, true);
     const QVector<ClipGraph::Port> outs = m_graph->outputPorts(modulator);
     int fromPort = -1, toPort = -1;
     for (const ClipGraph::Port &p : outs)

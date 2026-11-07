@@ -18,6 +18,6 @@ Item {
         maximumLineCount: 2
         horizontalAlignment: Text.AlignHCenter
         font.family: Theme.monoFontFamily
-        text: qsTr("level · low · mid · high · beat\neach 0 to 1")
+        text: qsTr("level · low · mid · high\nbeat · kick · tempo")
     }
 }

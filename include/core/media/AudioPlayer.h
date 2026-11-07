@@ -40,6 +40,10 @@ public:
     void setSpeed(double speed) { m_decoder.setPlaybackSpeed(speed); }
 
     bool isPlaying() const;
+    /// Media position (seconds) of the sample leaving the speakers now: the end of what was queued
+    /// minus what still waits in our buffer and the sink. Negative while the start delay plays.
+    /// NaN without an open sink. Device latency past the sink buffer is not included.
+    double heardPosition() const;
     QString currentFilePath() const { return m_currentFilePath; }
 
     void setDelayMs(int delayMs) { m_delayMs = delayMs; }
@@ -82,6 +86,7 @@ private:
     int m_delayMs = 0;
     QString m_deviceId;   // empty = system default output
     qint64 m_silenceBytesPending = 0;
+    double m_queuedEndSeconds = 0.0;   // media position at the end of the queued audio
     PcmTapFn m_pcmTap;
     PcmTapFn m_isoPcmTap;
     std::shared_ptr<AudioLevelMeter> m_meter;

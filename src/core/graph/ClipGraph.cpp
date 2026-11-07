@@ -127,7 +127,8 @@ QVariantMap defaultParams(NT type) {
         return {{"scriptType", QStringLiteral("audio")},
                 {"fftSize", c.fftSize}, {"binCount", c.binCount},
                 {"smoothing", double(c.smoothing)}, {"beatSensitivity", double(c.beatSensitivity)},
-                {"lowMidHz", double(c.lowMidHz)}, {"midHighHz", double(c.midHighHz)}};
+                {"lowMidHz", double(c.lowMidHz)}, {"midHighHz", double(c.midHighHz)},
+                {"offsetMs", 0.0}};
     }
     case NT::Modulator:
         return {{"kind", 0}, {"shape", 0}, {"sync", false}, {"rateHz", 1.0}, {"rateBeats", 1.0},
@@ -934,6 +935,17 @@ bool ClipGraph::moveNode(NodeId id, const QPointF &pos) {
     if (n->pos == pos) return true;
     n->pos = pos;
     notifyNode(id);
+    return true;
+}
+
+bool ClipGraph::setDrivenParams(NodeId id, const QVariantMap &params) {
+    Node *n = mutableNode(id);
+    if (!n) return false;
+    for (auto it = params.begin(); it != params.end(); ++it)
+        n->params.insert(it.key(), it.value());
+    refreshNode(*n);
+    notifyNode(id);
+    if (!m_restoring) emit paramsDriven(id);
     return true;
 }
 
@@ -2515,6 +2527,7 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         n.group = (quint64)obj["group"].toInteger();
         if (type != NT::Input && !obj["name"].toString().isEmpty()) n.params["name"] = obj["name"].toString();
         if (obj["expressions"].isObject()) n.params["expressions"] = obj["expressions"].toObject().toVariantMap();
+        if (obj["expressionInts"].isObject()) n.params["expressionInts"] = obj["expressionInts"].toObject().toVariantMap();
         refreshNode(n);
         m_nodes.insert(id, n);
         m_order.append(id);
@@ -2618,6 +2631,7 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
             p["beatSensitivity"] = double(float(obj["beatSensitivity"].toDouble(c.beatSensitivity)));
             p["lowMidHz"] = double(float(obj["lowMidHz"].toDouble(c.lowMidHz)));
             p["midHighHz"] = double(float(obj["midHighHz"].toDouble(c.midHighHz)));
+            p["offsetMs"] = std::clamp(obj["offsetMs"].toDouble(0.0), -500.0, 500.0);
             restore(obj, NT::AudioAnalyzer, p);
         } else {
             QVariantMap p = defaultParams(NT::Script);
