@@ -51,5 +51,58 @@
     "slug": "duotone",
     "input": {"type": "solid", "color": "#ffffffff"},
     "samples": [{"uv": [0.5, 0.5], "rgba": [255, 194, 8, 255], "tol": 3}]
+  },
+  {
+    "_comment": "transform with defaults (no move, scale 1, no rotation) is the identity.",
+    "slug": "transform",
+    "input": {"type": "hgradient", "from": "#000000ff", "to": "#ffffffff"},
+    "samples": [
+      {"uv": [0.0, 0.5], "rgba": [0, 0, 0, 255], "tol": 4},
+      {"uv": [1.0, 0.5], "rgba": [255, 255, 255, 255], "tol": 4}
+    ]
+  },
+  {
+    "_comment": "mirror horizontal folds the left half onto the right: x' = 0.5 - |x - 0.5|. Edges both read input x=0 (black). 0.25 and 0.75 both read x=0.25 (~64).",
+    "slug": "mirror",
+    "input": {"type": "hgradient", "from": "#000000ff", "to": "#ffffffff"},
+    "params": {"mode": 0},
+    "samples": [
+      {"uv": [0.0, 0.5], "rgba": [0, 0, 0, 255], "tol": 4},
+      {"uv": [1.0, 0.5], "rgba": [0, 0, 0, 255], "tol": 4},
+      {"uv": [0.25, 0.5], "rgba": [64, 64, 64, 255], "tol": 4},
+      {"uv": [0.75, 0.5], "rgba": [64, 64, 64, 255], "tol": 4}
+    ]
+  },
+  {
+    "_comment": "mirror vertical folds top onto bottom, which does not change an hgradient (it only varies with x).",
+    "slug": "mirror",
+    "input": {"type": "hgradient", "from": "#000000ff", "to": "#ffffffff"},
+    "params": {"mode": 1},
+    "samples": [
+      {"uv": [0.0, 0.2], "rgba": [0, 0, 0, 255], "tol": 4},
+      {"uv": [1.0, 0.8], "rgba": [255, 255, 255, 255], "tol": 4},
+      {"uv": [0.5, 0.1], "rgba": [128, 128, 128, 255], "tol": 4},
+      {"uv": [0.5, 0.9], "rgba": [128, 128, 128, 255], "tol": 4}
+    ]
+  },
+  {
+    "_comment": "pixelate with a 64px cell on a 64x64 image is one cell: the solid colour is unchanged.",
+    "slug": "pixelate",
+    "input": {"type": "solid", "color": "#336699ff"},
+    "params": {"size": 64},
+    "samples": [
+      {"uv": [0.5, 0.5], "rgba": [51, 102, 153, 255], "tol": 4},
+      {"uv": [0.1, 0.9], "rgba": [51, 102, 153, 255], "tol": 4}
+    ]
+  },
+  {
+    "_comment": "tile 1x1 with defaults is the identity (mirror off, repeat uses [0,1] with the end sample at 1.0).",
+    "slug": "tile",
+    "input": {"type": "hgradient", "from": "#000000ff", "to": "#ffffffff"},
+    "samples": [
+      {"uv": [0.0, 0.5], "rgba": [0, 0, 0, 255], "tol": 4},
+      {"uv": [1.0, 0.5], "rgba": [255, 255, 255, 255], "tol": 4},
+      {"uv": [0.5, 0.5], "rgba": [128, 128, 128, 255], "tol": 4}
+    ]
   }
 ]

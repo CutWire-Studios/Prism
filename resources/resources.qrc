@@ -273,6 +273,20 @@
         <file>shaders/effects/gradient_map.frag</file>
         <file>shaders/effects/channel_mixer.frag</file>
         <file>shaders/effects/lift_gamma_gain.frag</file>
+        <file>shaders/effects/transform.frag</file>
+        <file>shaders/effects/mirror.frag</file>
+        <file>shaders/effects/kaleidoscope.frag</file>
+        <file>shaders/effects/polar.frag</file>
+        <file>shaders/effects/twirl.frag</file>
+        <file>shaders/effects/wave.frag</file>
+        <file>shaders/effects/ripple.frag</file>
+        <file>shaders/effects/pixelate.frag</file>
+        <file>shaders/effects/tile.frag</file>
+        <file>shaders/effects/fisheye.frag</file>
+        <file>shaders/effects/hex_mosaic.frag</file>
+        <file>shaders/effects/corner_pin.frag</file>
+        <file>shaders/effects/displace_noise.frag</file>
+        <file>shaders/effects/camera_shake.frag</file>
         <file>shaders/slideshow/cube.glsl</file>
         <file>shaders/slideshow/flip.glsl</file>
         <file>shaders/slideshow/pagecurl.glsl</file>

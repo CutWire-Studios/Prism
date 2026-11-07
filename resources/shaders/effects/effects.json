@@ -169,6 +169,180 @@
         { "name": "gain_g", "type": "float", "label": "Gain green", "min": 0, "max": 2, "default": 1, "step": 0.01 },
         { "name": "gain_b", "type": "float", "label": "Gain blue", "min": 0, "max": 2, "default": 1, "step": 0.01 }
       ]
+    },
+    {
+      "id": 25,
+      "slug": "transform",
+      "name": "Transform",
+      "category": "Distort",
+      "description": "Move, scale and rotate the picture around its centre.",
+      "frag": "transform.frag",
+      "params": [
+        { "name": "offset", "type": "point", "label": "Move", "min": -1, "max": 1, "default": [0, 0], "step": 0.01 },
+        { "name": "scale", "type": "float", "label": "Scale", "min": 0.05, "max": 5, "default": 1, "step": 0.01 },
+        { "name": "rotation", "type": "float", "label": "Rotation (degrees)", "min": -360, "max": 360, "default": 0, "step": 1 }
+      ]
+    },
+    {
+      "id": 26,
+      "slug": "mirror",
+      "name": "Mirror",
+      "category": "Distort",
+      "description": "Reflect one half of the picture onto the other; quad tiles four mirrored copies.",
+      "frag": "mirror.frag",
+      "params": [
+        { "name": "mode", "type": "choice", "label": "Mode", "choices": ["Horizontal", "Vertical", "Both", "Quad"], "default": 0 }
+      ]
+    },
+    {
+      "id": 27,
+      "slug": "kaleidoscope",
+      "name": "Kaleidoscope",
+      "category": "Distort",
+      "description": "Fold the picture into mirrored slices around a point.",
+      "frag": "kaleidoscope.frag",
+      "params": [
+        { "name": "segments", "type": "int", "label": "Slices", "min": 2, "max": 24, "default": 6, "step": 1 },
+        { "name": "rotation", "type": "float", "label": "Rotation (degrees)", "min": -360, "max": 360, "default": 0, "step": 1 },
+        { "name": "center", "type": "point", "label": "Centre", "min": 0, "max": 1, "default": [0.5, 0.5], "step": 0.01 }
+      ]
+    },
+    {
+      "id": 28,
+      "slug": "polar",
+      "name": "Polar",
+      "category": "Distort",
+      "description": "Wrap the picture into a circle, or unwrap a circle into a rectangle.",
+      "frag": "polar.frag",
+      "params": [
+        { "name": "mode", "type": "choice", "label": "Mode", "choices": ["Rect to polar", "Polar to rect"], "default": 0 }
+      ]
+    },
+    {
+      "id": 29,
+      "slug": "twirl",
+      "name": "Twirl",
+      "category": "Distort",
+      "description": "Swirl the picture around a point like water down a drain.",
+      "frag": "twirl.frag",
+      "params": [
+        { "name": "angle", "type": "float", "label": "Twist (degrees)", "min": -360, "max": 360, "default": 0, "step": 1 },
+        { "name": "radius", "type": "float", "label": "Radius", "min": 0, "max": 1.5, "default": 0.45, "step": 0.01 },
+        { "name": "center", "type": "point", "label": "Centre", "min": 0, "max": 1, "default": [0.5, 0.5], "step": 0.01 }
+      ]
+    },
+    {
+      "id": 30,
+      "slug": "wave",
+      "name": "Wave",
+      "category": "Distort",
+      "description": "Ripple the picture side to side or up and down, over time.",
+      "frag": "wave.frag",
+      "params": [
+        { "name": "amplitude", "type": "float", "label": "Strength", "min": 0, "max": 0.2, "default": 0.01, "step": 0.001 },
+        { "name": "frequency", "type": "float", "label": "Waves", "min": 0, "max": 60, "default": 10, "step": 0.1 },
+        { "name": "speed", "type": "float", "label": "Speed", "min": -20, "max": 20, "default": 2, "step": 0.1 },
+        { "name": "direction", "type": "choice", "label": "Direction", "choices": ["Horizontal", "Vertical"], "default": 0 }
+      ]
+    },
+    {
+      "id": 31,
+      "slug": "ripple",
+      "name": "Ripple",
+      "category": "Distort",
+      "description": "Rings spreading out from a point, like a stone dropped in a pond.",
+      "frag": "ripple.frag",
+      "params": [
+        { "name": "amplitude", "type": "float", "label": "Strength", "min": 0, "max": 0.1, "default": 0.01, "step": 0.001 },
+        { "name": "frequency", "type": "float", "label": "Rings", "min": 1, "max": 100, "default": 30, "step": 1 },
+        { "name": "speed", "type": "float", "label": "Speed", "min": -20, "max": 20, "default": 4, "step": 0.1 },
+        { "name": "center", "type": "point", "label": "Centre", "min": 0, "max": 1, "default": [0.5, 0.5], "step": 0.01 }
+      ]
+    },
+    {
+      "id": 32,
+      "slug": "pixelate",
+      "name": "Pixelate",
+      "category": "Distort",
+      "description": "Big chunky square pixels.",
+      "frag": "pixelate.frag",
+      "params": [
+        { "name": "size", "type": "float", "label": "Cell size (px)", "min": 1, "max": 200, "default": 16, "step": 1 }
+      ]
+    },
+    {
+      "id": 33,
+      "slug": "tile",
+      "name": "Tile",
+      "category": "Distort",
+      "description": "Repeat the picture in a grid, optionally mirroring alternate tiles.",
+      "frag": "tile.frag",
+      "params": [
+        { "name": "count_x", "type": "float", "label": "Tiles across", "min": 1, "max": 12, "default": 1, "step": 0.1 },
+        { "name": "count_y", "type": "float", "label": "Tiles down", "min": 1, "max": 12, "default": 1, "step": 0.1 },
+        { "name": "mode", "type": "choice", "label": "Mode", "choices": ["Repeat", "Mirrored repeat"], "default": 0 }
+      ]
+    },
+    {
+      "id": 34,
+      "slug": "fisheye",
+      "name": "Fisheye",
+      "category": "Distort",
+      "description": "Bulge the middle out (positive) or pinch it in (negative).",
+      "frag": "fisheye.frag",
+      "params": [
+        { "name": "strength", "type": "float", "label": "Strength", "min": -1, "max": 1, "default": 0, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 35,
+      "slug": "hex_mosaic",
+      "name": "Hex mosaic",
+      "category": "Distort",
+      "description": "Break the picture into hexagonal blocks of flat colour.",
+      "frag": "hex_mosaic.frag",
+      "params": [
+        { "name": "size", "type": "float", "label": "Cell size (px)", "min": 2, "max": 200, "default": 16, "step": 1 }
+      ]
+    },
+    {
+      "id": 36,
+      "slug": "corner_pin",
+      "name": "Corner pin",
+      "category": "Distort",
+      "description": "Pin the four corners of the picture to any quadrilateral.",
+      "frag": "corner_pin.frag",
+      "params": [
+        { "name": "tl", "type": "point", "label": "Top left", "min": -1, "max": 2, "default": [0, 0], "step": 0.01 },
+        { "name": "tr", "type": "point", "label": "Top right", "min": -1, "max": 2, "default": [1, 0], "step": 0.01 },
+        { "name": "br", "type": "point", "label": "Bottom right", "min": -1, "max": 2, "default": [1, 1], "step": 0.01 },
+        { "name": "bl", "type": "point", "label": "Bottom left", "min": -1, "max": 2, "default": [0, 1], "step": 0.01 }
+      ]
+    },
+    {
+      "id": 37,
+      "slug": "displace_noise",
+      "name": "Displace (noise)",
+      "category": "Distort",
+      "description": "Push pixels around with animated noise.",
+      "frag": "displace_noise.frag",
+      "params": [
+        { "name": "amount", "type": "float", "label": "Strength", "min": 0, "max": 0.2, "default": 0.02, "step": 0.001 },
+        { "name": "scale", "type": "float", "label": "Noise scale", "min": 0.1, "max": 30, "default": 4, "step": 0.1 },
+        { "name": "speed", "type": "float", "label": "Speed", "min": -5, "max": 5, "default": 0.2, "step": 0.01 }
+      ]
+    },
+    {
+      "id": 38,
+      "slug": "camera_shake",
+      "name": "Camera shake",
+      "category": "Distort",
+      "description": "Jitter the frame like a handheld camera.",
+      "frag": "camera_shake.frag",
+      "params": [
+        { "name": "amount", "type": "float", "label": "Strength", "min": 0, "max": 0.1, "default": 0.01, "step": 0.001 },
+        { "name": "speed", "type": "float", "label": "Speed", "min": 0, "max": 60, "default": 8, "step": 0.1 }
+      ]
     }
   ]
 }
