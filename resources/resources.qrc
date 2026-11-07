@@ -258,6 +258,9 @@
         <file>scripts/counter.lua</file>
         <file>scripts/greeting.lua</file>
         <file>scripts/bitcoin_price.lua</file>
+        <file>shaders/effects/effects.json</file>
+        <file>shaders/effects/prelude.glsl</file>
+        <file>shaders/effects/invert.frag</file>
         <file>shaders/slideshow/cube.glsl</file>
         <file>shaders/slideshow/flip.glsl</file>
         <file>shaders/slideshow/pagecurl.glsl</file>

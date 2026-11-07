@@ -431,6 +431,8 @@ const ProcessEffectDescriptor *resolveEffect(const QJsonValue &v)
 
 static QString effectSlugOf(const ProcessEffectDescriptor &d)
 {
+    if (!d.slug.isEmpty())
+        return d.slug;
     QString out;
     for (QChar c : d.name.toLower()) {
         if (c.isLetterOrNumber())

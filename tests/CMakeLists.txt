@@ -32,3 +32,14 @@ prism_add_test(test_media)
 prism_add_test(test_skiarender)
 prism_add_test(test_clipgraph)
 prism_add_test(test_compositor)
+prism_add_test(test_shadereffects)
+
+find_program(GLSLANG_VALIDATOR glslangValidator)
+if(GLSLANG_VALIDATOR)
+    add_test(NAME test_shadereffects_glslang
+        COMMAND ${CMAKE_COMMAND}
+            -DTEST_EXE=$<TARGET_FILE:test_shadereffects>
+            -DGLSLANG=${GLSLANG_VALIDATOR}
+            -DOUT=${CMAKE_CURRENT_BINARY_DIR}/shadereffects_dump
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/glslang_check.cmake)
+endif()

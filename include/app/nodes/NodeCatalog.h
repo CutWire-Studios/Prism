@@ -20,6 +20,10 @@ public:
 
     /// [{id, name, menuLabel, hasEditor, editLabel}] for effects that are offered in menus.
     Q_INVOKABLE QVariantList processEffects() const;
+    /// Param descriptors [{name, label, type, min, max, step, def, choices}] of a data-driven shader
+    /// effect (id >= 12); empty for other effects. type is float|int|bool|choice|color|point; def is
+    /// a number, bool, [r,g,b,a] 0..1 or [x,y].
+    Q_INVOKABLE QVariantList processEffectParams(int id) const;
     Q_INVOKABLE QVariantList audioEffects() const;
 
     /// Button text for a Process / AudioEffect node (dynamic label of its current params).

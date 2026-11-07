@@ -2,6 +2,7 @@
 
 #include "core/graph/ClipGraph.h"
 
+#include "core/effects/ShaderEffects.h"
 #include "core/audio/AudioRack.h"
 #include "core/audio/dsp/PedalCatalog.h"
 
@@ -25,6 +26,35 @@ QVariantList NodeCatalog::processEffects() const
             {"menuLabel", d.menuLabel},
             {"hasEditor", !d.editLabel.isEmpty()},
             {"editLabel", d.editLabel},
+        });
+    }
+    return out;
+}
+
+QVariantList NodeCatalog::processEffectParams(int id) const
+{
+    QVariantList out;
+    const ShaderEffectSpec *spec = ShaderEffects::byId(id);
+    if (!spec)
+        return out;
+    static const char *const kTypes[] = {"float", "int", "bool", "choice", "color", "point"};
+    for (const ShaderParam &p : spec->params) {
+        QVariant def = p.def;
+        if (p.type == ShaderParam::Bool)
+            def = p.def != 0.0;
+        else if (p.type == ShaderParam::Color)
+            def = QVariantList{p.defColor.redF(), p.defColor.greenF(), p.defColor.blueF(), p.defColor.alphaF()};
+        else if (p.type == ShaderParam::Point)
+            def = QVariantList{p.defPoint.x(), p.defPoint.y()};
+        out.append(QVariantMap{
+            {"name", p.name},
+            {"label", p.label},
+            {"type", QString::fromLatin1(kTypes[p.type])},
+            {"min", p.min},
+            {"max", p.max},
+            {"step", p.step},
+            {"def", def},
+            {"choices", p.choices},
         });
     }
     return out;

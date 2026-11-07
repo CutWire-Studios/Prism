@@ -1,6 +1,8 @@
 #include "core/graph/ProcessEffects.h"
 #include "core/sources/MediaSource.h"
 #include "core/sources/EffectSources.h"
+#include "core/effects/ShaderEffects.h"
+#include "core/effects/ShaderEffectSource.h"
 #ifdef PRISM_HAVE_SEGMENTATION
 #include "core/sources/SegmentationSource.h"
 #endif
@@ -244,15 +246,38 @@ ProcessEffectDescriptor makePolygonMask() {
     return d;
 }
 
+// ── Data-driven shader effects (ids >= 12, declared in effects.json) ─────────
+ProcessEffectDescriptor makeShaderEffect(const ShaderEffectSpec &spec) {
+    ProcessEffectDescriptor d;
+    d.id = spec.id;
+    d.name = spec.name;
+    d.menuLabel = spec.name;
+    d.slug = spec.slug;
+    d.isDecorator = true;
+    d.defaultParams = spec.defaultParams();
+    d.wrapSource = [id = spec.id](std::unique_ptr<MediaSource> inner, const QJsonObject &p)
+        -> std::unique_ptr<MediaSource> {
+        const ShaderEffectSpec *s = ShaderEffects::byId(id);
+        if (!s) return inner;
+        return std::make_unique<ShaderEffectSource>(std::move(inner), *s, p);
+    };
+    return d;
+}
+
 } // namespace
 
 namespace ProcessEffects {
 
 const QVector<ProcessEffectDescriptor> &all() {
-    static const QVector<ProcessEffectDescriptor> registry{
-        makeCrop(), makeFlipH(), makeFlipV(), makeSegment(),
-        makeFlip(), makeRotate(), makeOpacity(), makeChromaKey(),
-        makeBlur(), makeSharpen(), makeKeystone(), makePolygonMask()};
+    static const QVector<ProcessEffectDescriptor> registry = [] {
+        QVector<ProcessEffectDescriptor> r{
+            makeCrop(), makeFlipH(), makeFlipV(), makeSegment(),
+            makeFlip(), makeRotate(), makeOpacity(), makeChromaKey(),
+            makeBlur(), makeSharpen(), makeKeystone(), makePolygonMask()};
+        for (const ShaderEffectSpec &spec : ShaderEffects::all())
+            r.append(makeShaderEffect(spec));
+        return r;
+    }();
     return registry;
 }
 
@@ -288,6 +313,8 @@ const ProcessEffectDescriptor *byName(const QString &name) {
         if (d.name.compare(key, Qt::CaseInsensitive) == 0)
             return &d;
         if (d.menuLabel.compare(key, Qt::CaseInsensitive) == 0)
+            return &d;
+        if (!d.slug.isEmpty() && d.slug == slug)
             return &d;
         if (effectSlug(d.name) == slug || effectSlug(d.menuLabel) == slug)
             return &d;

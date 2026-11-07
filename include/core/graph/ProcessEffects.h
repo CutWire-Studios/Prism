@@ -24,6 +24,7 @@ struct ProcessEffectDescriptor {
     int     id = -1;          // persisted in saved projects; stable, append-only
     QString name;             // node body label
     QString menuLabel;        // "Add Process Node" menu entry
+    QString slug;             // explicit lookup slug; empty means derived from name
     bool    available = true; // hides the menu entry only; never blocks project load
     QJsonObject defaultParams;
 

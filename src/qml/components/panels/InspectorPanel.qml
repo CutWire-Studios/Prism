@@ -133,7 +133,20 @@ PanelFrame {
                                 Layout.fillWidth: true
                                 active: del.type === body.nt.Process
                                 visible: active
-                                sourceComponent: InspectorProcessForm {
+                                sourceComponent: del.params.effect >= 12 ? shaderParamForm : processForm
+                            }
+
+                            Component {
+                                id: processForm
+                                InspectorProcessForm {
+                                    nodeId: del.nodeId
+                                    params: del.params
+                                }
+                            }
+
+                            Component {
+                                id: shaderParamForm
+                                ShaderParamForm {
                                     nodeId: del.nodeId
                                     params: del.params
                                 }
