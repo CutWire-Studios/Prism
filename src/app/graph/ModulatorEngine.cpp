@@ -104,6 +104,23 @@ void ModulatorEngine::tick(const ModulatorClock &clk, const InputResolver &resol
         n.value = finiteOr0(evaluate(id, n, clk, dt, input));
 }
 
+std::optional<std::pair<double, double>> ModulatorEngine::outputRange(const QVariantMap &p) {
+    const auto sorted = [](double a, double b) { return std::make_pair(std::min(a, b), std::max(a, b)); };
+    switch (Kind(p.value(QStringLiteral("kind")).toInt())) {
+    case Kind::Lfo:
+    case Kind::Random:
+    case Kind::ControlIn: return sorted(num(p, "min", 0.0), num(p, "max", 1.0));
+    case Kind::MapRange:  return sorted(num(p, "outMin", 0.0), num(p, "outMax", 1.0));
+    case Kind::Trigger:
+    case Kind::Toggle:    return std::make_pair(0.0, 1.0);
+    case Kind::Counter:   return std::make_pair(0.0, double(std::max(1, int(num(p, "steps", 4))) - 1));
+    case Kind::Envelope:
+    case Kind::Smooth:
+    case Kind::Math:      break;
+    }
+    return std::nullopt;
+}
+
 double ModulatorEngine::evaluate(NodeId id, Node &n, const ModulatorClock &clk, double dt, const InputFn &input) const {
     const QVariantMap &p = n.p;
     const bool hasSocket = Kind(n.kind) != Kind::ControlIn;

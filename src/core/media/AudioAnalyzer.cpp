@@ -90,6 +90,8 @@ bool AudioAnalyzer::open(const QString &filePath, double startTime) {
     m_highBand = 0.f;
     m_beatPulse = 0.f;
     m_prevLowEnergy = 0.f;
+    m_sinceHop = 0;
+    m_beatArmed = true;
     m_playheadSeconds = std::max(0.0, startTime);
     m_playbackSpeed = 1.0;
     m_hasData = false;
@@ -112,6 +114,8 @@ void AudioAnalyzer::close() {
     m_highBand = 0.f;
     m_beatPulse = 0.f;
     m_prevLowEnergy = 0.f;
+    m_sinceHop = 0;
+    m_beatArmed = true;
     m_playheadSeconds = 0.0;
     m_playbackSpeed = 1.0;
     m_hasData = false;
@@ -137,6 +141,8 @@ bool AudioAnalyzer::beginLive() {
     m_highBand = 0.f;
     m_beatPulse = 0.f;
     m_prevLowEnergy = 0.f;
+    m_sinceHop = 0;
+    m_beatArmed = true;
     m_playheadSeconds = 0.0;
     m_playbackSpeed = 1.0;
     m_hasData = false;
@@ -168,11 +174,6 @@ void AudioAnalyzer::feedStereoPcm(const QByteArray &pcm) {
         m_playheadSeconds += static_cast<double>(numFrames) / static_cast<double>(kSampleRate);
     }
 
-    const float dt = static_cast<float>(numFrames) / static_cast<float>(kSampleRate);
-    m_beatPulse = std::max(0.0f, m_beatPulse - 3.0f * dt);
-
-    if (m_ringFilled >= m_config.fftSize)
-        computeSpectrum();
 }
 
 bool AudioAnalyzer::seek(double seconds) {
@@ -193,6 +194,8 @@ bool AudioAnalyzer::seek(double seconds) {
     m_highBand = 0.f;
     m_beatPulse = 0.f;
     m_prevLowEnergy = 0.f;
+    m_sinceHop = 0;
+    m_beatArmed = true;
     m_playheadSeconds = clamped;
     m_hasData = false;
     return true;
@@ -206,11 +209,21 @@ void AudioAnalyzer::setPlaybackSpeed(double speed) {
     m_decoder->setPlaybackSpeed(clamped);
 }
 
+// Analyse every hop of new samples rather than once per caller tick, so a short transient
+// between two ticks still lands in a window and the outputs move at a steady rate.
 void AudioAnalyzer::appendMonoSample(float sample) {
     const int n = m_config.fftSize;
     m_ringBuffer[m_ringWrite] = sample;
     m_ringWrite = (m_ringWrite + 1) % n;
     m_ringFilled = std::min(m_ringFilled + 1, n);
+    if (++m_sinceHop >= hopSize() && m_ringFilled >= n) {
+        m_sinceHop = 0;
+        computeSpectrum();
+    }
+}
+
+int AudioAnalyzer::hopSize() const {
+    return std::min(m_config.fftSize / 2, 512);
 }
 
 void AudioAnalyzer::advance(double deltaSeconds) {
@@ -252,12 +265,6 @@ void AudioAnalyzer::advance(double deltaSeconds) {
         m_playheadSeconds += decodedSeconds * m_playbackSpeed;
     }
 
-    // Fast attack / slower release beat pulse envelope.
-    const float releasePerSecond = 3.0f;
-    m_beatPulse = std::max(0.0f, m_beatPulse - static_cast<float>(deltaSeconds) * releasePerSecond);
-
-    if (m_ringFilled >= m_config.fftSize)
-        computeSpectrum();
 }
 
 void AudioAnalyzer::decay(double deltaSeconds) {
@@ -321,8 +328,10 @@ void AudioAnalyzer::computeSpectrum() {
         maxVal = std::max(maxVal, v);
     const float norm = maxVal > 1e-6f ? maxVal : 1.f;
 
-    // Frame-blend smoothing: config.smoothing is the weight kept from the past.
-    const float keep = m_config.smoothing;
+    // config.smoothing is the weight kept from the past per 1/30 s; rescaled to the hop length so
+    // the feel does not depend on FFT size.
+    const float hopSeconds = static_cast<float>(hopSize()) / static_cast<float>(kSampleRate);
+    const float keep = std::pow(m_config.smoothing, hopSeconds * 30.f);
     const float take = 1.f - keep;
     for (int b = 0; b < bins; ++b) {
         const float normalized = std::clamp(rawBins[b] / norm, 0.f, 1.f);
@@ -350,12 +359,19 @@ void AudioAnalyzer::computeSpectrum() {
     m_midBand  = m_midBand  * keep + midRaw  * take;
     m_highBand = m_highBand * keep + highRaw * take;
 
-    // Beat pulse from low-band transient; beatSensitivity scales the threshold.
-    const float lowDelta = std::max(0.0f, m_lowBand - m_prevLowEnergy);
+    // Beat pulse: the raw low band rising above its recent average (~0.25 s); beatSensitivity
+    // scales the threshold. Re-arms once the onset falls back, so one hit fires once. The pulse
+    // jumps up on a hit and falls by 3 per second.
+    m_beatPulse = std::max(0.0f, m_beatPulse - 3.0f * hopSeconds);
+    const float onset = lowRaw - m_prevLowEnergy;
     const float dynamicThreshold = (0.06f + m_level * 0.08f) / m_config.beatSensitivity;
-    if (lowDelta > dynamicThreshold)
-        m_beatPulse = std::max(m_beatPulse, std::clamp(lowDelta * 6.0f, 0.0f, 1.0f));
-    m_prevLowEnergy = m_lowBand;
+    if (onset > dynamicThreshold && m_beatArmed) {
+        m_beatPulse = std::max(m_beatPulse, std::clamp(onset * 6.0f, 0.0f, 1.0f));
+        m_beatArmed = false;
+    } else if (onset < dynamicThreshold * 0.5f) {
+        m_beatArmed = true;
+    }
+    m_prevLowEnergy += (lowRaw - m_prevLowEnergy) * (1.f - std::exp(-hopSeconds / 0.25f));
 
     m_hasData = true;
 }

@@ -212,6 +212,15 @@ private slots:
         QVERIFY(near(tickAt(e, 0.4), 75.0));
     }
 
+    void outputRangeFollowsKindParams() {
+        const auto range = [](const QVariantMap &p) { return ModulatorEngine::outputRange(p); };
+        QCOMPARE(range({{"kind", int(Kind::Lfo)}, {"min", 5.0}, {"max", -1.0}}), std::make_optional(std::make_pair(-1.0, 5.0)));
+        QCOMPARE(range({{"kind", int(Kind::MapRange)}, {"outMin", 0.0}, {"outMax", 100.0}}), std::make_optional(std::make_pair(0.0, 100.0)));
+        QCOMPARE(range({{"kind", int(Kind::Counter)}, {"steps", 8}}), std::make_optional(std::make_pair(0.0, 7.0)));
+        QCOMPARE(range({{"kind", int(Kind::Toggle)}}), std::make_optional(std::make_pair(0.0, 1.0)));
+        QVERIFY(!range({{"kind", int(Kind::Smooth)}}).has_value());
+    }
+
     void triggerPulsesForDuration() {
         ModulatorEngine e;
         auto trig = [](const char *in) {

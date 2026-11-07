@@ -108,8 +108,13 @@ public:
     /// Last value of a Modulator node (0 when unknown); refreshed by pollDataConsumers.
     double modulatorValue(NodeId id) const;
     QVariant expressionInput(NodeId id, const QString &param) const;
+    /// Known value range of what feeds @p param: {min, max} for a number, {fields: {key: {min, max}}}
+    /// for an analyzer table; empty when the range is unknown (scripts, Envelope, Smooth, Math).
+    QVariantMap expressionInputRange(NodeId id, const QString &param) const;
 
     // ── Audio analyzers ─────────────────────────────────────────────────────────
+    /// Latest {low, mid, high, level, beat, hasAudio} of an Audio Analyzer node; empty when unknown.
+    QVariantMap analyzerBands(NodeId id) const;
     void feedLiveAudioForProducer(NodeId producerId, const QByteArray &pcm);
     void syncAudioAnalyzerNode(NodeId scriptNodeId, double playbackTime, bool playing, double speed);
     void syncAllAudioAnalyzers(NodeId liveClip, double timeLive, bool playingLive, double speedLive,

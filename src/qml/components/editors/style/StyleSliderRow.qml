@@ -206,8 +206,10 @@ RowLayout {
         expressionError: root.expressionError
         sourceLabel: root.paramSource.label || ""
         connected: root.paramSource.connected === true
+        sourceType: root.paramSource.type ?? -1
         from: root.from
         to: root.to
+        exprScale: root.exprScale
         unit: root.unit
         linkForm: root.linkForm
         onApplied: text => root.expressionEdited(text)

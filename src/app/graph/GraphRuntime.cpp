@@ -250,6 +250,7 @@ struct ScriptNode {
     QString audioPath;
     bool hasAudio = false;
     bool liveSource = false;
+    bool filePlaying = false;
     QElapsedTimer clock;
     qint64 lastMs = 0;
     qint64 lastSignalMs = 0;
@@ -359,6 +360,7 @@ struct ScriptNode {
             analyzer->setConfig(config);
         if (analyzer && analyzer->open(audioPath)) {
             hasAudio = true;
+            filePlaying = false;
             lastMs = clock.elapsed();
         } else {
             hasAudio = false;
@@ -382,14 +384,23 @@ struct ScriptNode {
         if (!hasAudio || !analyzer)
             return;
         analyzer->setPlaybackSpeed(speed);
+        tickFile();
+        filePlaying = playing;
         const double drift = std::abs(analyzer->currentTime() - playbackTime);
         if (drift > 0.08)
             analyzer->seek(playbackTime);
+    }
+
+    // Deck sync arrives at the 100 ms UI tick; this also runs on every graph poll so the outputs
+    // keep pace with the audio between syncs.
+    void tickFile() {
+        if (liveSource || !hasAudio || !analyzer)
+            return;
         const qint64 nowMs = clock.elapsed();
         const double dt = (lastMs > 0) ? (nowMs - lastMs) * 0.001 : 0.0;
         lastMs = nowMs;
         if (dt > 0.0) {
-            if (playing)
+            if (filePlaying)
                 analyzer->advance(dt);
             else
                 analyzer->decay(dt);
@@ -1332,6 +1343,29 @@ QVariant GraphRuntime::expressionInput(NodeId id, const QString &param) const {
     return d->paramInput(id, param);
 }
 
+QVariantMap GraphRuntime::expressionInputRange(NodeId id, const QString &param) const {
+    const NodeId producer = m_graph->paramProducer(id, param);
+    const ClipGraph::Node *p = producer ? m_graph->node(producer) : nullptr;
+    if (!p)
+        return {};
+    if (p->type == NT::Modulator) {
+        const auto r = ModulatorEngine::outputRange(p->params);
+        return r ? QVariantMap{{"min", r->first}, {"max", r->second}} : QVariantMap{};
+    }
+    if (p->type == NT::AudioAnalyzer) {
+        QVariantMap fields;
+        for (const char *k : {"low", "mid", "high", "level", "beat", "hasAudio"})
+            fields.insert(QLatin1String(k), QVariantMap{{"min", 0.0}, {"max", 1.0}});
+        return {{"fields", fields}};
+    }
+    return {};
+}
+
+QVariantMap GraphRuntime::analyzerBands(NodeId id) const {
+    QMutexLocker lock(&d->shared->mutex);
+    return d->shared->bands.value(id);
+}
+
 double GraphRuntime::modulatorValue(NodeId id) const {
     return d->modulators.value(id);
 }
@@ -1358,8 +1392,10 @@ void GraphRuntime::setActive(bool active) {
 
 void GraphRuntime::pollDataConsumers() {
     for (auto &[id, sn] : d->scripts) {
-        if (sn->type == NT::AudioAnalyzer)
+        if (sn->type == NT::AudioAnalyzer) {
             sn->tickLive();
+            sn->tickFile();
+        }
     }
 
     for (auto &[id, sn] : d->scripts) {

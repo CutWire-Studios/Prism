@@ -2104,6 +2104,10 @@ QVariantList AppController::oscControls() const { return m_oscServer->recentCont
 double AppController::modulatorValue(quint64 nodeId) const { return graphRuntime()->modulatorValue(nodeId); }
 QVariant AppController::expressionInput(quint64 nodeId, const QString &name) const { return graphRuntime()->expressionInput(nodeId, name); }
 
+QVariantMap AppController::expressionInputRange(quint64 nodeId, const QString &name) const { return graphRuntime()->expressionInputRange(nodeId, name); }
+
+QVariantMap AppController::analyzerBands(quint64 nodeId) const { return graphRuntime()->analyzerBands(nodeId); }
+
 bool AppController::runScript(quint64 nodeId) { return graphRuntime()->runScript(nodeId); }
 
 QString AppController::scriptError(quint64 nodeId) const { return graphRuntime()->scriptError(nodeId); }

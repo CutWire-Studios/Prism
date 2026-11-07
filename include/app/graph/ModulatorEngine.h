@@ -50,6 +50,10 @@ public:
 
     void tick(const ModulatorClock &clock, const InputResolver &resolve = {}, const SocketResolver &socket = {});
 
+    /// Output range implied by a node's params, or nullopt when it follows its inputs
+    /// (Envelope, Smooth, Math).
+    static std::optional<std::pair<double, double>> outputRange(const QVariantMap &params);
+
     bool contains(NodeId id) const { return m_nodes.count(id) > 0; }
     double value(NodeId id) const;
     QList<NodeId> ids() const;

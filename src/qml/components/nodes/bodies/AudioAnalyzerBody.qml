@@ -18,6 +18,6 @@ Item {
         maximumLineCount: 2
         horizontalAlignment: Text.AlignHCenter
         font.family: Theme.monoFontFamily
-        text: qsTr("FFT %1 · %2 bins\nlow/mid/high · beat").arg(root.p.fftSize).arg(root.p.binCount)
+        text: qsTr("level · low · mid · high · beat\neach 0 to 1")
     }
 }

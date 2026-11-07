@@ -818,8 +818,8 @@ Another application may already be using the virtual camera, or softcam.dll may 
 <context>
     <name>AudioAnalyzerBody</name>
     <message>
-        <source>FFT %1 · %2 bins
-low/mid/high · beat</source>
+        <source>level · low · mid · high · beat
+each 0 to 1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1078,10 +1078,6 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Input: %1 = %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Nothing connected. Wire a modulator, analyzer or script into the %1 socket on the node, or</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1090,27 +1086,103 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>e.g. input * 100</source>
+        <source>Bass: kick drums, bass lines</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Variables</source>
+        <source>Mids: vocals, guitars, snares</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>The connected table</source>
+        <source>Treble: hi-hats, cymbals</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Value: %1</source>
+        <source>Overall loudness</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Seconds</source>
+        <source>Jumps up on a bass hit, falls back to 0 in about ⅓ s</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Result range: %1 – %2%3. Example: %4</source>
+        <source>true while audio is playing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>range %1 to %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>seen %1 to %2 so far</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The connected table; use the fields below</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Value from %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Output: the expression must return a number from %1 to %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source> (shown as %1 to %2%3)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>. Values outside are not clamped.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>e.g. %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Variables (click to insert)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Seconds since the scene started; keeps growing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tempo in beats per minute, e.g. 120</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Beat count; keeps growing. beat % 1 goes 0 to 1 every beat</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Project global</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Helpers (click to insert)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>map(x, inMin, inMax, outMin, outMax): rescale x from the input range to this parameter&apos;s range, clamped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep x between lo and hi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Blend from a (t = 0) to b (t = 1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Where x sits between a and b: 0 at a, 1 at b</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Eased 0 to 1 as x goes from e0 to e1, clamped</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1350,6 +1422,42 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Mid / high</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Outputs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Every value runs from 0 to 1. Wire this node into a parameter&apos;s socket and read them in its expression as input.low, input.beat and so on.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No audio yet. Connect a clip or audio input and play it. Every value runs from 0 to 1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Overall loudness: 0 is silence, 1 is very loud.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bass below %1 Hz: kick drums, bass lines.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mids from %1 to %2 Hz: vocals, guitars, snares.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Treble above %1 Hz: hi-hats, cymbals.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Jumps up on a bass hit, then falls back to 0 in about ⅓ s. Good for flashes and pulses; raise Beat to catch softer hits.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>low, mid and high are measured against the loudest frequency at that moment, so they show the balance of the sound rather than its volume; use level for volume. Scripts and shaders also get spectrum: %1 values from lowest to highest pitch, each 0 to 1. Smoothing steadies the values but makes them react later.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

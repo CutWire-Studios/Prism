@@ -243,6 +243,22 @@ private slots:
         QTRY_VERIFY(std::abs(opacityOf(g, fx) - 0.9) < 1e-9);
     }
 
+    void expressionHelpersMapAndClamp()
+    {
+        ClipGraph g;
+        GraphRuntime rt(&g);
+        const NodeId fx = addOpacity(g, 0.5);
+
+        g.setParams(fx, {{"expressions", QVariantMap{{"params.opacity", "map(5, 0, 10, 0, 0.8)"}}}});
+        QTRY_VERIFY(std::abs(opacityOf(g, fx) - 0.4) < 1e-9);
+        g.setParams(fx, {{"expressions", QVariantMap{{"params.opacity", "map(20, 0, 10, 0, 0.8)"}}}});
+        QTRY_VERIFY(std::abs(opacityOf(g, fx) - 0.8) < 1e-9);
+        g.setParams(fx, {{"expressions", QVariantMap{{"params.opacity", "clamp(2, 0, 1) * lerp(0, 0.5, 0.5)"}}}});
+        QTRY_VERIFY(std::abs(opacityOf(g, fx) - 0.25) < 1e-9);
+        g.setParams(fx, {{"expressions", QVariantMap{{"params.opacity", "invlerp(2, 6, 3) + smoothstep(0, 1, 0.5)"}}}});
+        QTRY_VERIFY(std::abs(opacityOf(g, fx) - 0.75) < 1e-9);
+    }
+
     void expressionReadsWiredSocketAsInput()
     {
         ClipGraph g;

@@ -53,19 +53,23 @@ Scripts can only reach nodes of their own scene's graph; other node ids raise
 ## Parameter expressions
 
 Numeric inspector parameters with an "f" button can be driven by a Lua expression instead of
-a fixed value. Click "f", type an expression and the slider is replaced by the expression
-field; clicking "f" again removes it. Expressions are stored per node in
+a fixed value. Clicking "f" adds a socket for that parameter on the node and opens the expression
+editor; the slider is replaced by a chip showing the source, the expression and its result.
+Clicking "f" again removes the expression and the socket. Expressions are stored per node in
 `params.expressions` (`{ "<param>": "<expr>" }`).
 
 Expressions are evaluated at about 30 Hz while the scene's runtime is active. Available names:
 
+- `input`: whatever is wired into the parameter's socket: a Modulator's number, an Audio
+  Analyzer's `{low, mid, high, level, beat, hasAudio}` or a Script's output table. `nil` when
+  nothing is connected. The editor lists each field with its live value and range
 - `t`: seconds since the scene's runtime was created
-- `audio`: `{low, mid, high, level, beat}` (zeros without an analyzer)
 - `bpm`, `beat`: the BPM clock's tempo and beat position, as `prism.bpm` / `prism.beat`
-- `mod(nodeId)`: the current output of a Modulator node. The inspector's link button writes
-  `mod(<id>)` into the parameter's expression
-- `param(nodeId, name)`: as `prism.param` (read only)
+- `globals.<name>`: project globals
 - everything in `math` through the global environment, for example `math.sin(t)`
+- helpers: `map(x, inMin, inMax, outMin, outMax)` (clamped to the output range),
+  `clamp(x, lo, hi)`, `lerp(a, b, t)`, `invlerp(a, b, x)` (0 at a, 1 at b) and
+  `smoothstep(e0, e1, x)` (eased 0..1)
 
 The result is written as the stored parameter value (for example opacity 0..1 even though the
 inspector shows percent) and is not clamped. A syntax or runtime error, a non-numeric result

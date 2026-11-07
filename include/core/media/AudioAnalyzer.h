@@ -60,6 +60,7 @@ public:
 private:
     void appendMonoSample(float sample);
     void computeSpectrum();
+    int hopSize() const;
     void allocateBuffers();   // (re)size buffers + FFT cfg from m_config
 
     AudioAnalyzerConfig m_config;
@@ -80,7 +81,9 @@ private:
     float m_midBand = 0.f;
     float m_highBand = 0.f;
     float m_beatPulse = 0.f;
-    float m_prevLowEnergy = 0.f;
+    float m_prevLowEnergy = 0.f;   // recent average of the raw low band, for beat onsets
+    int   m_sinceHop = 0;
+    bool  m_beatArmed = true;
     double m_playheadSeconds = 0.0;
     double m_playbackSpeed = 1.0;
     bool  m_hasData = false;

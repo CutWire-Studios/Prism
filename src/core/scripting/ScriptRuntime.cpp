@@ -112,7 +112,7 @@ sol::object jsonToLua(sol::state_view lua, const QJsonValue &val) {
         return t;
     }
     default:
-        return sol::make_object(lua, sol::nil);
+        return sol::make_object(lua, sol::lua_nil);
     }
 }
 #endif
@@ -165,7 +165,7 @@ sol::object variantToLua(sol::state_view lua, const QVariant &v) {
         return t;
     }
     default:
-        return sol::make_object(lua, sol::nil);
+        return sol::make_object(lua, sol::lua_nil);
     }
 }
 
@@ -340,13 +340,13 @@ void ScriptRuntime::setupEngine() {
     prism["time"] = os.get<sol::function>("time");
     prism["clock"] = os.get<sol::function>("clock");
     prism["date"] = os.get<sol::function>("date");
-    lua["os"] = sol::nil;
-    lua["dofile"] = sol::nil;
-    lua["loadfile"] = sol::nil;
-    lua["require"] = sol::nil;
-    lua["package"] = sol::nil;
-    lua["io"] = sol::nil;
-    lua["debug"] = sol::nil;
+    lua["os"] = sol::lua_nil;
+    lua["dofile"] = sol::lua_nil;
+    lua["loadfile"] = sol::lua_nil;
+    lua["require"] = sol::lua_nil;
+    lua["package"] = sol::lua_nil;
+    lua["io"] = sol::lua_nil;
+    lua["debug"] = sol::lua_nil;
     lua.script("local l = load; load = function(c, n, m, e) return l(c, n, 't', e) end");
 
     sol::function tostr = lua["tostring"];
@@ -367,7 +367,7 @@ void ScriptRuntime::setupEngine() {
         if (value) {
             if (!m_host->setParam(quint64(id), qname, luaToVariant(*value)))
                 throw std::runtime_error("node " + std::to_string(id) + " is not in this scene");
-            return sol::make_object(ts, sol::nil);
+            return sol::make_object(ts, sol::lua_nil);
         }
         QVariant out;
         if (!m_host->getParam(quint64(id), qname, &out))
@@ -380,7 +380,7 @@ void ScriptRuntime::setupEngine() {
                                                   sol::this_state ts) -> sol::object {
         if ((key == "bpm" || key == "beat") && m_host && m_host->clockInfo)
             return sol::make_object(ts, m_host->clockInfo().value(QString::fromStdString(key)).toDouble());
-        return sol::make_object(ts, sol::nil);
+        return sol::make_object(ts, sol::lua_nil);
     };
     prism[sol::metatable_key] = prismMeta;
 
@@ -438,6 +438,17 @@ void ScriptRuntime::setupEngine() {
     lua_sethook(lua.lua_state(), instructionHook, LUA_MASKCOUNT, kHookStep);
 
     sol::environment env(lua, sol::create, lua.globals());
+    env["clamp"] = [](double x, double lo, double hi) { return std::clamp(x, std::min(lo, hi), std::max(lo, hi)); };
+    env["lerp"] = [](double a, double b, double t) { return a + (b - a) * t; };
+    env["invlerp"] = [](double a, double b, double x) { return a == b ? 0.0 : (x - a) / (b - a); };
+    env["map"] = [](double x, double inMin, double inMax, double outMin, double outMax) {
+        const double t = inMax == inMin ? 0.0 : std::clamp((x - inMin) / (inMax - inMin), 0.0, 1.0);
+        return outMin + (outMax - outMin) * t;
+    };
+    env["smoothstep"] = [](double e0, double e1, double x) {
+        const double t = e1 == e0 ? 0.0 : std::clamp((x - e0) / (e1 - e0), 0.0, 1.0);
+        return t * t * (3.0 - 2.0 * t);
+    };
     m_lua->exprEnv = env;
 }
 
