@@ -568,7 +568,8 @@ private slots:
         again.setIdBase(base);
         QVERIFY(again.fromJson(g.toJson()));
         QVERIFY(again.hasNode(a));
-        QCOMPARE(again.addNode(NT::Process, {}, {{"effect", 4}}), again.toJson()["nextId"].toInteger() - 1);
+        const NodeId added = again.addNode(NT::Process, {}, {{"effect", 4}});
+        QCOMPARE(added, NodeId(again.toJson()["nextId"].toInteger() - 1));
         QVERIFY(again.nodeIds().last() > base);
 
         ClipGraph empty;
