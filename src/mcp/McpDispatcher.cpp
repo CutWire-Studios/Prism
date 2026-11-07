@@ -394,8 +394,6 @@ int parseConnectionKind(const QJsonValue &v)
         return -1;
     if (s == QLatin1String("chain") || s == QLatin1String("0"))
         return 0;
-    if (s == QLatin1String("ab_to_output") || s == QLatin1String("8"))
-        return 8;
     if (s == QLatin1String("script_to_data") || s == QLatin1String("6"))
         return 6;
     if (s == QLatin1String("clip_to_shader_audio") || s == QLatin1String("5"))

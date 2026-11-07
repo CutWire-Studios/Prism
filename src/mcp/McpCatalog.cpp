@@ -319,7 +319,7 @@ const QList<Op> &ops()
                         stringProp(QStringLiteral("Destination node id"))},
                        {QStringLiteral("kind"),
                         stringProp(QStringLiteral(
-                            "chain (default), ab_to_output, script_to_data, clip_to_shader_audio, "
+                            "chain (default), script_to_data, clip_to_shader_audio, "
                             "or omit for auto"))},
                        {QStringLiteral("to_port"),
                         integerProp(QStringLiteral("Destination input slot (Layer / mixer)"))}},
