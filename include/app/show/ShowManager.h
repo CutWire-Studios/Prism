@@ -11,6 +11,7 @@
 class CueListModel;
 class QQuickImageProvider;
 class QTimer;
+class QUndoStack;
 struct NodeThumbStore;
 
 /// The ordered cues of a show and which of them is Live, Staging and being edited. Owns every
@@ -33,6 +34,11 @@ public:
     /// Refuses the Live cue and the last cue.
     bool removeCue(const QString &id);
     bool moveCue(int from, int to);
+    /// Show-level undo of add/remove/duplicate/reorder/cue-property edits (graph edits keep the
+    /// per-cue stacks).
+    QUndoStack *undoStack() const { return m_undo; }
+    /// Applies @p meta to the cue as one undo step.
+    void setCueMeta(const QString &id, const CueMeta &meta);
     /// Drops every cue and starts over with one empty Live cue.
     void reset();
 
@@ -99,17 +105,26 @@ signals:
     void defaultTransitionChanged();
     /// Anything the session should save changed (structure, roles, metadata).
     void changed();
+    void thumbnailChanged();
+    void cueMetaChanged(Cue *cue);
     void liveEnded();
 
 private:
     Cue *makeCue(const QString &id, int serial, bool withDefaults);
-    void attach(Cue *cue);
     void fixRoles();
+    friend class CueStructureCommand;
+    friend class MoveCueCommand;
+    /// Re-creates a cue from a toJson() snapshot at @p index.
+    Cue *restoreCue(const QJsonObject &snapshot, int index);
+    /// Removes without the Live/last-cue guards of removeCue; false when it would leave no Live cue.
+    bool eraseCue(const QString &id);
+    bool moveCueRaw(int from, int to);
 
     QList<Cue *> m_cues;
     CueListModel *m_model;
     std::shared_ptr<NodeThumbStore> m_thumbs;
     QTimer *m_endTimer;
+    QUndoStack *m_undo;
     QString m_liveId, m_stagingId, m_editedId;
     bool m_inCue = true;
     TransitionSpec m_default;

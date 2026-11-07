@@ -52,6 +52,7 @@ private:
 
     void dispatch(const OscProtocol::OscMessage &msg);
     void handleDeck(Deck deck, const QString &cmd, const QVariantList &args);
+    QString cueIdFromArg(const QVariant &arg) const;
     void handleStage(const QVariantList &args);
     void sendFullState();
     void sendDeckDiff(const char *deck, const DeckState &now, const DeckState &before);

@@ -55,6 +55,12 @@ Route matchRoute(const QString &method, const QString &path)
     const QString base = path.section(QLatin1Char('?'), 0, 0);
     if (base == QStringLiteral("/api/stage"))
         return Route::Stage;
+    if (base == QStringLiteral("/api/cue/take"))
+        return Route::CueTake;
+    if (base == QStringLiteral("/api/cue/next"))
+        return Route::CueNext;
+    if (base == QStringLiteral("/api/cue/prev"))
+        return Route::CuePrev;
     if (base == QStringLiteral("/api/live/play"))
         return Route::LivePlay;
     if (base == QStringLiteral("/api/live/pause"))

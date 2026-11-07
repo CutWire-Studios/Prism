@@ -148,8 +148,10 @@ ColumnLayout {
             enabled: !AppController.transitionRunning
             onClicked: AppController.take()
         }
+        ThemedLabel { text: qsTr("Default") }
         ThemedComboBox {
             Layout.fillWidth: true
+            Accessible.name: qsTr("Default transition")
             model: AppController.transitionModeNames
             currentIndex: AppController.transitionMode
             onActivated: index => AppController.transitionMode = index
@@ -160,7 +162,7 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: Theme.spacingSm
 
-        ThemedLabel { text: qsTr("Time") }
+        ThemedLabel { text: qsTr("Default time") }
         ThemedSlider {
             id: durSlider
             Layout.fillWidth: true

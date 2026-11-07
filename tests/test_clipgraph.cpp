@@ -378,7 +378,6 @@ private slots:
         QVERIFY(g.connectNodes(layer, g.outputNodeId()));
 
         QCOMPARE(g.outputSingleProducer(), layer);
-        QVERIFY(g.outputIsSingleStream());
 
         const auto stream = g.evaluateVideoInput(layer);
         QCOMPARE(stream.canvasWidth, 1280);

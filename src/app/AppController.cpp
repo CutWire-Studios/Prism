@@ -11,6 +11,7 @@
 #include "app/session/SessionManager.h"
 #include "app/show/Cue.h"
 #include "app/show/CueListModel.h"
+#include "app/show/CueThumbnails.h"
 #include "app/show/ShowManager.h"
 #include "app/show/VenueProfile.h"
 #include "core/sources/SharedSourcePool.h"
@@ -40,6 +41,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJSEngine>
+#include <QKeySequence>
+#include <QUndoStack>
 #include <QMediaDevices>
 #include <QQmlEngine>
 #include <QQuickWindow>
@@ -156,6 +159,11 @@ AppController::AppController(QObject *parent)
     m_pushTimer->setInterval(0);
     connect(m_pushTimer, &QTimer::timeout, this, &AppController::pushDecks);
 
+    m_warnTimer = new QTimer(this);
+    m_warnTimer->setSingleShot(true);
+    m_warnTimer->setInterval(500);
+    connect(m_warnTimer, &QTimer::timeout, this, &AppController::refreshCueWarnings);
+
     m_updateTimer = new QTimer(this);
     connect(m_updateTimer, &QTimer::timeout, this, &AppController::onTimerTick);
 
@@ -209,6 +217,26 @@ void AppController::connectSignals()
         attachCue(cue);
     connect(m_show, &ShowManager::cueAdded, this, &AppController::attachCue);
     connect(m_show, &ShowManager::changed, this, &AppController::markDirty);
+    connect(m_show, &ShowManager::changed, m_warnTimer, qOverload<>(&QTimer::start));
+    connect(m_show, &ShowManager::cueMetaChanged, this, &AppController::cuesEdited);
+    connect(m_show, &ShowManager::cuesReset, this, &AppController::selectedCueChanged);
+    connect(m_hotkeyManager, &HotkeyManager::bindingsChanged, this, &AppController::cuesEdited);
+    connect(m_show, &ShowManager::cueMetaChanged, this, [this](Cue *cue) {
+        if (cue == m_show->liveCue()) {
+            applyLiveEndAction();
+            m_show->rearmEndTimer();
+        }
+    });
+    connect(m_show->undoStack(), &QUndoStack::canUndoChanged, this, &AppController::showUndoChanged);
+    connect(m_show->undoStack(), &QUndoStack::canRedoChanged, this, &AppController::showUndoChanged);
+    m_show->model()->setHotkeyLookup([this](const QString &id) { return cueHotkey(id); });
+    m_show->model()->setWarningLookup([this](const QString &id) { return m_cueWarnings.value(id); });
+    connect(m_hotkeyManager, &HotkeyManager::bindingsChanged, m_show->model(), &CueListModel::refresh);
+    connect(m_show, &ShowManager::stagingCueChanged, this, [this]() {
+        if (!m_show->stagingCueId().isEmpty())
+            scheduleThumbnail(Deck::Staging);
+    });
+    connect(m_show, &ShowManager::liveCueChanged, this, [this]() { scheduleThumbnail(Deck::Live); });
     connect(m_show, &ShowManager::liveCueChanged, this, [this]() {
         m_pushTimer->start();
         emit showChanged();
@@ -388,6 +416,25 @@ QString AppController::liveCueId() const { return m_show->liveCueId(); }
 QString AppController::stagingCueId() const { return m_show->stagingCueId(); }
 QString AppController::editedCueId() const { return m_show->editedCueId(); }
 bool AppController::inCue() const { return m_show->inCue(); }
+QString AppController::selectedCueId() const
+{
+    return m_show->cue(m_selectedCueId) ? m_selectedCueId : m_show->editedCueId();
+}
+
+void AppController::setSelectedCueId(const QString &id)
+{
+    if (m_selectedCueId == id)
+        return;
+    m_selectedCueId = id;
+    emit selectedCueChanged();
+}
+
+bool AppController::canShowUndo() const { return m_show->undoStack()->canUndo(); }
+bool AppController::canShowRedo() const { return m_show->undoStack()->canRedo(); }
+bool AppController::editingLive() const
+{
+    return m_show->inCue() && !m_show->editedCueId().isEmpty() && m_show->editedCueId() == m_show->liveCueId();
+}
 const VenueProfile &AppController::venue() const { return *m_venue; }
 
 // ── Property getters ──────────────────────────────────────────────────────────
@@ -641,10 +688,110 @@ bool AppController::stageCue(const QString &id)
     return m_show->stageCue(id);
 }
 
-void AppController::stageAndTake(const QString &id)
+bool AppController::stageAndTake(const QString &id)
 {
-    if (stageCue(id))
-        take();
+    if (!stageCue(id))
+        return false;
+    take();
+    return true;
+}
+
+bool AppController::stageRelative(int delta)
+{
+    const int target = m_show->indexOf(m_show->liveCueId()) + delta;
+    if (target < 0 || target >= m_show->cues().size())
+        return false;
+    return stageCue(m_show->cues().at(target)->id());
+}
+
+bool AppController::moveCue(const QString &id, int toIndex)
+{
+    return m_show->moveCue(m_show->indexOf(id), toIndex);
+}
+
+void AppController::deleteCue(const QString &id)
+{
+    const Cue *cue = m_show->cue(id);
+    if (!cue)
+        return;
+    if (id == m_show->liveCueId()) {
+        emit errorOccurred(tr("The Live cue cannot be deleted. Take another cue first."));
+        return;
+    }
+    if (id != m_show->stagingCueId()) {
+        removeCue(id);
+        return;
+    }
+    requestConfirm(tr("Delete cue"), tr("\"%1\" is on Staging. Delete it?").arg(cue->name()),
+                   [this, id](bool ok) {
+                       if (ok)
+                           removeCue(id);
+                   });
+}
+
+void AppController::undoShow() { m_show->undoStack()->undo(); }
+void AppController::redoShow() { m_show->undoStack()->redo(); }
+
+QString AppController::cueHotkey(const QString &id) const
+{
+    const Qt::Key key = m_hotkeyManager->bindingForCue(id);
+    return key == Qt::Key_unknown ? QString() : QKeySequence(key).toString(QKeySequence::PortableText);
+}
+
+QString AppController::setCueHotkey(const QString &id, const QString &chord)
+{
+    if (chord.isEmpty()) {
+        m_hotkeyManager->clearBinding(id);
+        return {};
+    }
+    const QKeySequence seq(chord, QKeySequence::PortableText);
+    if (seq.count() != 1 || seq[0].keyboardModifiers() != Qt::NoModifier
+        || !HotkeyManager::isBindableKey(seq[0].key()))
+        return tr("That key cannot be used.");
+    const Qt::Key key = seq[0].key();
+    if (!m_hotkeyManager->setBinding(id, key))
+        return tr("%1 is already assigned to another cue.").arg(QKeySequence(key).toString());
+    return {};
+}
+
+QList<PreflightIssue> AppController::runPreflight(bool deep) const
+{
+    const QDir sessionDir = deep && !m_sessionPath.isEmpty() ? QFileInfo(m_sessionPath).absoluteDir() : QDir();
+    QList<PreflightIssue> issues = Preflight::run(*m_show, sessionDir, &Preflight::cameraMissing);
+    for (const Deck deck : {Deck::Live, Deck::Staging}) {
+        const Cue *cue = deck == Deck::Live ? m_show->liveCue() : m_show->stagingCue();
+        MediaSource *src = deck == Deck::Live ? m_compositor->sourceLive() : m_compositor->sourceStaging();
+        if (!cue || !src || !src->innermost()->isMissing())
+            continue;
+        const bool known = std::any_of(issues.cbegin(), issues.cend(), [&](const PreflightIssue &i) {
+            return i.cueId == cue->id() && i.kind == PreflightIssue::Kind::MissingDevice;
+        });
+        if (!known)
+            issues.append({PreflightIssue::Kind::MissingDevice, cue->id(), cue->name(), src->displayName(),
+                           tr("Device unavailable")});
+    }
+    return issues;
+}
+
+QVariantList AppController::preflight() const
+{
+    QVariantList out;
+    for (const PreflightIssue &i : runPreflight(true))
+        out.append(i.toJson().toVariantMap());
+    return out;
+}
+
+void AppController::refreshCueWarnings()
+{
+    m_cueWarnings.clear();
+    for (const PreflightIssue &i : runPreflight(false)) {
+        QString &w = m_cueWarnings[i.cueId];
+        w += (w.isEmpty() ? QString() : QStringLiteral("\n"))
+            + (i.kind == PreflightIssue::Kind::MissingFile ? tr("Missing file: %1") : tr("Missing device: %1"))
+                  .arg(i.detail.isEmpty() ? i.source : i.detail);
+    }
+    m_show->model()->refresh();
+    emit cuesEdited();
 }
 
 QString AppController::addCue(const QString &name)
@@ -677,7 +824,9 @@ QVariantMap AppController::cueInfo(const QString &id) const
     QVariantMap info{{"id", cue->id()}, {"name", cue->name()}, {"color", cue->color()},
                      {"notes", cue->notes()}, {"endAction", Cue::endActionName(cue->endAction())},
                      {"autoAdvanceMs", cue->autoAdvanceMs()},
-                     {"advanceOnMediaEnd", cue->advanceOnMediaEnd()}};
+                     {"advanceOnMediaEnd", cue->advanceOnMediaEnd()},
+                     {"hotkey", cueHotkey(id)}, {"warning", m_cueWarnings.value(id)},
+                     {"live", id == m_show->liveCueId()}};
     if (cue->incoming())
         info["transition"] = QVariantMap{{"mode", cue->incoming()->mode}, {"durationMs", cue->incoming()->durationMs}};
     else
@@ -690,29 +839,29 @@ void AppController::setCueProps(const QString &id, const QVariantMap &props)
     Cue *cue = m_show->cue(id);
     if (!cue)
         return;
+    CueMeta m = cue->meta();
     if (props.contains("name"))
-        cue->setName(props.value("name").toString().trimmed());
+        m.name = props.value("name").toString().trimmed();
     if (props.contains("color"))
-        cue->setColor(props.value("color").toString());
+        m.color = props.value("color").toString();
     if (props.contains("notes"))
-        cue->setNotes(props.value("notes").toString());
+        m.notes = props.value("notes").toString();
     if (props.contains("endAction"))
-        cue->setEndAction(Cue::endActionFromName(props.value("endAction").toString()));
+        m.endAction = int(Cue::endActionFromName(props.value("endAction").toString()));
     if (props.contains("autoAdvanceMs"))
-        cue->setAutoAdvanceMs(qMax(0, props.value("autoAdvanceMs").toInt()));
+        m.autoAdvanceMs = qMax(0, props.value("autoAdvanceMs").toInt());
     if (props.contains("advanceOnMediaEnd"))
-        cue->setAdvanceOnMediaEnd(props.value("advanceOnMediaEnd").toBool());
+        m.advanceOnMediaEnd = props.value("advanceOnMediaEnd").toBool();
     if (props.contains("transition")) {
         const QVariantMap t = props.value("transition").toMap();
         if (t.isEmpty())
-            cue->setIncoming(std::nullopt);
+            m.incoming.reset();
         else
-            cue->setIncoming(TransitionSpec{t.value("mode").toInt(), qMax(0, t.value("durationMs").toInt())});
+            m.incoming = TransitionSpec{t.value("mode").toInt(), qMax(0, t.value("durationMs").toInt())};
     }
-    if (cue->id() == m_show->liveCueId()) {
-        applyLiveEndAction();
-        m_show->rearmEndTimer();
-    }
+    m_show->setCueMeta(id, m);
+    if (props.contains("hotkey"))
+        setCueHotkey(id, props.value("hotkey").toString());
     mcpBumpRevision();
 }
 
@@ -750,6 +899,50 @@ void AppController::applyLiveEndAction()
     const Cue *live = m_show->liveCue();
     if (live && live->endAction() == Cue::EndAction::Loop)
         m_compositor->setRepeatLive(true);
+}
+
+QString AppController::thumbnailDir() const
+{
+    const QString base = m_sessionPath.isEmpty()
+        ? QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+        : QFileInfo(m_sessionPath).absolutePath();
+    return QDir(base).filePath(QStringLiteral("cuethumbs"));
+}
+
+void AppController::scheduleThumbnail(Deck deck)
+{
+    const QString cueId = deck == Deck::Live ? m_show->liveCueId() : m_show->stagingCueId();
+    if (cueId.isEmpty() || m_shuttingDown)
+        return;
+    // A staged cue grabs as soon as its source has a frame; a Live cue settles for ~500 ms first.
+    auto attempt = std::make_shared<std::function<void(int)>>();
+    *attempt = [this, deck, cueId, attempt](int tries) {
+        const QString current = deck == Deck::Live ? m_show->liveCueId() : m_show->stagingCueId();
+        if (current != cueId || m_shuttingDown)
+            return;
+        const MediaSource *src = deck == Deck::Live ? m_compositor->sourceLive() : m_compositor->sourceStaging();
+        if (src && src->isReady()) {
+            captureThumbnail(deck, cueId);
+            return;
+        }
+        if (tries > 0)
+            QTimer::singleShot(250, this, [attempt, tries] { (*attempt)(tries - 1); });
+    };
+    QTimer::singleShot(deck == Deck::Live ? 500 : 250, this, [attempt] { (*attempt)(20); });
+}
+
+void AppController::captureThumbnail(Deck deck, const QString &cueId)
+{
+    Cue *cue = m_show->cue(cueId);
+    if (!cue)
+        return;
+    QImage frame = m_compositor->deckProgramFrame(deck);
+    if (frame.isNull())
+        frame = FrameCaptureHelper::frameFromSource(deck == Deck::Live ? m_compositor->sourceLive()
+                                                                       : m_compositor->sourceStaging());
+    const QString path = CueThumbnails::save(frame, thumbnailDir(), cueId);
+    if (!path.isEmpty())
+        cue->setThumbnail(path);
 }
 
 void AppController::blackLive()
@@ -1719,6 +1912,7 @@ QVariantMap AppController::captureFrame(int layerIndex, bool savePng, bool addAs
 // ── App dialogs (shown by AppDialogs.qml) ─────────────────────────────────────
 
 void AppController::openHotkeyEditor() { emit appDialogRequested(QStringLiteral("hotkeys")); }
+void AppController::openPreflight() { emit appDialogRequested(QStringLiteral("preflight")); }
 
 void AppController::openRecordingSettings()
 {

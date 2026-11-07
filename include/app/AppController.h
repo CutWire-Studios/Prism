@@ -16,6 +16,7 @@
 #include <functional>
 #include <memory>
 
+#include "app/show/Preflight.h"
 #include "core/graph/ClipGraph.h"
 #include "core/graph/ClipGraphModels.h"
 #include "core/project/ClipManager.h"
@@ -68,6 +69,13 @@ class AppController : public QObject {
     Q_PROPERTY(QString editedCueId READ editedCueId NOTIFY showChanged)
     /// False after exitCue(): the node editor then asks for a cue to be entered.
     Q_PROPERTY(bool inCue READ inCue NOTIFY showChanged)
+    /// The cue the cue list has selected (what the inspector shows when no node is selected);
+    /// the edited cue until the list picks one.
+    Q_PROPERTY(QString selectedCueId READ selectedCueId WRITE setSelectedCueId NOTIFY selectedCueChanged)
+    Q_PROPERTY(bool canShowUndo READ canShowUndo NOTIFY showUndoChanged)
+    Q_PROPERTY(bool canShowRedo READ canShowRedo NOTIFY showUndoChanged)
+    /// True while the edited cue is the Live cue (edits go on air).
+    Q_PROPERTY(bool editingLive READ editingLive NOTIFY showChanged)
 
     // ── Decks (clock properties refresh every 100 ms via deckClockChanged) ────
     Q_PROPERTY(quint64 activeNodeLive READ activeNodeLive NOTIFY decksChanged)
@@ -194,6 +202,11 @@ public:
     QString stagingCueId() const;
     QString editedCueId() const;
     bool inCue() const;
+    QString selectedCueId() const;
+    void setSelectedCueId(const QString &id);
+    bool canShowUndo() const;
+    bool canShowRedo() const;
+    bool editingLive() const;
 
     QString panicMode() const;
 
@@ -230,7 +243,21 @@ public:
     // ── Decks / transitions (QML) ─────────────────────────────────────────────
     /// Puts a cue on Staging. False for an unknown cue, the Live cue, or while a take is running.
     Q_INVOKABLE bool stageCue(const QString &id);
-    Q_INVOKABLE void stageAndTake(const QString &id);
+    /// Stages @p id and starts the take; false when it could not be staged.
+    Q_INVOKABLE bool stageAndTake(const QString &id);
+    /// Stages the cue @p delta places after (or before, when negative) the Live cue.
+    Q_INVOKABLE bool stageRelative(int delta);
+    Q_INVOKABLE bool moveCue(const QString &id, int toIndex);
+    /// removeCue after a confirmation when the cue is Staging; the Live cue cannot be deleted.
+    Q_INVOKABLE void deleteCue(const QString &id);
+    Q_INVOKABLE void undoShow();
+    Q_INVOKABLE void redoShow();
+    /// Display text of the key bound to a cue ("" when unbound).
+    Q_INVOKABLE QString cueHotkey(const QString &id) const;
+    /// Binds @p chord (portable text, "" clears); returns an error message or "".
+    Q_INVOKABLE QString setCueHotkey(const QString &id, const QString &chord);
+    /// Missing media and devices across all cues: [{kind, cueId, cue, source, detail}].
+    Q_INVOKABLE QVariantList preflight() const;
     /// Adds a cue after the edited one and returns its id.
     Q_INVOKABLE QString addCue(const QString &name = {});
     Q_INVOKABLE QString duplicateCue(const QString &id);
@@ -311,6 +338,7 @@ public:
 
     // ── App-level dialogs: each emits appDialogRequested, AppDialogs.qml shows it ──
     Q_INVOKABLE void openHotkeyEditor();
+    Q_INVOKABLE void openPreflight();
     Q_INVOKABLE void openRecordingSettings();
     Q_INVOKABLE void openRemoteServerDialog();
     Q_INVOKABLE void openOscSettings();
@@ -381,6 +409,10 @@ signals:
     void transitionRunningChanged();
     void editedGraphChanged();
     void showChanged();
+    void showUndoChanged();
+    void selectedCueChanged();
+    /// Cue metadata, hotkeys or warnings changed (not graph contents).
+    void cuesEdited();
     void panicModeChanged();
     void sessionPathChanged();
     void sessionDirtyChanged();
@@ -406,7 +438,7 @@ signals:
     void statusMessage(const QString &text, int timeoutMs);
     /// Unclean shutdown detected: offer autosave / backups; answer with recoverFrom(path) or ignore to start fresh.
     void recoveryRequested(const QString &autosavePath, const QStringList &backupPaths);
-    /// id: "hotkeys" | "recording" | "remote" | "osc" | "agent" | "obs" | "addSource:<kind>".
+    /// id: "hotkeys" | "preflight" | "recording" | "remote" | "osc" | "agent" | "obs" | "addSource:<kind>".
     void appDialogRequested(const QString &id);
     /// The node editors for these source kinds are not app dialogs; the editor owner handles them.
     void sourceEditorRequested(const QString &kind);
@@ -442,6 +474,11 @@ private:
     void onLiveEnded();
     void applyLiveEndAction();
     void blackLive();
+    void scheduleThumbnail(Deck deck);
+    void captureThumbnail(Deck deck, const QString &cueId);
+    QString thumbnailDir() const;
+    QList<PreflightIssue> runPreflight(bool deep) const;
+    void refreshCueWarnings();
     void refreshOutputsList();
 
     static AppController *s_instance;
@@ -465,6 +502,9 @@ private:
     QTimer *m_updateTimer = nullptr;
     QTimer *m_autosaveTimer = nullptr;
     QTimer *m_pushTimer = nullptr;   // coalesces graph changes into one pushDecks()
+    QTimer *m_warnTimer = nullptr;   // debounces the per-cue missing media/device scan
+    QHash<QString, QString> m_cueWarnings;
+    QString m_selectedCueId;
 
     // Source identity of each deck's loaded stream (see pushDecks()).
     QString m_deckBase[2];

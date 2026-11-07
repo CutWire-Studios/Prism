@@ -50,12 +50,34 @@ void Cue::clearGraph()
 PRISM_CUE_SETTER(const QString &, m_name, Name)
 PRISM_CUE_SETTER(const QString &, m_color, Color)
 PRISM_CUE_SETTER(const QString &, m_notes, Notes)
-PRISM_CUE_SETTER(const QString &, m_thumbnail, Thumbnail)
 PRISM_CUE_SETTER(EndAction, m_endAction, EndAction)
 PRISM_CUE_SETTER(int, m_autoAdvanceMs, AutoAdvanceMs)
 PRISM_CUE_SETTER(bool, m_advanceOnMediaEnd, AdvanceOnMediaEnd)
 
 #undef PRISM_CUE_SETTER
+
+void Cue::setThumbnail(const QString &path)
+{
+    m_thumbnail = path;
+    ++m_thumbRev;
+    emit thumbnailChanged();
+}
+
+CueMeta Cue::meta() const
+{
+    return {m_name, m_color, m_notes, m_incoming, int(m_endAction), m_autoAdvanceMs, m_advanceOnMediaEnd};
+}
+
+void Cue::setMeta(const CueMeta &m)
+{
+    setName(m.name);
+    setColor(m.color);
+    setNotes(m.notes);
+    setIncoming(m.incoming);
+    setEndAction(EndAction(m.endAction));
+    setAutoAdvanceMs(m.autoAdvanceMs);
+    setAdvanceOnMediaEnd(m.advanceOnMediaEnd);
+}
 
 void Cue::setIncoming(const std::optional<TransitionSpec> &spec)
 {

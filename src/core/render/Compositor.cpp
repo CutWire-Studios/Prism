@@ -288,8 +288,6 @@ std::pair<float,float> Compositor::audioGains(TransitionMode mode, float mix) {
 bool Compositor::deckContributesToProgram(Deck deck) const {
     if (m_panicOverlay != PanicOverlay::None)
         return false;
-    if (m_singleStream)
-        return isLive(deck);
     const float t = std::clamp(m_crossfade, 0.f, 1.f);
     if (m_transitionMode == TransitionMode::Cut)
         return isLive(deck) ? t < 0.5f : t >= 0.5f;
@@ -397,7 +395,7 @@ void Compositor::renderCompositionGL() {
         return;
     }
 
-    if (m_transitionMode == TransitionMode::DipToWhite && !m_singleStream) {
+    if (m_transitionMode == TransitionMode::DipToWhite) {
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     } else {
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -409,15 +407,6 @@ void Compositor::renderCompositionGL() {
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    // Single-stream output: show the Live deck directly, no crossfade/transition.
-    if (m_singleStream) {
-        if (m_deckColorTexLive)
-            renderFboTexture(m_deckColorTexLive, 0.f, 0.f, (float)rw, (float)rh, 1.f);
-        glDisable(GL_BLEND);
-        glColor4f(1.f, 1.f, 1.f, 1.f);
-        return;
-    }
 
     const float t = std::clamp(m_crossfade, 0.f, 1.f);
 
@@ -893,12 +882,6 @@ void Compositor::setFlipStaging(bool flipH, bool flipV) {
     markDirty();
 }
 
-void Compositor::setSingleStreamMode(bool enabled) {
-    if (m_singleStream == enabled) return;
-    m_singleStream = enabled;
-    markDirty();
-}
-
 void Compositor::swapDeckContents() {
     using std::swap;
     swap(m_sourceLive, m_sourceStaging);
@@ -1349,8 +1332,8 @@ bool Compositor::advanceDeckPaced(Deck deck) {
 void Compositor::syncOnAir() {
     const float t = std::clamp(m_crossfade, 0.f, 1.f);
     const bool cut = m_transitionMode == TransitionMode::Cut;
-    const bool onAirLive = m_singleStream || (cut ? t < 0.5f : t < 0.999f);
-    const bool onAirStaging = !m_singleStream && (cut ? t >= 0.5f : t > 0.001f);
+    const bool onAirLive = (cut ? t < 0.5f : t < 0.999f);
+    const bool onAirStaging = (cut ? t >= 0.5f : t > 0.001f);
     if (m_sourceLive) m_sourceLive->setOnAir(onAirLive);
     if (m_sourceStaging) m_sourceStaging->setOnAir(onAirStaging);
     for (const NodeChainSource &c : m_chainLive)

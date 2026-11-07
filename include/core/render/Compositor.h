@@ -109,10 +109,6 @@ public:
     void setFlipLive(bool flipH, bool flipV);
     void setFlipStaging(bool flipH, bool flipV);
 
-    // Single-stream output: show the Live deck directly with no crossfade/transition.
-    void setSingleStreamMode(bool enabled);
-    bool singleStreamMode() const { return m_singleStream; }
-
     // Exchange all Live/Staging deck content (sources, textures, chains, placement, playback
     // clocks) so a clip can move between decks without re-decoding from disk.
     void swapDeckContents();
@@ -291,9 +287,6 @@ private:
     // Deck-primary flip (folded from process nodes)
     bool m_flipHLive = false, m_flipVLive = false;
     bool m_flipHStaging = false, m_flipVStaging = false;
-
-    // Single-stream output mode (Live deck only, no crossfade)
-    bool m_singleStream = false;
 
     // Base placement: normalised [0, 1]
     float m_baseXLive = 0.f, m_baseYLive = 0.f, m_baseWLive = 1.f, m_baseHLive = 1.f;

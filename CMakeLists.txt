@@ -374,6 +374,8 @@ set(SOURCES
     src/app/graph/GraphRuntime.cpp
     src/app/show/Cue.cpp
     src/app/show/CueListModel.cpp
+    src/app/show/CueThumbnails.cpp
+    src/app/show/Preflight.cpp
     src/app/show/ShowManager.cpp
     src/app/show/VenueProfile.cpp
     src/core/graph/ProcessEffects.cpp
@@ -502,6 +504,8 @@ set(HEADERS
     include/app/graph/GraphRuntime.h
     include/app/show/Cue.h
     include/app/show/CueListModel.h
+    include/app/show/CueThumbnails.h
+    include/app/show/Preflight.h
     include/app/show/ShowManager.h
     include/app/show/VenueProfile.h
     include/core/graph/ProcessEffects.h

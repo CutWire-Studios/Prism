@@ -24,6 +24,7 @@ Item {
             }
             switch (id) {
             case "hotkeys": hotkeys.ensure().open(); break
+            case "preflight": preflight.ensure().open(); break
             case "recording": recording.ensure().open(); break
             case "remote": remote.ensure().open(); break
             case "osc": osc.ensure().open(); break
@@ -47,6 +48,7 @@ Item {
     }
 
     LazyLoader { id: hotkeys; sourceComponent: HotkeyEditorDialog { } }
+    LazyLoader { id: preflight; sourceComponent: PreflightDialog { } }
     LazyLoader { id: recording; sourceComponent: RecordingPanelDialog { } }
     LazyLoader { id: remote; sourceComponent: RemoteServerDialog { } }
     LazyLoader { id: osc; sourceComponent: OscSettingsDialog { } }

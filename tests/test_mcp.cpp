@@ -47,6 +47,7 @@ private slots:
     void cutIsImmediateAndTakeIgnoresEmptyStaging();
     void deckToolsUseLiveStagingNames();
     void cueToolsAddAndEnter();
+    void cueToolsEditAndReorder();
 };
 
 void TestMcp::initTestCase()
@@ -608,6 +609,55 @@ void TestMcp::cueToolsAddAndEnter()
     QCOMPARE(window.editedCueId(), id);
     QCOMPARE(dispatcher.applyOne(QStringLiteral("add_ab_select"), {}).value(QStringLiteral("error")).toString(),
              QStringLiteral("unknown_op"));
+}
+
+void TestMcp::cueToolsEditAndReorder()
+{
+    AppController window(nullptr);
+    prism::mcp::McpDispatcher dispatcher(&window);
+    auto call = [&](const char *tool, const QJsonObject &args) {
+        return dispatcher.applyOne(QString::fromLatin1(tool), args);
+    };
+    const QString first = window.liveCueId();
+    const QString a = call("add_cue", {{"name", "A"}}).value(QStringLiteral("id")).toString();
+    const QString b = call("add_cue", {{"name", "B"}}).value(QStringLiteral("id")).toString();
+
+    QVERIFY(window.showManager()->indexOf(b) > 0);
+    QVERIFY(call("reorder_cue", {{"cue", b}, {"to", 1}}).value(QStringLiteral("ok")).toBool());
+    QCOMPARE(window.showManager()->indexOf(b), 0);
+    QCOMPARE(call("reorder_cue", {{"cue", b}, {"to", 9}}).value(QStringLiteral("error")).toString(),
+             QStringLiteral("bad_args"));
+
+    const QJsonObject props = call("set_cue_props", {{"cue", a}, {"color", "#ff0000"}, {"notes", "n"},
+                                                      {"endAction", "loop"}, {"hotkey", "Q"},
+                                                      {"transition", QJsonObject{{"mode", 1}, {"durationMs", 250}}}});
+    QVERIFY(props.value(QStringLiteral("ok")).toBool());
+    QCOMPARE(props.value(QStringLiteral("endAction")).toString(), QStringLiteral("loop"));
+    QCOMPARE(props.value(QStringLiteral("hotkey")).toString(), QStringLiteral("Q"));
+    QCOMPARE(props.value(QStringLiteral("transition")).toObject().value(QStringLiteral("durationMs")).toInt(), 250);
+    QVERIFY(call("set_cue_props", {{"cue", a}, {"transition", QJsonValue::Null}})
+                .value(QStringLiteral("transition")).isNull());
+    QCOMPARE(call("set_cue_props", {{"cue", a}, {"transition", QJsonObject{{"mode", "nope"}}}})
+                 .value(QStringLiteral("error")).toString(), QStringLiteral("bad_args"));
+
+    QVERIFY(call("set_default_transition", {{"mode", 0}, {"durationMs", 700}}).value(QStringLiteral("ok")).toBool());
+    QCOMPARE(window.showManager()->defaultTransition(), (TransitionSpec{0, 700}));
+
+    const QJsonObject dup = call("duplicate_cue", {{"cue", a}});
+    QVERIFY(dup.value(QStringLiteral("ok")).toBool());
+    const QString dupId = dup.value(QStringLiteral("id")).toString();
+    QVERIFY(dupId != a);
+    QVERIFY(call("remove_cue", {{"cue", dupId}}).value(QStringLiteral("ok")).toBool());
+    QVERIFY(!window.showManager()->cue(dupId));
+    QCOMPARE(call("remove_cue", {{"cue", first}}).value(QStringLiteral("error")).toString(), QStringLiteral("conflict"));
+
+    QVERIFY(call("take_cue", {{"cue", a}}).value(QStringLiteral("ok")).toBool());
+    QVERIFY(call("exit_cue", {}).value(QStringLiteral("ok")).toBool());
+    QVERIFY(!window.inCue());
+
+    QJsonObject pre = call("preflight", {});
+    QVERIFY(pre.value(QStringLiteral("ok")).toBool());
+    QVERIFY(pre.value(QStringLiteral("issues")).isArray());
 }
 
 QTEST_MAIN(TestMcp)

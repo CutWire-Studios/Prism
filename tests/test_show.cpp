@@ -1,5 +1,11 @@
 #include "app/AppController.h"
 #include "app/session/SessionManager.h"
+#include "app/remote/OscProtocol.h"
+#include "app/remote/OscServer.h"
+#include "app/remote/RemoteControlServer.h"
+#include "app/remote/RemoteProtocol.h"
+#include "app/show/CueThumbnails.h"
+#include "app/show/Preflight.h"
 #include "app/show/ShowManager.h"
 #include "core/graph/ClipGraph.h"
 #include "core/sources/SourceDescriptor.h"
@@ -7,7 +13,11 @@
 #include <QtTest>
 #include <QImage>
 #include <QJsonArray>
+#include <QSettings>
 #include <QSignalSpy>
+#include <QTcpSocket>
+#include <QUdpSocket>
+#include <QUndoStack>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 
@@ -245,6 +255,171 @@ private slots:
         QCOMPARE(app.transitionMode(), 0);
         QCOMPARE(app.transitionDuration(), 2.0);
         QCOMPARE(app.showManager()->defaultTransition(), (TransitionSpec{0, 2000}));
+    }
+
+    void showUndoCoversAddRemoveReorderAndProps() {
+        ShowManager show;
+        const QString first = show.liveCueId();
+        QUndoStack *undo = show.undoStack();
+
+        Cue *a = show.addCue(QStringLiteral("A"));
+        const QString aId = a->id();
+        const NodeId in = a->graph()->addNode(NT::Input, {}, canvas(QStringLiteral("x")));
+        QCOMPARE(show.cues().size(), 2);
+        undo->undo();
+        QCOMPARE(show.cues().size(), 1);
+        undo->redo();
+        QCOMPARE(show.cues().size(), 2);
+        QVERIFY(show.cue(aId)->graph()->hasNode(in));
+
+        Cue *b = show.addCue(QStringLiteral("B"));
+        const QString bId = b->id();
+        QCOMPARE(show.indexOf(bId), 2);
+        QVERIFY(show.moveCue(2, 0));
+        QCOMPARE(show.indexOf(bId), 0);
+        undo->undo();
+        QCOMPARE(show.indexOf(bId), 2);
+        undo->redo();
+        QCOMPARE(show.indexOf(bId), 0);
+        undo->undo();
+
+        CueMeta meta = show.cue(aId)->meta();
+        meta.name = QStringLiteral("Renamed");
+        meta.incoming = TransitionSpec{2, 300};
+        show.setCueMeta(aId, meta);
+        QCOMPARE(show.cue(aId)->name(), QStringLiteral("Renamed"));
+        undo->undo();
+        QCOMPARE(show.cue(aId)->name(), QStringLiteral("A"));
+        QVERIFY(!show.cue(aId)->incoming());
+        undo->redo();
+        QCOMPARE(show.cue(aId)->incoming()->durationMs, 300);
+
+        QVERIFY(show.removeCue(aId));
+        QVERIFY(!show.cue(aId));
+        undo->undo();
+        QVERIFY(show.cue(aId));
+        QCOMPARE(show.cue(aId)->name(), QStringLiteral("Renamed"));
+        undo->redo();
+        QVERIFY(!show.cue(aId));
+
+        Cue *dup = show.duplicateCue(first);
+        QVERIFY(dup);
+        const QString dupId = dup->id();
+        undo->undo();
+        QVERIFY(!show.cue(dupId));
+        undo->redo();
+        QVERIFY(show.cue(dupId));
+    }
+
+    void thumbnailPathPersists() {
+        QTemporaryDir dir;
+        QImage img(320, 180, QImage::Format_RGB888);
+        img.fill(Qt::red);
+        ShowManager show;
+        Cue *a = show.addCue(QStringLiteral("A"));
+        const QString path = CueThumbnails::save(img, dir.filePath(QStringLiteral("cuethumbs")), a->id());
+        QVERIFY(!path.isEmpty());
+        const QImage saved(path);
+        QCOMPARE(saved.size(), QSize(CueThumbnails::kWidth, CueThumbnails::kHeight));
+        a->setThumbnail(path);
+
+        ShowManager other;
+        QVERIFY(other.fromJson(show.toJson()));
+        QCOMPARE(other.cue(a->id())->thumbnail(), path);
+    }
+
+    void preflightReportsMissingFileAndDevice() {
+        using Kind = SourceDescriptor::Kind;
+        ShowManager show;
+        Cue *a = show.addCue(QStringLiteral("A"));
+        a->graph()->addNode(NT::Input, {}, {{"source", QVariantMap{{"kind", int(Kind::VideoFile)},
+                                                                   {"path", QStringLiteral("/nonexistent/clip.mp4")}}}});
+        a->graph()->addNode(NT::Input, {}, {{"source", QVariantMap{{"kind", int(Kind::Camera)},
+                                                                   {"path", QStringLiteral("fake-cam")}}}});
+        const auto issues = Preflight::run(show, QDir(), [](const SourceDescriptor &d) { return d.kind == Kind::Camera; });
+        QCOMPARE(issues.size(), 2);
+        int files = 0, devices = 0;
+        for (const PreflightIssue &i : issues) {
+            QCOMPARE(i.cueId, a->id());
+            files += i.kind == PreflightIssue::Kind::MissingFile;
+            devices += i.kind == PreflightIssue::Kind::MissingDevice;
+        }
+        QCOMPARE(files, 1);
+        QCOMPARE(devices, 1);
+    }
+
+    void stageRelativeStepsFromLiveCue() {
+        AppController app(nullptr);
+        const QString first = app.liveCueId();
+        const QString second = app.addCue();
+        QVERIFY(!app.stageRelative(-1));
+        QVERIFY(app.stageRelative(1));
+        QCOMPARE(app.stagingCueId(), second);
+        QVERIFY(!app.stageRelative(2));
+        QVERIFY(app.moveCue(second, 0));
+        QCOMPARE(app.showManager()->indexOf(first), 1);
+        QVERIFY(app.stageRelative(-1));
+        QCOMPARE(app.stagingCueId(), second);
+    }
+
+    void oscNextPrevStageRelativeToLive() {
+        QSettings settings;
+        settings.setValue(QStringLiteral("osc/enabled"), true);
+        settings.setValue(QStringLiteral("osc/port"), 39217);
+        settings.setValue(QStringLiteral("osc/feedbackHost"), QString());
+        AppController app(nullptr);
+        OscServer osc(&app);
+        QVERIFY(osc.applySettings());
+        const QString second = app.addCue();
+        const QString third = app.addCue();
+        const QString live = app.liveCueId();
+
+        QUdpSocket sock;
+        auto fire = [&](const QString &address, const QVariantList &args = {}) {
+            sock.writeDatagram(OscProtocol::encode({address, args}), QHostAddress::LocalHost, 39217);
+        };
+        fire(QStringLiteral("/prism/cue/next"));
+        QTRY_VERIFY(!app.stagingCueId().isEmpty());
+        QCOMPARE(app.showManager()->indexOf(app.stagingCueId()), app.showManager()->indexOf(live) + 1);
+        fire(QStringLiteral("/prism/cue/stage"), {3});
+        QTRY_COMPARE(app.stagingCueId(), third);
+        fire(QStringLiteral("/prism/cue/prev"));
+        QTRY_VERIFY(app.stagingCueId() != third);
+        Q_UNUSED(second);
+        osc.stop();
+        settings.setValue(QStringLiteral("osc/enabled"), false);
+    }
+
+    void httpCueEndpoints() {
+        AppController app(nullptr);
+        RemoteControlServer server(&app);
+        QVERIFY(server.startServer(QHostAddress::LocalHost, 39218));
+        const QString second = app.addCue();
+        app.addCue();
+
+        auto get = [&](const QString &path) {
+            QTcpSocket sock;
+            sock.connectToHost(QHostAddress::LocalHost, 39218);
+            (void)QTest::qWaitFor([&] { return sock.state() == QAbstractSocket::ConnectedState; }, 2000);
+            sock.write("GET " + path.toUtf8() + " HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n");
+            QByteArray all;
+            QElapsedTimer timer;
+            timer.start();
+            while (timer.elapsed() < 3000 && !all.contains("}")) {
+                QTest::qWait(20);
+                all += sock.readAll();
+            }
+            return all;
+        };
+
+        QVERIFY(get(QStringLiteral("/api/cue/next")).contains("ok"));
+        QCOMPARE(app.showManager()->indexOf(app.stagingCueId()), 1);
+        QVERIFY(get(QStringLiteral("/api/cue/prev")).contains("ok"));
+        QVERIFY(get(QStringLiteral("/api/stage?id=") + second).contains("ok"));
+        QCOMPARE(app.stagingCueId(), second);
+        QVERIFY(get(QStringLiteral("/api/status")).contains(second.toUtf8()));
+        QCOMPARE(RemoteProtocol::matchRoute(QStringLiteral("GET"), QStringLiteral("/api/cue/take?id=x")),
+                 RemoteProtocol::Route::CueTake);
     }
 
     void autoAdvanceStagesAndTakesNextCue() {

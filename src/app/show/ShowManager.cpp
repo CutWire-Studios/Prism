@@ -6,6 +6,8 @@
 
 #include <QJsonArray>
 #include <QTimer>
+#include <QUndoCommand>
+#include <QUndoStack>
 #include <QUuid>
 
 #include <algorithm>
@@ -43,11 +45,86 @@ QJsonObject shiftIds(QJsonObject graph, qint64 delta)
 
 } // namespace
 
+/// Inserts or removes a cue by snapshot. Add/duplicate push it already applied (first redo is
+/// skipped); undoing them removes the cue, redoing re-creates it with the same id and graph ids.
+class CueStructureCommand : public QUndoCommand {
+public:
+    CueStructureCommand(ShowManager *show, bool insert, const QString &id, const QJsonObject &snap, int index,
+                        bool applied, const QString &text)
+        : QUndoCommand(text), m_show(show), m_insert(insert), m_id(id), m_snap(snap), m_index(index), m_skip(applied) {}
+
+    void redo() override
+    {
+        if (m_skip) {
+            m_skip = false;
+            return;
+        }
+        apply(m_insert);
+    }
+    void undo() override { apply(!m_insert); }
+
+private:
+    void apply(bool insert)
+    {
+        if (insert) {
+            m_show->restoreCue(m_snap, m_index);
+            return;
+        }
+        if (const Cue *c = m_show->cue(m_id)) {
+            m_snap = c->toJson();
+            m_index = m_show->indexOf(m_id);
+            m_show->eraseCue(m_id);
+        }
+    }
+
+    ShowManager *m_show;
+    bool m_insert;
+    QString m_id;
+    QJsonObject m_snap;
+    int m_index;
+    bool m_skip;
+};
+
+class MoveCueCommand : public QUndoCommand {
+public:
+    MoveCueCommand(ShowManager *show, int from, int to)
+        : QUndoCommand(QObject::tr("Move cue")), m_show(show), m_from(from), m_to(to) {}
+    void redo() override { m_show->moveCueRaw(m_from, m_to); }
+    void undo() override { m_show->moveCueRaw(m_to, m_from); }
+
+private:
+    ShowManager *m_show;
+    int m_from, m_to;
+};
+
+namespace {
+
+class CueMetaCommand : public QUndoCommand {
+public:
+    CueMetaCommand(ShowManager *show, const QString &id, const CueMeta &before, const CueMeta &after)
+        : QUndoCommand(QObject::tr("Edit cue")), m_show(show), m_id(id), m_before(before), m_after(after) {}
+    void redo() override { apply(m_after); }
+    void undo() override { apply(m_before); }
+
+private:
+    void apply(const CueMeta &m)
+    {
+        if (Cue *c = m_show->cue(m_id))
+            c->setMeta(m);
+    }
+    ShowManager *m_show;
+    QString m_id;
+    CueMeta m_before, m_after;
+};
+
+} // namespace
+
 ShowManager::ShowManager(QObject *parent)
     : QObject(parent)
     , m_model(new CueListModel(this))
     , m_thumbs(GraphRuntime::createThumbStore())
     , m_endTimer(new QTimer(this))
+    , m_undo(new QUndoStack(this))
 {
     m_endTimer->setSingleShot(true);
     connect(m_endTimer, &QTimer::timeout, this, &ShowManager::notifyLiveEnded);
@@ -95,6 +172,8 @@ Cue *ShowManager::makeCue(const QString &id, int serial, bool withDefaults)
     auto *c = new Cue(id, serial, m_thumbs, withDefaults, this);
     c->graph()->setOutputCanvasSize(m_canvasW, m_canvasH);
     connect(c, &Cue::metaChanged, this, &ShowManager::changed);
+    connect(c, &Cue::metaChanged, this, [this, c] { emit cueMetaChanged(c); });
+    connect(c, &Cue::thumbnailChanged, this, &ShowManager::thumbnailChanged);
     connect(c->graph(), &ClipGraph::changed, this, &ShowManager::changed);
     m_nextSerial = std::max(m_nextSerial, serial + 1);
     return c;
@@ -108,6 +187,7 @@ Cue *ShowManager::addCue(const QString &name, int index)
     emit cueAdded(c);
     updateRuntimeActivity();
     emit changed();
+    m_undo->push(new CueStructureCommand(this, true, c->id(), {}, indexOf(c->id()), true, tr("Add cue")));
     return c;
 }
 
@@ -126,10 +206,32 @@ Cue *ShowManager::duplicateCue(const QString &id)
     emit cueAdded(c);
     updateRuntimeActivity();
     emit changed();
+    m_undo->push(new CueStructureCommand(this, true, c->id(), {}, indexOf(c->id()), true, tr("Duplicate cue")));
     return c;
 }
 
 bool ShowManager::removeCue(const QString &id)
+{
+    Cue *c = cue(id);
+    if (!c || id == m_liveId || m_cues.size() <= 1)
+        return false;
+    m_undo->push(new CueStructureCommand(this, false, id, c->toJson(), indexOf(id), false, tr("Remove cue")));
+    return true;
+}
+
+Cue *ShowManager::restoreCue(const QJsonObject &snapshot, int index)
+{
+    Cue *c = makeCue(snapshot.value(QStringLiteral("id")).toString(),
+                     snapshot.value(QStringLiteral("serial")).toInt(), false);
+    c->loadJson(snapshot);
+    m_cues.insert(qBound(0, index, int(m_cues.size())), c);
+    emit cueAdded(c);
+    updateRuntimeActivity();
+    emit changed();
+    return c;
+}
+
+bool ShowManager::eraseCue(const QString &id)
 {
     Cue *c = cue(id);
     if (!c || id == m_liveId || m_cues.size() <= 1)
@@ -154,6 +256,22 @@ bool ShowManager::moveCue(int from, int to)
 {
     if (from < 0 || from >= m_cues.size() || to < 0 || to >= m_cues.size() || from == to)
         return false;
+    m_undo->push(new MoveCueCommand(this, from, to));
+    return true;
+}
+
+void ShowManager::setCueMeta(const QString &id, const CueMeta &meta)
+{
+    Cue *c = cue(id);
+    if (!c || c->meta() == meta)
+        return;
+    m_undo->push(new CueMetaCommand(this, id, c->meta(), meta));
+}
+
+bool ShowManager::moveCueRaw(int from, int to)
+{
+    if (from < 0 || from >= m_cues.size() || to < 0 || to >= m_cues.size() || from == to)
+        return false;
     m_cues.move(from, to);
     emit cuesReset();
     emit changed();
@@ -162,6 +280,7 @@ bool ShowManager::moveCue(int from, int to)
 
 void ShowManager::reset()
 {
+    m_undo->clear();
     for (Cue *c : std::as_const(m_cues))
         emit cueAboutToBeRemoved(c);
     qDeleteAll(m_cues);
@@ -355,6 +474,7 @@ bool ShowManager::fromJson(const QJsonObject &root)
         return false;
     }
 
+    m_undo->clear();
     for (Cue *c : std::as_const(m_cues))
         emit cueAboutToBeRemoved(c);
     qDeleteAll(m_cues);

@@ -219,9 +219,6 @@ private slots:
         comp.setCrossfade(1.f);
         QVERIFY(!comp.deckContributesToProgram(Deck::Live));
         QVERIFY(comp.deckContributesToProgram(Deck::Staging));
-        comp.setSingleStreamMode(true);
-        QVERIFY(comp.deckContributesToProgram(Deck::Live) && !comp.deckContributesToProgram(Deck::Staging));
-        comp.setSingleStreamMode(false);
         comp.setPanicOverlay(Compositor::PanicOverlay::Blackout);
         QVERIFY(!comp.deckContributesToProgram(Deck::Live) && !comp.deckContributesToProgram(Deck::Staging));
     }

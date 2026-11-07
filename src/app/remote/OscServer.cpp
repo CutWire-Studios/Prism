@@ -130,6 +130,18 @@ void OscServer::dispatch(const OscProtocol::OscMessage &msg)
         m_mainWindow->cut();
     } else if (parts.size() == 3 && cmd == QLatin1String("cue") && parts.at(2) == QLatin1String("stage")) {
         handleStage(args);
+    } else if (parts.size() == 3 && cmd == QLatin1String("cue") && parts.at(2) == QLatin1String("take")) {
+        if (args.isEmpty()) {
+            m_mainWindow->take();
+        } else {
+            const QString id = cueIdFromArg(args.first());
+            if (!id.isEmpty())
+                m_mainWindow->stageAndTake(id);
+        }
+    } else if (parts.size() == 3 && cmd == QLatin1String("cue") && parts.at(2) == QLatin1String("next")) {
+        m_mainWindow->stageRelative(1);
+    } else if (parts.size() == 3 && cmd == QLatin1String("cue") && parts.at(2) == QLatin1String("prev")) {
+        m_mainWindow->stageRelative(-1);
     } else if (parts.size() == 2 && cmd == QLatin1String("take")) {
         m_mainWindow->take();
     } else if (parts.size() == 2 && cmd == QLatin1String("fader")) {
@@ -173,19 +185,22 @@ void OscServer::handleDeck(Deck deck, const QString &cmd, const QVariantList &ar
     }
 }
 
+QString OscServer::cueIdFromArg(const QVariant &arg) const
+{
+    if (!isNumber(arg))
+        return arg.toString();
+    const int index = arg.toInt() - 1;
+    const QList<Cue *> &cues = m_mainWindow->showManager()->cues();
+    return index >= 0 && index < cues.size() ? cues.at(index)->id() : QString();
+}
+
 void OscServer::handleStage(const QVariantList &args)
 {
     if (args.isEmpty())
         return;
-    const QVariant &arg = args.first();
-    if (isNumber(arg)) {
-        const int index = arg.toInt() - 1;
-        const QList<Cue *> &cues = m_mainWindow->showManager()->cues();
-        if (index >= 0 && index < cues.size())
-            m_mainWindow->stageCue(cues.at(index)->id());
-    } else {
-        m_mainWindow->stageCue(arg.toString());
-    }
+    const QString id = cueIdFromArg(args.first());
+    if (!id.isEmpty())
+        m_mainWindow->stageCue(id);
 }
 
 OscServer::State OscServer::captureState() const
@@ -226,6 +241,11 @@ void OscServer::pollState()
         send(QStringLiteral("/prism/fader"), {float(now.fader / 100.0)});
     }
     sendDeckDiff("live", now.live, before.live);
+    if (now.live.slot != before.live.slot || now.live.name != before.live.name || now.live.input != before.live.input)
+        send(QStringLiteral("/prism/cue/live"), {now.live.slot, now.live.name});
+    if (now.staging.slot != before.staging.slot || now.staging.name != before.staging.name
+        || now.staging.input != before.staging.input)
+        send(QStringLiteral("/prism/cue/staging"), {now.staging.slot, now.staging.name});
     sendDeckDiff("staging", now.staging, before.staging);
     if (now.mode != before.mode)
         send(QStringLiteral("/prism/transition/mode"), {now.mode});

@@ -269,6 +269,22 @@ QJsonObject McpDispatcher::applyOne(const QString &tool, const QJsonObject &args
         return opAddCue(args);
     if (tool == QLatin1String("enter_cue"))
         return opEnterCue(args);
+    if (tool == QLatin1String("take_cue"))
+        return opTakeCue(args);
+    if (tool == QLatin1String("remove_cue"))
+        return opRemoveCue(args);
+    if (tool == QLatin1String("reorder_cue"))
+        return opReorderCue(args);
+    if (tool == QLatin1String("duplicate_cue"))
+        return opDuplicateCue(args);
+    if (tool == QLatin1String("exit_cue"))
+        return opExitCue();
+    if (tool == QLatin1String("set_cue_props"))
+        return opSetCueProps(args);
+    if (tool == QLatin1String("set_default_transition"))
+        return opSetDefaultTransition(args);
+    if (tool == QLatin1String("preflight"))
+        return opPreflight();
     if (tool == QLatin1String("play"))
         return opPlayDeck(args, true);
     if (tool == QLatin1String("pause"))
@@ -751,15 +767,36 @@ Cue *resolveCue(AppController *w, const QJsonObject &args, QJsonObject *error)
     return cue;
 }
 
-QJsonObject cueJson(const ShowManager *show, const Cue *cue)
+QJsonObject cueJson(const AppController *w, const Cue *cue)
 {
+    const ShowManager *show = w->showManager();
+    const QVariantMap info = w->cueInfo(cue->id());
     return {{QStringLiteral("id"), cue->id()},
             {QStringLiteral("index"), show->indexOf(cue->id()) + 1},
             {QStringLiteral("name"), cue->name()},
             {QStringLiteral("live"), cue->id() == show->liveCueId()},
             {QStringLiteral("staging"), cue->id() == show->stagingCueId()},
             {QStringLiteral("edited"), show->inCue() && cue->id() == show->editedCueId()},
-            {QStringLiteral("endAction"), Cue::endActionName(cue->endAction())}};
+            {QStringLiteral("endAction"), Cue::endActionName(cue->endAction())},
+            {QStringLiteral("transition"), QJsonValue::fromVariant(info.value(QStringLiteral("transition")))},
+            {QStringLiteral("autoAdvanceMs"), cue->autoAdvanceMs()},
+            {QStringLiteral("advanceOnMediaEnd"), cue->advanceOnMediaEnd()},
+            {QStringLiteral("hotkey"), info.value(QStringLiteral("hotkey")).toString()},
+            {QStringLiteral("warning"), info.value(QStringLiteral("warning")).toString()}};
+}
+
+int transitionModeIndex(AppController *w, const QJsonValue &v)
+{
+    const QStringList modes = w->transitionModeNames();
+    if (v.isString()) {
+        for (int i = 0; i < modes.size(); ++i) {
+            if (modes.at(i).compare(v.toString().trimmed(), Qt::CaseInsensitive) == 0)
+                return i;
+        }
+        return -1;
+    }
+    const int index = v.toInt(-1);
+    return index >= 0 && index < modes.size() ? index : -1;
 }
 }
 
@@ -767,7 +804,7 @@ QJsonObject McpDispatcher::opListCues() const
 {
     QJsonArray cues;
     for (const Cue *cue : m_window->showManager()->cues())
-        cues.append(cueJson(m_window->showManager(), cue));
+        cues.append(cueJson(m_window, cue));
     return ok({{QStringLiteral("cues"), cues}});
 }
 
@@ -780,14 +817,14 @@ QJsonObject McpDispatcher::opStageCue(const QJsonObject &args)
     if (!m_window->stageCue(cue->id()))
         return err("conflict", QStringLiteral("Cue is Live or a take is running"));
     m_window->mcpBumpRevision();
-    return ok(cueJson(m_window->showManager(), cue));
+    return ok(cueJson(m_window, cue));
 }
 
 QJsonObject McpDispatcher::opAddCue(const QJsonObject &args)
 {
     const QString id = m_window->addCue(args.value(QStringLiteral("name")).toString().trimmed());
     m_window->mcpBumpRevision();
-    return ok(cueJson(m_window->showManager(), m_window->showManager()->cue(id)));
+    return ok(cueJson(m_window, m_window->showManager()->cue(id)));
 }
 
 QJsonObject McpDispatcher::opEnterCue(const QJsonObject &args)
@@ -798,7 +835,120 @@ QJsonObject McpDispatcher::opEnterCue(const QJsonObject &args)
         return error;
     m_window->enterCue(cue->id());
     m_window->mcpBumpRevision();
-    return ok(cueJson(m_window->showManager(), cue));
+    return ok(cueJson(m_window, cue));
+}
+
+QJsonObject McpDispatcher::opTakeCue(const QJsonObject &args)
+{
+    QJsonObject error;
+    Cue *cue = resolveCue(m_window, args, &error);
+    if (!cue)
+        return error;
+    if (!m_window->stageAndTake(cue->id()))
+        return err("conflict", QStringLiteral("Cue is Live or a take is running"));
+    m_window->mcpBumpRevision();
+    return ok(cueJson(m_window, cue));
+}
+
+QJsonObject McpDispatcher::opRemoveCue(const QJsonObject &args)
+{
+    QJsonObject error;
+    Cue *cue = resolveCue(m_window, args, &error);
+    if (!cue)
+        return error;
+    const QString id = cue->id();
+    if (!m_window->removeCue(id))
+        return err("conflict", QStringLiteral("The Live cue and the last cue cannot be removed, nor during a take"));
+    m_window->mcpBumpRevision();
+    return ok({{QStringLiteral("id"), id}});
+}
+
+QJsonObject McpDispatcher::opReorderCue(const QJsonObject &args)
+{
+    QJsonObject error;
+    Cue *cue = resolveCue(m_window, args, &error);
+    if (!cue)
+        return error;
+    const int to = jsonInt(args.value(QStringLiteral("to")), 0);
+    if (to < 1 || to > m_window->showManager()->cues().size())
+        return err("bad_args", QStringLiteral("to must be a 1-based position in list_cues"));
+    if (!m_window->moveCue(cue->id(), to - 1))
+        return err("conflict", QStringLiteral("Cue could not be moved"));
+    m_window->mcpBumpRevision();
+    return ok(cueJson(m_window, cue));
+}
+
+QJsonObject McpDispatcher::opDuplicateCue(const QJsonObject &args)
+{
+    QJsonObject error;
+    Cue *cue = resolveCue(m_window, args, &error);
+    if (!cue)
+        return error;
+    const QString id = m_window->duplicateCue(cue->id());
+    const Cue *copy = m_window->showManager()->cue(id);
+    if (!copy)
+        return err("conflict", QStringLiteral("Cue could not be duplicated"));
+    m_window->mcpBumpRevision();
+    return ok(cueJson(m_window, copy));
+}
+
+QJsonObject McpDispatcher::opExitCue()
+{
+    m_window->exitCue();
+    m_window->mcpBumpRevision();
+    return ok();
+}
+
+QJsonObject McpDispatcher::opSetCueProps(const QJsonObject &args)
+{
+    QJsonObject error;
+    Cue *cue = resolveCue(m_window, args, &error);
+    if (!cue)
+        return error;
+    QVariantMap props;
+    for (const char *key : {"name", "color", "notes", "endAction", "autoAdvanceMs", "advanceOnMediaEnd", "hotkey"}) {
+        const QString k = QString::fromLatin1(key);
+        if (args.contains(k))
+            props.insert(k, args.value(k).toVariant());
+    }
+    const QString transitionKey = QStringLiteral("transition");
+    if (args.contains(transitionKey)) {
+        const QJsonValue t = args.value(transitionKey);
+        if (t.isNull()) {
+            props.insert(transitionKey, QVariant());
+        } else {
+            const QJsonObject o = t.toObject();
+            const int mode = transitionModeIndex(m_window, o.value(QStringLiteral("mode")));
+            if (mode < 0)
+                return err("bad_args", QStringLiteral("transition.mode must be a name or index from list_transitions"));
+            props.insert(transitionKey, QVariantMap{{QStringLiteral("mode"), mode},
+                                                    {QStringLiteral("durationMs"),
+                                                     jsonInt(o.value(QStringLiteral("durationMs")), 1000)}});
+        }
+    }
+    m_window->setCueProps(cue->id(), props);
+    m_window->mcpBumpRevision();
+    return ok(cueJson(m_window, cue));
+}
+
+QJsonObject McpDispatcher::opSetDefaultTransition(const QJsonObject &args)
+{
+    const int mode = transitionModeIndex(m_window, args.value(QStringLiteral("mode")));
+    if (mode < 0)
+        return err("bad_args", QStringLiteral("mode must be a name or index from list_transitions"));
+    const int durationMs = qMax(0, jsonInt(args.value(QStringLiteral("durationMs")), 1000));
+    m_window->showManager()->setDefaultTransition(TransitionSpec{mode, durationMs});
+    m_window->mcpBumpRevision();
+    return ok({{QStringLiteral("mode"), m_window->transitionModeNames().at(mode)},
+               {QStringLiteral("durationMs"), durationMs}});
+}
+
+QJsonObject McpDispatcher::opPreflight() const
+{
+    QJsonArray issues;
+    for (const QVariant &v : m_window->preflight())
+        issues.append(QJsonObject::fromVariantMap(v.toMap()));
+    return ok({{QStringLiteral("issues"), issues}});
 }
 
 QJsonObject McpDispatcher::opPlayDeck(const QJsonObject &args, bool play)

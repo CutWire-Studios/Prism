@@ -1,0 +1,60 @@
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Controls.Basic
+import Prism
+
+ThemedDialog {
+    id: root
+
+    property var issues: []
+
+    title: qsTr("Preflight check")
+    showAccept: false
+    rejectText: qsTr("Close")
+    rejectVariant: "primary"
+    preferredWidth: Theme.dialogWidthLg
+
+    onAboutToShow: issues = AppController.preflight()
+
+    contentItem: Column {
+        spacing: Theme.spacingMd
+        width: parent ? parent.width : Theme.dialogWidthLg
+
+        ThemedLabel {
+            width: parent.width
+            wrapMode: Text.WordWrap
+            text: root.issues.length === 0
+                  ? qsTr("No missing media or devices in any cue.")
+                  : qsTr("%n problem(s) found across the cues.", "", root.issues.length)
+        }
+
+        Flickable {
+            id: flick
+            width: parent.width
+            height: Math.min(issueColumn.implicitHeight, root.availableContentHeight - 160)
+            contentHeight: issueColumn.implicitHeight
+            clip: true
+            ScrollBar.vertical: AppScrollBar { }
+
+            Column {
+                id: issueColumn
+                width: flick.width
+                spacing: Theme.spacingSm
+
+                Repeater {
+                    model: root.issues
+
+                    ThemedLabel {
+                        id: issue
+                        required property var modelData
+                        width: issueColumn.width
+                        wrapMode: Text.WordWrap
+                        tone: "default"
+                        text: (issue.modelData.kind === "missing_file" ? qsTr("Missing file") : qsTr("Missing device"))
+                              + " - " + issue.modelData.cue + " / " + issue.modelData.source + "\n" + issue.modelData.detail
+                    }
+                }
+            }
+        }
+    }
+}

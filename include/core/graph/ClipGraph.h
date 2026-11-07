@@ -247,7 +247,6 @@ public:
     // ── Video evaluation / layers ────────────────────────────────────────────
     ResolvedStream evaluateVideoInput(NodeId producerNode) const;
     NodeId producerForInput(NodeId nodeId, int inPort) const;
-    bool outputIsSingleStream() const { return outputSingleProducer() != 0; }
     NodeId outputSingleProducer() const;
     QVector<LayerSlotView> layerSlotViews(NodeId layerId) const;
     bool setLayerSlotRect(NodeId layerId, int index, float x, float y, float w, float h);

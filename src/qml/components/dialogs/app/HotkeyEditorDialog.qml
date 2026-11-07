@@ -24,7 +24,7 @@ ThemedDialog {
 
         ThemedLabel {
             width: parent.width
-            text: qsTr("Assign a key to each switcher input. The key stages the input; Shift plus the same key stages it and cuts to Live. Click a field, then press the key. Esc cancels, Backspace clears.")
+            text: qsTr("Assign a key to each cue. The key stages the cue; Shift plus the same key stages it and takes it. Click a field, then press the key. Esc cancels, Backspace clears.")
         }
 
         Flickable {

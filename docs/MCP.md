@@ -41,7 +41,7 @@ Pinned endpoints (`/mcp/sources`, `/mcp/decks`, `/mcp/transition`, `/mcp/panic`,
 |-------|------|
 | Time | Seconds |
 | Decks | Two fixed decks: **Staging** (next up, shown left) and **Live** (on air, shown right). Transition progress (`fader` in `inspect`) runs 0 = Live to 100 = Staging. A `take` animates it to 100, then the Staging content becomes Live, the former Live content moves to Staging, and progress resets to 0 |
-| Cues | The show is a list of cues, each with its own graph. `list_cues` shows them; `stage_cue` puts one on Staging (by id or 1-based position); `enter_cue` selects the cue that clip and graph ops act on. `add_cue` appends a cue |
+| Cues | The show is a list of cues, each with its own graph. `list_cues` shows them; `stage_cue` puts one on Staging (by id or 1-based position); `enter_cue` selects the cue that clip and graph ops act on. `add_cue` appends a cue; `take_cue` stages and takes in one step; `remove_cue`, `reorder_cue` (1-based `to`), `duplicate_cue`, `exit_cue` manage the list; `set_cue_props` sets name, color, notes, `transition` ({mode, durationMs} or null for the show default), `endAction` (hold, loop, autoAdvance, black), `autoAdvanceMs`, `advanceOnMediaEnd`, `hotkey`; `set_default_transition` sets the show default; `preflight` lists missing files and devices across all cues |
 | Clip reference | `clip` id from `inspect({clips:true})` (the edited cue). Required — clip ops never fall back to the current deck assignment |
 | Adding sources | `add_clip` / `add_source` only put a node on the edited cue's graph. Wire it to Output with `connect`, then `stage_cue` the cue |
 | Process / graph | `add_process_node` / `add_layer_node` only place nodes. Call `connect` to wire. `list_nodes` or `inspect({graph:true})` for ids |
@@ -57,7 +57,7 @@ Pinned endpoints (`/mcp/sources`, `/mcp/decks`, `/mcp/transition`, `/mcp/panic`,
 | Toolbox | When to use |
 |---------|-------------|
 | `sources` | Add/list/rename clips; set clip speed; text/SVG template/shader updates; cameras and NDI |
-| `decks` | List/add/enter/stage cues, play/pause/seek per deck |
+| `decks` | List/add/enter/stage/take/edit/reorder cues, preflight, play/pause/seek per deck |
 | `transition` | `set_transition_progress`, `cut`, `take`, look and duration |
 | `panic` | Blackout, freeze, stay-tuned slate |
 | `output` | Record program, NDI, virtual camera |

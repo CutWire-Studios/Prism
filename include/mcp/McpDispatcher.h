@@ -36,6 +36,14 @@ private:
     QJsonObject opStageCue(const QJsonObject &args);
     QJsonObject opAddCue(const QJsonObject &args);
     QJsonObject opEnterCue(const QJsonObject &args);
+    QJsonObject opTakeCue(const QJsonObject &args);
+    QJsonObject opRemoveCue(const QJsonObject &args);
+    QJsonObject opReorderCue(const QJsonObject &args);
+    QJsonObject opDuplicateCue(const QJsonObject &args);
+    QJsonObject opExitCue();
+    QJsonObject opSetCueProps(const QJsonObject &args);
+    QJsonObject opSetDefaultTransition(const QJsonObject &args);
+    QJsonObject opPreflight() const;
     QJsonObject opPlayDeck(const QJsonObject &args, bool play);
     QJsonObject opSeekDeck(const QJsonObject &args);
     QJsonObject opSetSpeed(const QJsonObject &args);

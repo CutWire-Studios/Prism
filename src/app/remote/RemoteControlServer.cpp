@@ -150,6 +150,26 @@ void RemoteControlServer::onReadyRead() {
         break;
     }
 
+    case RemoteProtocol::Route::CueTake: {
+        QString id;
+        if (RemoteProtocol::stringParam(request.path, QStringLiteral("id"), id) && m_mainWindow)
+            m_mainWindow->stageAndTake(id);
+        sendJsonResponse(socket, "{\"status\": \"ok\"}");
+        break;
+    }
+
+    case RemoteProtocol::Route::CueNext:
+        if (m_mainWindow)
+            m_mainWindow->stageRelative(1);
+        sendJsonResponse(socket, "{\"status\": \"ok\"}");
+        break;
+
+    case RemoteProtocol::Route::CuePrev:
+        if (m_mainWindow)
+            m_mainWindow->stageRelative(-1);
+        sendJsonResponse(socket, "{\"status\": \"ok\"}");
+        break;
+
     case RemoteProtocol::Route::LivePlay:
         if (m_mainWindow)
             m_mainWindow->playDeck(static_cast<int>(Deck::Live), true);
@@ -687,7 +707,8 @@ QString RemoteControlServer::getWebPageHtml() const {
         .clip-select-btn {
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            width: 32px;
+            min-width: 32px;
+            padding: 0 8px;
             height: 32px;
             font-size: 12px;
             font-weight: 700;
@@ -881,6 +902,10 @@ QString RemoteControlServer::getWebPageHtml() const {
             sendCommand(`/api/stage?id=${id}`);
         }
 
+        function takeCue(id) {
+            sendCommand(`/api/cue/take?id=${id}`);
+        }
+
         async function pollStatus() {
             try {
                 const res = await fetch('/api/status');
@@ -974,6 +999,12 @@ QString RemoteControlServer::getWebPageHtml() const {
                                 btnStage.textContent = "Stage";
                                 btnStage.onclick = () => stageCue(clip.id);
                                 btnGroup.appendChild(btnStage);
+
+                                const btnTake = document.createElement('button');
+                                btnTake.className = `clip-select-btn btn-to-live ${clip.onLive ? 'active' : ''}`;
+                                btnTake.textContent = "Take";
+                                btnTake.onclick = () => takeCue(clip.id);
+                                btnGroup.appendChild(btnTake);
 
                                 div.appendChild(btnGroup);
                                 clipsList.appendChild(div);

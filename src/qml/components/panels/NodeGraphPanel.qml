@@ -26,4 +26,22 @@ PanelFrame {
         onOutputWindowRequested: AppController.showOutputWindow()
         onFilesDropped: (urls, x, y) => AppController.importFiles(urls.map(u => AppController.localPath(u)), x, y)
     }
+
+    Rectangle {
+        visible: AppController.editingLive
+        anchors.top: parent.top
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.topMargin: Theme.spacingSm
+        implicitWidth: onAirRow.implicitWidth + 2 * Theme.spacingMd
+        implicitHeight: onAirRow.implicitHeight + Theme.spacingSm
+        radius: Theme.radiusSm
+        color: Theme.destructive
+
+        ThemedLabel {
+            id: onAirRow
+            anchors.centerIn: parent
+            tone: "default"
+            text: qsTr("ON AIR - edits go to the program output")
+        }
+    }
 }

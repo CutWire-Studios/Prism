@@ -258,6 +258,38 @@ Workflow: catalog, toolbox({name}), apply({ops}).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>The Live cue cannot be deleted. Take another cue first.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete cue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&quot;%1&quot; is on Staging. Delete it?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>That key cannot be used.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 is already assigned to another cue.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Device unavailable</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Missing file: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Missing device: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Clear All</source>
         <translation type="unfinished"></translation>
     </message>
@@ -797,7 +829,23 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>T</source>
+        <source>default</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 %2 s</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transition into this cue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use default</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Preflight check</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -818,50 +866,6 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Delete cue</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Name</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Transition</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Show default</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Duration</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>At end</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Hold</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Loop</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Auto-advance</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Black</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>After</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>When media ends</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1016,7 +1020,7 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Assign a key to each switcher input. The key stages the input; Shift plus the same key stages it and cuts to Live. Click a field, then press the key. Esc cancels, Backspace clears.</source>
+        <source>Assign a key to each cue. The key stages the cue; Shift plus the same key stages it and takes it. Click a field, then press the key. Esc cancels, Backspace clears.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1122,6 +1126,69 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Mid / high</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>InspectorCueForm</name>
+    <message>
+        <source>Cue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Notes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transition in</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use default</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Duration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>At end</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hold</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Loop</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Auto-advance</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Black</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>After</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>When media ends</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hotkey</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2003,6 +2070,10 @@ low/mid/high · beat</source>
         <source>Press a cue&apos;s edit button to work on its graph</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>ON AIR - edits go to the program output</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>NodeMinimap</name>
@@ -2506,6 +2577,35 @@ low/mid/high · beat</source>
     </message>
 </context>
 <context>
+    <name>PreflightDialog</name>
+    <message>
+        <source>Preflight check</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No missing media or devices in any cue.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n problem(s) found across the cues.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Missing file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Missing device</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ProcessBody</name>
     <message>
         <source>PROCESS</source>
@@ -2764,6 +2864,14 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
     </message>
     <message>
         <source>%1 fps</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Move cue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit cue</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3970,7 +4078,19 @@ Technical detail: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Add cue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>%1 copy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Duplicate cue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove cue</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -4357,7 +4477,15 @@ Continue anyway? Your phone may not be able to connect.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Time</source>
+        <source>Default</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Default transition</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Default time</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
