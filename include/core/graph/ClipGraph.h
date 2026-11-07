@@ -112,6 +112,7 @@ public:
         QSizeF size;
         QString title;
         QVariantMap params;
+        quint64 group = 0;      // owning Group (0 = none); a node is in at most one group
     };
 
     struct Edge {
@@ -131,6 +132,25 @@ public:
         QString title;
         QString color;
         QString comment;
+    };
+
+    /// A view-only collapse of several nodes. Members stay in the graph with their edges, so
+    /// evaluation ignores groups; a collapsed group is drawn as one box at @ref pos. Ids come from
+    /// the node id space.
+    struct Group {
+        quint64 id = 0;
+        QString name;
+        bool collapsed = false;
+        QPointF pos;            // top-left of the collapsed box
+        QString color;
+    };
+
+    /// A proxy port on a collapsed group: stands for the member port @ref innerPort of @ref node,
+    /// which has an edge crossing the group boundary. @ref port.index counts within its direction.
+    struct GroupPort {
+        Port port;
+        NodeId node = 0;
+        int innerPort = -1;
     };
 
     struct ResolvedStream;
@@ -218,6 +238,21 @@ public:
     /// Nodes whose rectangle lies fully inside the frame.
     QList<NodeId> nodesInsideFrame(quint64 id) const;
 
+    const QList<Group> &groups() const { return m_groups; }
+    const Group *group(quint64 id) const;
+    /// In insertion order.
+    QList<NodeId> groupMembers(quint64 id) const;
+    /// The collapsed box, or for an expanded group the padded bounds of its members.
+    QRectF groupRect(quint64 id) const;
+    /// Proxy ports of a group, one per member port with an edge crossing the boundary.
+    QVector<GroupPort> groupPorts(quint64 id, PortDirection dir) const;
+    /// The proxy a member port is drawn at while its group is collapsed. False when the node is not
+    /// in a collapsed group or the port has no crossing edge.
+    bool groupProxyFor(NodeId node, PortDirection dir, int port, quint64 *group, int *proxy) const;
+    /// True for an edge with both ends inside one collapsed group.
+    bool edgeHiddenByGroup(const Edge &e) const;
+    bool isHiddenByGroup(NodeId id) const;
+
     // ── Mutators ─────────────────────────────────────────────────────────────
     /// NaN x/y pick a staggered position. Process / AudioEffect nodes read
     /// params["effect"] and optional params["params"]; Input nodes read
@@ -243,6 +278,16 @@ public:
     /// Merges the "title", "color" and "comment" keys present in @p props.
     bool setFrameProps(quint64 id, const QVariantMap &props);
 
+    /// Collapsed group of the eligible (not Output, not already grouped) nodes among @p ids, named
+    /// "Group N". Returns 0 with fewer than two.
+    quint64 groupNodes(const QList<NodeId> &ids);
+    bool ungroup(quint64 id);
+    /// Collapsing puts the box at the members' top-left.
+    bool setGroupCollapsed(quint64 id, bool collapsed);
+    /// Merges the "name" and "color" keys present in @p props.
+    bool setGroupProps(quint64 id, const QVariantMap &props);
+    bool setGroupPos(quint64 id, const QPointF &pos);
+
     /// Wire two nodes. kind -1 infers from ports (prefers the video chain).
     /// toPortIndex is the destination slot (Layer / mixer / device).
     bool connectNodes(NodeId from, NodeId to, int kind = -1, int toPortIndex = -1);
@@ -260,8 +305,10 @@ public:
     bool detachNode(NodeId id);
     /// Serialises the given nodes (Output and Audio Output are skipped) and the edges between them.
     QJsonObject copyNodes(const QList<NodeId> &ids) const;
-    /// Recreates a copyNodes() document with new ids, shifted by @p delta. Returns the new ids.
-    QList<NodeId> pasteNodes(const QJsonObject &clip, const QPointF &delta);
+    /// Recreates a copyNodes() document with new ids, shifted by @p delta. Returns the new ids;
+    /// @p newGroups, when given, receives the ids of the groups it recreated.
+    QList<NodeId> pasteNodes(const QJsonObject &clip, const QPointF &delta,
+                             QList<quint64> *newGroups = nullptr);
 
     // ── Validation ───────────────────────────────────────────────────────────
     static bool portsCompatible(PortKind a, PortKind b);
@@ -325,6 +372,9 @@ signals:
     void frameAdded(quint64 id);
     void frameRemoved(quint64 id);
     void frameChanged(quint64 id);
+    void groupAdded(quint64 id);
+    void groupRemoved(quint64 id);
+    void groupChanged(quint64 id);
     void nodeAdded(NodeId id);
     void nodeRemoved(NodeId id);
     void nodeChanged(NodeId id);
@@ -342,6 +392,7 @@ private:
     std::optional<InsertPlan> planInsert(NodeId node, const Edge &e) const;
 
     Node *mutableNode(NodeId id);
+    Group *mutableGroup(quint64 id);
     NodeId allocateId() { return m_nextId++; }
     NodeId createNode(NodeType type, const QPointF &pos, const QVariantMap &params);
     void ensureOutputNode();
@@ -398,6 +449,7 @@ private:
     QList<NodeId> m_order;
     QList<Edge> m_edges;
     QList<Frame> m_frames;
+    QList<Group> m_groups;
     NodeId m_outputNode = 0;
     quint64 m_idBase = 0;
     NodeId m_nextId = 1;

@@ -28,6 +28,8 @@ public:
         ParamsRole,
         InputPortsRole,
         OutputPortsRole,
+        GroupRole,
+        HiddenRole,
     };
 
     explicit ClipGraphNodesModel(ClipGraph *graph, QObject *parent = nullptr);
@@ -59,6 +61,13 @@ public:
         ToNodeRole,
         ToPortRole,
         KindRole,
+        /// Where each end is drawn: the node itself, or the proxy port of its collapsed group
+        /// (then the item is the group id and the port the proxy index).
+        VisFromNodeRole,
+        VisFromPortRole,
+        VisToNodeRole,
+        VisToPortRole,
+        HiddenRole,
     };
 
     explicit ClipGraphEdgesModel(ClipGraph *graph, QObject *parent = nullptr);
@@ -70,6 +79,8 @@ public:
     Q_INVOKABLE int rowOfEdge(quint64 id) const;
 
 private:
+    void refreshVisual(bool force = false);
+
     QPointer<ClipGraph> m_graph;
     QList<EdgeId> m_ids;
 };
@@ -104,6 +115,41 @@ private:
     QList<quint64> m_ids;
 };
 
+class ClipGraphGroupsModel : public QAbstractListModel {
+    Q_OBJECT
+    QML_ELEMENT
+    QML_UNCREATABLE("Owned by ClipGraphController")
+
+public:
+    enum Role {
+        GroupIdRole = Qt::UserRole + 1,
+        XRole,
+        YRole,
+        WidthRole,
+        HeightRole,
+        NameRole,
+        ColorRole,
+        CollapsedRole,
+        MemberCountRole,
+        InputPortsRole,
+        OutputPortsRole,
+    };
+
+    explicit ClipGraphGroupsModel(ClipGraph *graph, QObject *parent = nullptr);
+
+    int rowCount(const QModelIndex &parent = {}) const override;
+    QVariant data(const QModelIndex &index, int role) const override;
+    QHash<int, QByteArray> roleNames() const override;
+
+    Q_INVOKABLE int rowOfGroup(quint64 id) const;
+
+private:
+    void refreshAll();
+
+    QPointer<ClipGraph> m_graph;
+    QList<quint64> m_ids;
+};
+
 /// QML-facing facade over ClipGraph: undoable edits, selection and the
 /// two-step drag-to-connect flow. Ports are addressed as (node, isOutput, index).
 class ClipGraphController : public QObject {
@@ -113,6 +159,9 @@ class ClipGraphController : public QObject {
     Q_PROPERTY(ClipGraphNodesModel *nodes READ nodes CONSTANT)
     Q_PROPERTY(ClipGraphEdgesModel *edges READ edges CONSTANT)
     Q_PROPERTY(ClipGraphFramesModel *frames READ frames CONSTANT)
+    Q_PROPERTY(ClipGraphGroupsModel *groups READ groups CONSTANT)
+    /// The selected group (0 = none). Selecting a group selects all of its members too.
+    Q_PROPERTY(quint64 selectedGroup READ selectedGroup NOTIFY selectedGroupChanged)
     /// The selected frame (0 = none). Frames never join the node selection.
     Q_PROPERTY(quint64 selectedFrame READ selectedFrame NOTIFY selectedFrameChanged)
     Q_PROPERTY(QVariantList selection READ selection NOTIFY selectionChanged)
@@ -130,7 +179,9 @@ public:
     ClipGraphNodesModel *nodes() const { return m_nodes; }
     ClipGraphEdgesModel *edges() const { return m_edges; }
     ClipGraphFramesModel *frames() const { return m_frames; }
+    ClipGraphGroupsModel *groups() const { return m_groups; }
     quint64 selectedFrame() const { return m_selectedFrame; }
+    quint64 selectedGroup() const { return m_selectedGroup; }
     QUndoStack *undoStack() { return &m_undo; }
     QVariantList selection() const;
     bool canUndo() const { return m_undo.canUndo(); }
@@ -197,6 +248,25 @@ public:
     Q_INVOKABLE bool removeFrame(quint64 id);
     Q_INVOKABLE void selectFrame(quint64 id);
 
+    /// Groups are a view over ordinary nodes (see ClipGraph::Group). Each op is one undo step,
+    /// except moveGroup, whose consecutive calls collapse until endMove().
+    /// Groups the selected nodes, collapsed, and selects the group. Returns 0 if fewer than two
+    /// ungrouped nodes are selected.
+    Q_INVOKABLE quint64 groupSelection();
+    /// The selected group, or the one group that contains the whole node selection (0 if none).
+    Q_INVOKABLE quint64 selectionGroup() const;
+    Q_INVOKABLE bool ungroupSelection();
+    Q_INVOKABLE bool ungroup(quint64 id);
+    Q_INVOKABLE bool setGroupCollapsed(quint64 id, bool collapsed);
+    Q_INVOKABLE bool toggleGroupCollapsed(quint64 id);
+    /// Any of "name", "color".
+    Q_INVOKABLE bool setGroupProps(quint64 id, const QVariantMap &props);
+    /// Moves a group by the delta between its current top-left and (x, y), carrying its members.
+    Q_INVOKABLE void moveGroup(quint64 id, qreal x, qreal y);
+    Q_INVOKABLE void selectGroup(quint64 id);
+    /// The group's members as [{id, title}].
+    Q_INVOKABLE QVariantList groupMembers(quint64 id) const;
+
     Q_INVOKABLE void select(const QVariantList &ids, bool additive = false);
     Q_INVOKABLE void clearSelection();
     Q_INVOKABLE bool isSelected(quint64 id) const { return m_selection.contains(id); }
@@ -216,6 +286,7 @@ public:
 signals:
     void selectionChanged();
     void selectedFrameChanged();
+    void selectedGroupChanged();
     void undoStateChanged();
     void connectingChanged();
     void revisionChanged();
@@ -230,13 +301,18 @@ private:
     void init();
     bool sceneRefAllowed(const QVariantMap &params) const;
     void pushSnapshot(const QString &text, const QJsonObject &before);
+    void setSelectedGroup(quint64 id);
+    /// A collapsed group's id and proxy index stand for the member port behind it.
+    bool resolvePort(quint64 &node, bool isOutput, int &port) const;
     QVariantList pasteDocument(const QJsonObject &clip, const QPointF &delta, const QString &text);
 
     ClipGraph *m_graph = nullptr;
     ClipGraphNodesModel *m_nodes = nullptr;
     ClipGraphEdgesModel *m_edges = nullptr;
     ClipGraphFramesModel *m_frames = nullptr;
+    ClipGraphGroupsModel *m_groups = nullptr;
     quint64 m_selectedFrame = 0;
+    quint64 m_selectedGroup = 0;
     quint64 m_dragFrame = 0;
     QList<NodeId> m_dragFrameNodes;
     QUndoStack m_undo;

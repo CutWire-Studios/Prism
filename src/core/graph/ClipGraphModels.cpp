@@ -126,6 +126,44 @@ private:
     const bool *m_mergeFlag;
 };
 
+class GroupMoveCommand : public QUndoCommand {
+public:
+    struct Entry { NodeId id; QPointF from; QPointF to; };
+
+    GroupMoveCommand(ClipGraph *graph, quint64 groupId, const QPointF &from, const QPointF &to,
+                     const QVector<Entry> &entries, const bool *mergeFlag)
+        : QUndoCommand(QStringLiteral("Move group")), m_graph(graph), m_groupId(groupId),
+          m_from(from), m_to(to), m_entries(entries), m_mergeFlag(mergeFlag) {}
+
+    int id() const override { return 6; }
+    void undo() override { apply(m_from, false); }
+    void redo() override { apply(m_to, true); }
+    bool mergeWith(const QUndoCommand *other) override {
+        if (!*m_mergeFlag || other->id() != id()) return false;
+        const auto *o = static_cast<const GroupMoveCommand *>(other);
+        if (o->m_groupId != m_groupId || o->m_entries.size() != m_entries.size()) return false;
+        for (qsizetype i = 0; i < m_entries.size(); ++i)
+            if (m_entries[i].id != o->m_entries[i].id) return false;
+        m_to = o->m_to;
+        for (qsizetype i = 0; i < m_entries.size(); ++i) m_entries[i].to = o->m_entries[i].to;
+        return true;
+    }
+
+private:
+    void apply(const QPointF &groupPos, bool forward) {
+        m_graph->setGroupPos(m_groupId, groupPos);
+        for (const Entry &e : std::as_const(m_entries))
+            m_graph->moveNode(e.id, forward ? e.to : e.from);
+    }
+
+    ClipGraph *m_graph;
+    quint64 m_groupId;
+    QPointF m_from;
+    QPointF m_to;
+    QVector<Entry> m_entries;
+    const bool *m_mergeFlag;
+};
+
 class FrameResizeCommand : public QUndoCommand {
 public:
     FrameResizeCommand(ClipGraph *graph, quint64 frameId, const QRectF &from, const QRectF &to,
@@ -274,6 +312,8 @@ QVariant ClipGraphNodesModel::data(const QModelIndex &idx, int role) const {
     }
     case InputPortsRole:  return portList(m_graph->inputPorts(id), id);
     case OutputPortsRole: return portList(m_graph->outputPorts(id), id);
+    case GroupRole:       return QVariant::fromValue<quint64>(n->group);
+    case HiddenRole:      return m_graph->isHiddenByGroup(id);
     }
     return {};
 }
@@ -290,6 +330,8 @@ QHash<int, QByteArray> ClipGraphNodesModel::roleNames() const {
         {ParamsRole, "params"},
         {InputPortsRole, "inputPorts"},
         {OutputPortsRole, "outputPorts"},
+        {GroupRole, "group"},
+        {HiddenRole, "hidden"},
     };
 }
 
@@ -376,6 +418,7 @@ ClipGraphEdgesModel::ClipGraphEdgesModel(ClipGraph *graph, QObject *parent)
         beginInsertRows({}, int(m_ids.size()), int(m_ids.size()));
         m_ids.append(id);
         endInsertRows();
+        refreshVisual();
     });
     connect(graph, &ClipGraph::edgeRemoved, this, [this](EdgeId id) {
         const int row = rowOfEdge(id);
@@ -383,11 +426,16 @@ ClipGraphEdgesModel::ClipGraphEdgesModel(ClipGraph *graph, QObject *parent)
         beginRemoveRows({}, row, row);
         m_ids.removeAt(row);
         endRemoveRows();
+        refreshVisual();
     });
     connect(graph, &ClipGraph::edgeChanged, this, [this](EdgeId id) {
         const int row = rowOfEdge(id);
         if (row >= 0) emit dataChanged(index(row), index(row));
+        refreshVisual();
     });
+    connect(graph, &ClipGraph::groupAdded, this, [this] { refreshVisual(); });
+    connect(graph, &ClipGraph::groupRemoved, this, [this] { refreshVisual(true); });
+    connect(graph, &ClipGraph::groupChanged, this, [this] { refreshVisual(); });
     connect(graph, &ClipGraph::graphReset, this, [this] {
         beginResetModel();
         m_ids.clear();
@@ -395,6 +443,12 @@ ClipGraphEdgesModel::ClipGraphEdgesModel(ClipGraph *graph, QObject *parent)
             m_ids.append(e.id);
         endResetModel();
     });
+}
+
+void ClipGraphEdgesModel::refreshVisual(bool force) {
+    if (m_ids.isEmpty() || (!force && m_graph->groups().isEmpty())) return;
+    emit dataChanged(index(0), index(int(m_ids.size()) - 1),
+                     {VisFromNodeRole, VisFromPortRole, VisToNodeRole, VisToPortRole, HiddenRole});
 }
 
 int ClipGraphEdgesModel::rowCount(const QModelIndex &parent) const {
@@ -416,6 +470,22 @@ QVariant ClipGraphEdgesModel::data(const QModelIndex &idx, int role) const {
     case ToNodeRole:   return QVariant::fromValue<quint64>(e->to);
     case ToPortRole:   return e->toPort;
     case KindRole:     return int(e->kind);
+    case VisFromNodeRole:
+    case VisFromPortRole:
+    case VisToNodeRole:
+    case VisToPortRole: {
+        const bool from = role == VisFromNodeRole || role == VisFromPortRole;
+        const bool wantNode = role == VisFromNodeRole || role == VisToNodeRole;
+        const NodeId nid = from ? e->from : e->to;
+        const int port = from ? e->fromPort : e->toPort;
+        quint64 group = 0;
+        int proxy = 0;
+        const bool proxied = m_graph->groupProxyFor(
+            nid, from ? ClipGraph::PortDirection::Out : ClipGraph::PortDirection::In, port, &group, &proxy);
+        if (wantNode) return QVariant::fromValue<quint64>(proxied ? group : nid);
+        return proxied ? proxy : port;
+    }
+    case HiddenRole:   return m_graph->edgeHiddenByGroup(*e);
     }
     return {};
 }
@@ -428,6 +498,121 @@ QHash<int, QByteArray> ClipGraphEdgesModel::roleNames() const {
         {ToNodeRole, "toNode"},
         {ToPortRole, "toPort"},
         {KindRole, "kind"},
+        {VisFromNodeRole, "visFromNode"},
+        {VisFromPortRole, "visFromPort"},
+        {VisToNodeRole, "visToNode"},
+        {VisToPortRole, "visToPort"},
+        {HiddenRole, "hidden"},
+    };
+}
+
+// ── Groups model ────────────────────────────────────────────────────────────
+
+ClipGraphGroupsModel::ClipGraphGroupsModel(ClipGraph *graph, QObject *parent)
+    : QAbstractListModel(parent), m_graph(graph)
+{
+    for (const ClipGraph::Group &g : graph->groups())
+        m_ids.append(g.id);
+
+    connect(graph, &ClipGraph::groupAdded, this, [this](quint64 id) {
+        beginInsertRows({}, int(m_ids.size()), int(m_ids.size()));
+        m_ids.append(id);
+        endInsertRows();
+    });
+    connect(graph, &ClipGraph::groupRemoved, this, [this](quint64 id) {
+        const int row = rowOfGroup(id);
+        if (row < 0) return;
+        beginRemoveRows({}, row, row);
+        m_ids.removeAt(row);
+        endRemoveRows();
+    });
+    connect(graph, &ClipGraph::groupChanged, this, [this](quint64 id) {
+        const int row = rowOfGroup(id);
+        if (row >= 0) emit dataChanged(index(row), index(row));
+    });
+    connect(graph, &ClipGraph::nodeChanged, this, [this](NodeId id) {
+        const ClipGraph::Node *n = m_graph->node(id);
+        const int row = n && n->group != 0 ? rowOfGroup(n->group) : -1;
+        if (row >= 0)
+            emit dataChanged(index(row), index(row), {XRole, YRole, WidthRole, HeightRole});
+    });
+    connect(graph, &ClipGraph::edgeAdded, this, [this] { refreshAll(); });
+    connect(graph, &ClipGraph::edgeRemoved, this, [this] { refreshAll(); });
+    connect(graph, &ClipGraph::edgeChanged, this, [this] { refreshAll(); });
+    connect(graph, &ClipGraph::graphReset, this, [this] {
+        beginResetModel();
+        m_ids.clear();
+        for (const ClipGraph::Group &g : m_graph->groups())
+            m_ids.append(g.id);
+        endResetModel();
+    });
+}
+
+void ClipGraphGroupsModel::refreshAll() {
+    if (m_ids.isEmpty()) return;
+    emit dataChanged(index(0), index(int(m_ids.size()) - 1),
+                     {HeightRole, MemberCountRole, InputPortsRole, OutputPortsRole});
+}
+
+int ClipGraphGroupsModel::rowCount(const QModelIndex &parent) const {
+    return parent.isValid() ? 0 : int(m_ids.size());
+}
+
+int ClipGraphGroupsModel::rowOfGroup(quint64 id) const {
+    return int(m_ids.indexOf(id));
+}
+
+QVariant ClipGraphGroupsModel::data(const QModelIndex &idx, int role) const {
+    if (!idx.isValid() || idx.row() >= m_ids.size() || !m_graph) return {};
+    const quint64 id = m_ids[idx.row()];
+    const ClipGraph::Group *g = m_graph->group(id);
+    if (!g) return {};
+    const auto portList = [&](ClipGraph::PortDirection dir) {
+        QVariantList out;
+        if (!g->collapsed) return out;
+        for (const ClipGraph::GroupPort &gp : m_graph->groupPorts(id, dir)) {
+            out.append(QVariantMap{
+                {"kind", int(gp.port.kind)},
+                {"direction", int(gp.port.direction)},
+                {"index", gp.port.index},
+                {"label", gp.port.label},
+                {"slotted", false},
+                {"x", gp.port.pos.x()},
+                {"y", gp.port.pos.y()},
+                {"connected", true},
+            });
+        }
+        return out;
+    };
+    switch (role) {
+    case GroupIdRole:     return QVariant::fromValue<quint64>(id);
+    case XRole:           return m_graph->groupRect(id).x();
+    case YRole:           return m_graph->groupRect(id).y();
+    case WidthRole:       return m_graph->groupRect(id).width();
+    case HeightRole:      return m_graph->groupRect(id).height();
+    case NameRole:        return g->name;
+    case ColorRole:       return g->color;
+    case CollapsedRole:   return g->collapsed;
+    case MemberCountRole: return int(m_graph->groupMembers(id).size());
+    case InputPortsRole:  return portList(ClipGraph::PortDirection::In);
+    case OutputPortsRole: return portList(ClipGraph::PortDirection::Out);
+    }
+    return {};
+}
+
+QHash<int, QByteArray> ClipGraphGroupsModel::roleNames() const {
+    return {
+        {GroupIdRole, "groupId"},
+        {XRole, "x"},
+        {YRole, "y"},
+        {WidthRole, "width"},
+        {HeightRole, "height"},
+        {NameRole, "name"},
+        {ColorRole, "color"},
+        {CollapsedRole, "collapsed"},
+        {MemberCountRole, "memberCount"},
+        {InputPortsRole, "inputPorts"},
+        {OutputPortsRole, "outputPorts"},
     };
 }
 
@@ -449,6 +634,7 @@ void ClipGraphController::init() {
     m_nodes = new ClipGraphNodesModel(m_graph, this);
     m_edges = new ClipGraphEdgesModel(m_graph, this);
     m_frames = new ClipGraphFramesModel(m_graph, this);
+    m_groups = new ClipGraphGroupsModel(m_graph, this);
     connect(&m_undo, &QUndoStack::indexChanged, this, &ClipGraphController::undoStateChanged);
     connect(&m_undo, &QUndoStack::cleanChanged, this, &ClipGraphController::undoStateChanged);
     connect(m_graph, &ClipGraph::graphReset, this, [this] {
@@ -460,10 +646,14 @@ void ClipGraphController::init() {
             m_selectedFrame = 0;
             emit selectedFrameChanged();
         }
+        if (m_selectedGroup != 0 && !m_graph->group(m_selectedGroup)) setSelectedGroup(0);
     });
     connect(m_graph, &ClipGraph::nodeRemoved, this, [this](NodeId id) {
         if (m_selection.remove(id)) emit selectionChanged();
         if (m_pending.node == id) cancelConnection();
+    });
+    connect(m_graph, &ClipGraph::groupRemoved, this, [this](quint64 id) {
+        if (m_selectedGroup == id) setSelectedGroup(0);
     });
     auto bump = [this] { ++m_revision; emit revisionChanged(); };
     connect(m_graph, &ClipGraph::changed, this, bump);
@@ -613,6 +803,7 @@ void ClipGraphController::selectFrame(quint64 id) {
         m_selection.clear();
         emit selectionChanged();
     }
+    if (id != 0) setSelectedGroup(0);
     if (id == m_selectedFrame) return;
     m_selectedFrame = id;
     emit selectedFrameChanged();
@@ -659,7 +850,19 @@ bool ClipGraphController::setSourceDescriptor(quint64 id, const SourceDescriptor
     return setSource(id, ClipGraph::sourceToMap(desc));
 }
 
+bool ClipGraphController::resolvePort(quint64 &node, bool isOutput, int &port) const {
+    const ClipGraph::Group *g = m_graph->hasNode(node) ? nullptr : m_graph->group(node);
+    if (!g || !g->collapsed) return true;
+    const auto proxies = m_graph->groupPorts(node, isOutput ? ClipGraph::PortDirection::Out
+                                                            : ClipGraph::PortDirection::In);
+    if (port < 0 || port >= proxies.size()) return false;
+    node = proxies[port].node;
+    port = proxies[port].innerPort;
+    return true;
+}
+
 bool ClipGraphController::beginConnection(quint64 node, bool isOutput, int port) {
+    if (!resolvePort(node, isOutput, port)) return false;
     const auto ports = isOutput ? m_graph->outputPorts(node) : m_graph->inputPorts(node);
     if (port < 0 || port >= ports.size()) return false;
     m_pending = {node, isOutput, port};
@@ -669,6 +872,7 @@ bool ClipGraphController::beginConnection(quint64 node, bool isOutput, int port)
 
 bool ClipGraphController::canConnect(quint64 node, bool isOutput, int port) const {
     if (m_pending.node == 0 || m_pending.output == isOutput) return false;
+    if (!resolvePort(node, isOutput, port)) return false;
     return isOutput
         ? m_graph->canConnectPorts(node, port, m_pending.node, m_pending.port)
         : m_graph->canConnectPorts(m_pending.node, m_pending.port, node, port);
@@ -677,6 +881,7 @@ bool ClipGraphController::canConnect(quint64 node, bool isOutput, int port) cons
 bool ClipGraphController::finishConnection(quint64 node, bool isOutput, int port) {
     bool ok = false;
     if (canConnect(node, isOutput, port)) {
+        resolvePort(node, isOutput, port);
         const QJsonObject before = m_graph->toJson();
         ok = isOutput
             ? m_graph->connectPorts(node, port, m_pending.node, m_pending.port)
@@ -776,12 +981,16 @@ bool ClipGraphController::copySelection() {
 QVariantList ClipGraphController::pasteDocument(const QJsonObject &clip, const QPointF &delta,
                                                 const QString &text) {
     const QJsonObject before = m_graph->toJson();
-    const QList<NodeId> created = m_graph->pasteNodes(clip, delta);
+    QList<quint64> newGroups;
+    const QList<NodeId> created = m_graph->pasteNodes(clip, delta, &newGroups);
     QVariantList out;
     for (NodeId id : created) out.append(QVariant::fromValue<quint64>(id));
     if (created.isEmpty()) return out;
     pushSnapshot(text, before);
     select(out);
+    if (newGroups.size() == 1 && m_graph->group(newGroups.first())->collapsed
+        && m_graph->groupMembers(newGroups.first()).size() == created.size())
+        selectGroup(newGroups.first());
     return out;
 }
 
@@ -822,6 +1031,7 @@ void ClipGraphController::select(const QVariantList &ids, bool additive) {
     QSet<NodeId> next = additive ? m_selection : QSet<NodeId>{};
     for (const QVariant &v : ids)
         if (m_graph->hasNode(v.toULongLong())) next.insert(v.toULongLong());
+    setSelectedGroup(0);
     if (!next.isEmpty()) selectFrame(0);
     if (next == m_selection) return;
     m_selection = next;
@@ -830,9 +1040,114 @@ void ClipGraphController::select(const QVariantList &ids, bool additive) {
 
 void ClipGraphController::clearSelection() {
     selectFrame(0);
+    setSelectedGroup(0);
     if (m_selection.isEmpty()) return;
     m_selection.clear();
     emit selectionChanged();
+}
+
+void ClipGraphController::setSelectedGroup(quint64 id) {
+    if (id == m_selectedGroup) return;
+    m_selectedGroup = id;
+    emit selectedGroupChanged();
+}
+
+void ClipGraphController::selectGroup(quint64 id) {
+    const ClipGraph::Group *g = m_graph->group(id);
+    if (!g) {
+        setSelectedGroup(0);
+        return;
+    }
+    selectFrame(0);
+    QSet<NodeId> next;
+    for (NodeId nid : m_graph->groupMembers(id)) next.insert(nid);
+    if (next != m_selection) {
+        m_selection = next;
+        emit selectionChanged();
+    }
+    setSelectedGroup(id);
+}
+
+quint64 ClipGraphController::selectionGroup() const {
+    if (m_selectedGroup != 0) return m_selectedGroup;
+    quint64 found = 0;
+    for (NodeId id : m_selection) {
+        const ClipGraph::Node *n = m_graph->node(id);
+        if (!n || n->group == 0 || (found != 0 && n->group != found)) return 0;
+        found = n->group;
+    }
+    return found;
+}
+
+quint64 ClipGraphController::groupSelection() {
+    const QJsonObject before = m_graph->toJson();
+    const quint64 id = m_graph->groupNodes(m_selection.values());
+    if (id == 0) return 0;
+    pushSnapshot(QStringLiteral("Group nodes"), before);
+    selectGroup(id);
+    return id;
+}
+
+bool ClipGraphController::ungroup(quint64 id) {
+    if (!m_graph->group(id)) return false;
+    QVariantList members;
+    for (NodeId nid : m_graph->groupMembers(id)) members.append(QVariant::fromValue<quint64>(nid));
+    const QJsonObject before = m_graph->toJson();
+    m_graph->ungroup(id);
+    pushSnapshot(QStringLiteral("Ungroup nodes"), before);
+    select(members);
+    return true;
+}
+
+bool ClipGraphController::ungroupSelection() {
+    const quint64 id = selectionGroup();
+    return id != 0 && ungroup(id);
+}
+
+bool ClipGraphController::setGroupCollapsed(quint64 id, bool collapsed) {
+    const ClipGraph::Group *g = m_graph->group(id);
+    if (!g) return false;
+    if (g->collapsed == collapsed) return true;
+    const QJsonObject before = m_graph->toJson();
+    m_graph->setGroupCollapsed(id, collapsed);
+    pushSnapshot(collapsed ? QStringLiteral("Collapse group") : QStringLiteral("Expand group"), before);
+    selectGroup(id);
+    return true;
+}
+
+bool ClipGraphController::toggleGroupCollapsed(quint64 id) {
+    const ClipGraph::Group *g = m_graph->group(id);
+    return g && setGroupCollapsed(id, !g->collapsed);
+}
+
+bool ClipGraphController::setGroupProps(quint64 id, const QVariantMap &props) {
+    if (!m_graph->group(id)) return false;
+    const QJsonObject before = m_graph->toJson();
+    m_graph->setGroupProps(id, props);
+    pushSnapshot(QStringLiteral("Edit group"), before);
+    return true;
+}
+
+void ClipGraphController::moveGroup(quint64 id, qreal x, qreal y) {
+    const ClipGraph::Group *g = m_graph->group(id);
+    if (!g) return;
+    const QPointF delta = QPointF(x, y) - m_graph->groupRect(id).topLeft();
+    if (delta.isNull()) return;
+    QVector<GroupMoveCommand::Entry> entries;
+    for (NodeId nid : m_graph->groupMembers(id)) {
+        const ClipGraph::Node *n = m_graph->node(nid);
+        entries.append({nid, n->pos, n->pos + delta});
+    }
+    m_undo.push(new GroupMoveCommand(m_graph, id, g->pos, g->pos + delta, entries, &m_mergeMoves));
+    m_mergeMoves = true;
+}
+
+QVariantList ClipGraphController::groupMembers(quint64 id) const {
+    QVariantList out;
+    for (NodeId nid : m_graph->groupMembers(id))
+        out.append(QVariantMap{{"id", QVariant::fromValue<quint64>(nid)},
+                               {"title", m_graph->node(nid)->title}});
+    return out;
 }
 
 void ClipGraphController::undo() {
@@ -852,6 +1167,7 @@ void ClipGraphController::clearHistory() {
 void ClipGraphController::selectAll() {
     QSet<NodeId> next;
     for (NodeId id : m_graph->nodeIds()) next.insert(id);
+    setSelectedGroup(0);
     if (!next.isEmpty()) selectFrame(0);
     if (next == m_selection) return;
     m_selection = next;

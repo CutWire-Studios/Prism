@@ -96,17 +96,17 @@ Item {
             readonly property var fromItem: {
                 void root.canvas.nodeCount
                 void root.canvas.nodesRevision
-                return root.canvas.nodeItem(model.fromNode)
+                return root.canvas.nodeItem(model.visFromNode)
             }
             readonly property var toItem: {
                 void root.canvas.nodeCount
                 void root.canvas.nodesRevision
-                return root.canvas.nodeItem(model.toNode)
+                return root.canvas.nodeItem(model.visToNode)
             }
             readonly property var portKinds: _fp && _tp ? [_fp.kind, _tp.kind] : null
-            readonly property bool valid: fromItem !== null && toItem !== null
-            readonly property var _fp: fromItem ? fromItem.outputPorts[model.fromPort] : undefined
-            readonly property var _tp: toItem ? toItem.inputPorts[model.toPort] : undefined
+            readonly property bool valid: fromItem !== null && toItem !== null && !model.hidden
+            readonly property var _fp: fromItem ? fromItem.outputPorts[model.visFromPort] : undefined
+            readonly property var _tp: toItem ? toItem.inputPorts[model.visToPort] : undefined
 
             readonly property real p1x: valid ? fromItem.x + (_fp ? _fp.x : fromItem.width) : 0
             readonly property real p1y: valid ? fromItem.y + (_fp ? _fp.y : fromItem.height / 2) : 0

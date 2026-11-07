@@ -60,6 +60,10 @@ Item {
             frameMenu.frameId = frameId
             frameMenu.popup(graphCanvas, screenPos.x, screenPos.y)
         }
+        onGroupMenuRequested: (groupId, screenPos) => {
+            groupMenu.groupId = groupId
+            groupMenu.popup(graphCanvas, screenPos.x, screenPos.y)
+        }
     }
 
     DropArea {
@@ -249,6 +253,11 @@ Item {
             onTriggered: root.controller.frameSelection()
         }
         ThemedMenuItem {
+            visible: !!root.controller && root.controller.selection.length > 1
+            text: qsTr("Group selection (Ctrl+G)")
+            onTriggered: root.controller.groupSelection()
+        }
+        ThemedMenuItem {
             text: qsTr("Delete")
             icon.name: "trash-2"
             enabled: nodeMenu.type !== nodeMenu.nodeTypes.Output || graphCanvas.nodeCount <= 1
@@ -269,6 +278,47 @@ Item {
                 root.controller.disconnectEdge(edgeMenu.edgeId)
                 graphCanvas.selectedEdge = 0
             }
+        }
+        onClosed: graphCanvas.forceActiveFocus()
+    }
+
+    ThemedContextMenu {
+        id: groupMenu
+
+        property var groupId: 0
+        readonly property var item: graphCanvas.groupItem(groupId)
+
+        ThemedMenuItem {
+            text: qsTr("Rename")
+            onTriggered: {
+                if (groupMenu.item)
+                    groupMenu.item.beginNameEdit()
+            }
+        }
+        ThemedMenuItem {
+            text: groupMenu.item && groupMenu.item.collapsed ? qsTr("Expand (Tab)") : qsTr("Collapse (Tab)")
+            onTriggered: root.controller.toggleGroupCollapsed(groupMenu.groupId)
+        }
+        ThemedContextMenu {
+            title: qsTr("Colour")
+            Repeater {
+                model: NodePalette.frameColors
+                ThemedMenuItem {
+                    required property string modelData
+                    text: modelData.length > 0 ? modelData : qsTr("None")
+                    onTriggered: root.controller.setGroupProps(groupMenu.groupId, { color: modelData })
+                }
+            }
+        }
+        ThemedMenuItem {
+            text: qsTr("Ungroup (Ctrl+Shift+G)")
+            onTriggered: root.controller.ungroup(groupMenu.groupId)
+        }
+        ThemedMenuSeparator { }
+        ThemedMenuItem {
+            text: qsTr("Delete group and its nodes")
+            icon.name: "trash-2"
+            onTriggered: root.controller.removeNodes(root.controller.groupMembers(groupMenu.groupId).map(m => m.id))
         }
         onClosed: graphCanvas.forceActiveFocus()
     }

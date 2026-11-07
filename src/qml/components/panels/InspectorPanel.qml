@@ -11,13 +11,14 @@ PanelFrame {
 
     readonly property var graph: AppController.graph
     readonly property var selection: graph ? graph.selection : []
-    readonly property var selectedId: selection.length === 1 ? Number(selection[0]) : 0
+    readonly property real selectedGroup: graph ? Number(graph.selectedGroup) : 0
+    readonly property var selectedId: selectedGroup === 0 && selection.length === 1 ? Number(selection[0]) : 0
 
     readonly property bool showScene: root.selection.length === 0 && AppController.selectedSceneId.length > 0
 
     EmptyState {
         anchors.centerIn: parent
-        visible: root.selectedId === 0 && !root.showScene
+        visible: root.selectedId === 0 && root.selectedGroup === 0 && !root.showScene
         compact: true
         glyph: "sliders-horizontal"
         title: root.selection.length > 1 ? qsTr("%1 nodes selected").arg(root.selection.length)
@@ -42,6 +43,124 @@ PanelFrame {
             InspectorSceneForm {
                 Layout.fillWidth: true
                 visible: root.showScene
+            }
+
+            Repeater {
+                model: root.graph ? root.graph.groups : null
+
+                delegate: ColumnLayout {
+                    id: groupForm
+
+                    required property var groupId
+                    required property string name
+                    required property string color
+                    required property bool collapsed
+                    required property int memberCount
+
+                    Layout.fillWidth: true
+                    visible: Number(groupId) === root.selectedGroup
+                    spacing: Theme.spacingMd
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spacingMd
+
+                        IconGlyph {
+                            glyph: "group"
+                            iconColor: groupForm.color.length > 0 ? groupForm.color : Theme.c.iconGlyph.icon
+                        }
+                        ThemedLabel {
+                            Layout.fillWidth: true
+                            tone: "default"
+                            size: "base"
+                            text: qsTr("Group  #%1").arg(groupForm.groupId)
+                        }
+                        IconButton {
+                            glyph: "trash-2"
+                            tooltip: qsTr("Delete group and its nodes")
+                            onClicked: root.graph.removeNodes(root.graph.groupMembers(groupForm.groupId).map(m => m.id))
+                        }
+                    }
+
+                    ThemedLabel { text: qsTr("Name") }
+                    ThemedTextField {
+                        Layout.fillWidth: true
+                        text: groupForm.name
+                        onEditingFinished: {
+                            if (text !== groupForm.name)
+                                root.graph.setGroupProps(groupForm.groupId, { name: text })
+                        }
+                    }
+
+                    ThemedLabel { text: qsTr("Colour") }
+                    Row {
+                        spacing: Theme.spacingSm
+
+                        Repeater {
+                            model: NodePalette.frameColors
+
+                            delegate: Rectangle {
+                                required property string modelData
+
+                                width: 20
+                                height: 20
+                                radius: 10
+                                color: modelData.length > 0 ? modelData : "transparent"
+                                border.width: groupForm.color === modelData ? 2 : 1
+                                border.color: groupForm.color === modelData ? Theme.primary : Theme.panelBorder
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: root.graph.setGroupProps(groupForm.groupId, { color: parent.modelData })
+                                }
+                            }
+                        }
+                    }
+
+                    ThemedSwitch {
+                        text: qsTr("Collapsed")
+                        checked: groupForm.collapsed
+                        onToggled: root.graph.setGroupCollapsed(groupForm.groupId, checked)
+                    }
+
+                    ThemedLabel { text: qsTr("Members (%1)").arg(groupForm.memberCount) }
+                    Repeater {
+                        model: {
+                            void root.graph.revision
+                            return root.graph.groupMembers(groupForm.groupId)
+                        }
+
+                        delegate: Rectangle {
+                            id: memberRow
+
+                            required property var modelData
+
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 24
+                            radius: Theme.radiusSm
+                            color: memberArea.containsMouse ? Theme.panelAccent : "transparent"
+
+                            ThemedLabel {
+                                anchors.fill: parent
+                                anchors.leftMargin: Theme.spacingSm
+                                tone: "default"
+                                elide: Text.ElideRight
+                                wrapMode: Text.NoWrap
+                                verticalAlignment: Text.AlignVCenter
+                                text: memberRow.modelData.title + "  #" + memberRow.modelData.id
+                            }
+                            MouseArea {
+                                id: memberArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: {
+                                    root.graph.setGroupCollapsed(groupForm.groupId, false)
+                                    root.graph.select([memberRow.modelData.id])
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             Repeater {

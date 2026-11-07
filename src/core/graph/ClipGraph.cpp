@@ -12,6 +12,7 @@
 #include <QUuid>
 
 #include <algorithm>
+#include <set>
 
 using NT = ClipGraph::NodeType;
 using PK = ClipGraph::PortKind;
@@ -43,6 +44,8 @@ constexpr qreal kMixW = 158.0, kMixHdr = 20.0, kMixRow = 22.0, kMixFoot = 26.0;
 constexpr qreal kAoW = 168.0, kAoHdr = 22.0, kAoRow = 20.0;
 constexpr qreal kRerouteW = 22.0, kRerouteH = 16.0;
 constexpr qreal kFrameMinW = 80.0, kFrameMinH = 50.0;
+constexpr qreal kGroupW = 180.0, kGroupHdr = 26.0, kGroupRow = 20.0, kGroupFoot = 8.0;
+constexpr qreal kGroupPad = 24.0;
 
 int processExtraInputs(const ClipGraph::Node &n) {
     const ShaderEffectSpec *spec = ShaderEffects::byId(n.params.value("effect").toInt());
@@ -886,11 +889,21 @@ bool ClipGraph::removeNode(NodeId id) {
     if (!m_nodes.contains(id)) return false;
     if (id == m_outputNode && m_nodes.size() > 1) return false;
 
+    const quint64 groupId = m_nodes.value(id).group;
     removeEdgesOfNode(id);
     m_nodes.remove(id);
     m_order.removeOne(id);
     if (id == m_outputNode) m_outputNode = 0;
     emit nodeRemoved(id);
+    if (groupId != 0) {
+        if (groupMembers(groupId).isEmpty()) {
+            for (qsizetype i = 0; i < m_groups.size(); ++i)
+                if (m_groups[i].id == groupId) { m_groups.removeAt(i); break; }
+            emit groupRemoved(groupId);
+        } else {
+            emit groupChanged(groupId);
+        }
+    }
     afterConnectionsChanged();
     return true;
 }
@@ -900,6 +913,7 @@ void ClipGraph::clear() {
     m_order.clear();
     m_edges.clear();
     m_frames.clear();
+    m_groups.clear();
     m_outputNode = 0;
     emit graphReset();
     emit changed();
@@ -979,6 +993,206 @@ bool ClipGraph::setFrameProps(quint64 id, const QVariantMap &props) {
         return true;
     }
     return false;
+}
+
+// ── Groups ──────────────────────────────────────────────────────────────────
+
+const ClipGraph::Group *ClipGraph::group(quint64 id) const {
+    for (const Group &g : m_groups)
+        if (g.id == id) return &g;
+    return nullptr;
+}
+
+ClipGraph::Group *ClipGraph::mutableGroup(quint64 id) {
+    for (Group &g : m_groups)
+        if (g.id == id) return &g;
+    return nullptr;
+}
+
+QList<NodeId> ClipGraph::groupMembers(quint64 id) const {
+    QList<NodeId> out;
+    for (NodeId nid : m_order) {
+        const Node *n = node(nid);
+        if (n && n->group == id) out.append(nid);
+    }
+    return out;
+}
+
+bool ClipGraph::isHiddenByGroup(NodeId id) const {
+    const Node *n = node(id);
+    if (!n || n->group == 0) return false;
+    const Group *g = group(n->group);
+    return g && g->collapsed;
+}
+
+bool ClipGraph::edgeHiddenByGroup(const Edge &e) const {
+    const Node *a = node(e.from);
+    const Node *b = node(e.to);
+    return a && b && a->group != 0 && a->group == b->group && isHiddenByGroup(e.from);
+}
+
+QRectF ClipGraph::groupRect(quint64 id) const {
+    const Group *g = group(id);
+    if (!g) return {};
+    if (g->collapsed) {
+        const qsizetype rows = std::max<qsizetype>(
+            2, std::max(groupPorts(id, PD::In).size(), groupPorts(id, PD::Out).size()));
+        return QRectF(g->pos, QSizeF(kGroupW, kGroupHdr + rows * kGroupRow + kGroupFoot));
+    }
+    QRectF bounds;
+    for (NodeId nid : groupMembers(id)) {
+        const Node *n = node(nid);
+        bounds = bounds.united(QRectF(n->pos, n->size));
+    }
+    if (bounds.isNull()) return QRectF(g->pos, QSizeF(kGroupW, kGroupHdr));
+    return bounds.adjusted(-kGroupPad, -kGroupPad - kGroupHdr, kGroupPad, kGroupPad);
+}
+
+QVector<ClipGraph::GroupPort> ClipGraph::groupPorts(quint64 id, PortDirection dir) const {
+    QVector<GroupPort> out;
+    if (!group(id)) return out;
+    const auto inGroup = [&](NodeId nid) {
+        const Node *n = node(nid);
+        return n && n->group == id;
+    };
+    // Ordered by member position, then port, so the proxies keep a stable layout.
+    std::set<std::pair<int, int>> inner;
+    for (const Edge &e : m_edges) {
+        const bool fromIn = inGroup(e.from), toIn = inGroup(e.to);
+        if (fromIn == toIn) continue;
+        if (dir == PD::Out && fromIn && e.fromPort >= 0)
+            inner.insert({int(m_order.indexOf(e.from)), e.fromPort});
+        else if (dir == PD::In && toIn && e.toPort >= 0)
+            inner.insert({int(m_order.indexOf(e.to)), e.toPort});
+    }
+    for (const auto &[order, portIndex] : inner) {
+        const NodeId nid = m_order[order];
+        const QVector<Port> ports = dir == PD::In ? inputPorts(nid) : outputPorts(nid);
+        if (portIndex >= ports.size()) continue;
+        const QString title = node(nid)->title;
+        const QString label = ports[portIndex].label;
+        GroupPort gp;
+        gp.node = nid;
+        gp.innerPort = portIndex;
+        gp.port.kind = ports[portIndex].kind;
+        gp.port.direction = dir;
+        gp.port.index = int(out.size());
+        gp.port.label = label.isEmpty() ? title : QStringLiteral("%1 (%2)").arg(label, title);
+        gp.port.pos = QPointF(dir == PD::In ? 0.0 : kGroupW,
+                              kGroupHdr + (gp.port.index + 0.5) * kGroupRow);
+        out.append(gp);
+    }
+    return out;
+}
+
+bool ClipGraph::groupProxyFor(NodeId nid, PortDirection dir, int port, quint64 *groupId,
+                              int *proxy) const {
+    if (!isHiddenByGroup(nid)) return false;
+    const quint64 gid = node(nid)->group;
+    const QVector<GroupPort> ports = groupPorts(gid, dir);
+    for (const GroupPort &gp : ports) {
+        if (gp.node != nid || gp.innerPort != port) continue;
+        *groupId = gid;
+        *proxy = gp.port.index;
+        return true;
+    }
+    return false;
+}
+
+quint64 ClipGraph::groupNodes(const QList<NodeId> &ids) {
+    QList<NodeId> picked;
+    for (NodeId nid : m_order) {
+        const Node *n = node(nid);
+        if (n && ids.contains(nid) && n->type != NT::Output && n->group == 0) picked.append(nid);
+    }
+    if (picked.size() < 2) return 0;
+
+    Group g;
+    g.id = allocateId();
+    g.collapsed = true;
+    for (int i = int(m_groups.size()) + 1;; ++i) {
+        g.name = QStringLiteral("Group %1").arg(i);
+        const bool taken = std::any_of(m_groups.cbegin(), m_groups.cend(),
+                                       [&](const Group &o) { return o.name == g.name; });
+        if (!taken) break;
+    }
+    QRectF bounds;
+    for (NodeId nid : picked) {
+        Node *n = mutableNode(nid);
+        n->group = g.id;
+        bounds = bounds.united(QRectF(n->pos, n->size));
+    }
+    g.pos = bounds.topLeft();
+    m_groups.append(g);
+    emit groupAdded(g.id);
+    for (NodeId nid : picked) notifyNode(nid);
+    notifyChanged();
+    return g.id;
+}
+
+bool ClipGraph::ungroup(quint64 id) {
+    const QList<NodeId> members = groupMembers(id);
+    for (qsizetype i = 0; i < m_groups.size(); ++i) {
+        if (m_groups[i].id != id) continue;
+        m_groups.removeAt(i);
+        for (NodeId nid : members) mutableNode(nid)->group = 0;
+        emit groupRemoved(id);
+        for (NodeId nid : members) notifyNode(nid);
+        notifyChanged();
+        return true;
+    }
+    return false;
+}
+
+bool ClipGraph::setGroupCollapsed(quint64 id, bool collapsed) {
+    Group *g = mutableGroup(id);
+    if (!g) return false;
+    if (g->collapsed == collapsed) return true;
+    const QList<NodeId> members = groupMembers(id);
+    if (collapsed) {
+        QRectF bounds;
+        for (NodeId nid : members) {
+            const Node *n = node(nid);
+            bounds = bounds.united(QRectF(n->pos, n->size));
+        }
+        if (!bounds.isNull()) g->pos = bounds.topLeft();
+    }
+    g->collapsed = collapsed;
+    emit groupChanged(id);
+    for (NodeId nid : members) notifyNode(nid);
+    notifyChanged();
+    return true;
+}
+
+bool ClipGraph::setGroupProps(quint64 id, const QVariantMap &props) {
+    Group *g = mutableGroup(id);
+    if (!g) return false;
+    bool changed = false;
+    if (props.contains("name")) {
+        const QString name = props.value("name").toString().trimmed();
+        if (!name.isEmpty() && name != g->name) {
+            g->name = name;
+            changed = true;
+        }
+    }
+    if (props.contains("color") && props.value("color").toString() != g->color) {
+        g->color = props.value("color").toString();
+        changed = true;
+    }
+    if (changed) {
+        emit groupChanged(id);
+        notifyChanged();
+    }
+    return true;
+}
+
+bool ClipGraph::setGroupPos(quint64 id, const QPointF &pos) {
+    Group *g = mutableGroup(id);
+    if (!g) return false;
+    if (g->pos == pos) return true;
+    g->pos = pos;
+    emit groupChanged(id);
+    return true;
 }
 
 // ── Edges ───────────────────────────────────────────────────────────────────
@@ -1261,10 +1475,27 @@ QJsonObject ClipGraph::copyNodes(const QList<NodeId> &ids) const {
         edges.append(QJsonObject{{"from", int(from)}, {"fromPort", e.fromPort}, {"to", int(to)},
                                  {"toPort", e.toPort}, {"kind", int(e.kind)}});
     }
-    return QJsonObject{{"originX", minX}, {"originY", minY}, {"nodes", nodes}, {"edges", edges}};
+
+    // A group travels only when all of its members were asked for.
+    QJsonArray groups;
+    for (const Group &g : m_groups) {
+        const QList<NodeId> all = groupMembers(g.id);
+        const bool whole = std::all_of(all.cbegin(), all.cend(), [&](NodeId id) { return wanted.contains(id); });
+        QJsonArray members;
+        for (NodeId id : all)
+            if (const qsizetype i = picked.indexOf(id); i >= 0) members.append(int(i));
+        if (!whole || members.isEmpty()) continue;
+        groups.append(QJsonObject{{"name", g.name}, {"collapsed", g.collapsed}, {"color", g.color},
+                                  {"x", g.pos.x()}, {"y", g.pos.y()}, {"members", members}});
+    }
+
+    QJsonObject clip{{"originX", minX}, {"originY", minY}, {"nodes", nodes}, {"edges", edges}};
+    if (!groups.isEmpty()) clip["groups"] = groups;
+    return clip;
 }
 
-QList<NodeId> ClipGraph::pasteNodes(const QJsonObject &clip, const QPointF &delta) {
+QList<NodeId> ClipGraph::pasteNodes(const QJsonObject &clip, const QPointF &delta,
+                                    QList<quint64> *newGroups) {
     QList<NodeId> created;
     for (const QJsonValue &v : clip["nodes"].toArray()) {
         const QJsonObject o = v.toObject();
@@ -1286,6 +1517,27 @@ QList<NodeId> ClipGraph::pasteNodes(const QJsonObject &clip, const QPointF &delt
         if (from < 0 || to < 0 || from >= created.size() || to >= created.size()) continue;
         connectPortsRaw(created[from], o["fromPort"].toInt(-1), created[to], o["toPort"].toInt(-1),
                         EdgeKind(o["kind"].toInt()));
+    }
+    for (const QJsonValue &v : clip["groups"].toArray()) {
+        const QJsonObject o = v.toObject();
+        QList<NodeId> members;
+        for (const QJsonValue &m : o["members"].toArray()) {
+            const int i = m.toInt(-1);
+            if (i >= 0 && i < created.size() && created[i] != 0 && node(created[i])->group == 0)
+                members.append(created[i]);
+        }
+        if (members.isEmpty()) continue;
+        Group g;
+        g.id = allocateId();
+        g.name = o["name"].toString();
+        g.collapsed = o["collapsed"].toBool();
+        g.color = o["color"].toString();
+        g.pos = QPointF(o["x"].toDouble(), o["y"].toDouble()) + delta;
+        for (NodeId id : members) mutableNode(id)->group = g.id;
+        m_groups.append(g);
+        emit groupAdded(g.id);
+        for (NodeId id : members) notifyNode(id);
+        if (newGroups) newGroups->append(g.id);
     }
     if (!created.isEmpty()) {
         ensureOutputNode();
@@ -2009,6 +2261,7 @@ QJsonObject ClipGraph::toJson() const {
         o["id"] = (qint64)n.id;
         o["posX"] = n.pos.x();
         o["posY"] = n.pos.y();
+        if (n.group != 0) o["group"] = (qint64)n.group;
         switch (n.type) {
         case NT::Input:             inputNodes.append(o); break;
         case NT::Process:
@@ -2058,6 +2311,13 @@ QJsonObject ClipGraph::toJson() const {
                                       {"comment", f.comment}});
         root["frames"] = frames;
     }
+    if (!m_groups.isEmpty()) {
+        QJsonArray groups;
+        for (const Group &g : m_groups)
+            groups.append(QJsonObject{{"id", (qint64)g.id}, {"name", g.name}, {"collapsed", g.collapsed},
+                                      {"x", g.pos.x()}, {"y", g.pos.y()}, {"color", g.color}});
+        root["groups"] = groups;
+    }
     root["masterAudioNodes"] = masterAudioNodes;
     root["masterAudioInputNodes"] = masterAudioInputNodes;
     root["masterAudioCaptureNodes"] = masterAudioCaptureNodes;
@@ -2083,6 +2343,7 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
     m_order.clear();
     m_edges.clear();
     m_frames.clear();
+    m_groups.clear();
     m_outputNode = 0;
     m_nextId = m_idBase + 1;
 
@@ -2104,6 +2365,7 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         n.type = type;
         n.pos = QPointF(obj["posX"].toDouble(), obj["posY"].toDouble());
         n.params = params;
+        n.group = (quint64)obj["group"].toInteger();
         if (type != NT::Input && !obj["name"].toString().isEmpty()) n.params["name"] = obj["name"].toString();
         if (obj["expressions"].isObject()) n.params["expressions"] = obj["expressions"].toObject().toVariantMap();
         refreshNode(n);
@@ -2290,6 +2552,19 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         loadedFrames.append(f);
     }
 
+    QList<Group> loadedGroups;
+    for (const QJsonValue &val : state["groups"].toArray()) {
+        const QJsonObject obj = val.toObject();
+        Group g;
+        g.id = (quint64)obj["id"].toInteger();
+        g.name = obj["name"].toString();
+        g.collapsed = obj["collapsed"].toBool();
+        g.pos = QPointF(obj["x"].toDouble(), obj["y"].toDouble());
+        g.color = obj["color"].toString();
+        maxId = std::max(maxId, g.id);
+        loadedGroups.append(g);
+    }
+
     m_nextId = std::max({maxId + 1, (NodeId)state["nextId"].toInteger(0), NodeId(m_idBase + 1)});
 
     QSet<quint64> usedFrameIds;
@@ -2298,6 +2573,20 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         usedFrameIds.insert(f.id);
         m_frames.append(f);
     }
+
+    // A group needs a unique id and at least one member; members of a dropped group are released.
+    QSet<quint64> usedGroupIds;
+    for (const Group &g : std::as_const(loadedGroups)) {
+        const bool clash = g.id == 0 || m_nodes.contains(g.id) || frame(g.id) || usedGroupIds.contains(g.id);
+        const bool hasMember = !clash && std::any_of(m_nodes.cbegin(), m_nodes.cend(),
+                                                     [&](const Node &n) { return n.group == g.id; });
+        if (!hasMember) continue;
+        usedGroupIds.insert(g.id);
+        m_groups.append(g);
+    }
+    for (Node &n : m_nodes)
+        if (n.group != 0 && !usedGroupIds.contains(n.group)) n.group = 0;
+    if (m_nodes.contains(m_outputNode)) m_nodes[m_outputNode].group = 0;
 
     for (const QJsonValue &val : state["connections"].toArray()) {
         const QJsonObject obj = val.toObject();
@@ -2326,6 +2615,8 @@ QJsonObject ClipGraph::snapshot(const std::function<double(NodeId)> &modulatorVa
         extra.insert(QStringLiteral("type"), type);
         extra.insert(QStringLiteral("x"), n.pos.x());
         extra.insert(QStringLiteral("y"), n.pos.y());
+        if (n.group != 0)
+            extra.insert(QStringLiteral("group"), QString::number(n.group));
         const QVariantMap exprs = n.params.value("expressions").toMap();
         if (!exprs.isEmpty())
             extra.insert(QStringLiteral("expressions"), QJsonObject::fromVariantMap(exprs));
@@ -2414,6 +2705,18 @@ QJsonObject ClipGraph::snapshot(const std::function<double(NodeId)> &modulatorVa
                                       {QStringLiteral("h"), f.rect.height()},
                                       {QStringLiteral("comment"), f.comment}});
         result.insert(QStringLiteral("frames"), frames);
+    }
+    if (!m_groups.isEmpty()) {
+        QJsonArray groups;
+        for (const Group &g : m_groups) {
+            QJsonArray members;
+            for (NodeId id : groupMembers(g.id)) members.append(QString::number(id));
+            groups.append(QJsonObject{{QStringLiteral("id"), QString::number(g.id)},
+                                      {QStringLiteral("name"), g.name},
+                                      {QStringLiteral("collapsed"), g.collapsed},
+                                      {QStringLiteral("members"), members}});
+        }
+        result.insert(QStringLiteral("groups"), groups);
     }
     return result;
 }

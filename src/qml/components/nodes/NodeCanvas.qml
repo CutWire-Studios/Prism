@@ -8,7 +8,8 @@ import Prism
 // Pointer map: wheel zooms about the cursor (trackpad scroll pans, Ctrl+scroll zooms), middle
 // drag or Space+drag pans, pinch zooms, left drag on empty space rubber-bands, a drag from a port
 // wires a connection, and a click on a wire selects it. Alt+click or double-click on a wire
-// splices in a reroute; Shift+F wraps the selection in a frame.
+// splices in a reroute; Shift+F wraps the selection in a frame. Ctrl+G groups the selection into
+// a collapsed group, Ctrl+Shift+G ungroups, and Tab (with a group selected) collapses or expands it.
 FocusScope {
     id: root
 
@@ -61,6 +62,7 @@ FocusScope {
     signal nodeMenuRequested(var item, point worldPos, point screenPos)
     signal edgeMenuRequested(var edgeId, point screenPos)
     signal frameMenuRequested(var frameId, point screenPos)
+    signal groupMenuRequested(var groupId, point screenPos)
     signal addMenuRequested(point screenPos, point worldPos)
     // Space was tapped (pressed and released without a pan drag).
     signal quickAddRequested(point screenPos, point worldPos)
@@ -115,7 +117,16 @@ FocusScope {
         let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
         for (let i = 0; i < nodeRepeater.count; ++i) {
             const it = nodeRepeater.itemAt(i)
-            if (!it)
+            if (!it || !it.visible)
+                continue
+            x0 = Math.min(x0, it.x)
+            y0 = Math.min(y0, it.y)
+            x1 = Math.max(x1, it.x + it.width)
+            y1 = Math.max(y1, it.y + it.height)
+        }
+        for (let i = 0; i < groupRepeater.count; ++i) {
+            const it = groupRepeater.itemAt(i)
+            if (!it || !it.collapsed)
                 continue
             x0 = Math.min(x0, it.x)
             y0 = Math.min(y0, it.y)
@@ -147,6 +158,11 @@ FocusScope {
     }
 
     function frameSelection() {
+        const grouped = controller && controller.selectedGroup != 0 ? groupItem(controller.selectedGroup) : null
+        if (grouped && grouped.collapsed) {
+            frameRect(Qt.rect(grouped.x, grouped.y, grouped.width, grouped.height))
+            return
+        }
         const sel = controller ? controller.selection : []
         if (sel.length === 0) {
             fitAll()
@@ -193,7 +209,7 @@ FocusScope {
             const v = viewRect
             for (let i = 0; i < nodeRepeater.count; ++i) {
                 const it = nodeRepeater.itemAt(i)
-                if (!it || (it.type !== NodePalette.nodeType.Input && it.type !== NodePalette.nodeType.Process))
+                if (!it || !it.visible || (it.type !== NodePalette.nodeType.Input && it.type !== NodePalette.nodeType.Process))
                     continue
                 if (it.x < v.x + v.width && it.x + it.width > v.x && it.y < v.y + v.height && it.y + it.height > v.y)
                     ids.push(it.nodeId)
@@ -224,8 +240,18 @@ FocusScope {
             return null
         const row = controller.nodes.rowOfNode(id)
         if (row < 0)
-            return null
+            return groupItem(id)
         const it = nodeRepeater.itemAt(row)
+        return it ? it : null
+    }
+
+    // Group ids share the node id space, so nodeItem() falls back to this: a collapsed group stands
+    // in for its members as the end of their wires.
+    function groupItem(id) {
+        if (!controller)
+            return null
+        const row = controller.groups.rowOfGroup(id)
+        const it = row < 0 ? null : groupRepeater.itemAt(row)
         return it ? it : null
     }
 
@@ -351,9 +377,10 @@ FocusScope {
     // The port within reach of a world position, or null.
     function portAt(wp) {
         const reach = 10
-        for (let i = 0; i < nodeRepeater.count; ++i) {
-            const it = nodeRepeater.itemAt(i)
-            if (!it || wp.x < it.x - reach || wp.x > it.x + it.width + reach
+        const total = nodeRepeater.count + groupRepeater.count
+        for (let i = 0; i < total; ++i) {
+            const it = i < nodeRepeater.count ? nodeRepeater.itemAt(i) : groupRepeater.itemAt(i - nodeRepeater.count)
+            if (!it || !it.visible || wp.x < it.x - reach || wp.x > it.x + it.width + reach
                     || wp.y < it.y - reach || wp.y > it.y + it.height + reach)
                 continue
             for (let o = 0; o < 2; ++o) {
@@ -488,6 +515,15 @@ FocusScope {
         } else if (event.key === Qt.Key_Escape) {
             cancelConnection()
             selectedEdge = 0
+            event.accepted = true
+        } else if (ctrl && event.key === Qt.Key_G) {
+            if (shift)
+                controller.ungroupSelection()
+            else
+                controller.groupSelection()
+            event.accepted = true
+        } else if (event.key === Qt.Key_Tab && !ctrl && controller.selectedGroup != 0) {
+            controller.toggleGroupCollapsed(controller.selectedGroup)
             event.accepted = true
         } else if (event.key === Qt.Key_Tab && !ctrl) {
             const at = isNaN(hoverPos.x) ? Qt.point(width / 2, height / 2) : hoverPos
@@ -692,7 +728,7 @@ FocusScope {
             const ids = baseSelection.slice()
             for (let i = 0; i < nodeRepeater.count; ++i) {
                 const it = nodeRepeater.itemAt(i)
-                if (it && it.x < b.x && it.x + it.width > a.x && it.y < b.y && it.y + it.height > a.y
+                if (it && it.visible && it.x < b.x && it.x + it.width > a.x && it.y < b.y && it.y + it.height > a.y
                         && ids.indexOf(it.nodeId) < 0)
                     ids.push(it.nodeId)
             }
@@ -733,6 +769,15 @@ FocusScope {
             id: frameRepeater
             model: root.controller ? root.controller.frames : null
             delegate: FrameItem {
+                canvas: root
+            }
+        }
+
+        // Expanded groups draw a backdrop (below the wires), collapsed ones a card (above them).
+        Repeater {
+            id: groupRepeater
+            model: root.controller ? root.controller.groups : null
+            delegate: GroupItem {
                 canvas: root
             }
         }

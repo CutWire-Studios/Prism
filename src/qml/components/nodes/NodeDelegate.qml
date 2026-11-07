@@ -83,7 +83,10 @@ Item {
     width: model.width
     height: model.height
     z: selected ? 2 : 1
+    // Members of a collapsed group are drawn by the group box instead.
+    visible: !model.hidden
 
+    onVisibleChanged: canvas.scheduleBounds()
     onXChanged: canvas.scheduleBounds()
     onYChanged: canvas.scheduleBounds()
     onWidthChanged: canvas.scheduleBounds()

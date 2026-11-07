@@ -962,6 +962,23 @@ low/mid/high · beat</source>
     </message>
 </context>
 <context>
+    <name>GroupItem</name>
+    <message numerus="yes">
+        <source>%n node(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Expand (Tab)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Collapse (Tab)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>HotkeyEditor</name>
     <message>
         <source>That key cannot be used.</source>
@@ -1601,6 +1618,26 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Group  #%1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete group and its nodes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Colour</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Collapsed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Members (%1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2800,6 +2837,10 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Group selection (Ctrl+G)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Delete</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2809,6 +2850,22 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Rename</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Expand (Tab)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Collapse (Tab)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ungroup (Ctrl+Shift+G)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete group and its nodes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

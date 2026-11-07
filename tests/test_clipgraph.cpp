@@ -145,6 +145,32 @@ class TestClipGraph : public QObject {
                 {"hasAudio", audio}};
     }
 
+    struct Chain {
+        quint64 a = 0, p1 = 0, p2 = 0, p3 = 0, out = 0;
+    };
+
+    // a -> p1 -> p2 -> p3 -> Output, all video; p1..p3 are Flip processes.
+    Chain buildChain(ClipGraphController &c) const {
+        Chain k;
+        k.a = c.addNode(int(NT::Input), 0, 0, canvas("a"));
+        k.p1 = c.addNode(int(NT::Process), 200, 0, {{"effect", 4}});
+        k.p2 = c.addNode(int(NT::Process), 400, 0, {{"effect", 4}});
+        k.p3 = c.addNode(int(NT::Process), 600, 0, {{"effect", 4}});
+        k.out = c.graph()->outputNodeId();
+        ClipGraph *g = c.graph();
+        g->connectNodes(k.a, k.p1);
+        g->connectNodes(k.p1, k.p2);
+        g->connectNodes(k.p2, k.p3);
+        g->connectNodes(k.p3, k.out);
+        return k;
+    }
+
+    static QVariantList ids(std::initializer_list<quint64> list) {
+        QVariantList out;
+        for (quint64 id : list) out.append(QVariant::fromValue<quint64>(id));
+        return out;
+    }
+
 private slots:
     void jsonMatchesStoredFixture() {
         const QJsonObject input = QJsonDocument::fromJson(QByteArray(R"json({
@@ -1357,6 +1383,267 @@ private slots:
         QVERIFY(g.connectPorts(r2, 0, q, 0));
         QVERIFY(!g.canConnectPorts(q, 0, p, 0));
         QCOMPARE(g.evaluateVideoInput(r1).layers.size(), 0);
+    }
+    void groupRoundTripsThroughJson() {
+        ClipGraphController c;
+        const Chain k = buildChain(c);
+        c.select(ids({k.p1, k.p2, k.p3}));
+        const quint64 gid = c.groupSelection();
+        QVERIFY(gid != 0);
+        QCOMPARE(c.selectedGroup(), gid);
+
+        const QJsonObject json = c.graph()->toJson();
+        QCOMPARE(json["groups"].toArray().size(), 1);
+        QCOMPARE(json["groups"].toArray()[0].toObject()["name"].toString(), QStringLiteral("Group 1"));
+
+        ClipGraph g2;
+        QVERIFY(g2.fromJson(json));
+        const ClipGraph::Group *g = g2.group(gid);
+        QVERIFY(g);
+        QVERIFY(g->collapsed);
+        QCOMPARE(g2.groupMembers(gid), (QList<NodeId>{k.p1, k.p2, k.p3}));
+        QCOMPARE(g2.node(k.p2)->group, gid);
+        QCOMPARE(g2.node(k.a)->group, quint64(0));
+        const QString diff = firstDiff(withoutVolatile(json, false), withoutVolatile(g2.toJson(), false));
+        QVERIFY2(diff.isEmpty(), qPrintable(diff));
+
+        QVERIFY(c.ungroupSelection());
+        QVERIFY(c.graph()->groups().isEmpty());
+        QCOMPARE(c.graph()->node(k.p2)->group, quint64(0));
+        const QJsonObject plain = c.graph()->toJson();
+        QVERIFY(!plain.contains("groups"));
+        ClipGraph g3;
+        QVERIFY(g3.fromJson(plain));
+        QVERIFY(g3.groups().isEmpty());
+    }
+
+    void groupingDoesNotChangeEvaluation() {
+        ClipGraphController c;
+        const Chain k = buildChain(c);
+        ClipGraph *g = c.graph();
+        const auto key = [&] {
+            const auto s = g->evaluateVideoInput(g->producerForInput(k.out, 0));
+            return ProcessEffects::sourceEffectsKey(s.layers.first().sourceEffects)
+                + ProcessEffects::sourceEffectsParamsKey(s.layers.first().sourceEffects);
+        };
+        const QString before = key();
+        QVERIFY(!before.isEmpty());
+        const int edges = g->edges().size();
+
+        c.select(ids({k.p1, k.p2, k.p3}));
+        const quint64 gid = c.groupSelection();
+        QVERIFY(g->group(gid)->collapsed);
+        QCOMPARE(key(), before);
+        QCOMPARE(g->edges().size(), edges);
+
+        QVERIFY(c.setGroupCollapsed(gid, false));
+        QCOMPARE(key(), before);
+        QVERIFY(c.ungroup(gid));
+        QCOMPARE(key(), before);
+        QCOMPARE(g->edges().size(), edges);
+    }
+
+    void groupCollapseAndUngroupUndoInOneStep() {
+        ClipGraphController c;
+        const Chain k = buildChain(c);
+        ClipGraph *g = c.graph();
+        c.select(ids({k.p1, k.p2, k.p3}));
+        c.clearHistory();
+
+        const quint64 gid = c.groupSelection();
+        QVERIFY(gid != 0);
+        c.undo();
+        QVERIFY(g->groups().isEmpty());
+        QCOMPARE(g->node(k.p1)->group, quint64(0));
+        QVERIFY(!c.canUndo());
+        c.redo();
+        QVERIFY(g->group(gid));
+
+        QVERIFY(c.toggleGroupCollapsed(gid));
+        QVERIFY(!g->group(gid)->collapsed);
+        c.undo();
+        QVERIFY(g->group(gid));
+        QVERIFY(g->group(gid)->collapsed);
+        c.redo();
+        QVERIFY(!g->group(gid)->collapsed);
+
+        QVERIFY(c.ungroup(gid));
+        QVERIFY(g->groups().isEmpty());
+        c.undo();
+        QVERIFY(g->group(gid));
+        QCOMPARE(g->groupMembers(gid).size(), 3);
+        QVERIFY(!g->group(gid)->collapsed);
+    }
+
+    void movingACollapsedGroupCarriesMembersInOneStep() {
+        ClipGraphController c;
+        const Chain k = buildChain(c);
+        ClipGraph *g = c.graph();
+        c.select(ids({k.p1, k.p2, k.p3}));
+        const quint64 gid = c.groupSelection();
+        c.clearHistory();
+
+        const QPointF p1 = g->node(k.p1)->pos, p3 = g->node(k.p3)->pos;
+        const QRectF box = g->groupRect(gid);
+        c.moveGroup(gid, box.x() + 50, box.y() + 30);
+        c.moveGroup(gid, box.x() + 60, box.y() + 40);
+        c.endMove();
+        QCOMPARE(g->node(k.p1)->pos, p1 + QPointF(60, 40));
+        QCOMPARE(g->node(k.p3)->pos, p3 + QPointF(60, 40));
+        QCOMPARE(g->groupRect(gid).topLeft(), box.topLeft() + QPointF(60, 40));
+
+        c.undo();
+        QCOMPARE(g->node(k.p1)->pos, p1);
+        QCOMPARE(g->node(k.p3)->pos, p3);
+        QCOMPARE(g->groupRect(gid).topLeft(), box.topLeft());
+        QVERIFY(!c.canUndo());
+    }
+
+    void groupBoundaryPortsMapToInnerPorts() {
+        ClipGraphController c;
+        const Chain k = buildChain(c);
+        ClipGraph *g = c.graph();
+        c.select(ids({k.p1, k.p2, k.p3}));
+        const quint64 gid = c.groupSelection();
+
+        const auto ins = g->groupPorts(gid, ClipGraph::PortDirection::In);
+        const auto outs = g->groupPorts(gid, ClipGraph::PortDirection::Out);
+        QCOMPARE(ins.size(), 1);
+        QCOMPARE(outs.size(), 1);
+        QCOMPARE(ins[0].node, k.p1);
+        QCOMPARE(ins[0].innerPort, 0);
+        QCOMPARE(ins[0].port.index, 0);
+        QCOMPARE(ins[0].port.kind, ClipGraph::PortKind::ChainIn);
+        QVERIFY(ins[0].port.label.contains(g->node(k.p1)->title));
+        QCOMPARE(ins[0].port.pos.x(), 0.0);
+        QCOMPARE(outs[0].node, k.p3);
+        QCOMPARE(outs[0].innerPort, 0);
+        QCOMPARE(outs[0].port.kind, ClipGraph::PortKind::ChainOut);
+        QCOMPARE(outs[0].port.pos.x(), g->groupRect(gid).width());
+
+        quint64 proxyGroup = 0;
+        int proxy = -1;
+        QVERIFY(g->groupProxyFor(k.p1, ClipGraph::PortDirection::In, 0, &proxyGroup, &proxy));
+        QCOMPARE(proxyGroup, gid);
+        QCOMPARE(proxy, 0);
+        QVERIFY(g->groupProxyFor(k.p3, ClipGraph::PortDirection::Out, 0, &proxyGroup, &proxy));
+        QVERIFY(!g->groupProxyFor(k.p2, ClipGraph::PortDirection::In, 0, &proxyGroup, &proxy));
+
+        int hidden = 0;
+        for (const ClipGraph::Edge &e : g->edges())
+            if (g->edgeHiddenByGroup(e)) ++hidden;
+        QCOMPARE(hidden, 2);
+
+        QVERIFY(c.setGroupCollapsed(gid, false));
+        QVERIFY(!g->groupProxyFor(k.p1, ClipGraph::PortDirection::In, 0, &proxyGroup, &proxy));
+        for (const ClipGraph::Edge &e : g->edges())
+            QVERIFY(!g->edgeHiddenByGroup(e));
+
+        ClipGraphController lone;
+        const quint64 x = lone.addNode(int(NT::Process), 0, 0, {{"effect", 4}});
+        const quint64 y = lone.addNode(int(NT::Process), 200, 0, {{"effect", 4}});
+        lone.select(ids({x, y}));
+        const quint64 lg = lone.groupSelection();
+        QVERIFY(lone.graph()->groupPorts(lg, ClipGraph::PortDirection::In).isEmpty());
+        QVERIFY(lone.graph()->groupPorts(lg, ClipGraph::PortDirection::Out).isEmpty());
+    }
+
+    void connectingToGroupProxyConnectsInnerPort() {
+        ClipGraphController c;
+        const Chain k = buildChain(c);
+        ClipGraph *g = c.graph();
+        c.select(ids({k.p1, k.p2, k.p3}));
+        const quint64 gid = c.groupSelection();
+        const quint64 b = c.addNode(int(NT::Input), 0, 300, canvas("b"));
+        const int edges = g->edges().size();
+
+        QVERIFY(c.beginConnection(b, true, 0));
+        QVERIFY(c.canConnect(gid, false, 0));
+        QVERIFY(!c.canConnect(gid, false, 5));
+        QVERIFY(c.finishConnection(gid, false, 0));
+        QCOMPARE(g->producerForInput(k.p1, 0), b);
+        QCOMPARE(g->edges().size(), edges);
+        QCOMPARE(g->groupPorts(gid, ClipGraph::PortDirection::In).size(), 1);
+
+        const quint64 q = c.addNode(int(NT::Process), 800, 300, {{"effect", 4}});
+        QVERIFY(c.beginConnection(gid, true, 0));
+        QVERIFY(c.finishConnection(q, false, 0));
+        QCOMPARE(g->producerForInput(q, 0), k.p3);
+
+        QVERIFY(!c.beginConnection(gid, true, 7));
+        c.undo();
+        QVERIFY(g->producerForInput(q, 0) != k.p3);
+    }
+
+    void copyAndPasteOfGroupCreatesNewGroup() {
+        ClipGraphController c;
+        const Chain k = buildChain(c);
+        ClipGraph *g = c.graph();
+        c.select(ids({k.p1, k.p2, k.p3}));
+        const quint64 gid = c.groupSelection();
+        const int edges = g->edges().size();
+
+        QVERIFY(c.copySelection());
+        const QVariantList pasted = c.paste(900, 400);
+        QCOMPARE(pasted.size(), 3);
+        QCOMPARE(g->groups().size(), 2);
+        QCOMPARE(g->edges().size(), edges + 2);
+        const quint64 ng = g->node(pasted[0].toULongLong())->group;
+        QVERIFY(ng != 0);
+        QVERIFY(ng != gid);
+        for (const QVariant &v : pasted) {
+            const quint64 id = v.toULongLong();
+            QVERIFY(id != k.p1 && id != k.p2 && id != k.p3);
+            QCOMPARE(g->node(id)->group, ng);
+        }
+        QVERIFY(g->group(ng)->collapsed);
+        QCOMPARE(c.selectedGroup(), ng);
+        QCOMPARE(g->groupMembers(gid).size(), 3);
+
+        c.undo();
+        QCOMPARE(g->groups().size(), 1);
+
+        c.select(ids({k.p1, k.p2}));
+        QVERIFY(c.copySelection());
+        const QVariantList partial = c.paste(0, 800);
+        QCOMPARE(partial.size(), 2);
+        QCOMPARE(g->node(partial[0].toULongLong())->group, quint64(0));
+        QCOMPARE(g->groups().size(), 1);
+    }
+
+    void deletingACollapsedGroupRemovesMembersAndGroup() {
+        ClipGraphController c;
+        const Chain k = buildChain(c);
+        ClipGraph *g = c.graph();
+        c.select(ids({k.p1, k.p2, k.p3}));
+        const quint64 gid = c.groupSelection();
+        c.clearHistory();
+
+        c.removeNodes(c.selection());
+        QVERIFY(!g->hasNode(k.p2));
+        QVERIFY(g->groups().isEmpty());
+        QCOMPARE(c.selectedGroup(), quint64(0));
+        c.undo();
+        QVERIFY(g->group(gid));
+        QCOMPARE(g->groupMembers(gid).size(), 3);
+        QVERIFY(!c.canUndo());
+    }
+
+    void snapshotListsGroups() {
+        ClipGraphController c;
+        const Chain k = buildChain(c);
+        c.select(ids({k.p1, k.p2, k.p3}));
+        const quint64 gid = c.groupSelection();
+        const QJsonObject snap = c.graph()->snapshot();
+        const QJsonArray groups = snap["groups"].toArray();
+        QCOMPARE(groups.size(), 1);
+        QCOMPARE(groups[0].toObject()["id"].toString(), QString::number(gid));
+        QCOMPARE(groups[0].toObject()["collapsed"].toBool(), true);
+        QCOMPARE(groups[0].toObject()["members"].toArray().size(), 3);
+        int tagged = 0;
+        for (const QJsonValue &v : snap["nodes"].toArray())
+            if (v.toObject()["group"].toString() == QString::number(gid)) ++tagged;
+        QCOMPARE(tagged, 3);
     }
 };
 
