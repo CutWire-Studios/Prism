@@ -28,6 +28,9 @@ Compositor::Compositor(QObject *parent)
     m_frameTimer->setTimerType(Qt::PreciseTimer);
     connect(m_frameTimer, &QTimer::timeout, this, &Compositor::updateFrame);
     m_frameTimer->start(frameIntervalMs(m_programFps));
+    // Create the context here, on the GUI thread: PreviewItem queries it from the scene-graph
+    // render thread, and a context created there can never be made current on this one.
+    isValid();
 }
 
 int Compositor::frameIntervalMs(int fps) {
