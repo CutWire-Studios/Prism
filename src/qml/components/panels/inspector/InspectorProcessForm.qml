@@ -54,6 +54,10 @@ InspectorForm {
         unit: "%"
         value: root.num("opacity", 1) * 100
         onEdited: v => root.setValues({ opacity: v / 100 }, true)
+        expressionName: "params.opacity"
+        expression: root.expr(expressionName)
+        expressionError: root.exprError(expressionName)
+        onExpressionEdited: text => root.setExpr(expressionName, text)
     }
 
     StyleFieldRow {
@@ -80,6 +84,10 @@ InspectorForm {
         decimals: 0
         value: root.num("threshold", 0.25) * 100
         onEdited: v => root.setValues({ threshold: v / 100 }, true)
+        expressionName: "params.threshold"
+        expression: root.expr(expressionName)
+        expressionError: root.exprError(expressionName)
+        onExpressionEdited: text => root.setExpr(expressionName, text)
     }
 
     StyleSliderRow {
@@ -92,6 +100,10 @@ InspectorForm {
         decimals: 0
         value: root.num("smoothness", 0.1) * 100
         onEdited: v => root.setValues({ smoothness: v / 100 }, true)
+        expressionName: "params.smoothness"
+        expression: root.expr(expressionName)
+        expressionError: root.exprError(expressionName)
+        onExpressionEdited: text => root.setExpr(expressionName, text)
     }
 
     StyleSliderRow {
@@ -105,6 +117,10 @@ InspectorForm {
         unit: "px"
         value: root.num("radius", 6)
         onEdited: v => root.setValues({ radius: Math.round(v) }, true)
+        expressionName: "params.radius"
+        expression: root.expr(expressionName)
+        expressionError: root.exprError(expressionName)
+        onExpressionEdited: text => root.setExpr(expressionName, text)
     }
 
     StyleSliderRow {
@@ -117,5 +133,9 @@ InspectorForm {
         decimals: 2
         value: root.num("amount", 1)
         onEdited: v => root.setValues({ amount: v }, true)
+        expressionName: "params.amount"
+        expression: root.expr(expressionName)
+        expressionError: root.exprError(expressionName)
+        onExpressionEdited: text => root.setExpr(expressionName, text)
     }
 }

@@ -55,6 +55,18 @@ Item {
         outputPorts = rawOutputPorts
     }
 
+    property string scriptError: ""
+    function _refreshScriptError() {
+        scriptError = type === NodePalette.nodeType.Script ? AppController.scriptError(nodeId) : ""
+    }
+    Connections {
+        target: AppController
+        function onScriptStatusChanged(id) {
+            if (id === 0 || id == root.nodeId)
+                root._refreshScriptError()
+        }
+    }
+
     readonly property bool selected: canvas.selectedMap[nodeId] === true
     readonly property real headerH: meta.header
     readonly property string headerText: {
@@ -77,6 +89,7 @@ Item {
     onWidthChanged: canvas.scheduleBounds()
     onHeightChanged: canvas.scheduleBounds()
     Component.onCompleted: {
+        _refreshScriptError()
         _syncParams()
         _syncInputs()
         _syncOutputs()
@@ -237,8 +250,7 @@ Item {
     Component { id: masterAudioInputBody; MasterAudioInputBody { node: root } }
     Component { id: masterAudioCaptureBody; MasterAudioCaptureBody { node: root } }
     Component { id: scriptBody; ScriptBody { node: root } }
-    Component { id: audioScriptBody; AudioScriptBody { node: root } }
-    Component { id: triggerBody; TriggerBody { node: root } }
+    Component { id: audioAnalyzerBody; AudioAnalyzerBody { node: root } }
 
     Loader {
         anchors.fill: parent
@@ -254,8 +266,7 @@ Item {
             case NodePalette.nodeType.MasterAudioInput: return masterAudioInputBody
             case NodePalette.nodeType.MasterAudioCapture: return masterAudioCaptureBody
             case NodePalette.nodeType.Script: return scriptBody
-            case NodePalette.nodeType.AudioScript: return audioScriptBody
-            case NodePalette.nodeType.Trigger: return triggerBody
+            case NodePalette.nodeType.AudioAnalyzer: return audioAnalyzerBody
             }
             return null
         }
@@ -279,8 +290,38 @@ Item {
         radius: card.radius
         color: "transparent"
         border.width: 2
+        border.color: Theme.destructive
+        visible: root.scriptError.length > 0
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        radius: card.radius
+        color: "transparent"
+        border.width: 2
         border.color: Theme.primary
         visible: root.selected
+    }
+
+    IconGlyph {
+        id: errorBadge
+        visible: root.scriptError.length > 0
+        x: root.width - width - Theme.spacingSm
+        y: (root.headerH - height) / 2
+        glyph: "triangle-alert"
+        iconSize: Theme.iconSizeMd
+        iconColor: Theme.destructive
+
+        MouseArea {
+            id: badgeHover
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.NoButton
+        }
+        ThemedToolTip {
+            text: root.scriptError
+            visible: badgeHover.containsMouse
+        }
     }
 
     Repeater {

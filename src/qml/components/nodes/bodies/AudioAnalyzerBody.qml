@@ -1,7 +1,7 @@
 import QtQuick
 import Prism
 
-// Audio script: analyser configuration summary.
+// Audio analyzer: analyser configuration summary.
 Item {
     id: root
 

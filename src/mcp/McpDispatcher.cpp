@@ -398,7 +398,7 @@ int parseConnectionKind(const QJsonValue &v)
         return 6;
     if (s == QLatin1String("clip_to_shader_audio") || s == QLatin1String("5"))
         return 5;
-    if (s == QLatin1String("clip_to_audio_script") || s == QLatin1String("12"))
+    if (s == QLatin1String("clip_to_audio_analyzer") || s == QLatin1String("12"))
         return 12;
     if (s == QLatin1String("input_to_master") || s == QLatin1String("7"))
         return 7;

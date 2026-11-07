@@ -312,8 +312,11 @@ public:
     Q_INVOKABLE void linkNodeObsScene(quint64 nodeId, const QString &sceneName);
     /// "Run now" on a Script node; false when the node is not a running Script node.
     Q_INVOKABLE bool runScript(quint64 nodeId);
-    /// "Pulse now" on a Trigger node; false when the node is not a Trigger node.
-    Q_INVOKABLE bool pulseTrigger(quint64 nodeId);
+    /// Error of the Script node's last run (empty when it succeeded) and its print/prism.log output.
+    Q_INVOKABLE QString scriptError(quint64 nodeId) const;
+    Q_INVOKABLE QStringList scriptLog(quint64 nodeId) const;
+    /// Error of node @p nodeId's expression on param @p name ("" when fine).
+    Q_INVOKABLE QString expressionError(quint64 nodeId, const QString &name) const;
     /// 0 while the node has no thumbnail; otherwise a cache-buster for image://nodethumb/<id>?v=<rev>.
     Q_INVOKABLE int nodeThumbnailRevision(quint64 nodeId) const;
     /// Code, output and run hook of the script feeding a Text/Shader node's data input (empty when unconnected).
@@ -409,6 +412,8 @@ public:
     QJsonObject currentSessionJson(const QString &sessionFilePath = {}) const;
 
 signals:
+    /// A Script node's error or log, or a parameter expression error, changed (0 = everything).
+    void scriptStatusChanged(quint64 id);
     /// id 0 means all node thumbnails were dropped.
     void nodeThumbnailChanged(quint64 id);
     // Properties

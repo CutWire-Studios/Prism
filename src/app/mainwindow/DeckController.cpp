@@ -130,7 +130,7 @@ void DeckController::syncMasterAudioInputs() {
                     continue;
 
                 src.routed = g->resolveAudioStreamRoute(id, src.route);
-                if (!src.routed && !g->hasAudioScriptConsumer(id))
+                if (!src.routed && !g->hasAudioAnalyzerConsumer(id))
                     continue;
                 if (src.routed) {
                     QString device;
@@ -317,7 +317,7 @@ void DeckController::applyAudioControllerToDeck(Deck deck, NodeId clipId, bool f
 void DeckController::refreshShaderAudioForActiveDecks() {
     auto *out = m_compositor;
 
-    // Drive every audio-script node from whichever deck owns its source clip, so
+    // Drive every audio-analyzer node from whichever deck owns its source clip, so
     // audio data is produced whether it feeds a shader or a script chain. Each cue
     // has its own runtime, so each deck syncs the runtime of the cue it plays.
     for (const Deck deck : {Deck::Live, Deck::Staging}) {
@@ -328,9 +328,9 @@ void DeckController::refreshShaderAudioForActiveDecks() {
         const double time = isLive(deck) ? out->getCurrentTimeLive() : out->getCurrentTimeStaging();
         const bool playing = isLive(deck) ? out->isPlayingLive() : out->isPlayingStaging();
         if (isLive(deck))
-            rt->syncAllAudioScripts(node, time, playing, g->clipSettings(node).speed, 0, 0.0, false, 1.0);
+            rt->syncAllAudioAnalyzers(node, time, playing, g->clipSettings(node).speed, 0, 0.0, false, 1.0);
         else
-            rt->syncAllAudioScripts(0, 0.0, false, 1.0, node, time, playing, g->clipSettings(node).speed);
+            rt->syncAllAudioAnalyzers(0, 0.0, false, 1.0, node, time, playing, g->clipSettings(node).speed);
     }
 
     // Point each active shader at its (possibly merged) JSON data feed. Shaders

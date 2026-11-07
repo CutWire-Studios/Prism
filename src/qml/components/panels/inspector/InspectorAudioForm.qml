@@ -3,15 +3,15 @@ import QtQuick
 import QtQuick.Layouts
 import Prism
 
-// Mic Input / Audio Capture device picker and the Audio Script analyser settings.
+// Mic Input / Audio Capture device picker and the Audio Analyzer analyser settings.
 InspectorForm {
     id: root
 
-    property bool isScript: false
+    property bool isAnalyzer: false
     property bool isCapture: false
 
     readonly property var fftSizes: [256, 512, 1024, 2048, 4096, 8192]
-    readonly property var devices: isScript ? [] : isCapture ? catalog.playbackDevices() : catalog.inputDevices()
+    readonly property var devices: isAnalyzer ? [] : isCapture ? catalog.playbackDevices() : catalog.inputDevices()
 
     AudioDeviceCatalog {
         id: catalog
@@ -19,7 +19,7 @@ InspectorForm {
 
     StyleFieldRow {
         Layout.fillWidth: true
-        visible: !root.isScript
+        visible: !root.isAnalyzer
         label: root.isCapture ? qsTr("Playback") : qsTr("Input")
         ThemedComboBox {
             Layout.fillWidth: true
@@ -39,7 +39,7 @@ InspectorForm {
 
     StyleFieldRow {
         Layout.fillWidth: true
-        visible: root.isScript
+        visible: root.isAnalyzer
         label: qsTr("FFT size")
         ThemedComboBox {
             Layout.fillWidth: true
@@ -51,7 +51,7 @@ InspectorForm {
 
     StyleFieldRow {
         Layout.fillWidth: true
-        visible: root.isScript
+        visible: root.isAnalyzer
         label: qsTr("Bins")
         ThemedNumberField {
             Layout.fillWidth: true
@@ -64,18 +64,22 @@ InspectorForm {
 
     StyleSliderRow {
         Layout.fillWidth: true
-        visible: root.isScript
+        visible: root.isAnalyzer
         label: qsTr("Smoothing")
         from: 0
         to: 0.98
         step: 0.01
         value: root.params.smoothing
         onEdited: v => root.set({ smoothing: v }, true)
+        expressionName: "smoothing"
+        expression: root.expr(expressionName)
+        expressionError: root.exprError(expressionName)
+        onExpressionEdited: text => root.setExpr(expressionName, text)
     }
 
     StyleSliderRow {
         Layout.fillWidth: true
-        visible: root.isScript
+        visible: root.isAnalyzer
         label: qsTr("Beat")
         from: 0.1
         to: 5
@@ -83,11 +87,15 @@ InspectorForm {
         decimals: 1
         value: root.params.beatSensitivity
         onEdited: v => root.set({ beatSensitivity: v }, true)
+        expressionName: "beatSensitivity"
+        expression: root.expr(expressionName)
+        expressionError: root.exprError(expressionName)
+        onExpressionEdited: text => root.setExpr(expressionName, text)
     }
 
     StyleFieldRow {
         Layout.fillWidth: true
-        visible: root.isScript
+        visible: root.isAnalyzer
         label: qsTr("Low / mid")
         ThemedNumberField {
             Layout.fillWidth: true
@@ -102,7 +110,7 @@ InspectorForm {
 
     StyleFieldRow {
         Layout.fillWidth: true
-        visible: root.isScript
+        visible: root.isAnalyzer
         label: qsTr("Mid / high")
         ThemedNumberField {
             Layout.fillWidth: true

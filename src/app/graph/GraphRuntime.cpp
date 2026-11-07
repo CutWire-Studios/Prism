@@ -8,7 +8,9 @@
 #include "core/scripting/ScriptRuntime.h"
 #include "core/media/AudioLoopbackEnumerator.h"
 
+#include <QCoreApplication>
 #include <QDate>
+#include <QEventLoop>
 #include <QDir>
 #include <QDateTime>
 #include <QElapsedTimer>
@@ -139,6 +141,63 @@ void publishJson(ScriptOutput &out, const QJsonObject &obj) {
     out.version.fetch_add(1, std::memory_order_release);
 }
 
+struct PendingWrite {
+    NodeId id;
+    QString name;
+    QVariant value;
+};
+
+/// State that script threads read or post to. It outlives the GraphRuntime while its scripts wind
+/// down, so it never touches the runtime after `closed` is set.
+struct RuntimeShared {
+    QMutex mutex;
+    bool closed = false;
+    bool wakePosted = false;
+    QHash<NodeId, QVariantMap> params;
+    QHash<NodeId, QVariantMap> bands;
+    NodeId latestBands = 0;
+    QVector<PendingWrite> pending;
+};
+
+QVariant valueAtPath(const QVariantMap &map, const QString &path) {
+    const int dot = path.indexOf(QLatin1Char('.'));
+    if (dot < 0)
+        return map.value(path);
+    return valueAtPath(map.value(path.left(dot)).toMap(), path.mid(dot + 1));
+}
+
+QVariantMap withValueAtPath(QVariantMap map, const QString &path, const QVariant &value) {
+    const int dot = path.indexOf(QLatin1Char('.'));
+    if (dot < 0) {
+        const QVariant old = map.value(path);
+        if (old.typeId() == QMetaType::Int)
+            map.insert(path, int(qRound64(value.toDouble())));
+        else if (old.typeId() == QMetaType::LongLong)
+            map.insert(path, qRound64(value.toDouble()));
+        else if (old.typeId() == QMetaType::Bool)
+            map.insert(path, value.toBool());
+        else
+            map.insert(path, value);
+        return map;
+    }
+    const QString head = path.left(dot);
+    map.insert(head, withValueAtPath(map.value(head).toMap(), path.mid(dot + 1), value));
+    return map;
+}
+
+std::atomic<int> g_retiringScripts{0};
+
+/// Stops a script thread without waiting for it: the runtime aborts at its next VM hook and is
+/// deleted in its own thread, which then ends and is freed once the GUI loop runs again.
+void retireScriptThread(QThread *thread, ScriptRuntime *runtime) {
+    ++g_retiringScripts;
+    QObject::connect(thread, &QThread::finished, [] { --g_retiringScripts; });
+    QObject::connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+    runtime->requestShutdown();
+    runtime->deleteLater();
+    thread->quit();
+}
+
 AudioAnalyzerConfig analyzerConfigFrom(const QVariantMap &p) {
     AudioAnalyzerConfig c;
     c.fftSize = p.value("fftSize", c.fftSize).toInt();
@@ -157,19 +216,22 @@ bool sameConfig(const AudioAnalyzerConfig &a, const AudioAnalyzerConfig &b) {
 }
 
 struct ScriptNode {
-    enum class TrigMode { Interval = 0, TimeOfDay = 1, Manual = 2 };
-
     NT type = NT::Script;
+    NodeId id = 0;
+    std::shared_ptr<RuntimeShared> shared;
     std::shared_ptr<ScriptOutput> output = std::make_shared<ScriptOutput>();
 
     // Lua script
     QThread *thread = nullptr;
     ScriptRuntime *runtime = nullptr;
     QString code;
-    int triggerMode = 0;
+    int runOn = 0;
     int intervalMs = 1000;
+    QString runTime;
+    QString error;
+    QStringList log;
 
-    // Audio script
+    // Audio analyzer
     std::unique_ptr<AudioAnalyzer> analyzer;
     AudioAnalyzerConfig config;
     QString audioPath;
@@ -179,54 +241,34 @@ struct ScriptNode {
     qint64 lastMs = 0;
     qint64 lastSignalMs = 0;
 
-    // Trigger
-    std::unique_ptr<QTimer> trigTimer;
-    TrigMode trigMode = TrigMode::Interval;
-    int trigInterval = 1000;
-    QTime trigTime = QTime(12, 0);
-    qint64 tickCount = 0;
-    QDate lastFireDate;
-
-    explicit ScriptNode(NT t) : type(t) {
+    ScriptNode(NT t, NodeId nodeId, std::shared_ptr<RuntimeShared> sh,
+               const std::shared_ptr<ScriptHost> &host)
+        : type(t), id(nodeId), shared(std::move(sh)) {
         if (type == NT::Script) {
             thread = new QThread();
-            runtime = new ScriptRuntime(output);
+            runtime = new ScriptRuntime(output, host);
             runtime->moveToThread(thread);
             thread->start();
-        } else if (type == NT::AudioScript) {
+        } else if (type == NT::AudioAnalyzer) {
             analyzer = std::make_unique<AudioAnalyzer>();
             clock.start();
-        } else if (type == NT::Trigger) {
-            trigTimer = std::make_unique<QTimer>();
-            QObject::connect(trigTimer.get(), &QTimer::timeout, trigTimer.get(), [this]() { onTrigTick(); });
-            applyTiming();
         }
     }
 
     ~ScriptNode() {
-        if (runtime && thread) {
-            if (thread->isRunning()) {
-                QMetaObject::invokeMethod(runtime, "shutdown", Qt::BlockingQueuedConnection);
-                QMetaObject::invokeMethod(runtime, "deleteLater", Qt::BlockingQueuedConnection);
-                thread->quit();
-                thread->wait();
-            } else {
-                delete runtime;
-            }
-            runtime = nullptr;
-        }
-        delete thread;
-        thread = nullptr;
+        if (runtime && thread)
+            retireScriptThread(thread, runtime);
     }
 
-    void applyScript(const QString &c, int mode, int interval) {
+    void applyScript(const QString &c, int mode, int interval, const QString &time) {
         code = c;
-        triggerMode = mode;
+        runOn = mode;
         intervalMs = interval;
+        runTime = time;
         if (runtime) {
             QMetaObject::invokeMethod(runtime, "applySettings", Qt::QueuedConnection,
-                                      Q_ARG(QString, code), Q_ARG(int, triggerMode),
-                                      Q_ARG(int, intervalMs));
+                                      Q_ARG(QString, code), Q_ARG(int, runOn),
+                                      Q_ARG(int, intervalMs), Q_ARG(QString, runTime));
         }
     }
 
@@ -240,7 +282,7 @@ struct ScriptNode {
             QMetaObject::invokeMethod(runtime, "runNow", Qt::QueuedConnection);
     }
 
-    // ── Audio script ──
+    // ── Audio analyzer ──
     void setAnalyzerConfig(const AudioAnalyzerConfig &c) {
         config = c;
         if (analyzer)
@@ -262,6 +304,16 @@ struct ScriptNode {
             spectrum.append(std::clamp(static_cast<double>(v), 0.0, 1.0));
         obj["spectrum"] = spectrum;
         publishJson(*output, obj);
+        publishBands(obj);
+    }
+
+    void publishBands(const QJsonObject &obj) {
+        QVariantMap b;
+        for (const char *k : {"low", "mid", "high", "level", "beat", "hasAudio"})
+            b.insert(QLatin1String(k), obj.value(QLatin1String(k)).toVariant());
+        QMutexLocker lock(&shared->mutex);
+        shared->bands.insert(id, b);
+        shared->latestBands = id;
     }
 
     void publishSilentOutput() {
@@ -277,6 +329,7 @@ struct ScriptNode {
             spectrum.append(0.0);
         obj["spectrum"] = spectrum;
         publishJson(*output, obj);
+        publishBands(obj);
     }
 
     void setAudioSourcePath(const QString &path) {
@@ -384,55 +437,14 @@ struct ScriptNode {
             publishOutput();
         }
     }
-
-    // ── Trigger ──
-    void setTiming(TrigMode mode, int interval, QTime timeOfDay) {
-        trigMode = mode;
-        trigInterval = std::max(20, interval);
-        trigTime = timeOfDay;
-        applyTiming();
-    }
-
-    void pulse() {
-        ++tickCount;
-        QJsonObject obj;
-        obj["tick"] = static_cast<double>(tickCount);
-        obj["epoch"] = static_cast<double>(QDateTime::currentSecsSinceEpoch());
-        obj["pulse"] = true;
-        publishJson(*output, obj);
-    }
-
-    void applyTiming() {
-        if (!trigTimer)
-            return;
-        trigTimer->stop();
-        lastFireDate = QDate();
-        if (trigMode == TrigMode::Interval)
-            trigTimer->start(trigInterval);
-        else if (trigMode == TrigMode::TimeOfDay)
-            trigTimer->start(1000);
-    }
-
-    void onTrigTick() {
-        if (trigMode == TrigMode::Interval) {
-            pulse();
-        } else if (trigMode == TrigMode::TimeOfDay) {
-            const QDate today = QDate::currentDate();
-            if (lastFireDate == today)
-                return;
-            if (QTime::currentTime() >= trigTime) {
-                lastFireDate = today;
-                pulse();
-            }
-        }
-    }
 };
 
-bool isScriptType(NT t) { return t == NT::Script || t == NT::AudioScript || t == NT::Trigger; }
+bool isScriptType(NT t) { return t == NT::Script || t == NT::AudioAnalyzer; }
 
 } // namespace
 
 struct GraphRuntime::Impl {
+    GraphRuntime *owner = nullptr;
     std::map<NodeId, std::unique_ptr<ScriptNode>> scripts;
     QHash<NodeId, uint> lastMergedVersion;
     mutable QHash<NodeId, std::shared_ptr<ScriptOutput>> dataInputs;
@@ -442,13 +454,142 @@ struct GraphRuntime::Impl {
     QHash<NodeId, QString> thumbKeys;
     QTimer *pollTimer = nullptr;
 
+    std::shared_ptr<RuntimeShared> shared = std::make_shared<RuntimeShared>();
+    std::shared_ptr<ScriptHost> host = std::make_shared<ScriptHost>();
+
+    QHash<NodeId, QVariantMap> expressions;
+    QHash<NodeId, QVariantMap> expressionErrors;
+    QThread *exprThread = nullptr;
+    ScriptRuntime *exprRuntime = nullptr;
+    bool exprBusy = false;
+    QElapsedTimer clock;
+
     ScriptNode *script(NodeId id) const {
         auto it = scripts.find(id);
         return it == scripts.end() ? nullptr : it->second.get();
     }
 
+    void ensureExpressionRuntime() {
+        if (exprRuntime)
+            return;
+        exprThread = new QThread();
+        exprRuntime = new ScriptRuntime(std::make_shared<ScriptOutput>(), host);
+        exprRuntime->moveToThread(exprThread);
+        QObject::connect(exprRuntime, &ScriptRuntime::expressionsEvaluated, owner,
+                         [this](const QVariantList &results) { applyExpressionResults(results); });
+        exprThread->start();
+    }
+
+    void applyExpressionResults(const QVariantList &results) {
+        exprBusy = false;
+        for (const QVariant &rv : results) {
+            const QVariantMap r = rv.toMap();
+            const NodeId id = r.value("node").toULongLong();
+            const QString name = r.value("name").toString();
+            if (!expressions.value(id).contains(name))
+                continue;
+            QString error = r.value("error").toString();
+            if (r.value("ok").toBool()) {
+                const ClipGraph::Node *n = owner->m_graph->node(id);
+                const double v = r.value("value").toDouble();
+                if (n) {
+                    const QVariant cur = valueAtPath(n->params, name);
+                    if (!cur.isValid() || std::abs(cur.toDouble() - v) > 1e-9)
+                        owner->writeParam(id, name, v);
+                }
+            }
+            setExpressionError(id, name, error);
+        }
+    }
+
+    void setExpressionError(NodeId id, const QString &name, const QString &error) {
+        QVariantMap &m = expressionErrors[id];
+        if (m.value(name).toString() == error)
+            return;
+        if (error.isEmpty())
+            m.remove(name);
+        else
+            m[name] = error;
+        if (m.isEmpty())
+            expressionErrors.remove(id);
+        emit owner->scriptStatusChanged(id);
+    }
+
+    void runExpressions() {
+        if (exprBusy || expressions.isEmpty())
+            return;
+        QVariantList jobs;
+        for (auto it = expressions.begin(); it != expressions.end(); ++it)
+            for (auto e = it->begin(); e != it->end(); ++e)
+                jobs.append(QVariantMap{{"node", QVariant::fromValue<qulonglong>(it.key())},
+                                        {"name", e.key()}, {"expr", e.value()}});
+        ensureExpressionRuntime();
+        exprBusy = true;
+        QMetaObject::invokeMethod(exprRuntime, "evaluateExpressions", Qt::QueuedConnection,
+                                  Q_ARG(QVariantList, jobs),
+                                  Q_ARG(double, clock.elapsed() / 1000.0));
+    }
+
+    void connectStatus(ScriptNode *sn) {
+        ScriptRuntime *rt = sn->runtime;
+        const NodeId id = sn->id;
+        QObject::connect(rt, &ScriptRuntime::executionFinished, owner,
+                         [this, id, rt](bool, const QString &error) {
+            ScriptNode *node = script(id);
+            if (!node || node->runtime != rt || node->error == error)
+                return;
+            node->error = error;
+            emit owner->scriptStatusChanged(id);
+        });
+        QObject::connect(rt, &ScriptRuntime::logChanged, owner,
+                         [this, id, rt](const QStringList &lines) {
+            ScriptNode *node = script(id);
+            if (!node || node->runtime != rt)
+                return;
+            node->log = lines;
+            emit owner->scriptStatusChanged(id);
+        });
+    }
+
+    void syncExpressions(NodeId id, const ClipGraph::Node *n) {
+        QVariantMap exprs;
+        if (n) {
+            const QVariantMap raw = n->params.value("expressions").toMap();
+            for (auto it = raw.begin(); it != raw.end(); ++it)
+                if (!it.value().toString().trimmed().isEmpty())
+                    exprs.insert(it.key(), it.value().toString());
+        }
+        if (exprs.isEmpty()) {
+            expressions.remove(id);
+        } else {
+            expressions.insert(id, exprs);
+        }
+        QVariantMap &errs = expressionErrors[id];
+        bool changed = false;
+        for (auto it = errs.begin(); it != errs.end();) {
+            if (!exprs.contains(it.key())) {
+                it = errs.erase(it);
+                changed = true;
+            } else {
+                ++it;
+            }
+        }
+        if (errs.isEmpty())
+            expressionErrors.remove(id);
+        if (changed)
+            emit owner->scriptStatusChanged(id);
+    }
+
     void sync(ClipGraph *graph, NodeId id) {
         const ClipGraph::Node *n = graph->node(id);
+        {
+            QMutexLocker lock(&shared->mutex);
+            if (n)
+                shared->params.insert(id, n->params);
+            else
+                shared->params.remove(id);
+        }
+        syncExpressions(id, n);
         if (!n || !isScriptType(n->type)) {
             scripts.erase(id);
             return;
@@ -460,50 +601,32 @@ struct GraphRuntime::Impl {
         }
         const bool created = !sn;
         if (created) {
-            auto owned = std::make_unique<ScriptNode>(n->type);
+            auto owned = std::make_unique<ScriptNode>(n->type, id, shared, host);
             sn = owned.get();
             scripts[id] = std::move(owned);
+            if (sn->runtime) {
+                connectStatus(sn);
+                QMetaObject::invokeMethod(sn->runtime, "setActive", Qt::QueuedConnection,
+                                          Q_ARG(bool, active));
+            }
         }
 
         const QVariantMap &p = n->params;
         switch (n->type) {
         case NT::Script: {
             const QString code = p.value("luaCode").toString();
-            const int mode = p.value("triggerMode", 3).toInt();
-            const int interval = p.value("intervalMs", 1000).toInt();
-            if (created) {
-                sn->code = code;
-                sn->triggerMode = mode;
-                sn->intervalMs = interval;
-                if (!code.isEmpty())
-                    sn->applyScript(code, mode, interval);
-            } else if (code != sn->code || mode != sn->triggerMode || interval != sn->intervalMs) {
-                sn->applyScript(code, mode, interval);
-            }
+            const int mode = std::clamp(p.value("runOn", 0).toInt(), 0, 3);
+            const int interval = std::max(20, p.value("intervalMs", 1000).toInt());
+            const QString time = p.value("runTime", QStringLiteral("12:00:00")).toString();
+            if (created || code != sn->code || mode != sn->runOn || interval != sn->intervalMs
+                || time != sn->runTime)
+                sn->applyScript(code, mode, interval, time);
             break;
         }
-        case NT::AudioScript: {
+        case NT::AudioAnalyzer: {
             const AudioAnalyzerConfig c = analyzerConfigFrom(p);
             if (!sameConfig(c, sn->config))
                 sn->setAnalyzerConfig(c);
-            break;
-        }
-        case NT::Trigger: {
-            const auto mode = static_cast<ScriptNode::TrigMode>(
-                std::clamp(p.value("trigMode", 0).toInt(), 0, 2));
-            const int interval = std::max(20, p.value("trigInterval", 1000).toInt());
-            QTime t = QTime::fromString(p.value("trigTime", QStringLiteral("12:00:00")).toString(),
-                                        QStringLiteral("HH:mm:ss"));
-            if (!t.isValid())
-                t = QTime(12, 0);
-            if (created) {
-                sn->trigMode = mode;
-                sn->trigInterval = interval;
-                sn->trigTime = t;
-                sn->applyTiming();
-            } else if (mode != sn->trigMode || interval != sn->trigInterval || t != sn->trigTime) {
-                sn->setTiming(mode, interval, t);
-            }
             break;
         }
         default:
@@ -515,12 +638,30 @@ struct GraphRuntime::Impl {
         scripts.clear();
         lastMergedVersion.clear();
         dataInputs.clear();
+        expressions.clear();
+        expressionErrors.clear();
+        {
+            QMutexLocker lock(&shared->mutex);
+            shared->params.clear();
+            shared->bands.clear();
+            shared->latestBands = 0;
+        }
         for (NodeId id : graph->nodeIds())
             sync(graph, id);
+        emit owner->scriptStatusChanged(0);
     }
 
     void removeNode(NodeId id) {
         scripts.erase(id);
+        expressions.remove(id);
+        expressionErrors.remove(id);
+        {
+            QMutexLocker lock(&shared->mutex);
+            shared->params.remove(id);
+            shared->bands.remove(id);
+            if (shared->latestBands == id)
+                shared->latestBands = 0;
+        }
         lastMergedVersion.remove(id);
         dataInputs.remove(id);
         thumbKeys.remove(id);
@@ -537,7 +678,46 @@ std::shared_ptr<NodeThumbStore> GraphRuntime::createThumbStore() {
 
 GraphRuntime::GraphRuntime(ClipGraph *graph, QObject *parent, std::shared_ptr<NodeThumbStore> thumbs)
     : QObject(parent), d(std::make_unique<Impl>()), m_graph(graph) {
+    d->owner = this;
+    d->clock.start();
     d->thumbs = thumbs ? std::move(thumbs) : createThumbStore();
+
+    {
+        auto sh = d->shared;
+        d->host->getParam = [sh](quint64 id, const QString &name, QVariant *out) {
+            QMutexLocker lock(&sh->mutex);
+            const auto it = sh->params.constFind(id);
+            if (it == sh->params.constEnd())
+                return false;
+            *out = valueAtPath(*it, name);
+            return true;
+        };
+        d->host->setParam = [sh, this](quint64 id, const QString &name, const QVariant &value) {
+            QMutexLocker lock(&sh->mutex);
+            if (sh->closed || !sh->params.contains(id))
+                return false;
+            bool replaced = false;
+            for (PendingWrite &w : sh->pending) {
+                if (w.id == id && w.name == name) {
+                    w.value = value;
+                    replaced = true;
+                    break;
+                }
+            }
+            if (!replaced)
+                sh->pending.append({id, name, value});
+            if (!sh->wakePosted) {
+                sh->wakePosted = true;
+                QMetaObject::invokeMethod(this, [this] { applyScriptWrites(); }, Qt::QueuedConnection);
+            }
+            return true;
+        };
+        d->host->audioBands = [sh](quint64 id) {
+            QMutexLocker lock(&sh->mutex);
+            return sh->bands.value(id ? id : sh->latestBands);
+        };
+    }
+
     d->rebuild(m_graph);
 
     connect(m_graph, &ClipGraph::nodeAdded, this, [this](NodeId id) {
@@ -579,7 +759,64 @@ GraphRuntime::GraphRuntime(ClipGraph *graph, QObject *parent, std::shared_ptr<No
     d->pollTimer->start(kPollIntervalMs);
 }
 
-GraphRuntime::~GraphRuntime() = default;
+GraphRuntime::~GraphRuntime() {
+    {
+        QMutexLocker lock(&d->shared->mutex);
+        d->shared->closed = true;
+        d->shared->pending.clear();
+    }
+    if (d->exprRuntime) {
+        retireScriptThread(d->exprThread, d->exprRuntime);
+        d->exprRuntime = nullptr;
+    }
+}
+
+bool GraphRuntime::waitForRetiredScripts(int timeoutMs) {
+    QElapsedTimer t;
+    t.start();
+    while (g_retiringScripts.load() > 0) {
+        if (t.elapsed() > timeoutMs)
+            return false;
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        QThread::msleep(2);
+    }
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    return true;
+}
+
+void GraphRuntime::writeParam(NodeId id, const QString &name, const QVariant &value) {
+    const ClipGraph::Node *n = m_graph->node(id);
+    if (!n)
+        return;
+    const QString top = name.section(QLatin1Char('.'), 0, 0);
+    const QVariantMap next = withValueAtPath(n->params, name, value);
+    m_graph->setParams(id, {{top, next.value(top)}});
+}
+
+void GraphRuntime::applyScriptWrites() {
+    QVector<PendingWrite> writes;
+    {
+        QMutexLocker lock(&d->shared->mutex);
+        writes.swap(d->shared->pending);
+        d->shared->wakePosted = false;
+    }
+    for (const PendingWrite &w : std::as_const(writes))
+        writeParam(w.id, w.name, w.value);
+}
+
+QString GraphRuntime::scriptError(NodeId id) const {
+    const ScriptNode *sn = d->script(id);
+    return sn ? sn->error : QString();
+}
+
+QStringList GraphRuntime::scriptLog(NodeId id) const {
+    const ScriptNode *sn = d->script(id);
+    return sn ? sn->log : QStringList();
+}
+
+QString GraphRuntime::expressionError(NodeId id, const QString &name) const {
+    return d->expressionErrors.value(id).value(name).toString();
+}
 
 NodeId GraphRuntime::addClipNode(const QString &path, const QImage &thumbnail, const QPointF &pos) {
     const bool audioOnly = ClipManager::isAudioPath(path);
@@ -675,22 +912,14 @@ void GraphRuntime::setActive(bool active) {
     else
         d->pollTimer->stop();
     for (auto &[id, sn] : d->scripts) {
-        if (sn->type == NT::Script) {
-            QMetaObject::invokeMethod(sn->runtime, "applySettings", Qt::QueuedConnection,
-                                      Q_ARG(QString, sn->code), Q_ARG(int, active ? sn->triggerMode : 2),
-                                      Q_ARG(int, sn->intervalMs));
-        } else if (sn->type == NT::Trigger) {
-            if (active)
-                sn->applyTiming();
-            else
-                sn->trigTimer->stop();
-        }
+        if (sn->runtime)
+            QMetaObject::invokeMethod(sn->runtime, "setActive", Qt::QueuedConnection, Q_ARG(bool, active));
     }
 }
 
 void GraphRuntime::pollDataConsumers() {
     for (auto &[id, sn] : d->scripts) {
-        if (sn->type == NT::AudioScript)
+        if (sn->type == NT::AudioAnalyzer)
             sn->tickLive();
     }
 
@@ -705,6 +934,8 @@ void GraphRuntime::pollDataConsumers() {
             sn->setInputJson(merged);
         }
     }
+
+    d->runExpressions();
 
     for (auto it = d->dataInputs.begin(); it != d->dataInputs.end(); ++it) {
         const QVector<NodeId> producers = m_graph->scriptProducersForData(it.key());
@@ -794,32 +1025,24 @@ bool GraphRuntime::runScript(NodeId scriptNodeId) {
     return true;
 }
 
-bool GraphRuntime::pulseTrigger(NodeId triggerNodeId) {
-    ScriptNode *sn = d->script(triggerNodeId);
-    if (!sn || sn->type != NT::Trigger)
-        return false;
-    sn->pulse();
-    return true;
-}
-
 void GraphRuntime::feedLiveAudioForProducer(NodeId producerId, const QByteArray &pcm) {
     for (auto &[id, sn] : d->scripts) {
-        if (sn->type != NT::AudioScript)
+        if (sn->type != NT::AudioAnalyzer)
             continue;
-        if (m_graph->audioSourceNodeIdForAudioScript(id) != producerId)
+        if (m_graph->audioSourceNodeIdForAudioAnalyzer(id) != producerId)
             continue;
         sn->feedLivePcm(pcm);
     }
 }
 
-void GraphRuntime::syncAudioScriptNode(NodeId scriptNodeId, double playbackTime, bool playing,
+void GraphRuntime::syncAudioAnalyzerNode(NodeId scriptNodeId, double playbackTime, bool playing,
                                        double speed) {
     ScriptNode *sn = d->script(scriptNodeId);
-    if (!sn || sn->type != NT::AudioScript)
+    if (!sn || sn->type != NT::AudioAnalyzer)
         return;
 
-    const NodeId producerId = m_graph->audioSourceNodeIdForAudioScript(scriptNodeId);
-    if (producerId != 0 && m_graph->isLiveAudioScriptProducer(producerId)) {
+    const NodeId producerId = m_graph->audioSourceNodeIdForAudioAnalyzer(scriptNodeId);
+    if (producerId != 0 && m_graph->isLiveAudioAnalyzerProducer(producerId)) {
         sn->setLiveSource(true);
         return;
     }
@@ -827,7 +1050,7 @@ void GraphRuntime::syncAudioScriptNode(NodeId scriptNodeId, double playbackTime,
     sn->setLiveSource(false);
 
     QString audioPath;
-    if (!m_graph->audioSourceForAudioScript(scriptNodeId, audioPath)) {
+    if (!m_graph->audioSourceForAudioAnalyzer(scriptNodeId, audioPath)) {
         sn->setAudioSourcePath(QString());
         return;
     }
@@ -835,19 +1058,19 @@ void GraphRuntime::syncAudioScriptNode(NodeId scriptNodeId, double playbackTime,
     sn->setAudioSyncState(playbackTime, playing, speed);
 }
 
-void GraphRuntime::syncAllAudioScripts(NodeId liveClip, double timeLive, bool playingLive, double speedLive,
+void GraphRuntime::syncAllAudioAnalyzers(NodeId liveClip, double timeLive, bool playingLive, double speedLive,
                                        NodeId stagingClip, double timeStaging, bool playingStaging, double speedStaging) {
     QVector<NodeId> ids;
     for (auto &[id, sn] : d->scripts)
-        if (sn->type == NT::AudioScript)
+        if (sn->type == NT::AudioAnalyzer)
             ids.append(id);
     for (NodeId id : ids) {
-        const NodeId clip = m_graph->audioSourceNodeIdForAudioScript(id);
+        const NodeId clip = m_graph->audioSourceNodeIdForAudioAnalyzer(id);
         if (clip != 0 && clip == liveClip)
-            syncAudioScriptNode(id, timeLive, playingLive, speedLive);
+            syncAudioAnalyzerNode(id, timeLive, playingLive, speedLive);
         else if (clip != 0 && clip == stagingClip)
-            syncAudioScriptNode(id, timeStaging, playingStaging, speedStaging);
+            syncAudioAnalyzerNode(id, timeStaging, playingStaging, speedStaging);
         else
-            syncAudioScriptNode(id, 0.0, false, 1.0);
+            syncAudioAnalyzerNode(id, 0.0, false, 1.0);
     }
 }

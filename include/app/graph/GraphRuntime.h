@@ -6,6 +6,8 @@
 #include <QObject>
 #include <QPointF>
 #include <QString>
+#include <QStringList>
+#include <QVariant>
 #include <QVector>
 #include <QtNumeric>
 #include <memory>
@@ -18,8 +20,8 @@ class QTimer;
 struct NodeThumbStore;
 
 /// Runtime half of the node graph: everything ClipNodeEditor did beyond holding the model.
-/// Owns the per-node script engines (Script / Audio Script / Trigger), merges script outputs
-/// into DataIn feeds, drives audio-script nodes from the
+/// Owns the per-node script engines (Script / Audio Analyzer), merges script outputs
+/// into DataIn feeds, drives audio-analyzer nodes from the
 /// decks, and caches node thumbnails for QML (image://nodethumb/<id>).
 /// It follows the ClipGraph's nodeAdded/nodeRemoved/nodeChanged/graphReset signals to
 /// create, update and destroy its per-node runtime objects.
@@ -30,7 +32,7 @@ public:
     explicit GraphRuntime(ClipGraph *graph, QObject *parent = nullptr,
                           std::shared_ptr<NodeThumbStore> thumbs = {});
     static std::shared_ptr<NodeThumbStore> createThumbStore();
-    /// An inactive runtime stops polling and pauses its Lua scripts and triggers; activating restarts them.
+    /// An inactive runtime stops polling and pauses its Lua scripts and expressions; activating restarts them.
     void setActive(bool active);
     ~GraphRuntime() override;
 
@@ -64,22 +66,33 @@ public:
     std::shared_ptr<ScriptOutput> scriptOutputForDataNode(NodeId dataNodeId) const;
     /// What ClipNodeEditor::wireTextScriptBinding installed as ClipCard::scriptBindingProvider.
     ScriptBinding scriptBindingFor(NodeId dataNodeId) const;
-    /// "Run now" on a Script node / "Pulse now" on a Trigger node. False when the node is not that kind.
+    /// "Run now" on a Script node. False when the node is not a Script.
     bool runScript(NodeId scriptNodeId);
-    bool pulseTrigger(NodeId triggerNodeId);
+    /// Last run's error of a Script node, empty when it succeeded.
+    QString scriptError(NodeId scriptNodeId) const;
+    /// The node's print/prism.log output, newest last (at most ScriptRuntime::kLogLines).
+    QStringList scriptLog(NodeId scriptNodeId) const;
+    /// Error of the last evaluation of node @p id's expression for param @p name, empty when fine.
+    QString expressionError(NodeId id, const QString &name) const;
+    /// Waits (pumping events) until script threads from deleted runtimes or nodes have ended.
+    static bool waitForRetiredScripts(int timeoutMs);
 
-    // ── Audio scripts ─────────────────────────────────────────────────────────
+    // ── Audio analyzers ─────────────────────────────────────────────────────────
     void feedLiveAudioForProducer(NodeId producerId, const QByteArray &pcm);
-    void syncAudioScriptNode(NodeId scriptNodeId, double playbackTime, bool playing, double speed);
-    void syncAllAudioScripts(NodeId liveClip, double timeLive, bool playingLive, double speedLive,
+    void syncAudioAnalyzerNode(NodeId scriptNodeId, double playbackTime, bool playing, double speed);
+    void syncAllAudioAnalyzers(NodeId liveClip, double timeLive, bool playingLive, double speedLive,
                              NodeId stagingClip, double timeStaging, bool playingStaging, double speedStaging);
 
 signals:
+    /// A script node's error or log, or an expression error, changed. id 0 means re-read everything.
+    void scriptStatusChanged(NodeId id);
     /// id 0 means every thumbnail was dropped (graph reset).
     void thumbnailChanged(NodeId id);
 
 private:
     void requestThumbnail(NodeId id);
+    void writeParam(NodeId id, const QString &name, const QVariant &value);
+    void applyScriptWrites();
     struct Impl;
     std::unique_ptr<Impl> d;
     ClipGraph *m_graph;

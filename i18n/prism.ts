@@ -39,14 +39,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Audio Script</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Trigger</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Audio Output</source>
         <translation type="unfinished"></translation>
     </message>
@@ -152,6 +144,10 @@
     </message>
     <message>
         <source>Logic</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Analyzer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -681,6 +677,14 @@ Another application may already be using the virtual camera, or softcam.dll may 
     </message>
 </context>
 <context>
+    <name>AudioAnalyzerBody</name>
+    <message>
+        <source>FFT %1 · %2 bins
+low/mid/high · beat</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>AudioDeviceCatalog</name>
     <message>
         <source>System Default Mic</source>
@@ -770,14 +774,6 @@ Another application may already be using the virtual camera, or softcam.dll may 
     </message>
     <message>
         <source>Muted</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>AudioScriptBody</name>
-    <message>
-        <source>FFT %1 · %2 bins
-low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1409,10 +1405,6 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Run now</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Open editor…</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1492,9 +1484,13 @@ low/mid/high · beat</source>
     </message>
 </context>
 <context>
-    <name>InspectorTriggerForm</name>
+    <name>InspectorScriptForm</name>
     <message>
-        <source>Mode</source>
+        <source>Run on</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Input change</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1502,15 +1498,11 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>At time of day</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Manual pulse</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Time of day</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Manual</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1518,7 +1510,11 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Pulse now</source>
+        <source>Run now</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Log</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2100,10 +2096,6 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Pulse now</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Delete</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2185,6 +2177,10 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Audio Analyzer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Double-click a name to rename. Select the node to set per-input volume and mute.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2214,14 +2210,6 @@ low/mid/high · beat</source>
     </message>
     <message>
         <source>Audio Capture</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Audio Script</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Trigger</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3112,7 +3100,11 @@ Technical detail: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>On start</source>
+        <source>At %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Run</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3143,23 +3135,26 @@ Technical detail: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Trigger:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>On input change</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Manual</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Run now</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Output preview</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ScriptRuntime</name>
+    <message>
+        <source>Expression result is not a finite number</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Expression must return a number</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Lua support was disabled at build time.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -4453,6 +4448,17 @@ Continue anyway? Your phone may not be able to connect.</source>
     </message>
 </context>
 <context>
+    <name>StyleSliderRow</name>
+    <message>
+        <source>e.g. 0.5 + audio.low * 0.5</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Drive this value with a Lua expression</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>SvgTemplateBackend</name>
     <message>
         <source>Scale</source>
@@ -5229,24 +5235,6 @@ Continue anyway? Your phone may not be able to connect.</source>
     </message>
     <message>
         <source>3D Flip</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>TriggerBody</name>
-    <message>
-        <source>Every
-%1 ms</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>At
-%1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Manual
-pulse</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

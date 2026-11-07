@@ -97,20 +97,16 @@ QVariantMap defaultParams(NT type) {
         return {{"deviceId", QString()}, {"deviceLabel", QString()},
                 {"volume", 100}, {"muted", false}};
     case NT::Script:
-        return {{"luaCode", QString()}, {"triggerMode", 3}, {"intervalMs", 1000},
+        return {{"luaCode", QString()}, {"runOn", 0}, {"intervalMs", 1000},
+                {"runTime", QStringLiteral("12:00:00")},
                 {"scriptType", QStringLiteral("lua")}};
-    case NT::AudioScript: {
+    case NT::AudioAnalyzer: {
         const AudioAnalyzerConfig c;
-        return {{"luaCode", QString()}, {"triggerMode", 2}, {"intervalMs", 1000},
-                {"scriptType", QStringLiteral("audio")},
+        return {{"scriptType", QStringLiteral("audio")},
                 {"fftSize", c.fftSize}, {"binCount", c.binCount},
                 {"smoothing", double(c.smoothing)}, {"beatSensitivity", double(c.beatSensitivity)},
                 {"lowMidHz", double(c.lowMidHz)}, {"midHighHz", double(c.midHighHz)}};
     }
-    case NT::Trigger:
-        return {{"luaCode", QString()}, {"triggerMode", 2}, {"intervalMs", 1000},
-                {"scriptType", QStringLiteral("trigger")},
-                {"trigMode", 0}, {"trigInterval", 1000}, {"trigTime", QStringLiteral("12:00:00")}};
     default:
         return {};
     }
@@ -269,7 +265,7 @@ QString ClipGraph::edgeKindName(int kind) {
     case EK::Chain:              return QStringLiteral("chain");
     case EK::ScriptToData:       return QStringLiteral("script_to_data");
     case EK::ClipToShaderAudio:  return QStringLiteral("clip_to_shader_audio");
-    case EK::ClipToAudioScript:  return QStringLiteral("clip_to_audio_script");
+    case EK::ClipToAudioAnalyzer:  return QStringLiteral("clip_to_audio_analyzer");
     case EK::InputToMaster:      return QStringLiteral("input_to_master");
     case EK::StreamToMixer:      return QStringLiteral("stream_to_mixer");
     case EK::MixerToOutput:      return QStringLiteral("mixer_to_output");
@@ -454,11 +450,8 @@ void ClipGraph::buildPorts(const Node &n, QVector<Port> &in, QVector<Port> &out)
         add(in, PK::DataIn, PD::In, QStringLiteral("data"), false, {0.0, kSmallH / 2});
         add(out, PK::ScriptOut, PD::Out, QStringLiteral("out"), false, {kSmallW, kSmallH / 2});
         break;
-    case NT::AudioScript:
+    case NT::AudioAnalyzer:
         add(in, PK::AudioIn, PD::In, QStringLiteral("audio"), false, {0.0, kSmallH / 2});
-        add(out, PK::ScriptOut, PD::Out, QStringLiteral("out"), false, {kSmallW, kSmallH / 2});
-        break;
-    case NT::Trigger:
         add(out, PK::ScriptOut, PD::Out, QStringLiteral("out"), false, {kSmallW, kSmallH / 2});
         break;
     }
@@ -537,7 +530,7 @@ bool ClipGraph::lookupConnectionPorts(NodeId from, NodeId to, int kind, int slot
         *fromPort = findPortIndex(from, PK::AudioControllerOut, -1);
         *toPort = findPortIndex(to, PK::ShaderAudioIn, -1);
         break;
-    case EK::ClipToAudioScript:
+    case EK::ClipToAudioAnalyzer:
         *fromPort = fromFirst({PK::AudioControllerOut, PK::MasterAudioInputOut});
         *toPort = findPortIndex(to, PK::AudioIn, -1);
         break;
@@ -601,8 +594,7 @@ void ClipGraph::refreshNode(Node &n) {
     case NT::MasterAudioInput:  n.title = QStringLiteral("Mic Input"); break;
     case NT::MasterAudioCapture: n.title = QStringLiteral("Audio Capture"); break;
     case NT::Script:            n.title = QStringLiteral("Lua Script"); break;
-    case NT::AudioScript:       n.title = QStringLiteral("Audio Script"); break;
-    case NT::Trigger:           n.title = QStringLiteral("Trigger"); break;
+    case NT::AudioAnalyzer:       n.title = QStringLiteral("Audio Analyzer"); break;
     }
     if (n.type != NT::Input) {
         const QString custom = n.params.value("name").toString();
@@ -868,7 +860,7 @@ bool ClipGraph::connectNodes(NodeId from, NodeId to, int kind, int toPortIndex) 
     static const EK kTryOrder[] = {
         EK::Chain, EK::ScriptToData, EK::ClipToShaderAudio, EK::AudioEffectChain,
         EK::StreamToMixer, EK::MixerToOutput, EK::InputToMaster,
-        EK::ClipToAudioScript,
+        EK::ClipToAudioAnalyzer,
     };
     QVector<int> kinds;
     if (kind >= 0) kinds.append(kind);
@@ -889,7 +881,7 @@ bool ClipGraph::canConnectNodes(NodeId from, NodeId to, int kind, int toPortInde
     static const EK kTryOrder[] = {
         EK::Chain, EK::ScriptToData, EK::ClipToShaderAudio, EK::AudioEffectChain,
         EK::StreamToMixer, EK::MixerToOutput, EK::InputToMaster,
-        EK::ClipToAudioScript,
+        EK::ClipToAudioAnalyzer,
     };
     QVector<int> kinds;
     if (kind >= 0) kinds.append(kind);
@@ -919,7 +911,7 @@ std::optional<ClipGraph::ConnectPlan> ClipGraph::planConnection(NodeId from, int
     ConnectPlan plan;
     if (a == PK::ChainOut && b == PK::ChainIn) plan.kind = EK::Chain;
     else if (a == PK::AudioControllerOut && b == PK::ShaderAudioIn) plan.kind = EK::ClipToShaderAudio;
-    else if (isAudioStreamOutKind(a) && b == PK::AudioIn) plan.kind = EK::ClipToAudioScript;
+    else if (isAudioStreamOutKind(a) && b == PK::AudioIn) plan.kind = EK::ClipToAudioAnalyzer;
     else if (isAudioStreamOutKind(a) && isMixedAudioInKind(b)) plan.insertMixer = true;
     else if (isAudioStreamOutKind(a) && isAudioMixerInKind(b)) plan.kind = EK::StreamToMixer;
     else if (isMixedAudioOutKind(a) && isMixedAudioInKind(b)) plan.kind = EK::MixerToOutput;
@@ -1639,14 +1631,14 @@ bool ClipGraph::mixerSlotSettings(NodeId mixerId, int slotIndex, int &volume, bo
     return true;
 }
 
-NodeId ClipGraph::clipForAudioScript(NodeId scriptNodeId) const {
+NodeId ClipGraph::clipForAudioAnalyzer(NodeId scriptNodeId) const {
     for (const Edge &e : m_edges)
-        if (e.kind == EK::ClipToAudioScript && e.to == scriptNodeId) return e.from;
+        if (e.kind == EK::ClipToAudioAnalyzer && e.to == scriptNodeId) return e.from;
     return 0;
 }
 
-bool ClipGraph::audioSourceForAudioScript(NodeId scriptNodeId, QString &filePath) const {
-    const Node *clip = node(clipForAudioScript(scriptNodeId));
+bool ClipGraph::audioSourceForAudioAnalyzer(NodeId scriptNodeId, QString &filePath) const {
+    const Node *clip = node(clipForAudioAnalyzer(scriptNodeId));
     if (!clip || clip->type != NT::Input) return false;
     const QVariantMap src = clip->params.value("source").toMap();
     const int kind = src.value("kind").toInt();
@@ -1656,18 +1648,18 @@ bool ClipGraph::audioSourceForAudioScript(NodeId scriptNodeId, QString &filePath
     return !filePath.isEmpty();
 }
 
-NodeId ClipGraph::audioSourceNodeIdForAudioScript(NodeId scriptNodeId) const {
-    return clipForAudioScript(scriptNodeId);
+NodeId ClipGraph::audioSourceNodeIdForAudioAnalyzer(NodeId scriptNodeId) const {
+    return clipForAudioAnalyzer(scriptNodeId);
 }
 
-bool ClipGraph::isLiveAudioScriptProducer(NodeId producerId) const {
+bool ClipGraph::isLiveAudioAnalyzerProducer(NodeId producerId) const {
     const Node *n = node(producerId);
     return n && (n->type == NT::MasterAudioInput || n->type == NT::MasterAudioCapture);
 }
 
-bool ClipGraph::hasAudioScriptConsumer(NodeId producerId) const {
-    for (NodeId id : nodeIdsOfType(NT::AudioScript))
-        if (clipForAudioScript(id) == producerId) return true;
+bool ClipGraph::hasAudioAnalyzerConsumer(NodeId producerId) const {
+    for (NodeId id : nodeIdsOfType(NT::AudioAnalyzer))
+        if (clipForAudioAnalyzer(id) == producerId) return true;
     return false;
 }
 
@@ -1724,8 +1716,7 @@ QJsonObject ClipGraph::toJson() const {
             }
             break;
         case NT::Script:
-        case NT::AudioScript:
-        case NT::Trigger:           scriptNodes.append(o); break;
+        case NT::AudioAnalyzer:     scriptNodes.append(o); break;
         case NT::MasterAudioOutput: masterAudioNodes.append(o); break;
         case NT::MasterAudioInput:  masterAudioInputNodes.append(o); break;
         case NT::MasterAudioCapture: masterAudioCaptureNodes.append(o); break;
@@ -1783,6 +1774,7 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         n.pos = QPointF(obj["posX"].toDouble(), obj["posY"].toDouble());
         n.params = params;
         if (type != NT::Input && !obj["name"].toString().isEmpty()) n.params["name"] = obj["name"].toString();
+        if (obj["expressions"].isObject()) n.params["expressions"] = obj["expressions"].toObject().toVariantMap();
         refreshNode(n);
         m_nodes.insert(id, n);
         m_order.append(id);
@@ -1876,27 +1868,22 @@ bool ClipGraph::fromJson(const QJsonObject &state) {
         const QString scriptType = obj["scriptType"].toString();
         if (scriptType == QStringLiteral("audio")) {
             const AudioAnalyzerConfig c;
-            QVariantMap p = defaultParams(NT::AudioScript);
+            QVariantMap p = defaultParams(NT::AudioAnalyzer);
             p["fftSize"] = obj["fftSize"].toInt(c.fftSize);
             p["binCount"] = obj["binCount"].toInt(c.binCount);
             p["smoothing"] = double(float(obj["smoothing"].toDouble(c.smoothing)));
             p["beatSensitivity"] = double(float(obj["beatSensitivity"].toDouble(c.beatSensitivity)));
             p["lowMidHz"] = double(float(obj["lowMidHz"].toDouble(c.lowMidHz)));
             p["midHighHz"] = double(float(obj["midHighHz"].toDouble(c.midHighHz)));
-            restore(obj, NT::AudioScript, p);
-        } else if (scriptType == QStringLiteral("trigger")) {
-            QVariantMap p = defaultParams(NT::Trigger);
-            p["trigMode"] = obj["trigMode"].toInt(0);
-            p["trigInterval"] = std::max(20, obj["trigInterval"].toInt(1000));
-            p["trigTime"] = QTime::fromString(obj["trigTime"].toString(QStringLiteral("12:00:00")),
-                                              QStringLiteral("HH:mm:ss"))
-                                .toString(QStringLiteral("HH:mm:ss"));
-            restore(obj, NT::Trigger, p);
+            restore(obj, NT::AudioAnalyzer, p);
         } else {
             QVariantMap p = defaultParams(NT::Script);
             p["luaCode"] = obj["luaCode"].toString();
-            p["triggerMode"] = obj["triggerMode"].toInt(0);
-            p["intervalMs"] = obj["intervalMs"].toInt(1000);
+            p["runOn"] = std::clamp(obj["runOn"].toInt(0), 0, 3);
+            p["intervalMs"] = std::max(20, obj["intervalMs"].toInt(1000));
+            p["runTime"] = QTime::fromString(obj["runTime"].toString(QStringLiteral("12:00:00")),
+                                             QStringLiteral("HH:mm:ss"))
+                               .toString(QStringLiteral("HH:mm:ss"));
             restore(obj, NT::Script, p);
         }
     }

@@ -1,12 +1,12 @@
 # SwitchX Shader Data Interface (v1)
 
 Shaders in SwitchX are **data-driven**: a shader node's input is a JSON object produced
-by the script graph (audio-script nodes, Lua script nodes, trigger nodes — chained and
+by the script graph (audio-analyzer nodes, Lua script nodes — chained and
 merged however you like). SwitchX maps that JSON to GLSL uniforms every frame.
 
 A shader **declares only the uniforms it uses**. Anything not declared is ignored, and
 any uniform with no matching data is simply left unset. None of this depends on how the
-FFT (or anything else upstream) is implemented — tune an audio-script node's FFT size,
+FFT (or anything else upstream) is implemented — tune an audio-analyzer node's FFT size,
 bin count or band splits and the uniform contract below does not change.
 
 ## Built-in uniforms (always set)
@@ -16,12 +16,12 @@ bin count or band splits and the uniform contract below does not change.
 | `u_resolution` | `vec2` | Output size in pixels |
 | `u_time` | `float` | Seconds since the shader started |
 
-> Do **not** send a JSON key named `time` — it would collide with `u_time`. Trigger
-> nodes emit `epoch` (wall-clock seconds) instead.
+> Do **not** send a JSON key named `time` — it would collide with `u_time`. Script
+> nodes with no code emit `epoch` (wall-clock seconds) instead.
 
-## Audio block (set whenever an audio-script node is anywhere upstream)
+## Audio block (set whenever an audio-analyzer node is anywhere upstream)
 
-These are a **stable, named contract**. An audio-script node always emits the full set,
+These are a **stable, named contract**. An audio-analyzer node always emits the full set,
 regardless of its FFT configuration.
 
 | Uniform | GLSL type | Range | Meaning |
@@ -78,5 +78,5 @@ uniform vec3  u_tint;        // (1.0, 0.2, 0.4)
 uniform float u_hue;         // 210.0
 ```
 
-Wire an audio-script node into the same shader (fan-in merges both JSON objects into one
+Wire an audio-analyzer node into the same shader (fan-in merges both JSON objects into one
 `input`) and the shader additionally gets `u_audioLevel`, `u_bands`, `u_spectrum`, etc.

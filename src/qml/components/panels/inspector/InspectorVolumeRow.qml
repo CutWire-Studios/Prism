@@ -19,6 +19,10 @@ InspectorForm {
         unit: "%"
         value: root.params[root.volumeKey] !== undefined ? root.params[root.volumeKey] : 100
         onEdited: v => root.set({ [root.volumeKey]: Math.round(v) }, true)
+        expressionName: root.volumeKey
+        expression: root.expr(expressionName)
+        expressionError: root.exprError(expressionName)
+        onExpressionEdited: text => root.setExpr(expressionName, text)
     }
 
     ThemedSwitch {

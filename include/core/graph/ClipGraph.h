@@ -46,8 +46,7 @@ public:
         MasterAudioInput,
         MasterAudioCapture,
         Script,
-        AudioScript,
-        Trigger,
+        AudioAnalyzer,
     };
     Q_ENUM(NodeType)
 
@@ -83,7 +82,7 @@ public:
         StreamToMixer = 9,
         MixerToOutput = 10,
         AudioEffectChain = 11,
-        ClipToAudioScript = 12,
+        ClipToAudioAnalyzer = 12,
     };
     Q_ENUM(EdgeKind)
 
@@ -272,10 +271,10 @@ public:
     QVector<NodeId> allMasterAudioCaptureNodeIds() const { return nodeIdsOfType(NodeType::MasterAudioCapture); }
     QVector<NodeId> allAudioMixerNodeIds() const { return nodeIdsOfType(NodeType::AudioMixer); }
     bool mixerSlotSettings(NodeId mixerId, int slotIndex, int &volume, bool &muted, QString &name) const;
-    bool audioSourceForAudioScript(NodeId scriptNodeId, QString &filePath) const;
-    NodeId audioSourceNodeIdForAudioScript(NodeId scriptNodeId) const;
-    bool isLiveAudioScriptProducer(NodeId producerId) const;
-    bool hasAudioScriptConsumer(NodeId producerId) const;
+    bool audioSourceForAudioAnalyzer(NodeId scriptNodeId, QString &filePath) const;
+    NodeId audioSourceNodeIdForAudioAnalyzer(NodeId scriptNodeId) const;
+    bool isLiveAudioAnalyzerProducer(NodeId producerId) const;
+    bool hasAudioAnalyzerConsumer(NodeId producerId) const;
     NodeId dataScriptNodeId(NodeId dataNodeId) const;
     /// All script producers feeding a node's DataIn, in connection order.
     QVector<NodeId> scriptProducersForData(NodeId dataNodeId) const;
@@ -285,7 +284,7 @@ public:
     QJsonObject toJson() const;
     /// Replaces the graph. Returns false (leaving it empty) for graphVersion < kGraphVersion.
     bool fromJson(const QJsonObject &state);
-    static constexpr int kGraphVersion = 4;
+    static constexpr int kGraphVersion = 5;
     /// The summary ClipNodeEditor::graphSnapshot() returns (MCP / remote control).
     QJsonObject snapshot() const;
 
@@ -342,7 +341,7 @@ private:
     ResolvedStream evaluateGuarded(NodeId producer, QSet<NodeId> visited) const;
     bool edgeFromAudioStreamOut(NodeId from, const Edge **out) const;
     bool masterSettings(NodeId id, NodeType type, MasterAudioSettings &settings) const;
-    NodeId clipForAudioScript(NodeId scriptNodeId) const;
+    NodeId clipForAudioAnalyzer(NodeId scriptNodeId) const;
     QString deviceIdAt(const Node &out, int index) const;
 
     void notifyNode(NodeId id);

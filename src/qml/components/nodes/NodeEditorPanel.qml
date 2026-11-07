@@ -18,7 +18,6 @@ Item {
     signal inspectorRequested()
     signal outputWindowRequested()
     signal runScriptRequested(var nodeId)
-    signal pulseTriggerRequested(var nodeId)
     // Local media files dropped on the canvas; x/y are graph coordinates.
     signal filesDropped(var urls, real x, real y)
 
@@ -205,11 +204,6 @@ Item {
             visible: nodeMenu.type === nodeMenu.nodeTypes.Script
             text: qsTr("Run now")
             onTriggered: root.runScriptRequested(nodeMenu.target.nodeId)
-        }
-        ThemedMenuItem {
-            visible: nodeMenu.type === nodeMenu.nodeTypes.Trigger
-            text: qsTr("Pulse now")
-            onTriggered: root.pulseTriggerRequested(nodeMenu.target.nodeId)
         }
         ThemedMenuItem {
             text: qsTr("Delete")

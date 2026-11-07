@@ -4,8 +4,7 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Prism
 
-// Lua script editor for Script nodes. The interval is kept as stored: periodic timing moved to
-// Trigger nodes, so the field is not shown.
+// Lua script editor for Script nodes. When the script runs is set in the inspector.
 ThemedDialog {
     id: root
 
@@ -14,7 +13,6 @@ ThemedDialog {
     acceptOnReturn: false
 
     property var nodeId: 0
-    property int intervalMs: 1000
     property bool _loadingPreset: false
 
     readonly property int presetCount: preview.presetNames.length
@@ -28,8 +26,6 @@ ThemedDialog {
     function openFor(id, kind) {
         nodeId = id
         const p = graphParams.params(id)
-        intervalMs = p.intervalMs
-        triggerCombo.currentIndex = p.triggerMode === 3 ? 0 : 1
         preview.clear()
 
         const code = p.luaCode || ""
@@ -53,11 +49,7 @@ ThemedDialog {
         const code = codeArea.text.trim()
         if (code.length === 0)
             return
-        AppController.graph.setParams(root.nodeId, {
-            luaCode: code,
-            triggerMode: triggerCombo.currentIndex === 0 ? 3 : 2,
-            intervalMs: root.intervalMs
-        })
+        AppController.graph.setParams(root.nodeId, { luaCode: code })
     }
 
     AudioGraphParams {
@@ -154,17 +146,6 @@ ThemedDialog {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spacingLg
-
-                ThemedLabel {
-                    text: qsTr("Trigger:")
-                    tone: "default"
-                    size: "sm"
-                }
-
-                ThemedComboBox {
-                    id: triggerCombo
-                    model: [qsTr("On input change"), qsTr("Manual")]
-                }
 
                 Item {
                     Layout.fillWidth: true

@@ -131,17 +131,17 @@ PanelFrame {
                                 params: del.params
                             }
 
-                            InspectorTriggerForm {
-                                visible: del.type === body.nt.Trigger
+                            InspectorScriptForm {
+                                visible: del.type === body.nt.Script
                                 nodeId: del.nodeId
                                 params: del.params
                             }
 
                             InspectorAudioForm {
                                 visible: del.type === body.nt.MasterAudioInput || del.type === body.nt.MasterAudioCapture
-                                         || del.type === body.nt.AudioScript
+                                         || del.type === body.nt.AudioAnalyzer
                                 isCapture: del.type === body.nt.MasterAudioCapture
-                                isScript: del.type === body.nt.AudioScript
+                                isAnalyzer: del.type === body.nt.AudioAnalyzer
                                 nodeId: del.nodeId
                                 params: del.params
                             }
@@ -207,13 +207,6 @@ PanelFrame {
                                 text: qsTr("Bypass")
                                 checked: !!del.params.bypass
                                 onToggled: root.graph.setParams(del.nodeId, { bypass: checked })
-                            }
-
-                            ThemedButton {
-                                Layout.fillWidth: true
-                                visible: del.type === body.nt.Script
-                                text: qsTr("Run now")
-                                onClicked: AppController.runScript(del.nodeId)
                             }
 
                             ThemedButton {

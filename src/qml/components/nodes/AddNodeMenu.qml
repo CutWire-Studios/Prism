@@ -77,9 +77,8 @@ Popup {
         "audio fx": ["pedalboard", "effects", "reverb", "eq", "compressor"],
         "MasterAudioOutput": ["speaker", "master", "device"],
         "AudioMixer": ["mix", "volume", "sum"],
-        "Script": ["lua", "code", "program"],
-        "AudioScript": ["lua", "dsp", "code"],
-        "Trigger": ["timer", "pulse", "event", "clock"]
+        "Script": ["lua", "code", "program", "timer", "pulse", "trigger", "clock"],
+        "AudioAnalyzer": ["fft", "beat", "spectrum", "dsp"]
     })
 
     function allEntries() {
@@ -122,8 +121,7 @@ Popup {
         node(qsTr("Audio"), "type:" + T.MasterAudioOutput, qsTr("Audio Output"), T.MasterAudioOutput, undefined, true)
         if (NodeCatalog.scriptingAvailable()) {
             node(qsTr("Logic"), "type:" + T.Script, qsTr("Script"), T.Script)
-            node(qsTr("Logic"), "type:" + T.AudioScript, qsTr("Audio Script"), T.AudioScript)
-            node(qsTr("Logic"), "type:" + T.Trigger, qsTr("Trigger"), T.Trigger)
+            node(qsTr("Logic"), "type:" + T.AudioAnalyzer, qsTr("Audio Analyzer"), T.AudioAnalyzer)
         }
         return list
     }

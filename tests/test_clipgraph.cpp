@@ -147,7 +147,7 @@ class TestClipGraph : public QObject {
 private slots:
     void jsonMatchesStoredFixture() {
         const QJsonObject input = QJsonDocument::fromJson(QByteArray(R"json({
-            "graphVersion": 4,
+            "graphVersion": 5,
             "inputNodes": [
                 {"id": 1, "posX": 20, "posY": 20, "hasAudio": false,
                  "source": {"kind": 5, "displayName": "Cam 1"}}
@@ -162,7 +162,7 @@ private slots:
             ]
         })json")).object();
         const QJsonObject expectedGraph = QJsonDocument::fromJson(QByteArray(R"json({
-            "graphVersion": 4,
+            "graphVersion": 5,
             "nextId": 4,
             "inputNodes": [
                 {"id": 1, "posX": 20, "posY": 20, "hasAudio": false, "audioOnly": false,
@@ -286,9 +286,9 @@ private slots:
         const NodeId mic = g.addNode(NT::MasterAudioInput);
         const NodeId fx = g.addNode(NT::AudioEffect, {}, {{"effect", AudioEffects::kAudioFxEffectId}});
         const NodeId script = g.addNode(NT::Script);
-        const NodeId audioScript = g.addNode(NT::AudioScript);
+        const NodeId audioAnalyzer = g.addNode(NT::AudioAnalyzer);
         QVERIFY(clip && silent && text && proc && layer && out && mixer && master && mic
-                && fx && script && audioScript);
+                && fx && script && audioAnalyzer);
 
         // Chain
         QVERIFY(g.canConnectNodes(clip, proc, int(EK::Chain)));
@@ -309,10 +309,10 @@ private slots:
         // ClipToShaderAudio: no node exposes a ShaderAudioIn port
         QVERIFY(!g.canConnectNodes(clip, text, int(EK::ClipToShaderAudio)));
 
-        // ClipToAudioScript
-        QVERIFY(g.canConnectNodes(clip, audioScript, int(EK::ClipToAudioScript)));
-        QVERIFY(g.canConnectNodes(mic, audioScript, int(EK::ClipToAudioScript)));
-        QVERIFY(!g.canConnectNodes(silent, audioScript, int(EK::ClipToAudioScript)));
+        // ClipToAudioAnalyzer
+        QVERIFY(g.canConnectNodes(clip, audioAnalyzer, int(EK::ClipToAudioAnalyzer)));
+        QVERIFY(g.canConnectNodes(mic, audioAnalyzer, int(EK::ClipToAudioAnalyzer)));
+        QVERIFY(!g.canConnectNodes(silent, audioAnalyzer, int(EK::ClipToAudioAnalyzer)));
 
         // Audio routing kinds
         QVERIFY(g.canConnectNodes(clip, mixer, int(EK::StreamToMixer), 0));
@@ -633,7 +633,7 @@ private slots:
         QCOMPARE(micSettings.deviceLabel, QStringLiteral("Desk Mic"));
         QCOMPARE(micSettings.routedMasterOutputId, master);
         QVERIFY(!g.masterAudioCaptureSettings(mic, micSettings));
-        QVERIFY(g.isLiveAudioScriptProducer(mic));
+        QVERIFY(g.isLiveAudioAnalyzerProducer(mic));
 
         // slot names defaulted from the producers
         int v; bool m; QString n;
@@ -649,19 +649,19 @@ private slots:
             {"source", QVariantMap{{"kind", int(SourceDescriptor::Kind::VideoFile)},
                                    {"path", "/tmp/x.mp4"}}},
             {"hasAudio", true}});
-        const NodeId audioScript = g.addNode(NT::AudioScript);
+        const NodeId audioAnalyzer = g.addNode(NT::AudioAnalyzer);
         const NodeId s1 = g.addNode(NT::Script);
-        const NodeId s2 = g.addNode(NT::Trigger);
+        const NodeId s2 = g.addNode(NT::Script);
         const NodeId text = g.addNode(NT::Input, {}, {
             {"source", QVariantMap{{"kind", int(SourceDescriptor::Kind::Text)}}}});
 
-        QVERIFY(g.connectNodes(clip, audioScript, int(EK::ClipToAudioScript)));
+        QVERIFY(g.connectNodes(clip, audioAnalyzer, int(EK::ClipToAudioAnalyzer)));
         QString path;
-        QVERIFY(g.audioSourceForAudioScript(audioScript, path));
+        QVERIFY(g.audioSourceForAudioAnalyzer(audioAnalyzer, path));
         QCOMPARE(path, QStringLiteral("/tmp/x.mp4"));
-        QCOMPARE(g.audioSourceNodeIdForAudioScript(audioScript), clip);
-        QVERIFY(g.hasAudioScriptConsumer(clip));
-        QVERIFY(!g.hasAudioScriptConsumer(text));
+        QCOMPARE(g.audioSourceNodeIdForAudioAnalyzer(audioAnalyzer), clip);
+        QVERIFY(g.hasAudioAnalyzerConsumer(clip));
+        QVERIFY(!g.hasAudioAnalyzerConsumer(text));
 
         QVERIFY(g.connectNodes(s1, text, int(EK::ScriptToData)));
         QVERIFY(g.connectNodes(s2, text, int(EK::ScriptToData)));

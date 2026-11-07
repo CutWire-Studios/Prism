@@ -190,6 +190,7 @@ AppController::~AppController()
     delete m_deckController;
     delete m_outputHub;
     delete m_show;
+    GraphRuntime::waitForRetiredScripts(2000);
     m_compositor.reset();
     if (s_instance == this) {
         ErrorReporter::setHandler({});
@@ -1119,6 +1120,7 @@ void AppController::attachCue(Cue *cue)
     connect(graph, &ClipGraph::graphReset, this, [this]() { m_pushTimer->start(); });
     connect(graph, &ClipGraph::nodeChanged, this, [this, cue](NodeId id) { onNodeChanged(cue, id); });
     connect(cue->runtime(), &GraphRuntime::thumbnailChanged, this, &AppController::nodeThumbnailChanged);
+    connect(cue->runtime(), &GraphRuntime::scriptStatusChanged, this, &AppController::scriptStatusChanged);
 }
 
 void AppController::onCueGraphChanged(Cue *cue)
@@ -1481,7 +1483,14 @@ int AppController::nodeThumbnailRevision(quint64 nodeId) const { return graphRun
 
 bool AppController::runScript(quint64 nodeId) { return graphRuntime()->runScript(nodeId); }
 
-bool AppController::pulseTrigger(quint64 nodeId) { return graphRuntime()->pulseTrigger(nodeId); }
+QString AppController::scriptError(quint64 nodeId) const { return graphRuntime()->scriptError(nodeId); }
+
+QStringList AppController::scriptLog(quint64 nodeId) const { return graphRuntime()->scriptLog(nodeId); }
+
+QString AppController::expressionError(quint64 nodeId, const QString &name) const
+{
+    return graphRuntime()->expressionError(nodeId, name);
+}
 
 ScriptBinding AppController::scriptBindingFor(NodeId dataNodeId) const
 {

@@ -27,13 +27,11 @@ ScriptPreview::ScriptPreview(QObject *parent)
     , m_scriptOutput(std::make_shared<ScriptOutput>())
     , m_runtime(std::make_unique<ScriptRuntime>(m_scriptOutput))
 {
-    connect(m_runtime.get(), &ScriptRuntime::executionFinished, this, [this](bool ok) {
+    connect(m_runtime.get(), &ScriptRuntime::executionFinished, this, [this](bool ok, const QString &error) {
+        m_error = error;
         if (ok) {
-            m_error.clear();
             QMutexLocker lock(&m_scriptOutput->mutex);
             m_output = m_scriptOutput->json;
-        } else {
-            m_error = m_runtime->lastError();
         }
         emit resultChanged();
     });
