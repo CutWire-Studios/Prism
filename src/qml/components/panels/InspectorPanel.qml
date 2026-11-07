@@ -119,85 +119,116 @@ PanelFrame {
                                 }
                             }
 
-                            InspectorInputForm {
-                                visible: del.type === body.nt.Input
-                                nodeId: del.nodeId
-                                params: del.params
-                            }
-
-                            InspectorProcessForm {
-                                visible: del.type === body.nt.Process
-                                nodeId: del.nodeId
-                                params: del.params
-                            }
-
-                            InspectorScriptForm {
-                                visible: del.type === body.nt.Script
-                                nodeId: del.nodeId
-                                params: del.params
-                            }
-
-                            InspectorAudioForm {
-                                visible: del.type === body.nt.MasterAudioInput || del.type === body.nt.MasterAudioCapture
-                                         || del.type === body.nt.AudioAnalyzer
-                                isCapture: del.type === body.nt.MasterAudioCapture
-                                isAnalyzer: del.type === body.nt.AudioAnalyzer
-                                nodeId: del.nodeId
-                                params: del.params
-                            }
-
-                            InspectorVolumeRow {
-                                visible: del.type === body.nt.MasterAudioInput || del.type === body.nt.MasterAudioCapture
-                                nodeId: del.nodeId
-                                params: del.params
-                            }
-
-                            InspectorOutputForm {
-                                visible: del.type === body.nt.MasterAudioOutput
-                                nodeId: del.nodeId
-                                params: del.params
-                            }
-
-                            InspectorPedalboardForm {
-                                visible: del.type === body.nt.AudioEffect
-                                nodeId: del.nodeId
-                                params: del.params
-                            }
-
-                            ColumnLayout {
+                            Loader {
                                 Layout.fillWidth: true
-                                visible: del.type === body.nt.Layer
-                                spacing: Theme.spacingMd
+                                active: del.type === body.nt.Input
+                                visible: active
+                                sourceComponent: InspectorInputForm {
+                                    nodeId: del.nodeId
+                                    params: del.params
+                                }
+                            }
 
-                                ThemedSwitch {
-                                    text: qsTr("Custom canvas size")
-                                    checked: !!del.params.canvasCustom
-                                    onToggled: root.graph.setParams(del.nodeId, { canvasCustom: checked })
+                            Loader {
+                                Layout.fillWidth: true
+                                active: del.type === body.nt.Process
+                                visible: active
+                                sourceComponent: InspectorProcessForm {
+                                    nodeId: del.nodeId
+                                    params: del.params
                                 }
-                                StyleFieldRow {
-                                    Layout.fillWidth: true
-                                    visible: !!del.params.canvasCustom
-                                    label: qsTr("Width")
-                                    ThemedNumberField {
-                                        Layout.fillWidth: true
-                                        from: 1
-                                        to: 7680
-                                        unit: "px"
-                                        value: del.params.canvasW
-                                        onEdited: v => root.graph.setParams(del.nodeId, { canvasW: Math.round(v) })
+                            }
+
+                            Loader {
+                                Layout.fillWidth: true
+                                active: del.type === body.nt.Script
+                                visible: active
+                                sourceComponent: InspectorScriptForm {
+                                    nodeId: del.nodeId
+                                    params: del.params
+                                }
+                            }
+
+                            Loader {
+                                Layout.fillWidth: true
+                                active: del.type === body.nt.MasterAudioInput || del.type === body.nt.MasterAudioCapture
+                                    || del.type === body.nt.AudioAnalyzer
+                                visible: active
+                                sourceComponent: InspectorAudioForm {
+                                    isCapture: del.type === body.nt.MasterAudioCapture
+                                    isAnalyzer: del.type === body.nt.AudioAnalyzer
+                                    nodeId: del.nodeId
+                                    params: del.params
+                                }
+                            }
+
+                            Loader {
+                                Layout.fillWidth: true
+                                active: del.type === body.nt.MasterAudioInput || del.type === body.nt.MasterAudioCapture
+                                visible: active
+                                sourceComponent: InspectorVolumeRow {
+                                    nodeId: del.nodeId
+                                    params: del.params
+                                }
+                            }
+
+                            Loader {
+                                Layout.fillWidth: true
+                                active: del.type === body.nt.MasterAudioOutput
+                                visible: active
+                                sourceComponent: InspectorOutputForm {
+                                    nodeId: del.nodeId
+                                    params: del.params
+                                }
+                            }
+
+                            Loader {
+                                Layout.fillWidth: true
+                                active: del.type === body.nt.AudioEffect
+                                visible: active
+                                sourceComponent: InspectorPedalboardForm {
+                                    nodeId: del.nodeId
+                                    params: del.params
+                                }
+                            }
+
+                            Loader {
+                                Layout.fillWidth: true
+                                active: del.type === body.nt.Layer
+                                visible: active
+                                sourceComponent: ColumnLayout {
+                                    spacing: Theme.spacingMd
+
+                                    ThemedSwitch {
+                                        text: qsTr("Custom canvas size")
+                                        checked: !!del.params.canvasCustom
+                                        onToggled: root.graph.setParams(del.nodeId, { canvasCustom: checked })
                                     }
-                                }
-                                StyleFieldRow {
-                                    Layout.fillWidth: true
-                                    visible: !!del.params.canvasCustom
-                                    label: qsTr("Height")
-                                    ThemedNumberField {
+                                    StyleFieldRow {
                                         Layout.fillWidth: true
-                                        from: 1
-                                        to: 4320
-                                        unit: "px"
-                                        value: del.params.canvasH
-                                        onEdited: v => root.graph.setParams(del.nodeId, { canvasH: Math.round(v) })
+                                        visible: !!del.params.canvasCustom
+                                        label: qsTr("Width")
+                                        ThemedNumberField {
+                                            Layout.fillWidth: true
+                                            from: 1
+                                            to: 7680
+                                            unit: "px"
+                                            value: del.params.canvasW
+                                            onEdited: v => root.graph.setParams(del.nodeId, { canvasW: Math.round(v) })
+                                        }
+                                    }
+                                    StyleFieldRow {
+                                        Layout.fillWidth: true
+                                        visible: !!del.params.canvasCustom
+                                        label: qsTr("Height")
+                                        ThemedNumberField {
+                                            Layout.fillWidth: true
+                                            from: 1
+                                            to: 4320
+                                            unit: "px"
+                                            value: del.params.canvasH
+                                            onEdited: v => root.graph.setParams(del.nodeId, { canvasH: Math.round(v) })
+                                        }
                                     }
                                 }
                             }

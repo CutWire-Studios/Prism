@@ -19,13 +19,14 @@ Item {
     readonly property string key: node.nodeId + (isOutput ? ":o:" : ":i:") + portIndex
     readonly property bool hovered: canvas.hoverPortKey === key
     // Only meaningful while a connection is pending: whether it could be completed here.
+    readonly property bool connecting: !!root.canvas.controller && root.canvas.controller.connecting
     readonly property bool compatible: {
-        void root.canvas.controller.connecting
-        void root.canvas.controller.revision
-        return root.canvas.controller.connecting
+        void root.connecting
+        void root.canvas.controller?.revision
+        return root.connecting
             && root.canvas.controller.canConnect(root.node.nodeId, root.isOutput, root.portIndex)
     }
-    readonly property bool incompatible: root.canvas.controller.connecting && !compatible
+    readonly property bool incompatible: root.connecting && !compatible
         && !(root.canvas.connectNode === root.node.nodeId && root.canvas.connectIsOutput === root.isOutput
              && root.canvas.connectPort === root.portIndex)
     readonly property color hue: NodePalette.portColor(kind)
@@ -78,7 +79,7 @@ Item {
         onCanceled: root.canvas.portDragCanceled()
 
         ThemedToolTip {
-            visible: area.containsMouse && !area.pressed && !root.canvas.controller.connecting
+            visible: area.containsMouse && !area.pressed && !root.connecting
             text: (root.label.length > 0 ? root.label + " - " : "") + NodePalette.portKindName(root.kind)
         }
     }

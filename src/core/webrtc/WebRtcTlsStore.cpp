@@ -32,7 +32,10 @@ struct TlsMaterial {
     QStringList     dnsNames;
 };
 
-TlsMaterial g_material;
+TlsMaterial &material() {
+    static TlsMaterial m;
+    return m;
+}
 
 QString metaPath() {
     return WebRtcTlsStore::storageDir() + QStringLiteral("/meta.json");
@@ -159,18 +162,18 @@ bool loadMaterialFromDisk(QString *errorOut) {
         return false;
     }
 
-    g_material.cert = cert;
-    g_material.key  = key;
-    g_material.ipAddresses.clear();
-    g_material.dnsNames.clear();
+    material().cert = cert;
+    material().key  = key;
+    material().ipAddresses.clear();
+    material().dnsNames.clear();
 
     QFile metaFile(metaPath());
     if (metaFile.open(QIODevice::ReadOnly)) {
         const QJsonObject obj = QJsonDocument::fromJson(metaFile.readAll()).object();
         for (const QJsonValue &v : obj.value(QStringLiteral("ips")).toArray())
-            g_material.ipAddresses.append(v.toString());
+            material().ipAddresses.append(v.toString());
         for (const QJsonValue &v : obj.value(QStringLiteral("dns")).toArray())
-            g_material.dnsNames.append(v.toString());
+            material().dnsNames.append(v.toString());
     }
     return true;
 }
@@ -201,11 +204,11 @@ bool storeMaterial(const QByteArray &certPem, const QByteArray &keyPem, const QS
         return false;
     }
 
-    g_material.cert = QSslCertificate(certPem, QSsl::Pem);
-    g_material.key  = QSslKey(keyPem, QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey);
-    g_material.ipAddresses = { QStringLiteral("127.0.0.1"), bindAddress };
-    g_material.dnsNames    = { QStringLiteral("localhost"), QStringLiteral("cutwire.org") };
-    return !g_material.cert.isNull() && !g_material.key.isNull();
+    material().cert = QSslCertificate(certPem, QSsl::Pem);
+    material().key  = QSslKey(keyPem, QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey);
+    material().ipAddresses = { QStringLiteral("127.0.0.1"), bindAddress };
+    material().dnsNames    = { QStringLiteral("localhost"), QStringLiteral("cutwire.org") };
+    return !material().cert.isNull() && !material().key.isNull();
 }
 
 bool coversAddress(const QString &bindAddress) {
@@ -213,11 +216,11 @@ bool coversAddress(const QString &bindAddress) {
         return false;
     if (bindAddress == QStringLiteral("127.0.0.1"))
         return true;
-    return g_material.ipAddresses.contains(bindAddress);
+    return material().ipAddresses.contains(bindAddress);
 }
 
 bool hasExpectedDnsNames() {
-    return g_material.dnsNames.contains(QStringLiteral("cutwire.org"));
+    return material().dnsNames.contains(QStringLiteral("cutwire.org"));
 }
 
 #endif // QT_NO_SSL
@@ -275,10 +278,10 @@ QSslConfiguration WebRtcTlsStore::sslConfiguration() {
     QSslConfiguration config = QSslConfiguration::defaultConfiguration();
 #ifdef PRISM_HAVE_WEBRTC
 #ifndef QT_NO_SSL
-    if (!g_material.cert.isNull())
-        config.setLocalCertificate(g_material.cert);
-    if (!g_material.key.isNull())
-        config.setPrivateKey(g_material.key);
+    if (!material().cert.isNull())
+        config.setLocalCertificate(material().cert);
+    if (!material().key.isNull())
+        config.setPrivateKey(material().key);
     config.setProtocol(QSsl::TlsV1_2OrLater);
     config.setPeerVerifyMode(QSslSocket::VerifyNone);
 #endif

@@ -57,7 +57,7 @@ InspectorForm {
             Layout.fillWidth: true
             from: 8
             to: 256
-            value: root.params.binCount
+            value: root.params.binCount ?? 0
             onEdited: v => root.set({ binCount: Math.round(v) })
         }
     }
@@ -69,7 +69,7 @@ InspectorForm {
         from: 0
         to: 0.98
         step: 0.01
-        value: root.params.smoothing
+        value: root.params.smoothing ?? 0
         onEdited: v => root.set({ smoothing: v }, true)
         expressionName: "smoothing"
         expression: root.expr(expressionName)
@@ -85,7 +85,7 @@ InspectorForm {
         to: 5
         step: 0.1
         decimals: 1
-        value: root.params.beatSensitivity
+        value: root.params.beatSensitivity ?? 0
         onEdited: v => root.set({ beatSensitivity: v }, true)
         expressionName: "beatSensitivity"
         expression: root.expr(expressionName)
@@ -103,7 +103,7 @@ InspectorForm {
             to: 20000
             step: 10
             unit: "Hz"
-            value: root.params.lowMidHz
+            value: root.params.lowMidHz ?? 0
             onEdited: v => root.set({ lowMidHz: v })
         }
     }
@@ -118,7 +118,7 @@ InspectorForm {
             to: 20000
             step: 10
             unit: "Hz"
-            value: root.params.midHighHz
+            value: root.params.midHighHz ?? 0
             onEdited: v => root.set({ midHighHz: v })
         }
     }
