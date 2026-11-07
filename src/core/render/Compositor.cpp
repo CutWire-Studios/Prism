@@ -53,6 +53,7 @@ Compositor::~Compositor() {
         destroyProgramFbo();
         if (m_textureLive)       glDeleteTextures(1, &m_textureLive);
         if (m_textureStaging)       glDeleteTextures(1, &m_textureStaging);
+        if (m_stayTunedTex)         glDeleteTextures(1, &m_stayTunedTex);
         clearChainTextures(m_chainTexLive);
         clearChainTextures(m_chainTexStaging);
         doneCurrent();
@@ -385,6 +386,49 @@ void Compositor::renderDeckToFbo(Deck deck) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+// Painted once per output size and kept as a texture; the slate is static.
+void Compositor::drawStayTunedSlate(int w, int h) {
+    if (w <= 0 || h <= 0)
+        return;
+    if (!m_stayTunedTex || m_stayTunedSize != QSize(w, h)) {
+        QImage img(w, h, QImage::Format_RGBA8888);
+        img.fill(QColor(18, 18, 23));
+        {
+            QPainter p(&img);
+            p.setRenderHint(QPainter::Antialiasing);
+            p.setRenderHint(QPainter::TextAntialiasing);
+            const qreal s = h / 720.0;
+            const qreal inset = 36 * s;
+            p.setPen(QPen(QColor(42, 140, 160, 120), std::max(1.0, 3 * s)));
+            p.setBrush(Qt::NoBrush);
+            p.drawRoundedRect(QRectF(img.rect()).adjusted(inset, inset, -inset, -inset), 18 * s, 18 * s);
+            QFont font;
+            font.setPixelSize(std::max(8, int(84 * s)));
+            font.setBold(true);
+            font.setLetterSpacing(QFont::AbsoluteSpacing, 3 * s);
+            p.setFont(font);
+            p.setPen(QColor(230, 230, 235));
+            p.drawText(img.rect(), Qt::AlignCenter, tr("Stay Tuned"));
+        }
+        if (!m_stayTunedTex)
+            glGenTextures(1, &m_stayTunedTex);
+        glBindTexture(GL_TEXTURE_2D, m_stayTunedTex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, img.constBits());
+        glBindTexture(GL_TEXTURE_2D, 0);
+        m_stayTunedSize = QSize(w, h);
+    }
+    glEnable(GL_TEXTURE_2D);
+    glDisable(GL_BLEND);
+    glColor4f(1.f, 1.f, 1.f, 1.f);
+    // The program FBO holds deck FBOs sampled bottom-up and is read back without a row flip, so a
+    // top-down image drawn straight into it must be flipped to come out upright.
+    renderTexture(m_stayTunedTex, 0.f, 0.f, 1.f, 1.f, 0.f, 0.f, float(w), float(h), false, true);
+}
+
 void Compositor::renderCompositionGL() {
     if (m_panicOverlay == PanicOverlay::Blackout) {
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -395,6 +439,7 @@ void Compositor::renderCompositionGL() {
     if (m_panicOverlay == PanicOverlay::StayTuned) {
         glClearColor(0.07f, 0.07f, 0.09f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        drawStayTunedSlate(renderW(), renderH());
         return;
     }
 

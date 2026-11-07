@@ -265,6 +265,8 @@ private:
     std::unique_ptr<MediaSource> m_sourceStaging;
     GLuint m_textureLive       = 0;
     GLuint m_textureStaging       = 0;
+    GLuint m_stayTunedTex = 0;
+    QSize  m_stayTunedSize;
     bool   m_playingLive       = false;
     bool   m_playingStaging       = false;
     // Async video source whose first (or post-seek) frame has not arrived yet.
@@ -361,6 +363,7 @@ private:
     void destroyProgramFbo();
     void renderDeckToFbo(Deck deck);
     void renderCompositionGL();
+    void drawStayTunedSlate(int w, int h);
     void cacheProgramFrameFromFbo();
     void cacheDeckFrameFromFbo(Deck deck);
 
