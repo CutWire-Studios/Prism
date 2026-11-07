@@ -78,6 +78,23 @@ private slots:
         QCOMPARE(spy.last().at(1).toBool(), true);
     }
 
+    void suspendedDoesNotEmitScene() {
+        HotkeyManager mgr(m_show);
+        QSignalSpy spy(&mgr, &HotkeyManager::sceneTriggered);
+        QVERIFY(mgr.setBinding(idAt(1), Qt::Key_G));
+
+        QWindow window;
+        mgr.setSuspended(true);
+        QKeyEvent press(QEvent::KeyPress, Qt::Key_G, Qt::NoModifier);
+        QCoreApplication::sendEvent(&window, &press);
+        QCOMPARE(spy.size(), 0);
+
+        mgr.setSuspended(false);
+        QKeyEvent again(QEvent::KeyPress, Qt::Key_G, Qt::NoModifier);
+        QCoreApplication::sendEvent(&window, &again);
+        QCOMPARE(spy.size(), 1);
+    }
+
     void reservedCombosMatchModifiers() {
         const QVariantList reserved = {int(Qt::Key_M), int(Qt::Key_F), int(Qt::Key_F | Qt::ShiftModifier)};
         QVERIFY(HotkeyManager::isReserved(Qt::Key_M, reserved));

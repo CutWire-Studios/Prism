@@ -42,6 +42,8 @@ bool focusIsTextInput() {
 bool focusReserves(int combo) {
     auto *item = qobject_cast<QQuickItem *>(QGuiApplication::focusObject());
     for (; item; item = item->parentItem()) {
+        if (item->property("hotkeyCaptureAll").toBool())
+            return true;
         const QVariant reserved = item->property("hotkeyReservedKeys");
         if (reserved.isValid())
             return HotkeyManager::isReserved(combo, reserved.toList());
@@ -63,7 +65,7 @@ bool HotkeyManager::eventFilter(QObject *watched, QEvent *event) {
     const QEvent::Type type = event->type();
     if (type != QEvent::KeyPress && type != QEvent::ShortcutOverride)
         return false;
-    if (!watched->isWindowType() || QGuiApplication::modalWindow())
+    if (m_suspended || !watched->isWindowType() || QGuiApplication::modalWindow())
         return false;
 
     auto *ke = static_cast<QKeyEvent *>(event);

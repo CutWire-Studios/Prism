@@ -54,6 +54,8 @@ ApplicationWindow {
     readonly property bool inSceneList: !!focused && focused.hasOwnProperty("sceneListFocus")
     readonly property bool shortcutsLive: modalDepth === 0 && !typing
 
+    onModalDepthChanged: AppController.setHotkeysSuspended(modalDepth > 0)
+
     function pushOverlayModal() { modalDepth++ }
     function popOverlayModal() { modalDepth = Math.max(0, modalDepth - 1) }
 

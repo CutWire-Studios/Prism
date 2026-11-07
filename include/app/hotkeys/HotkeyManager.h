@@ -47,6 +47,10 @@ public:
     QJsonObject exportProfile() const;
     bool importProfile(const QJsonObject &profile, QStringList *warnings = nullptr);
 
+    /// While suspended (modal UI open) the filter never fires scene hotkeys.
+    void setSuspended(bool suspended) { m_suspended = suspended; }
+    bool suspended() const { return m_suspended; }
+
     void saveSettingsProfile() const;
     void loadSettingsProfile();
 
@@ -59,6 +63,7 @@ protected:
 
 private:
     ShowManager *m_show;
+    bool m_suspended = false;
 
     QMap<QString, Qt::Key> m_sceneHotkeys;
     QMap<Qt::Key, QString> m_keyToScene;

@@ -402,6 +402,7 @@ public:
     Q_INVOKABLE QVariantMap captureFrame(int layerIndex, bool savePng, bool addAsElement, bool holdAsStill);
 
     // ── App-level dialogs: each emits appDialogRequested, AppDialogs.qml shows it ──
+    Q_INVOKABLE void setHotkeysSuspended(bool suspended);
     Q_INVOKABLE void openHotkeyEditor();
     Q_INVOKABLE void openPreflight();
     Q_INVOKABLE void openRecordingSettings();

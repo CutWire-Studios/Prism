@@ -2600,6 +2600,7 @@ QVariantMap AppController::captureFrame(int layerIndex, bool savePng, bool addAs
 
 // ── App dialogs (shown by AppDialogs.qml) ─────────────────────────────────────
 
+void AppController::setHotkeysSuspended(bool suspended) { m_hotkeyManager->setSuspended(suspended); }
 void AppController::openHotkeyEditor() { emit appDialogRequested(QStringLiteral("hotkeys")); }
 void AppController::openPreflight() { emit appDialogRequested(QStringLiteral("preflight")); }
 

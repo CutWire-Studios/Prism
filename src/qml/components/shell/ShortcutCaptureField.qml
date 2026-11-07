@@ -15,6 +15,8 @@ AbstractButton {
     property string actionId
     property string shortcut
     property bool capturing: false
+    // Read by HotkeyManager: every key belongs to the field while armed, so scene hotkeys stand aside.
+    readonly property bool hotkeyCaptureAll: capturing
 
     signal captured(string chord)
     signal cleared()
