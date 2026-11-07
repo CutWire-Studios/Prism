@@ -488,6 +488,14 @@ FocusScope {
 
     // ── Input ──────────────────────────────────────────────────────────────
 
+    // Plain/Shift letter combos handled in Keys.onPressed below; HotkeyManager lets scene
+    // hotkeys pass for these while the canvas has focus. Keep in sync with the handler.
+    readonly property var hotkeyReservedKeys: [
+        Qt.Key_M,
+        Qt.Key_F,
+        Qt.Key_F | Qt.ShiftModifier
+    ]
+
     Keys.onPressed: (event) => {
         if (!controller)
             return

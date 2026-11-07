@@ -6,6 +6,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QStringList>
+#include <QVariantList>
 #include <Qt>
 
 class ShowManager;
@@ -38,6 +39,9 @@ public:
 
     static const QList<Qt::Key> &hotkeySequence();
     static bool isBindableKey(Qt::Key key);
+
+    /// True if `combo` (Qt::Key | modifiers) is in a focused item's `hotkeyReservedKeys` list.
+    static bool isReserved(int combo, const QVariantList &reserved);
 
     /// Portable profile (scene id -> key), for import/export and QSettings.
     QJsonObject exportProfile() const;

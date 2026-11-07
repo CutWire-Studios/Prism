@@ -5,6 +5,7 @@
 #include <QInputMethodQueryEvent>
 #include <QKeyEvent>
 #include <QKeySequence>
+#include <QQuickItem>
 #include <QSettings>
 #include <QJsonDocument>
 #include <QDebug>
@@ -36,6 +37,16 @@ bool focusIsTextInput() {
     QInputMethodQueryEvent query(Qt::ImEnabled);
     QCoreApplication::sendEvent(focus, &query);
     return query.value(Qt::ImEnabled).toBool();
+}
+
+bool focusReserves(int combo) {
+    auto *item = qobject_cast<QQuickItem *>(QGuiApplication::focusObject());
+    for (; item; item = item->parentItem()) {
+        const QVariant reserved = item->property("hotkeyReservedKeys");
+        if (reserved.isValid())
+            return HotkeyManager::isReserved(combo, reserved.toList());
+    }
+    return false;
 }
 }
 
@@ -70,6 +81,8 @@ bool HotkeyManager::eventFilter(QObject *watched, QEvent *event) {
     const QString ref = m_keyToScene.value(static_cast<Qt::Key>(key));
     if (ref.isEmpty() || focusIsTextInput())
         return false;
+    if (focusReserves(key | static_cast<int>(mods)))
+        return false;
 
     if (type == QEvent::ShortcutOverride) {
         event->accept();
@@ -77,6 +90,14 @@ bool HotkeyManager::eventFilter(QObject *watched, QEvent *event) {
     }
     emit sceneTriggered(ref, takeNow);
     return true;
+}
+
+bool HotkeyManager::isReserved(int combo, const QVariantList &reserved) {
+    for (const QVariant &r : reserved) {
+        if (r.toInt() == combo)
+            return true;
+    }
+    return false;
 }
 
 const QList<Qt::Key> &HotkeyManager::hotkeySequence() {

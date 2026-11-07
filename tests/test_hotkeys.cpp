@@ -78,6 +78,15 @@ private slots:
         QCOMPARE(spy.last().at(1).toBool(), true);
     }
 
+    void reservedCombosMatchModifiers() {
+        const QVariantList reserved = {int(Qt::Key_M), int(Qt::Key_F), int(Qt::Key_F | Qt::ShiftModifier)};
+        QVERIFY(HotkeyManager::isReserved(Qt::Key_M, reserved));
+        QVERIFY(!HotkeyManager::isReserved(Qt::Key_M | Qt::ShiftModifier, reserved));
+        QVERIFY(HotkeyManager::isReserved(Qt::Key_F | Qt::ShiftModifier, reserved));
+        QVERIFY(!HotkeyManager::isReserved(Qt::Key_G, reserved));
+        QVERIFY(!HotkeyManager::isReserved(Qt::Key_M, {}));
+    }
+
     void isBindableKey_rejectsModifiers() {
         QVERIFY(!HotkeyManager::isBindableKey(Qt::Key_Shift));
         QVERIFY(!HotkeyManager::isBindableKey(Qt::Key_Control));
