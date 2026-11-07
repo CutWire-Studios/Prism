@@ -5,10 +5,13 @@
 #include <QList>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QKeySequence>
+#include <QString>
 #include <QStringList>
 #include <QVariantList>
 #include <Qt>
 
+class AppShortcuts;
 class ShowManager;
 
 /// Manages keyboard shortcut assignments (VJ hotkey grid) for the scenes of the show.
@@ -43,7 +46,17 @@ public:
     /// True if `combo` (Qt::Key | modifiers) is in a focused item's `hotkeyReservedKeys` list.
     static bool isReserved(int combo, const QVariantList &reserved);
 
-    /// Portable profile (scene id -> key), for import/export and QSettings.
+    /// Global app shortcuts (Main.qml). They win over scene hotkeys: a scene cannot bind a key an
+    /// app action uses, and legacy scene bindings on such keys are dropped on load.
+    AppShortcuts *appShortcuts() const { return m_actions; }
+    /// Rebinds an action to a single chord. Returns an error message, empty on success.
+    QString setActionSequence(const QString &id, const QKeySequence &seq);
+    void clearActionSequence(const QString &id);
+    /// Returns an error message if the default chord is taken now, empty on success.
+    QString resetAction(const QString &id);
+    void resetAllActions();
+
+    /// Portable profile (scene id -> key, app action overrides), for import/export and QSettings.
     QJsonObject exportProfile() const;
     bool importProfile(const QJsonObject &profile, QStringList *warnings = nullptr);
 
@@ -63,6 +76,7 @@ protected:
 
 private:
     ShowManager *m_show;
+    AppShortcuts *m_actions;
     bool m_suspended = false;
 
     QMap<QString, Qt::Key> m_sceneHotkeys;
@@ -71,4 +85,7 @@ private:
 
     void bindKey(const QString &sceneId, Qt::Key key);
     void releaseScene(const QString &sceneId);
+    /// Drops scene bindings on keys an app action uses, then re-assigns those scenes.
+    void evictScenesUsingActionKeys();
+    QString sceneConflictMessage(const QKeySequence &seq) const;
 };

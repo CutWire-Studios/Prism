@@ -1,9 +1,12 @@
+#include "app/hotkeys/AppShortcuts.h"
 #include "app/hotkeys/HotkeyManager.h"
 #include "app/show/ShowManager.h"
 
 #include <QtTest>
 #include <QGuiApplication>
+#include <QSettings>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QJsonArray>
 #include <QJsonObject>
 
@@ -14,6 +17,7 @@ class TestHotkeys : public QObject {
 
 private slots:
     void init() {
+        QSettings().clear();
         m_show = new ShowManager;
         m_show->addScene(QStringLiteral("Second"));
     }
@@ -137,10 +141,109 @@ private slots:
         QCOMPARE(mgr.bindingForScene(idAt(0)), Qt::Key_5);
         QCOMPARE(mgr.bindingForScene(idAt(1)), Qt::Key_K);
     }
+
+    void appActionDefaultsResolve() {
+        HotkeyManager mgr(m_show);
+        const AppShortcuts *a = mgr.appShortcuts();
+        QCOMPARE(a->actions().size(), 16);
+        QCOMPARE(a->sequences(QStringLiteral("panic.blackout")), QStringList{QStringLiteral("B")});
+        QCOMPARE(a->sequences(QStringLiteral("transport.take")),
+                 (QStringList{QStringLiteral("Return"), QStringLiteral("Enter")}));
+        QCOMPARE(a->sequences(QStringLiteral("scene.prevTab")),
+                 (QStringList{QStringLiteral("Ctrl+Shift+Tab"), QStringLiteral("Ctrl+Backtab")}));
+        QVERIFY(!a->sequences(QStringLiteral("edit.undo")).isEmpty());
+        for (const AppShortcuts::Action &act : a->actions())
+            QVERIFY2(!a->sequences(act.id).isEmpty(), qPrintable(act.id));
+    }
+
+    void rebindingChangesSequencesAndNotifies() {
+        HotkeyManager mgr(m_show);
+        QSignalSpy spy(mgr.appShortcuts(), &AppShortcuts::changed);
+        QVERIFY(mgr.setActionSequence(QStringLiteral("file.save"), QKeySequence(QStringLiteral("Ctrl+Alt+S"))).isEmpty());
+        QCOMPARE(mgr.appShortcuts()->sequences(QStringLiteral("file.save")), QStringList{QStringLiteral("Ctrl+Alt+S")});
+        QCOMPARE(mgr.appShortcuts()->sequenceMap().value(QStringLiteral("file.save")).toStringList(),
+                 QStringList{QStringLiteral("Ctrl+Alt+S")});
+        QCOMPARE(spy.size(), 1);
+    }
+
+    void appVsAppConflictRefused() {
+        HotkeyManager mgr(m_show);
+        const QStringList before = mgr.appShortcuts()->sequences(QStringLiteral("panic.freeze"));
+        QVERIFY(!mgr.setActionSequence(QStringLiteral("panic.freeze"), QKeySequence(QStringLiteral("B"))).isEmpty());
+        QCOMPARE(mgr.appShortcuts()->sequences(QStringLiteral("panic.freeze")), before);
+    }
+
+    void appVsSceneConflictRefusedBothWays() {
+        HotkeyManager mgr(m_show);
+        QVERIFY(mgr.setBinding(idAt(0), Qt::Key_G));
+        QVERIFY(!mgr.setActionSequence(QStringLiteral("panic.freeze"), QKeySequence(QStringLiteral("G"))).isEmpty());
+        QVERIFY(!mgr.setActionSequence(QStringLiteral("panic.freeze"), QKeySequence(QStringLiteral("Shift+G"))).isEmpty());
+        QVERIFY(mgr.setActionSequence(QStringLiteral("panic.freeze"), QKeySequence(QStringLiteral("Ctrl+G"))).isEmpty());
+
+        QVERIFY(!mgr.setBinding(idAt(1), Qt::Key_B));
+        QVERIFY(mgr.setBinding(idAt(1), Qt::Key_P));   // freed by the rebind above
+    }
+
+    void autoAssignSkipsAppKeys() {
+        for (int i = 0; i < 40; ++i)
+            m_show->addScene(QStringLiteral("S%1").arg(i));
+        HotkeyManager mgr(m_show);
+        mgr.syncWithShow();
+        QVERIFY(mgr.sceneForKey(Qt::Key_B).isEmpty());
+        QVERIFY(mgr.sceneForKey(Qt::Key_P).isEmpty());
+        QVERIFY(!mgr.sceneForKey(Qt::Key_G).isEmpty());
+    }
+
+    void legacySceneKeyOnAppKeyIsDropped() {
+        HotkeyManager mgr(m_show);
+        QJsonObject hk;
+        hk["scene"] = idAt(0);
+        hk["key"] = int(Qt::Key_B);
+        mgr.restoreHotkeys(QJsonArray{hk});
+        QVERIFY(mgr.bindingForScene(idAt(0)) != Qt::Key_B);
+        QVERIFY(HotkeyManager::isBindableKey(mgr.bindingForScene(idAt(0))));
+    }
+
+    void profileRoundTripIncludesOverrides() {
+        HotkeyManager mgr(m_show);
+        QVERIFY(mgr.setActionSequence(QStringLiteral("edit.undo"), QKeySequence(QStringLiteral("Ctrl+Alt+Z"))).isEmpty());
+        const QJsonObject profile = mgr.exportProfile();
+        QCOMPARE(profile.value("actions").toObject().value("edit.undo").toArray().first().toString(),
+                 QStringLiteral("Ctrl+Alt+Z"));
+
+        mgr.resetAllActions();
+        QVERIFY(!mgr.appShortcuts()->isOverridden(QStringLiteral("edit.undo")));
+        QVERIFY(mgr.importProfile(profile));
+        QCOMPARE(mgr.appShortcuts()->sequences(QStringLiteral("edit.undo")), QStringList{QStringLiteral("Ctrl+Alt+Z")});
+
+        // Old profile without "actions" imports and leaves overrides alone; unknown ids are ignored.
+        QJsonObject old = profile;
+        old.remove("actions");
+        QVERIFY(mgr.importProfile(old));
+        QVERIFY(mgr.appShortcuts()->isOverridden(QStringLiteral("edit.undo")));
+        QJsonObject unknown = profile;
+        unknown.insert("actions", QJsonObject{{"no.such", QJsonArray{"X"}}});
+        QVERIFY(mgr.importProfile(unknown));
+        QVERIFY(!mgr.appShortcuts()->isOverridden(QStringLiteral("edit.undo")));
+        QVERIFY(!mgr.appShortcuts()->isOverridden(QStringLiteral("no.such")));
+    }
+
+    void resetToDefault() {
+        HotkeyManager mgr(m_show);
+        const QStringList def = mgr.appShortcuts()->sequences(QStringLiteral("transport.take"));
+        QVERIFY(mgr.setActionSequence(QStringLiteral("transport.take"), QKeySequence(QStringLiteral("Ctrl+T"))).isEmpty());
+        QVERIFY(mgr.setActionSequence(QStringLiteral("transport.cut"), QKeySequence(QStringLiteral("Ctrl+K"))).isEmpty());
+        QVERIFY(mgr.resetAction(QStringLiteral("transport.take")).isEmpty());
+        QCOMPARE(mgr.appShortcuts()->sequences(QStringLiteral("transport.take")), def);
+        QVERIFY(mgr.appShortcuts()->isOverridden(QStringLiteral("transport.cut")));
+        mgr.resetAllActions();
+        QVERIFY(!mgr.appShortcuts()->isOverridden(QStringLiteral("transport.cut")));
+    }
 };
 
 int main(int argc, char *argv[])
 {
+    QStandardPaths::setTestModeEnabled(true);
     QGuiApplication app(argc, argv);
     TestHotkeys tc;
     return QTest::qExec(&tc, argc, argv);

@@ -20,10 +20,23 @@ class HotkeyEditor : public QObject {
     /// Rows {label, chord, cutChord}; chord (the bare key, stages) is empty when unbound.
     Q_PROPERTY(QVariantList rows READ rows NOTIFY rowsChanged)
 
+    /// Action id -> list of sequence strings; bind Shortcut.sequences to `appSequences["id"]` so rebinding applies live.
+    Q_PROPERTY(QVariantMap appSequences READ appSequences NOTIFY appRowsChanged)
+    /// Rows {id, label, category, chord, overridden} in registry order; chord is the primary sequence.
+    Q_PROPERTY(QVariantList appRows READ appRows NOTIFY appRowsChanged)
+
 public:
     explicit HotkeyEditor(QObject *parent = nullptr);
 
     QVariantList rows() const { return m_rows; }
+    QVariantMap appSequences() const { return m_appSequences; }
+    QVariantList appRows() const { return m_appRows; }
+
+    /// Same contract as setChord, for app shortcut `id`; modifiers are allowed.
+    Q_INVOKABLE QVariantMap setAppChord(const QString &id, const QString &chord);
+    Q_INVOKABLE void clearAppChord(const QString &id);
+    Q_INVOKABLE QVariantMap resetAppChord(const QString &id);
+    Q_INVOKABLE void resetAllAppChords();
 
     /// Returns {ok, message}. Only unmodified keys are bindable (Shift+key stages and cuts to Live).
     Q_INVOKABLE QVariantMap setChord(int row, const QString &chord);
@@ -35,6 +48,7 @@ public:
 
 signals:
     void rowsChanged();
+    void appRowsChanged();
 
 private:
     HotkeyManager *manager() const;
@@ -42,5 +56,9 @@ private:
 
     QStringList m_sceneIds;
     QVariantList m_rows;
+    QVariantMap m_appSequences;
+    QVariantList m_appRows;
     bool m_connected = false;
+
+    void refreshApp();
 };

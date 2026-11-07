@@ -87,6 +87,88 @@ ThemedDialog {
                         }
                     }
                 }
+
+                ThemedLabel {
+                    width: rowsColumn.width
+                    topPadding: Theme.spacingLg
+                    tone: "default"
+                    text: qsTr("App shortcuts")
+                }
+
+                Repeater {
+                    model: HotkeyEditor.appRows
+
+                    Item {
+                        id: appRow
+                        required property int index
+                        required property var modelData
+                        readonly property bool newCategory: index === 0
+                            || HotkeyEditor.appRows[index - 1].category !== modelData.category
+                        width: rowsColumn.width
+                        height: 40 + (newCategory ? 20 : 0)
+
+                        ThemedLabel {
+                            visible: appRow.newCategory
+                            anchors.left: parent.left
+                            anchors.top: parent.top
+                            size: "xs"
+                            text: appRow.modelData.category
+                        }
+
+                        ThemedLabel {
+                            anchors.left: parent.left
+                            anchors.right: appCapture.left
+                            anchors.rightMargin: Theme.spacingLg
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 10
+                            tone: "default"
+                            size: "sm"
+                            elide: Text.ElideRight
+                            wrapMode: Text.NoWrap
+                            text: appRow.modelData.label
+                        }
+
+                        ShortcutCaptureField {
+                            id: appCapture
+                            anchors.right: appClear.left
+                            anchors.rightMargin: Theme.spacingMd
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 7
+                            actionId: appRow.modelData.label
+                            shortcut: appRow.modelData.chord
+                            onCaptured: (chord) => root.note = HotkeyEditor.setAppChord(appRow.modelData.id, chord).message
+                            onCleared: {
+                                HotkeyEditor.clearAppChord(appRow.modelData.id)
+                                root.note = ""
+                            }
+                        }
+
+                        ThemedButton {
+                            id: appClear
+                            anchors.right: appReset.left
+                            anchors.rightMargin: Theme.spacingMd
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 7
+                            text: qsTr("Clear")
+                            variant: "ghost"
+                            onClicked: {
+                                HotkeyEditor.clearAppChord(appRow.modelData.id)
+                                root.note = ""
+                            }
+                        }
+
+                        ThemedButton {
+                            id: appReset
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 7
+                            text: qsTr("Reset")
+                            variant: "ghost"
+                            enabled: appRow.modelData.overridden
+                            onClicked: root.note = HotkeyEditor.resetAppChord(appRow.modelData.id).message
+                        }
+                    }
+                }
             }
         }
 
@@ -101,6 +183,14 @@ ThemedDialog {
             visible: root.note.length > 0
             tone: "default"
             text: root.note
+        }
+
+        ThemedButton {
+            text: qsTr("Reset all app shortcuts")
+            onClicked: {
+                HotkeyEditor.resetAllAppChords()
+                root.note = ""
+            }
         }
 
         HotkeyProfileButtons {

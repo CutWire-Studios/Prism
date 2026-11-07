@@ -101,63 +101,63 @@ ApplicationWindow {
         }
     }
 
-    Shortcut { sequences: [StandardKey.New]; onActivated: AppController.newSession() }
-    Shortcut { sequences: [StandardKey.Open]; onActivated: AppController.requestOpenSession() }
-    Shortcut { sequences: [StandardKey.Save]; onActivated: AppController.saveSession() }
-    Shortcut { sequences: [StandardKey.SaveAs]; onActivated: AppController.requestSaveSessionAs() }
-    Shortcut { sequence: "Ctrl+Shift+O"; onActivated: AppController.requestAddFiles() }
+    Shortcut { sequences: HotkeyEditor.appSequences["file.new"]; onActivated: AppController.newSession() }
+    Shortcut { sequences: HotkeyEditor.appSequences["file.open"]; onActivated: AppController.requestOpenSession() }
+    Shortcut { sequences: HotkeyEditor.appSequences["file.save"]; onActivated: AppController.saveSession() }
+    Shortcut { sequences: HotkeyEditor.appSequences["file.saveAs"]; onActivated: AppController.requestSaveSessionAs() }
+    Shortcut { sequences: HotkeyEditor.appSequences["file.addFiles"]; onActivated: AppController.requestAddFiles() }
     Shortcut {
-        sequence: "Ctrl+M"
+        sequences: HotkeyEditor.appSequences["record.marker"]
         enabled: AppController.recording
         onActivated: AppController.dropMarker("")
     }
     Shortcut {
-        sequences: [StandardKey.Undo]
+        sequences: HotkeyEditor.appSequences["edit.undo"]
         enabled: window.shortcutsLive && !window.inCanvas
         onActivated: window.inSceneList ? AppController.undoShow() : AppController.graph.undo()
     }
     Shortcut {
-        sequences: [StandardKey.Redo]
+        sequences: HotkeyEditor.appSequences["edit.redo"]
         enabled: window.shortcutsLive && !window.inCanvas
         onActivated: window.inSceneList ? AppController.redoShow() : AppController.graph.redo()
     }
     Shortcut {
-        sequence: "Ctrl+Tab"
+        sequences: HotkeyEditor.appSequences["scene.nextTab"]
         enabled: window.modalDepth === 0
         onActivated: AppController.enterSceneRelative(1)
     }
     Shortcut {
-        sequences: ["Ctrl+Shift+Tab", "Ctrl+Backtab"]
+        sequences: HotkeyEditor.appSequences["scene.prevTab"]
         enabled: window.modalDepth === 0
         onActivated: AppController.enterSceneRelative(-1)
     }
     Shortcut {
-        sequences: ["Ctrl+Return", "Ctrl+Enter"]
+        sequences: HotkeyEditor.appSequences["scene.goLive"]
         enabled: window.shortcutsLive && AppController.inScene
         onActivated: AppController.stageAndTake(AppController.editedSceneId)
     }
     Shortcut {
-        sequence: "B"
+        sequences: HotkeyEditor.appSequences["panic.blackout"]
         enabled: window.shortcutsLive
         onActivated: AppController.togglePanic("blackout")
     }
     Shortcut {
-        sequence: "P"
+        sequences: HotkeyEditor.appSequences["panic.freeze"]
         enabled: window.shortcutsLive
         onActivated: AppController.togglePanic("freeze")
     }
     Shortcut {
-        sequence: "F9"
+        sequences: HotkeyEditor.appSequences["panic.stayTuned"]
         enabled: window.modalDepth === 0
         onActivated: AppController.togglePanic("stay_tuned")
     }
     Shortcut {
-        sequence: "Space"
+        sequences: HotkeyEditor.appSequences["transport.cut"]
         enabled: window.shortcutsLive && !window.inCanvas && !window.inSceneList
         onActivated: AppController.cut()
     }
     Shortcut {
-        sequences: ["Return", "Enter"]
+        sequences: HotkeyEditor.appSequences["transport.take"]
         enabled: window.shortcutsLive && !window.inCanvas && !window.inSceneList
         onActivated: AppController.take()
     }

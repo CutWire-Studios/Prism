@@ -1,4 +1,5 @@
 #include "app/hotkeys/HotkeyManager.h"
+#include "app/hotkeys/AppShortcuts.h"
 #include "app/show/ShowManager.h"
 #include <QCoreApplication>
 #include <QGuiApplication>
@@ -53,7 +54,7 @@ bool focusReserves(int combo) {
 }
 
 HotkeyManager::HotkeyManager(ShowManager *show, QObject *parent)
-    : QObject(parent), m_show(show)
+    : QObject(parent), m_show(show), m_actions(new AppShortcuts(this))
 {
     loadSettingsProfile();
     syncWithShow();
@@ -81,7 +82,7 @@ bool HotkeyManager::eventFilter(QObject *watched, QEvent *event) {
             key = plain;
     }
     const QString ref = m_keyToScene.value(static_cast<Qt::Key>(key));
-    if (ref.isEmpty() || focusIsTextInput())
+    if (ref.isEmpty() || m_actions->usesPlainKey(static_cast<Qt::Key>(key)) || focusIsTextInput())
         return false;
     if (focusReserves(key | static_cast<int>(mods)))
         return false;
@@ -174,10 +175,10 @@ void HotkeyManager::syncWithShow() {
             continue;
 
         Qt::Key chosen = m_settingsProfile.value(id, Qt::Key_unknown);
-        if (chosen == Qt::Key_unknown || m_keyToScene.contains(chosen)) {
+        if (chosen == Qt::Key_unknown || m_keyToScene.contains(chosen) || m_actions->usesPlainKey(chosen)) {
             chosen = Qt::Key_unknown;
             for (Qt::Key k : hotkeySequence()) {
-                if (!m_keyToScene.contains(k)) {
+                if (!m_keyToScene.contains(k) && !m_actions->usesPlainKey(k)) {
                     chosen = k;
                     break;
                 }
@@ -203,6 +204,8 @@ bool HotkeyManager::setBinding(const QString &sceneId, Qt::Key key) {
         return false;
 
     if (m_keyToScene.contains(key) && m_keyToScene.value(key) != sceneId)
+        return false;
+    if (m_actions->usesPlainKey(key))
         return false;
 
     if (m_sceneHotkeys.value(sceneId, Qt::Key_unknown) == key)
@@ -239,7 +242,7 @@ void HotkeyManager::applyBindings(const QMap<QString, Qt::Key> &bindings) {
         const Qt::Key key = it.value();
         if (key == Qt::Key_unknown || !isBindableKey(key))
             continue;
-        if (m_keyToScene.contains(key))
+        if (m_keyToScene.contains(key) || m_actions->usesPlainKey(key))
             continue;
         if (!alive.contains(it.key()))
             continue;
@@ -277,7 +280,7 @@ void HotkeyManager::restoreHotkeys(const QJsonArray &hotkeys) {
         const Qt::Key key = static_cast<Qt::Key>(obj["key"].toInt());
         if (!isBindableKey(key))
             continue;
-        if (m_keyToScene.contains(key)) {
+        if (m_keyToScene.contains(key) || m_actions->usesPlainKey(key)) {
             skipped << QKeySequence(key).toString();
             continue;
         }
@@ -290,7 +293,7 @@ void HotkeyManager::restoreHotkeys(const QJsonArray &hotkeys) {
     }
 
     if (!skipped.isEmpty())
-        qWarning() << "HotkeyManager: skipped duplicate keys during restore:" << skipped;
+        qWarning() << "HotkeyManager: skipped duplicate or app-shortcut keys during restore:" << skipped;
 
     // Auto-assign whatever the session didn't cover.
     syncWithShow();
@@ -309,6 +312,7 @@ QJsonObject HotkeyManager::exportProfile() const {
         bindings.append(entry);
     }
     root.insert(QStringLiteral("bindings"), bindings);
+    root.insert(QStringLiteral("actions"), m_actions->overridesJson());
     return root;
 }
 
@@ -317,6 +321,16 @@ bool HotkeyManager::importProfile(const QJsonObject &profile, QStringList *warni
         if (warnings)
             warnings->append(QObject::tr("Unsupported hotkey profile version."));
         return false;
+    }
+
+    // Absent in older profiles: keep the current overrides then.
+    if (profile.contains(QStringLiteral("actions"))) {
+        const QStringList reverted = m_actions->setOverrides(profile.value(QStringLiteral("actions")).toObject());
+        for (const QString &id : reverted) {
+            if (warnings)
+                warnings->append(QObject::tr("Shortcut for \"%1\" conflicts with another and was reset.")
+                                     .arg(m_actions->action(id)->label));
+        }
     }
 
     QStringList alive;
@@ -354,6 +368,7 @@ void HotkeyManager::saveSettingsProfile() const {
 
 void HotkeyManager::loadSettingsProfile() {
     m_settingsProfile.clear();
+    m_actions->setOverrides({});
     QSettings settings;
     settings.beginGroup(QStringLiteral("hotkeys"));
     const QByteArray raw = settings.value(QStringLiteral("profile")).toByteArray();
@@ -368,6 +383,8 @@ void HotkeyManager::loadSettingsProfile() {
     if (doc.object().value(QStringLiteral("version")).toInt(0) != kProfileVersion)
         return;   // discard old clip-based profiles
 
+    m_actions->setOverrides(doc.object().value(QStringLiteral("actions")).toObject());
+
     const QJsonArray bindings = doc.object().value(QStringLiteral("bindings")).toArray();
     for (const QJsonValue &val : bindings) {
         const QJsonObject entry = val.toObject();
@@ -375,5 +392,84 @@ void HotkeyManager::loadSettingsProfile() {
         const Qt::Key key       = static_cast<Qt::Key>(entry.value(QStringLiteral("key")).toInt());
         if (!slotKey.isEmpty() && isBindableKey(key))
             m_settingsProfile.insert(slotKey, key);
+    }
+}
+
+QString HotkeyManager::sceneConflictMessage(const QKeySequence &seq) const {
+    const QKeyCombination combo = seq[0];
+    const Qt::KeyboardModifiers mods = combo.keyboardModifiers() & ~Qt::KeypadModifier;
+    if (mods != Qt::NoModifier && mods != Qt::ShiftModifier)
+        return {};
+    const QString sceneId = m_keyToScene.value(combo.key());
+    if (sceneId.isEmpty())
+        return {};
+    const Scene *scene = m_show->scene(sceneId);
+    return QObject::tr("%1 is used by scene \"%2\". Change that scene's key first.")
+        .arg(seq.toString(QKeySequence::NativeText), scene ? scene->name() : sceneId);
+}
+
+QString HotkeyManager::setActionSequence(const QString &id, const QKeySequence &seq) {
+    if (!m_actions->action(id))
+        return QObject::tr("Unknown shortcut.");
+    if (seq.count() != 1)
+        return QObject::tr("That shortcut cannot be used.");
+
+    const QString other = m_actions->actionUsing(seq, id);
+    if (!other.isEmpty())
+        return QObject::tr("%1 is already assigned to \"%2\".")
+            .arg(seq.toString(QKeySequence::NativeText), m_actions->action(other)->label);
+    const QString sceneMsg = sceneConflictMessage(seq);
+    if (!sceneMsg.isEmpty())
+        return sceneMsg;
+
+    m_actions->setSequences(id, {seq.toString(QKeySequence::PortableText)});
+    saveSettingsProfile();
+    return {};
+}
+
+void HotkeyManager::clearActionSequence(const QString &id) {
+    m_actions->setSequences(id, {});
+    saveSettingsProfile();
+}
+
+QString HotkeyManager::resetAction(const QString &id) {
+    const AppShortcuts::Action *a = m_actions->action(id);
+    if (!a)
+        return QObject::tr("Unknown shortcut.");
+    for (const QString &s : a->defaults) {
+        const QKeySequence seq(s, QKeySequence::PortableText);
+        const QString other = m_actions->actionUsing(seq, id);
+        if (!other.isEmpty())
+            return QObject::tr("%1 is already assigned to \"%2\".")
+                .arg(seq.toString(QKeySequence::NativeText), m_actions->action(other)->label);
+        const QString sceneMsg = sceneConflictMessage(seq);
+        if (!sceneMsg.isEmpty())
+            return sceneMsg;
+    }
+    m_actions->reset(id);
+    saveSettingsProfile();
+    return {};
+}
+
+void HotkeyManager::resetAllActions() {
+    m_actions->resetAll();
+    evictScenesUsingActionKeys();
+    saveSettingsProfile();
+}
+
+void HotkeyManager::evictScenesUsingActionKeys() {
+    bool evicted = false;
+    const QList<Qt::Key> keys = m_keyToScene.keys();
+    for (Qt::Key key : keys) {
+        if (!m_actions->usesPlainKey(key))
+            continue;
+        qWarning() << "HotkeyManager: scene key" << QKeySequence(key).toString()
+                   << "is used by an app shortcut; reassigning";
+        releaseScene(m_keyToScene.value(key));
+        evicted = true;
+    }
+    if (evicted) {
+        syncWithShow();
+        emit bindingsChanged();
     }
 }

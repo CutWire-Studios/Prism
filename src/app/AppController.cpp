@@ -26,6 +26,7 @@
 #include "mcp/McpJson.h"
 #include "mcp/McpServer.h"
 #include "core/platform/ErrorReporter.h"
+#include "app/hotkeys/AppShortcuts.h"
 #include "app/hotkeys/HotkeyManager.h"
 #include "app/common/MainWindowUtils.h"
 #include "app/obs/ObsIntegration.h"
@@ -926,6 +927,9 @@ QString AppController::setSceneHotkey(const QString &id, const QString &chord)
         || !HotkeyManager::isBindableKey(seq[0].key()))
         return tr("That key cannot be used.");
     const Qt::Key key = seq[0].key();
+    const QString appLabel = m_hotkeyManager->appShortcuts()->labelUsingPlainKey(key);
+    if (!appLabel.isEmpty())
+        return tr("%1 is used by the app shortcut \"%2\".").arg(QKeySequence(key).toString(), appLabel);
     if (!m_hotkeyManager->setBinding(id, key))
         return tr("%1 is already assigned to another scene.").arg(QKeySequence(key).toString());
     return {};

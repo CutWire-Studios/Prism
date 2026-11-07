@@ -67,6 +67,72 @@ SettingsPage {
         }
     }
 
+    Text {
+        width: parent.width
+        visible: page.query.length === 0
+        topPadding: Theme.spacingLg
+        text: qsTr("App shortcuts")
+        color: Theme.c.settingsRow.foreground
+        font.family: Theme.fontFamily
+        font.pixelSize: Theme.fontSizeBase
+        font.weight: Font.DemiBold
+    }
+
+    Repeater {
+        model: HotkeyEditor.appRows
+
+        SettingsRow {
+            id: actionRow
+
+            required property var modelData
+
+            title: modelData.label
+            description: modelData.category
+            keywords: "shortcut key binding hotkey app action"
+            query: page.query
+
+            Row {
+                spacing: Theme.spacingMd
+
+                ShortcutCaptureField {
+                    width: 160
+                    actionId: actionRow.modelData.label
+                    shortcut: actionRow.modelData.chord
+                    onCaptured: (chord) => page.note = HotkeyEditor.setAppChord(actionRow.modelData.id, chord).message
+                    onCleared: {
+                        HotkeyEditor.clearAppChord(actionRow.modelData.id)
+                        page.note = ""
+                    }
+                }
+
+                ThemedButton {
+                    text: qsTr("Clear")
+                    variant: "ghost"
+                    onClicked: {
+                        HotkeyEditor.clearAppChord(actionRow.modelData.id)
+                        page.note = ""
+                    }
+                }
+
+                ThemedButton {
+                    text: qsTr("Reset")
+                    variant: "ghost"
+                    enabled: actionRow.modelData.overridden
+                    onClicked: page.note = HotkeyEditor.resetAppChord(actionRow.modelData.id).message
+                }
+            }
+        }
+    }
+
+    ThemedButton {
+        visible: page.query.length === 0
+        text: qsTr("Reset all app shortcuts")
+        onClicked: {
+            HotkeyEditor.resetAllAppChords()
+            page.note = ""
+        }
+    }
+
     HotkeyProfileButtons {
         visible: page.query.length === 0
         onMessage: (text) => page.note = text

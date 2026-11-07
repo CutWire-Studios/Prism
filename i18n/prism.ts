@@ -298,6 +298,10 @@ Workflow: catalog, toolbox({name}), apply({ops}).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>%1 is used by the app shortcut &quot;%2&quot;.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>%1 is already assigned to another scene.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -518,6 +522,97 @@ Another application may already be using the virtual camera, or softcam.dll may 
     </message>
     <message>
         <source>Settings…</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AppShortcuts</name>
+    <message>
+        <source>File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Scenes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Panic</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transport</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New session</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open session</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save session</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save session as</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add media files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Drop recording marker</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Recording</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Undo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Redo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Next scene tab</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Previous scene tab</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Go live with edited scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Blackout</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Freeze</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stay tuned</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cut</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Take</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1024,6 +1119,10 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>%1 is used by the app shortcut &quot;%2&quot;.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>%1 is already assigned to another scene.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1076,7 +1175,23 @@ low/mid/high · beat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>App shortcuts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reset</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>No scenes yet. Add a scene to assign keys.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reset all app shortcuts</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3747,7 +3862,27 @@ Allow incoming TCP on port(s) %3 until CutWire Prism exits?
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Shortcut for &quot;%1&quot; conflicts with another and was reset.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>No scene matched: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 is used by scene &quot;%2&quot;. Change that scene&apos;s key first.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unknown shortcut.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>That shortcut cannot be used.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 is already assigned to &quot;%2&quot;.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4566,6 +4701,22 @@ Technical detail: %1</source>
     </message>
     <message>
         <source>No scenes yet. Add a scene to assign keys.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>App shortcuts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reset</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reset all app shortcuts</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

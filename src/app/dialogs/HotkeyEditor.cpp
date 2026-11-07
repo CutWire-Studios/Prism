@@ -1,6 +1,7 @@
 #include "app/dialogs/HotkeyEditor.h"
 
 #include "app/AppController.h"
+#include "app/hotkeys/AppShortcuts.h"
 #include "app/hotkeys/HotkeyManager.h"
 #include "app/show/ShowManager.h"
 
@@ -38,6 +39,8 @@ void HotkeyEditor::refresh()
         connect(mgr, &HotkeyManager::bindingsChanged, this, &HotkeyEditor::refresh);
         connect(sm, &ShowManager::scenesReset, this, &HotkeyEditor::refresh);
         connect(sm, &ShowManager::sceneAdded, this, &HotkeyEditor::refresh);
+        connect(mgr->appShortcuts(), &AppShortcuts::changed, this, &HotkeyEditor::refreshApp);
+        refreshApp();
     }
 
     m_sceneIds.clear();
@@ -56,6 +59,52 @@ void HotkeyEditor::refresh()
     emit rowsChanged();
 }
 
+void HotkeyEditor::refreshApp()
+{
+    HotkeyManager *mgr = manager();
+    if (!mgr)
+        return;
+    const AppShortcuts *actions = mgr->appShortcuts();
+    m_appSequences = actions->sequenceMap();
+    m_appRows.clear();
+    for (const AppShortcuts::Action &a : actions->actions()) {
+        const QStringList seqs = actions->sequences(a.id);
+        m_appRows.append(QVariantMap{{"id", a.id}, {"label", a.label}, {"category", a.category},
+                                     {"chord", seqs.value(0)}, {"overridden", actions->isOverridden(a.id)}});
+    }
+    emit appRowsChanged();
+}
+
+QVariantMap HotkeyEditor::setAppChord(const QString &id, const QString &chord)
+{
+    HotkeyManager *mgr = manager();
+    if (!mgr)
+        return {{"ok", false}, {"message", QString()}};
+    const QString error = mgr->setActionSequence(id, QKeySequence(chord, QKeySequence::PortableText));
+    return {{"ok", error.isEmpty()}, {"message", error}};
+}
+
+void HotkeyEditor::clearAppChord(const QString &id)
+{
+    if (HotkeyManager *mgr = manager())
+        mgr->clearActionSequence(id);
+}
+
+QVariantMap HotkeyEditor::resetAppChord(const QString &id)
+{
+    HotkeyManager *mgr = manager();
+    if (!mgr)
+        return {{"ok", false}, {"message", QString()}};
+    const QString error = mgr->resetAction(id);
+    return {{"ok", error.isEmpty()}, {"message", error}};
+}
+
+void HotkeyEditor::resetAllAppChords()
+{
+    if (HotkeyManager *mgr = manager())
+        mgr->resetAllActions();
+}
+
 QVariantMap HotkeyEditor::setChord(int row, const QString &chord)
 {
     HotkeyManager *mgr = manager();
@@ -72,6 +121,11 @@ QVariantMap HotkeyEditor::setChord(int row, const QString &chord)
     const Qt::Key key = combo.key();
     if (!HotkeyManager::isBindableKey(key))
         return {{"ok", false}, {"message", tr("That key cannot be used.")}};
+
+    const QString appLabel = mgr->appShortcuts()->labelUsingPlainKey(key);
+    if (!appLabel.isEmpty())
+        return {{"ok", false}, {"message", tr("%1 is used by the app shortcut \"%2\".")
+                                               .arg(QKeySequence(key).toString(), appLabel)}};
 
     const QString owner = mgr->sceneForKey(key);
     if (!owner.isEmpty() && owner != m_sceneIds.at(row))

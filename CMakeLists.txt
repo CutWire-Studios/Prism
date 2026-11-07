@@ -403,6 +403,7 @@ set(SOURCES
     src/app/common/CodeHighlighter.cpp
     src/core/media/CameraEnumerator.cpp
     src/core/media/AudioLoopbackEnumerator.cpp
+    src/app/hotkeys/AppShortcuts.cpp
     src/app/hotkeys/HotkeyManager.cpp
     src/app/session/SessionManager.cpp
     src/app/transitions/TransitionController.cpp
@@ -544,6 +545,7 @@ set(HEADERS
     include/app/common/ThumbHelper.h
     include/core/media/CameraEnumerator.h
     include/core/media/AudioLoopbackEnumerator.h
+    include/app/hotkeys/AppShortcuts.h
     include/app/hotkeys/HotkeyManager.h
     include/app/session/SessionManager.h
     include/app/transitions/TransitionController.h
